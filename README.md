@@ -30,6 +30,21 @@ flutter build web \
 
 More web cabinet notes are in `WEB_CABINET.md`.
 
+
+## GitHub Actions and Web Deploy
+
+The repository includes two workflows:
+
+- `Flutter CI` runs `flutter analyze` and `flutter test` on pushes and pull requests to `main`.
+- `Flutter Web Deploy` builds Flutter Web and deploys `build/web` to GitHub Pages.
+
+For web deploy, add these repository secrets in GitHub:
+
+- `SUPABASE_URL`
+- `SUPABASE_ANON_KEY`
+
+Then enable GitHub Pages with **Source: GitHub Actions** in the repository settings. The default project Pages base path is `/PKModelApp/`.
+
 ## Secrets
 
 Do not commit service-role keys, SMS provider keys, hook secrets, or local `.env` files. Configure them in Supabase secrets or hosting environment variables.
