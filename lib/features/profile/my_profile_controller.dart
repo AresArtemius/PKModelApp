@@ -1,0 +1,440 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:modelapp/core/supabase_provider.dart';
+import 'package:modelapp/features/profile/profile_model.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../../core/auth_providers.dart';
+import '../../core/entitlements_provider.dart';
+import 'profile_supabase_schema.dart';
+
+final myProfileProvider =
+    StateNotifierProvider<
+      MyProfileController,
+      AsyncValue<List<MyProfileState>>
+    >((ref) {
+      ref.watch(currentUserIdProvider);
+      return MyProfileController(ref);
+    });
+
+enum MyProfileError {
+  noUser,
+  fullNameRequired,
+  ageRequired,
+  ageOutOfRange,
+  heightRequired,
+  heightOutOfRange,
+  bustRequired,
+  bustOutOfRange,
+  waistRequired,
+  waistOutOfRange,
+  hipsRequired,
+  hipsOutOfRange,
+  profileLimitReached,
+}
+
+class MyProfileException implements Exception {
+  MyProfileException(this.code);
+  final MyProfileError code;
+}
+
+class MyProfileController
+    extends StateNotifier<AsyncValue<List<MyProfileState>>> {
+  MyProfileController(this.ref) : super(const AsyncValue.loading()) {
+    load();
+  }
+
+  final Ref ref;
+
+  static const int _ageMin = 0;
+  static const int _ageMax = 99;
+  static const int _heightMin = 30;
+  static const int _heightMax = 220;
+  static const int _measureMin = 10;
+  static const int _measureMax = 200;
+
+  SupabaseClient get _sb => ref.read(supabaseProvider);
+
+  String? get _currentUserId => ref.read(currentUserIdProvider);
+
+  List<MyProfileState> get _currentList => [
+    ...(state.value ?? const <MyProfileState>[]),
+  ];
+
+  String _requireUid() {
+    final uid = _currentUserId;
+    if (uid == null) throw MyProfileException(MyProfileError.noUser);
+    return uid;
+  }
+
+  Map<String, dynamic> _basePayloadFor(MyProfileState s, String uid) => {
+    'user_id': uid,
+    'profile_type': s.profileType.storageValue,
+    'full_name': s.fullName,
+    'age': s.age,
+    'height': s.height,
+    'bust': s.bust,
+    'waist': s.waist,
+    'hips': s.hips,
+    'shoe_size': s.shoeSize,
+    'min_hourly_rate': s.minHourlyRate,
+    'min_daily_fee': s.minDailyFee,
+    'eye_color': s.eyeColor,
+    'hair_color': s.hairColor,
+    'country': s.country,
+    'resume': s.resume,
+    'experience': s.experience,
+    'skills': s.skills,
+    'services': s.services,
+    'genres': s.genres,
+    'equipment': s.equipment,
+    'unavailable_days': s.unavailableDays,
+    'city': s.city,
+    'is_available': s.isAvailable,
+    'status': statusToString(s.status),
+    'moderation_comment': s.moderationComment,
+  };
+
+  bool _isMissingOptionalProfileColumn(PostgrestException e) {
+    return ProfileSupabaseSchema.isMissingOwnOptionalColumn(e);
+  }
+
+  Map<String, dynamic> _withoutProfessionalPayload(
+    Map<String, dynamic> payload,
+  ) {
+    return ProfileSupabaseSchema.withoutProfessionalPayload(payload);
+  }
+
+  Future<List<dynamic>> _selectOwnProfiles(String uid) async {
+    try {
+      return await _sb
+          .from(ProfileSupabaseSchema.table)
+          .select(ProfileSupabaseSchema.selectOwn(includeOptional: true))
+          .eq('user_id', uid)
+          .order('id', ascending: false);
+    } on PostgrestException catch (e) {
+      if (!_isMissingOptionalProfileColumn(e)) rethrow;
+      return await _sb
+          .from(ProfileSupabaseSchema.table)
+          .select(ProfileSupabaseSchema.selectOwn(includeOptional: false))
+          .eq('user_id', uid)
+          .order('id', ascending: false);
+    }
+  }
+
+  Future<void> _ensureCanCreateProfile(String uid) async {
+    final entitlements = await ref.read(accountEntitlementsProvider.future);
+    final limit = entitlements.maxPublishedProfiles;
+    if (limit == null) return;
+
+    final count = await _sb
+        .from(ProfileSupabaseSchema.table)
+        .count(CountOption.exact)
+        .eq('user_id', uid);
+    if (count >= limit) {
+      throw MyProfileException(MyProfileError.profileLimitReached);
+    }
+  }
+
+  Future<Map<String, dynamic>> _insertProfileAndSelect(
+    Map<String, dynamic> payload,
+  ) async {
+    try {
+      final data = await _sb
+          .from(ProfileSupabaseSchema.table)
+          .insert(payload)
+          .select(ProfileSupabaseSchema.selectOwn(includeOptional: true))
+          .single();
+      return Map<String, dynamic>.from(data as Map);
+    } on PostgrestException catch (e) {
+      if (!_isMissingOptionalProfileColumn(e)) rethrow;
+      final data = await _sb
+          .from(ProfileSupabaseSchema.table)
+          .insert(_withoutProfessionalPayload(payload))
+          .select(ProfileSupabaseSchema.selectOwn(includeOptional: false))
+          .single();
+      return Map<String, dynamic>.from(data as Map);
+    }
+  }
+
+  Future<Map<String, dynamic>> _updateProfileAndSelect(
+    String profileId,
+    String uid,
+    Map<String, dynamic> payload,
+  ) async {
+    try {
+      final data = await _sb
+          .from(ProfileSupabaseSchema.table)
+          .update(payload)
+          .eq('id', profileId)
+          .eq('user_id', uid)
+          .select(ProfileSupabaseSchema.selectOwn(includeOptional: true))
+          .single();
+      return Map<String, dynamic>.from(data as Map);
+    } on PostgrestException catch (e) {
+      if (!_isMissingOptionalProfileColumn(e)) rethrow;
+      final data = await _sb
+          .from(ProfileSupabaseSchema.table)
+          .update(_withoutProfessionalPayload(payload))
+          .eq('id', profileId)
+          .eq('user_id', uid)
+          .select(ProfileSupabaseSchema.selectOwn(includeOptional: false))
+          .single();
+      return Map<String, dynamic>.from(data as Map);
+    }
+  }
+
+  Map<String, dynamic> _payloadFor(MyProfileState s, String uid) => {
+    ..._basePayloadFor(s, uid),
+    'photo_urls': s.photoUrls,
+    'video_urls': s.videoUrls,
+    'video_preview_urls': s.videoPreviewUrls,
+    'pending_photo_urls': s.pendingPhotoUrls,
+    'pending_video_urls': s.pendingVideoUrls,
+    'has_pending_media': s.hasPendingMedia,
+  };
+
+  MyProfileState? _findById(List<MyProfileState> list, String id) {
+    for (final p in list) {
+      if (p.id == id) return p;
+    }
+    return null;
+  }
+
+  List<MyProfileState> _upsertProfile(
+    List<MyProfileState> list,
+    MyProfileState item,
+  ) {
+    final next = [...list];
+    final idx = next.indexWhere((p) => p.id == item.id);
+    if (idx >= 0) {
+      next[idx] = item;
+    } else {
+      next.insert(0, item);
+    }
+    return next;
+  }
+
+  List<MyProfileState> _replaceProfile(
+    List<MyProfileState> list,
+    MyProfileState item,
+  ) {
+    final next = [...list];
+    final idx = next.indexWhere((p) => p.id == item.id);
+    if (idx >= 0) {
+      next[idx] = item;
+    }
+    return next;
+  }
+
+  void _validateForReview(MyProfileState p) {
+    final name = p.fullName.trim();
+    if (name.isEmpty) {
+      throw MyProfileException(MyProfileError.fullNameRequired);
+    }
+
+    if (p.profileType.usesPhysicalBasics && p.age <= 0) {
+      throw MyProfileException(MyProfileError.ageRequired);
+    }
+    if (p.profileType.usesPhysicalBasics &&
+        (p.age < _ageMin || p.age > _ageMax)) {
+      throw MyProfileException(MyProfileError.ageOutOfRange);
+    }
+    if (p.profileType.usesPhysicalBasics && p.height <= 0) {
+      throw MyProfileException(MyProfileError.heightRequired);
+    }
+    if (p.profileType.usesPhysicalBasics &&
+        (p.height < _heightMin || p.height > _heightMax)) {
+      throw MyProfileException(MyProfileError.heightOutOfRange);
+    }
+    if (!p.profileType.usesModelMeasurements) return;
+
+    if (p.bust <= 0) {
+      throw MyProfileException(MyProfileError.bustRequired);
+    }
+    if (p.bust < _measureMin || p.bust > _measureMax) {
+      throw MyProfileException(MyProfileError.bustOutOfRange);
+    }
+    if (p.waist <= 0) {
+      throw MyProfileException(MyProfileError.waistRequired);
+    }
+    if (p.waist < _measureMin || p.waist > _measureMax) {
+      throw MyProfileException(MyProfileError.waistOutOfRange);
+    }
+    if (p.hips <= 0) {
+      throw MyProfileException(MyProfileError.hipsRequired);
+    }
+    if (p.hips < _measureMin || p.hips > _measureMax) {
+      throw MyProfileException(MyProfileError.hipsOutOfRange);
+    }
+  }
+
+  Future<void> load() async {
+    final uid = _currentUserId;
+    if (uid == null) {
+      state = const AsyncValue.data([]);
+      return;
+    }
+
+    try {
+      final rows = await _selectOwnProfiles(uid);
+
+      if (!mounted) return;
+
+      final items = rows
+          .map(
+            (e) => MyProfileState.fromMap(Map<String, dynamic>.from(e as Map)),
+          )
+          .toList(growable: false);
+
+      state = AsyncValue.data(items);
+    } catch (e, st) {
+      if (!mounted) return;
+      state = AsyncValue.error(e, st);
+    }
+  }
+
+  Future<MyProfileState> saveProfile(MyProfileState s) async {
+    final uid = _requireUid();
+    final profileId = s.id.trim();
+    final payload = _payloadFor(s, uid);
+
+    if (profileId.isEmpty) {
+      await _ensureCanCreateProfile(uid);
+      final data = await _insertProfileAndSelect(payload);
+      final created = MyProfileState.fromMap(data);
+      state = AsyncValue.data(_upsertProfile(_currentList, created));
+      return created;
+    }
+
+    final data = await _updateProfileAndSelect(profileId, uid, payload);
+    final updated = MyProfileState.fromMap(data);
+
+    state = AsyncValue.data(_upsertProfile(_currentList, updated));
+    return updated;
+  }
+
+  Future<MyProfileState> saveProfileWithPendingMedia({
+    required MyProfileState profile,
+    required List<String> newPhotoUrls,
+    required List<String> newVideoUrls,
+    required List<String> newVideoPreviewUrls,
+  }) async {
+    final uid = _requireUid();
+    final profileId = profile.id.trim();
+    final basePayload = _basePayloadFor(profile, uid);
+
+    if (profileId.isEmpty) {
+      await _ensureCanCreateProfile(uid);
+      final payload = {
+        ...basePayload,
+        'photo_urls': [...profile.photoUrls, ...newPhotoUrls],
+        'video_urls': [...profile.videoUrls, ...newVideoUrls],
+        'video_preview_urls': [
+          ...profile.videoPreviewUrls,
+          ...newVideoPreviewUrls,
+        ],
+        'pending_photo_urls': const <String>[],
+        'pending_video_urls': const <String>[],
+        'has_pending_media': false,
+      };
+
+      final data = await _insertProfileAndSelect(payload);
+      final created = MyProfileState.fromMap(data);
+      state = AsyncValue.data(_upsertProfile(_currentList, created));
+      return created;
+    }
+
+    final payload = {
+      ...basePayload,
+      'photo_urls': profile.photoUrls,
+      'video_urls': profile.videoUrls,
+      'video_preview_urls': profile.videoPreviewUrls,
+      'pending_photo_urls': [...profile.pendingPhotoUrls, ...newPhotoUrls],
+      'pending_video_urls': [...profile.pendingVideoUrls, ...newVideoUrls],
+      'pending_video_preview_urls': [
+        ...profile.pendingVideoPreviewUrls,
+        ...newVideoPreviewUrls,
+      ],
+      'has_pending_media':
+          (profile.pendingPhotoUrls.isNotEmpty ||
+          profile.pendingVideoUrls.isNotEmpty ||
+          profile.pendingVideoPreviewUrls.isNotEmpty ||
+          newPhotoUrls.isNotEmpty ||
+          newVideoUrls.isNotEmpty ||
+          newVideoPreviewUrls.isNotEmpty),
+    };
+
+    final data = await _updateProfileAndSelect(profileId, uid, payload);
+    final updated = MyProfileState.fromMap(data);
+
+    state = AsyncValue.data(_upsertProfile(_currentList, updated));
+    return updated;
+  }
+
+  Future<void> submitForReview(String profileId) async {
+    final id = profileId.trim();
+    if (id.isEmpty) return;
+
+    final list = state.value ?? const <MyProfileState>[];
+    final current = _findById(list, id);
+
+    if (current == null) return;
+
+    _validateForReview(current);
+
+    final uid = _requireUid();
+
+    await _sb
+        .from(ProfileSupabaseSchema.table)
+        .update({'status': 'pending', 'moderation_comment': null})
+        .eq('id', id)
+        .eq('user_id', uid);
+
+    final next = current.copyWith(
+      status: ProfileStatus.pending,
+      moderationComment: null,
+    );
+    state = AsyncValue.data(_replaceProfile(list, next));
+  }
+
+  Future<void> requestVerification(String profileId) async {
+    final id = profileId.trim();
+    if (id.isEmpty) return;
+
+    final list = state.value ?? const <MyProfileState>[];
+    final current = _findById(list, id);
+    if (current == null || current.isVerified) return;
+
+    final uid = _requireUid();
+
+    await _sb
+        .from(ProfileSupabaseSchema.table)
+        .update({
+          'verification_status': 'pending',
+          'verification_requested_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', id)
+        .eq('user_id', uid);
+
+    final next = current.copyWith(
+      verificationStatus: ProfileVerificationStatus.pending,
+    );
+    state = AsyncValue.data(_replaceProfile(list, next));
+  }
+
+  Future<void> deleteProfile(String profileId) async {
+    final uid = _requireUid();
+    final id = profileId.trim();
+    if (id.isEmpty) return;
+
+    await _sb
+        .from(ProfileSupabaseSchema.table)
+        .delete()
+        .eq('id', id)
+        .eq('user_id', uid);
+
+    final list = _currentList;
+    list.removeWhere((p) => p.id == id);
+    state = AsyncValue.data(list);
+  }
+}

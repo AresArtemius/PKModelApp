@@ -1,0 +1,2 @@
+[functions.send-sms-aero-otp]
+verify_jwt = false
