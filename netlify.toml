@@ -1,5 +1,5 @@
 [build]
-  command = "flutter build web --pwa-strategy=none --dart-define=SUPABASE_URL=https://dherzlobdrknoajeidbz.supabase.co --dart-define=SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRoZXJ6bG9iZHJrbm9hamVpZGJ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg2NTY3ODYsImV4cCI6MjA4NDIzMjc4Nn0.2gwurY6hQBbbiCyO6IxLfVyYErSF6YaQZloB0bv1W9U"
+  command = "bash scripts/web_build.sh"
   publish = "build/web"
 
 [[redirects]]

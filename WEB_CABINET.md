@@ -7,10 +7,7 @@ through the existing tables, storage buckets, policies and Edge Functions.
 ## Build
 
 ```bash
-flutter build web \
-  --pwa-strategy=none \
-  --dart-define=SUPABASE_URL=https://dherzlobdrknoajeidbz.supabase.co \
-  --dart-define=SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRoZXJ6bG9iZHJrbm9hamVpZGJ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg2NTY3ODYsImV4cCI6MjA4NDIzMjc4Nn0.2gwurY6hQBbbiCyO6IxLfVyYErSF6YaQZloB0bv1W9U
+SUPABASE_URL=... SUPABASE_ANON_KEY=... bash scripts/web_build.sh
 ```
 
 The deployable site is created in:
@@ -108,10 +105,7 @@ The web cabinet already includes SPA redirect configuration:
 After any change to files in `web/` or Flutter code, rebuild locally:
 
 ```bash
-flutter build web \
-  --pwa-strategy=none \
-  --dart-define=SUPABASE_URL=https://dherzlobdrknoajeidbz.supabase.co \
-  --dart-define=SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRoZXJ6bG9iZHJrbm9hamVpZGJ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg2NTY3ODYsImV4cCI6MjA4NDIzMjc4Nn0.2gwurY6hQBbbiCyO6IxLfVyYErSF6YaQZloB0bv1W9U
+SUPABASE_URL=... SUPABASE_ANON_KEY=... bash scripts/web_build.sh
 ```
 
-Then deploy the updated `build/web` folder.
+Then deploy the updated `build/web` folder. On Vercel or Netlify, add `SUPABASE_URL` and `SUPABASE_ANON_KEY` in project environment variables; the included config runs the same script automatically.

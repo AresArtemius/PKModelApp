@@ -36,14 +36,20 @@ More web cabinet notes are in `WEB_CABINET.md`.
 The repository includes two workflows:
 
 - `Flutter CI` runs `flutter analyze` and `flutter test` on pushes and pull requests to `main`.
-- `Flutter Web Deploy` builds Flutter Web and deploys `build/web` to GitHub Pages.
+- `Flutter Web Deploy` builds Flutter Web for GitHub Pages when Pages is available for the repository.
 
-For web deploy, add these repository secrets in GitHub:
+For a private repository, use Vercel or Netlify first. Both configs are included and use the same build script:
+
+```bash
+bash scripts/web_build.sh
+```
+
+Add these environment variables in the hosting provider settings:
 
 - `SUPABASE_URL`
 - `SUPABASE_ANON_KEY`
 
-Then enable GitHub Pages with **Source: GitHub Actions** in the repository settings. The default project Pages base path is `/PKModelApp/`.
+The web output directory is `build/web`.
 
 ## Secrets
 
