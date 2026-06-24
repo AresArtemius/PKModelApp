@@ -142,7 +142,23 @@ class ModerationAdminPage extends ConsumerWidget {
   }) async {
     final sb = ref.read(supabaseProvider);
 
-    await sb.rpc('approve_profile', params: {'p_profile_id': profileId});
+    try {
+      await sb.rpc(
+        'admin_publish_profile',
+        params: {'p_profile_id': profileId},
+      );
+    } on PostgrestException catch (e) {
+      if (!SupabaseCompat.isMissingRpc(e, 'admin_publish_profile')) {
+        rethrow;
+      }
+      await sb
+          .from('profiles')
+          .update(<String, dynamic>{
+            'status': 'approved',
+            'moderation_comment': null,
+          })
+          .eq('id', profileId);
+    }
 
     ref.invalidate(pendingProfilesProvider);
   }
