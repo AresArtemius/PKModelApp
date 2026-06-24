@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:io';
-
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -745,7 +743,7 @@ class _AccountProfileEditPageState
       final ext = _ext(image.path);
       final path =
           '${user.id}/account_avatar/${DateTime.now().millisecondsSinceEpoch}.$ext';
-      final bytes = await File(image.path).readAsBytes();
+      final bytes = await image.readAsBytes();
       await _sb.storage
           .from(_kAccountAvatarBucket)
           .uploadBinary(

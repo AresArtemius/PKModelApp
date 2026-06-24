@@ -204,6 +204,7 @@ class MyProfilePage extends ConsumerWidget {
                         ),
                         child: _ProfileSummaryCard(
                           fullName: p.fullName.trim(),
+                          status: p.status,
                           photoUrl: p.photoUrls.isNotEmpty
                               ? p.photoUrls.first
                               : null,
@@ -926,18 +927,35 @@ class _EmptyProfileImagePlaceholder extends StatelessWidget {
 class _ProfileSummaryCard extends StatelessWidget {
   const _ProfileSummaryCard({
     required this.fullName,
+    required this.status,
     required this.onTap,
     required this.photoUrl,
   });
 
   final String fullName;
+  final ProfileStatus status;
   final String? photoUrl;
   final VoidCallback onTap;
 
+  String _statusLabel(AppLocalizations t) {
+    switch (status) {
+      case ProfileStatus.pending:
+        return t.profileStatusPendingUpper;
+      case ProfileStatus.approved:
+        return t.profileStatusApprovedUpper;
+      case ProfileStatus.rejected:
+        return t.profileStatusRejectedUpper;
+      case ProfileStatus.draft:
+        return t.profileStatusDraftUpper;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
     final hasPhoto = photoUrl?.trim().isNotEmpty ?? false;
     final title = fullName.trim().isEmpty ? '—' : fullName.trim();
+    final statusLabel = _statusLabel(t);
 
     return GestureDetector(
       onTap: onTap,
@@ -960,15 +978,34 @@ class _ProfileSummaryCard extends StatelessWidget {
             ),
             const SizedBox(width: kProfileSummaryGap),
             Expanded(
-              child: Text(
-                title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: _accountCommandStyle(
-                  size: 18,
-                  spacing: 1.8,
-                  weight: FontWeight.w700,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: _accountCommandStyle(
+                      size: 18,
+                      spacing: 1.8,
+                      weight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    statusLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: _accountCommandStyle(
+                      color: status == ProfileStatus.rejected
+                          ? BrandTheme.redTop
+                          : kTextMuted,
+                      size: 11,
+                      spacing: 1.1,
+                      weight: FontWeight.w700,
+                    ),
+                  ),
+                ],
               ),
             ),
             const Icon(

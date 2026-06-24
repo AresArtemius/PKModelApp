@@ -5,6 +5,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/auth_providers.dart';
 import '../../core/entitlements_provider.dart';
+import '../../core/roles_provider.dart';
+import '../../core/supabase_compat.dart';
 import 'profile_supabase_schema.dart';
 
 final myProfileProvider =
@@ -122,6 +124,9 @@ class MyProfileController
   }
 
   Future<void> _ensureCanCreateProfile(String uid) async {
+    final isAdmin = await ref.read(isAdminProvider.future);
+    if (isAdmin) return;
+
     final entitlements = await ref.read(accountEntitlementsProvider.future);
     final limit = entitlements.maxPublishedProfiles;
     if (limit == null) return;
@@ -190,6 +195,7 @@ class MyProfileController
     'video_preview_urls': s.videoPreviewUrls,
     'pending_photo_urls': s.pendingPhotoUrls,
     'pending_video_urls': s.pendingVideoUrls,
+    'pending_video_preview_urls': s.pendingVideoPreviewUrls,
     'has_pending_media': s.hasPendingMedia,
   };
 
@@ -335,6 +341,7 @@ class MyProfileController
         ],
         'pending_photo_urls': const <String>[],
         'pending_video_urls': const <String>[],
+        'pending_video_preview_urls': const <String>[],
         'has_pending_media': false,
       };
 
@@ -384,17 +391,32 @@ class MyProfileController
 
     final uid = _requireUid();
 
-    await _sb
-        .from(ProfileSupabaseSchema.table)
-        .update({'status': 'pending', 'moderation_comment': null})
-        .eq('id', id)
-        .eq('user_id', uid);
+    await _submitForReview(id, uid);
 
     final next = current.copyWith(
       status: ProfileStatus.pending,
       moderationComment: null,
     );
     state = AsyncValue.data(_replaceProfile(list, next));
+  }
+
+  Future<void> _submitForReview(String profileId, String uid) async {
+    try {
+      await _sb.rpc(
+        'submit_profile_for_review',
+        params: {'p_profile_id': profileId},
+      );
+      return;
+    } on PostgrestException catch (e) {
+      if (!SupabaseCompat.isMissingRpc(e, 'submit_profile_for_review')) {
+        rethrow;
+      }
+    }
+
+    await _updateProfileAndSelect(profileId, uid, {
+      'status': 'pending',
+      'moderation_comment': null,
+    });
   }
 
   Future<void> requestVerification(String profileId) async {

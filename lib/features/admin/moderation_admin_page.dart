@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/app_error_mapper.dart';
+import '../../core/supabase_compat.dart';
 import '../../core/supabase_provider.dart';
 import '../../core/roles_provider.dart';
 import '../../ui/brand/brand_admin_header.dart';
@@ -20,34 +21,116 @@ const int _moderationMediaCacheWidth = 280;
 const double _moderationMediaSize = 64;
 const double _moderationMediaRadius = 16;
 
+String _formatModerationCounts(Map<String, int>? counts, {required bool ru}) {
+  if (counts == null) {
+    return ru
+        ? 'SQL profile_submission_moderation_fix.sql еще не применен или приложение использует старую схему.'
+        : 'profile_submission_moderation_fix.sql is not applied yet, or the app is still using the old schema.';
+  }
+
+  final pending = counts['pending'] ?? 0;
+  final draft = counts['draft'] ?? 0;
+  final approved = counts['approved'] ?? 0;
+  final rejected = counts['rejected'] ?? 0;
+  final total = counts.values.fold<int>(0, (sum, value) => sum + value);
+
+  if (ru) {
+    return 'Статусы в базе: на модерации $pending, черновики $draft, одобрено $approved, отклонено $rejected, всего $total.';
+  }
+  return 'Database statuses: pending $pending, draft $draft, approved $approved, rejected $rejected, total $total.';
+}
+
 final pendingProfilesProvider =
     FutureProvider.autoDispose<List<MyProfileState>>((ref) async {
       ref.watch(authStateProvider);
       final sb = ref.read(supabaseProvider);
 
-      Future<List<dynamic>> load({required bool includeVerification}) async {
+      Future<List<dynamic>> loadViaRpc() async {
+        return await sb.rpc('pending_profiles_for_moderation');
+      }
+
+      Future<List<dynamic>> load({
+        required bool includeVerification,
+        required bool includePendingMedia,
+      }) async {
         final query = sb
             .from(ProfileSupabaseSchema.table)
             .select(
               ProfileSupabaseSchema.selectModeration(
                 includeVerification: includeVerification,
+                includePendingMedia: includePendingMedia,
               ),
             );
 
         return query.eq('status', 'pending').limit(200);
       }
 
-      List<dynamic> rows;
-      try {
-        rows = await load(includeVerification: true);
-      } on PostgrestException catch (e) {
-        if (!ProfileSupabaseSchema.isMissingVerificationColumn(e)) rethrow;
-        rows = await load(includeVerification: false);
+      List<dynamic> rows = const <dynamic>[];
+      var includeVerification = true;
+      var includePendingMedia = true;
+      while (true) {
+        try {
+          try {
+            rows = await loadViaRpc();
+          } on PostgrestException catch (e) {
+            if (!SupabaseCompat.isMissingRpc(
+              e,
+              'pending_profiles_for_moderation',
+            )) {
+              rethrow;
+            }
+            rows = await load(
+              includeVerification: includeVerification,
+              includePendingMedia: includePendingMedia,
+            );
+          }
+          break;
+        } on PostgrestException catch (e) {
+          final missingVerification =
+              includeVerification &&
+              ProfileSupabaseSchema.isMissingVerificationColumn(e);
+          final missingPendingMedia =
+              includePendingMedia &&
+              ProfileSupabaseSchema.isMissingPendingMediaColumn(e);
+
+          if (!missingVerification && !missingPendingMedia) rethrow;
+
+          if (missingVerification) includeVerification = false;
+          if (missingPendingMedia) includePendingMedia = false;
+        }
       }
 
       return rows
           .map((row) => MyProfileState.fromMap(Map<String, dynamic>.from(row)))
           .toList(growable: false);
+    });
+
+final moderationStatusCountsProvider =
+    FutureProvider.autoDispose<Map<String, int>?>((ref) async {
+      ref.watch(authStateProvider);
+      final sb = ref.read(supabaseProvider);
+
+      try {
+        final rows = await sb.rpc('profile_moderation_status_counts');
+        final counts = <String, int>{};
+        for (final row in rows as List) {
+          final map = Map<String, dynamic>.from(row as Map);
+          final status = map['status']?.toString().trim();
+          final count = int.tryParse(map['count']?.toString() ?? '') ?? 0;
+          if (status != null && status.isNotEmpty) {
+            counts[status] = count;
+          }
+        }
+        return counts;
+      } on PostgrestException catch (e) {
+        if (SupabaseCompat.isMissingRpc(
+          e,
+          'profile_moderation_status_counts',
+        )) {
+          return null;
+        }
+        rethrow;
+      }
     });
 
 class ModerationAdminPage extends ConsumerWidget {
@@ -149,8 +232,32 @@ class ModerationAdminPage extends ConsumerWidget {
                                     context,
                                   ).languageCode ==
                                   'ru';
-                              return AdminMessageCard(
-                                text: ru ? 'ЗАЯВОК НЕТ' : 'NO REQUESTS',
+                              final countsAsync = ref.watch(
+                                moderationStatusCountsProvider,
+                              );
+                              return countsAsync.when(
+                                loading: () => AdminMessageCard(
+                                  text: ru
+                                      ? 'ЗАЯВОК НЕТ\n\nПроверяю статусы анкет...'
+                                      : 'NO REQUESTS\n\nChecking profile statuses...',
+                                ),
+                                error: (e, _) => AdminMessageCard(
+                                  text: ru
+                                      ? 'ЗАЯВОК НЕТ\n\nНе удалось проверить статусы: ${AppErrorMapper.message(e, t)}'
+                                      : 'NO REQUESTS\n\nCould not check statuses: ${AppErrorMapper.message(e, t)}',
+                                  isError: true,
+                                ),
+                                data: (counts) {
+                                  final details = _formatModerationCounts(
+                                    counts,
+                                    ru: ru,
+                                  );
+                                  return AdminMessageCard(
+                                    text: ru
+                                        ? 'ЗАЯВОК НЕТ\n\n$details'
+                                        : 'NO REQUESTS\n\n$details',
+                                  );
+                                },
                               );
                             }
 

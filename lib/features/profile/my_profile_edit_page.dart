@@ -10,6 +10,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:video_player/video_player.dart';
 import 'package:video_thumbnail/video_thumbnail.dart';
 
+import '../../core/app_logger.dart';
+import '../../core/roles_provider.dart';
 import '../../core/supabase_provider.dart';
 import '../../gen_l10n/app_localizations.dart';
 import '../../ui/brand/appearance_lookups.dart';
@@ -368,10 +370,24 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
         .toList(growable: false);
   }
 
-  MyProfileState _buildNextProfile(MyProfileState base, _NameParts nn) {
+  MyProfileState _buildNextProfile(
+    MyProfileState base,
+    _NameParts nn, {
+    required bool submitForReview,
+    required bool approveImmediately,
+  }) {
+    final nextStatus = approveImmediately
+        ? ProfileStatus.approved
+        : submitForReview
+        ? ProfileStatus.pending
+        : base.status;
     return base.copyWith(
       profileType: _profileType,
       fullName: _ProfileNameHelper.buildFullName(nn),
+      status: nextStatus,
+      moderationComment: submitForReview || approveImmediately
+          ? null
+          : base.moderationComment,
       age: _intOrZero(_ageC.text),
       height: _intOrZero(_heightC.text),
       bust: _intOrZero(_bustC.text),
@@ -605,6 +621,7 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
   Future<String?> _saveAndMaybeSubmit(
     MyProfileState base, {
     required bool submitForReview,
+    bool approveImmediately = false,
     bool closeAfter = true,
   }) async {
     if (_saving || _uploading) return null;
@@ -627,7 +644,12 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
       final uid = await _requireUid();
       final uploaded = await _uploadPickedMediaToLists(uid);
 
-      final next = _buildNextProfile(base, nn);
+      final next = _buildNextProfile(
+        base,
+        nn,
+        submitForReview: submitForReview,
+        approveImmediately: approveImmediately,
+      );
 
       final saved = await ref
           .read(myProfileProvider.notifier)
@@ -638,7 +660,9 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
             newVideoPreviewUrls: uploaded.videoPreviewUrls,
           );
 
-      if (submitForReview) {
+      if (!approveImmediately &&
+          submitForReview &&
+          saved.status != ProfileStatus.pending) {
         await ref.read(myProfileProvider.notifier).submitForReview(saved.id);
       }
 
@@ -656,7 +680,8 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
 
       if (closeAfter) Navigator.of(context).pop();
       return saved.id;
-    } catch (e) {
+    } catch (e, st) {
+      AppLogger.error('Failed to save profile', error: e, stackTrace: st);
       if (!mounted) return null;
       setState(() {
         _error = e is MyProfileException
@@ -674,6 +699,16 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
   Future<void> _submitNew(MyProfileState base) async {
     await _runIfIdle(() async {
       await _saveAndMaybeSubmit(base, submitForReview: true);
+    });
+  }
+
+  Future<void> _saveAdminProfile(MyProfileState base) async {
+    await _runIfIdle(() async {
+      await _saveAndMaybeSubmit(
+        base,
+        submitForReview: false,
+        approveImmediately: true,
+      );
     });
   }
 
@@ -843,6 +878,9 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
 
     _initFromState(base);
     final showDelete = !widget.startBlank && base.id.trim().isNotEmpty;
+    final isAdmin = ref
+        .watch(isAdminProvider)
+        .maybeWhen(data: (value) => value, orElse: () => false);
 
     return Scaffold(
       body: Stack(
@@ -1110,7 +1148,31 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
 
                       const SizedBox(height: kGap14),
 
-                      if (widget.startBlank) ...[
+                      if (isAdmin) ...[
+                        SizedBox(
+                          width: double.infinity,
+                          height: BrandTheme.pillHeight,
+                          child: BrandPillButton(
+                            label: t.profileSaveUpper,
+                            style: BrandPillStyle.dark,
+                            onTap: _isBusy
+                                ? null
+                                : () => _saveAdminProfile(base),
+                          ),
+                        ),
+                        if (showDelete) ...[
+                          const SizedBox(height: kGap10),
+                          SizedBox(
+                            width: double.infinity,
+                            height: BrandTheme.pillHeight,
+                            child: BrandPillButton(
+                              label: t.profileDeleteUpper,
+                              style: BrandPillStyle.light,
+                              onTap: _isBusy ? null : () => _delete(base),
+                            ),
+                          ),
+                        ],
+                      ] else if (widget.startBlank) ...[
                         SizedBox(
                           width: double.infinity,
                           height: BrandTheme.pillHeight,

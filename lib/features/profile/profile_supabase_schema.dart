@@ -76,7 +76,7 @@ class ProfileSupabaseSchema {
       if (includeOptional) 'is_verified',
       if (includeOptional) 'verification_status',
       ..._mediaColumns,
-      ..._pendingMediaColumns,
+      if (includeOptional) ..._pendingMediaColumns,
     ]);
   }
 
@@ -120,7 +120,10 @@ class ProfileSupabaseSchema {
     ]);
   }
 
-  static String selectModeration({required bool includeVerification}) {
+  static String selectModeration({
+    required bool includeVerification,
+    required bool includePendingMedia,
+  }) {
     return _join([
       'id',
       'full_name',
@@ -134,7 +137,7 @@ class ProfileSupabaseSchema {
       if (includeVerification) 'is_verified',
       if (includeVerification) 'verification_status',
       ..._mediaColumns,
-      ..._pendingMediaColumns,
+      if (includePendingMedia) ..._pendingMediaColumns,
     ]);
   }
 
@@ -154,16 +157,25 @@ class ProfileSupabaseSchema {
     return SupabaseCompat.isMissingAnyColumn(error, proColumns);
   }
 
+  static bool isMissingPendingMediaColumn(PostgrestException error) {
+    return SupabaseCompat.isMissingAnyColumn(error, _pendingMediaColumns);
+  }
+
   static bool isMissingOwnOptionalColumn(PostgrestException error) {
     return isMissingProfessionalColumn(error) ||
-        isMissingVerificationColumn(error);
+        isMissingVerificationColumn(error) ||
+        isMissingPendingMediaColumn(error);
   }
 
   static Map<String, dynamic> withoutProfessionalPayload(
     Map<String, dynamic> payload,
   ) {
     final next = Map<String, dynamic>.from(payload);
-    for (final column in professionalColumns) {
+    for (final column in [
+      ...professionalColumns,
+      ...verificationColumns,
+      ..._pendingMediaColumns,
+    ]) {
       next.remove(column);
     }
     return next;

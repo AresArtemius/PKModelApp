@@ -424,6 +424,32 @@ class _VideoThumb extends StatelessWidget {
   }
 }
 
+class _PickedXFileImage extends StatelessWidget {
+  const _PickedXFileImage({required this.file, this.fit = BoxFit.cover});
+
+  final XFile file;
+  final BoxFit fit;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Uint8List>(
+      future: file.readAsBytes(),
+      builder: (context, snapshot) {
+        final bytes = snapshot.data;
+        if (bytes == null || bytes.isEmpty) {
+          return const _EmptyProfileImagePlaceholder();
+        }
+
+        return Image.memory(
+          bytes,
+          fit: fit,
+          errorBuilder: (_, _, _) => const _EmptyProfileImagePlaceholder(),
+        );
+      },
+    );
+  }
+}
+
 class _VideoThumbImage extends StatefulWidget {
   const _VideoThumbImage({this.url, this.file});
 
@@ -705,7 +731,7 @@ class _ThumbRow extends StatelessWidget {
         ),
       for (int i = 0; i < files.length; i++)
         _Thumb(
-          image: Image.file(File(files[i].path), fit: BoxFit.cover),
+          image: _PickedXFileImage(file: files[i], fit: BoxFit.cover),
           onRemove: () => onRemove(i, isPicked: true),
         ),
     ];
@@ -1058,23 +1084,6 @@ class _ProfileMediaStorage {
     return _sb.storage.from(bucket).getPublicUrl(path);
   }
 
-  Future<String> uploadFile({
-    required String bucket,
-    required String path,
-    required File file,
-    required String contentType,
-  }) async {
-    await _sb.storage
-        .from(bucket)
-        .upload(
-          path,
-          file,
-          fileOptions: FileOptions(contentType: contentType, upsert: false),
-        );
-
-    return _sb.storage.from(bucket).getPublicUrl(path);
-  }
-
   Future<_ProfileMediaUploadResult> uploadPickedMedia({
     required String bucket,
     required String uid,
@@ -1101,7 +1110,7 @@ class _ProfileMediaStorage {
       final name = '${stamp}_$i.${ext.isEmpty ? 'jpg' : ext}';
       final storagePath = '$uid/photos/$name';
 
-      final bytes = await File(xf.path).readAsBytes();
+      final bytes = await xf.readAsBytes();
       final url = await uploadBinary(
         bucket: bucket,
         path: storagePath,
@@ -1118,10 +1127,11 @@ class _ProfileMediaStorage {
       final name = '${stamp}_$i.${ext.isEmpty ? 'mp4' : ext}';
       final storagePath = '$uid/videos/$name';
 
-      final videoUrl = await uploadFile(
+      final videoBytes = await xf.readAsBytes();
+      final videoUrl = await uploadBinary(
         bucket: bucket,
         path: storagePath,
-        file: File(xf.path),
+        bytes: videoBytes,
         contentType: ct,
       );
       uploadedVideos.add(videoUrl);

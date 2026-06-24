@@ -119,26 +119,26 @@ void _runBootstrap(_BootstrapErrorKind kind, {String? details}) {
 }
 
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-
-  FlutterError.onError = (details) {
-    FlutterError.presentError(details);
-  };
-
-  ui.PlatformDispatcher.instance.onError = (error, stack) {
-    FlutterError.reportError(
-      FlutterErrorDetails(
-        exception: error,
-        stack: stack,
-        library: 'platform_dispatcher',
-        context: ErrorDescription('unhandled platform error'),
-      ),
-    );
-    return false;
-  };
-
   await runZonedGuarded(
     () async {
+      WidgetsFlutterBinding.ensureInitialized();
+
+      FlutterError.onError = (details) {
+        FlutterError.presentError(details);
+      };
+
+      ui.PlatformDispatcher.instance.onError = (error, stack) {
+        FlutterError.reportError(
+          FlutterErrorDetails(
+            exception: error,
+            stack: stack,
+            library: 'platform_dispatcher',
+            context: ErrorDescription('unhandled platform error'),
+          ),
+        );
+        return false;
+      };
+
       if (!AppConfig.isValid) {
         _runBootstrap(_BootstrapErrorKind.config);
         return;
