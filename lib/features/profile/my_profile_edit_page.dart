@@ -659,27 +659,34 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
             newVideoUrls: uploaded.videoUrls,
             newVideoPreviewUrls: uploaded.videoPreviewUrls,
           );
+      final visibleSaved = approveImmediately
+          ? await ref
+                .read(myProfileProvider.notifier)
+                .publishAdminProfile(saved.id)
+          : saved;
 
       if (!approveImmediately &&
           submitForReview &&
-          saved.status != ProfileStatus.pending) {
-        await ref.read(myProfileProvider.notifier).submitForReview(saved.id);
+          visibleSaved.status != ProfileStatus.pending) {
+        await ref
+            .read(myProfileProvider.notifier)
+            .submitForReview(visibleSaved.id);
       }
 
-      if (!mounted) return saved.id;
+      if (!mounted) return visibleSaved.id;
 
       setState(() {
-        _currentProfile = saved;
+        _currentProfile = visibleSaved;
         _pickedPhotos.clear();
         _pickedVideos.clear();
 
-        _photoUrls = List<String>.from(saved.photoUrls);
-        _videoUrls = List<String>.from(saved.videoUrls);
-        _videoPreviewUrls = List<String>.from(saved.videoPreviewUrls);
+        _photoUrls = List<String>.from(visibleSaved.photoUrls);
+        _videoUrls = List<String>.from(visibleSaved.videoUrls);
+        _videoPreviewUrls = List<String>.from(visibleSaved.videoPreviewUrls);
       });
 
       if (closeAfter) Navigator.of(context).pop();
-      return saved.id;
+      return visibleSaved.id;
     } catch (e, st) {
       AppLogger.error('Failed to save profile', error: e, stackTrace: st);
       if (!mounted) return null;

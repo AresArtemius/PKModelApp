@@ -328,6 +328,7 @@ class MyProfileController
     final uid = _requireUid();
     final profileId = profile.id.trim();
     final basePayload = _basePayloadFor(profile, uid);
+    final publishImmediately = profile.status == ProfileStatus.approved;
 
     if (profileId.isEmpty) {
       await _ensureCanCreateProfile(uid);
@@ -353,22 +354,36 @@ class MyProfileController
 
     final payload = {
       ...basePayload,
-      'photo_urls': profile.photoUrls,
-      'video_urls': profile.videoUrls,
-      'video_preview_urls': profile.videoPreviewUrls,
-      'pending_photo_urls': [...profile.pendingPhotoUrls, ...newPhotoUrls],
-      'pending_video_urls': [...profile.pendingVideoUrls, ...newVideoUrls],
-      'pending_video_preview_urls': [
-        ...profile.pendingVideoPreviewUrls,
-        ...newVideoPreviewUrls,
-      ],
-      'has_pending_media':
-          (profile.pendingPhotoUrls.isNotEmpty ||
-          profile.pendingVideoUrls.isNotEmpty ||
-          profile.pendingVideoPreviewUrls.isNotEmpty ||
-          newPhotoUrls.isNotEmpty ||
-          newVideoUrls.isNotEmpty ||
-          newVideoPreviewUrls.isNotEmpty),
+      'photo_urls': publishImmediately
+          ? [...profile.photoUrls, ...profile.pendingPhotoUrls, ...newPhotoUrls]
+          : profile.photoUrls,
+      'video_urls': publishImmediately
+          ? [...profile.videoUrls, ...profile.pendingVideoUrls, ...newVideoUrls]
+          : profile.videoUrls,
+      'video_preview_urls': publishImmediately
+          ? [
+              ...profile.videoPreviewUrls,
+              ...profile.pendingVideoPreviewUrls,
+              ...newVideoPreviewUrls,
+            ]
+          : profile.videoPreviewUrls,
+      'pending_photo_urls': publishImmediately
+          ? const <String>[]
+          : [...profile.pendingPhotoUrls, ...newPhotoUrls],
+      'pending_video_urls': publishImmediately
+          ? const <String>[]
+          : [...profile.pendingVideoUrls, ...newVideoUrls],
+      'pending_video_preview_urls': publishImmediately
+          ? const <String>[]
+          : [...profile.pendingVideoPreviewUrls, ...newVideoPreviewUrls],
+      'has_pending_media': publishImmediately
+          ? false
+          : (profile.pendingPhotoUrls.isNotEmpty ||
+                profile.pendingVideoUrls.isNotEmpty ||
+                profile.pendingVideoPreviewUrls.isNotEmpty ||
+                newPhotoUrls.isNotEmpty ||
+                newVideoUrls.isNotEmpty ||
+                newVideoPreviewUrls.isNotEmpty),
     };
 
     final data = await _updateProfileAndSelect(profileId, uid, payload);
@@ -376,6 +391,43 @@ class MyProfileController
 
     state = AsyncValue.data(_upsertProfile(_currentList, updated));
     return updated;
+  }
+
+  Future<MyProfileState> publishAdminProfile(String profileId) async {
+    final id = profileId.trim();
+    if (id.isEmpty) throw MyProfileException(MyProfileError.noUser);
+
+    final uid = _requireUid();
+    try {
+      final data = await _sb.rpc(
+        'admin_publish_profile',
+        params: {'p_profile_id': id},
+      );
+      final rows = data is List ? data : const [];
+      if (rows.isNotEmpty) {
+        final published = MyProfileState.fromMap(
+          Map<String, dynamic>.from(rows.first as Map),
+        );
+        state = AsyncValue.data(_upsertProfile(_currentList, published));
+        return published;
+      }
+    } on PostgrestException catch (e) {
+      if (!SupabaseCompat.isMissingRpc(e, 'admin_publish_profile')) {
+        rethrow;
+      }
+    }
+
+    final data = await _updateProfileAndSelect(id, uid, {
+      'status': 'approved',
+      'moderation_comment': null,
+      'pending_photo_urls': const <String>[],
+      'pending_video_urls': const <String>[],
+      'pending_video_preview_urls': const <String>[],
+      'has_pending_media': false,
+    });
+    final published = MyProfileState.fromMap(data);
+    state = AsyncValue.data(_upsertProfile(_currentList, published));
+    return published;
   }
 
   Future<void> submitForReview(String profileId) async {
