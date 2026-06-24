@@ -394,50 +394,6 @@ final List<RouteBase> appRoutes = [
     },
   ),
 
-  GoRoute(path: Routes.admin, builder: (context, state) => const AdminPage()),
-  GoRoute(
-    path: Routes.catalogAdmin,
-    builder: (context, state) => const CatalogAdminPage(),
-  ),
-  GoRoute(
-    path: Routes.moderationAdmin,
-    builder: (context, state) => const ModerationAdminPage(),
-  ),
-  GoRoute(
-    path: Routes.castingAgentApplicationsAdmin,
-    builder: (context, state) => const CastingAgentApplicationsPage(),
-  ),
-  GoRoute(
-    path: Routes.accountMergeRequestsAdmin,
-    builder: (context, state) => const AccountMergeRequestsPage(),
-  ),
-  GoRoute(
-    path: Routes.createCastingAdmin,
-    builder: (context, state) => const CreateCastingAdminPage(),
-  ),
-  GoRoute(
-    path: Routes.adminSelection,
-    builder: (context, state) => const SelectionAdminPage(),
-  ),
-  GoRoute(
-    path: Routes.safetyAdmin,
-    builder: (context, state) => const SafetyAdminPage(),
-  ),
-  GoRoute(
-    path: '${Routes.adminSelection}/:$_routeParamId',
-    builder: (context, state) {
-      final id = state.pathParameters[_routeParamId] ?? '';
-      return SelectionCastingPage(castingId: id);
-    },
-  ),
-  GoRoute(
-    path: '${Routes.adminSelectionProject}/:$_routeParamId',
-    builder: (context, state) {
-      final id = state.pathParameters[_routeParamId] ?? '';
-      return SelectionProjectPage(selectionId: id);
-    },
-  ),
-
   ShellRoute(
     builder: (context, state, child) => AppShell(child: child),
     routes: [
@@ -472,6 +428,52 @@ final List<RouteBase> appRoutes = [
       GoRoute(
         path: Routes.profileAnalytics,
         builder: (context, state) => const ProfileAnalyticsPage(),
+      ),
+      GoRoute(
+        path: Routes.admin,
+        builder: (context, state) => const AdminPage(),
+      ),
+      GoRoute(
+        path: Routes.catalogAdmin,
+        builder: (context, state) => const CatalogAdminPage(),
+      ),
+      GoRoute(
+        path: Routes.moderationAdmin,
+        builder: (context, state) => const ModerationAdminPage(),
+      ),
+      GoRoute(
+        path: Routes.castingAgentApplicationsAdmin,
+        builder: (context, state) => const CastingAgentApplicationsPage(),
+      ),
+      GoRoute(
+        path: Routes.accountMergeRequestsAdmin,
+        builder: (context, state) => const AccountMergeRequestsPage(),
+      ),
+      GoRoute(
+        path: Routes.createCastingAdmin,
+        builder: (context, state) => const CreateCastingAdminPage(),
+      ),
+      GoRoute(
+        path: Routes.adminSelection,
+        builder: (context, state) => const SelectionAdminPage(),
+      ),
+      GoRoute(
+        path: Routes.safetyAdmin,
+        builder: (context, state) => const SafetyAdminPage(),
+      ),
+      GoRoute(
+        path: '${Routes.adminSelection}/:$_routeParamId',
+        builder: (context, state) {
+          final id = state.pathParameters[_routeParamId] ?? '';
+          return SelectionCastingPage(castingId: id);
+        },
+      ),
+      GoRoute(
+        path: '${Routes.adminSelectionProject}/:$_routeParamId',
+        builder: (context, state) {
+          final id = state.pathParameters[_routeParamId] ?? '';
+          return SelectionProjectPage(selectionId: id);
+        },
       ),
     ],
   ),

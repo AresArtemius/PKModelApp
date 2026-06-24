@@ -43,7 +43,6 @@ class AdminPage extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: _kAdminBg,
-      bottomNavigationBar: const AppBottomNav(),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(_kAdminPagePad),
