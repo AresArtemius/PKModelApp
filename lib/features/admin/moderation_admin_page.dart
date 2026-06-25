@@ -158,14 +158,6 @@ class ModerationAdminPage extends ConsumerWidget {
     final sb = ref.read(supabaseProvider);
 
     try {
-      await sb.rpc(
-        'admin_publish_profile',
-        params: {'p_profile_id': profileId},
-      );
-    } on PostgrestException catch (e) {
-      if (!SupabaseCompat.isMissingRpc(e, 'admin_publish_profile')) {
-        rethrow;
-      }
       await sb
           .from('profiles')
           .update(<String, dynamic>{
@@ -173,6 +165,12 @@ class ModerationAdminPage extends ConsumerWidget {
             'moderation_comment': null,
           })
           .eq('id', profileId);
+    } on PostgrestException catch (directError) {
+      if (directError.code == '22P02') rethrow;
+      await sb.rpc(
+        'admin_publish_profile',
+        params: {'p_profile_id': profileId},
+      );
     }
 
     ref.invalidate(pendingProfilesProvider);
