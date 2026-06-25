@@ -327,14 +327,15 @@ declare
   v_title text;
   v_body text;
 begin
-  if new.user_id is null or coalesce(old.status, '') = coalesce(new.status, '') then
+  if new.user_id is null
+     or coalesce(old.status::text, '') = coalesce(new.status::text, '') then
     return new;
   end if;
 
-  if new.status = 'approved' then
+  if new.status::text = 'approved' then
     v_title := 'Анкета одобрена';
     v_body := 'Ваша анкета прошла модерацию.';
-  elsif new.status = 'rejected' then
+  elsif new.status::text = 'rejected' then
     v_title := 'Анкета отклонена';
     v_body := coalesce(nullif(btrim(new.moderation_comment), ''), 'Анкета не прошла модерацию.');
   else
@@ -347,7 +348,7 @@ begin
     v_body,
     '/me',
     'profile_moderation',
-    jsonb_build_object('profile_id', new.id, 'status', new.status)
+    jsonb_build_object('profile_id', new.id, 'status', new.status::text)
   );
 
   return new;
@@ -372,14 +373,14 @@ declare
   v_title text;
   v_body text;
 begin
-  if coalesce(old.status, '') = coalesce(new.status, '') then
+  if coalesce(old.status::text, '') = coalesce(new.status::text, '') then
     return new;
   end if;
 
-  if new.status = 'approved' then
+  if new.status::text = 'approved' then
     v_title := 'Заявка кастинг-агента одобрена';
     v_body := 'Теперь вы можете создавать подборки для кастингов.';
-  elsif new.status = 'rejected' then
+  elsif new.status::text = 'rejected' then
     v_title := 'Заявка кастинг-агента отклонена';
     v_body := coalesce(nullif(btrim(new.comment), ''), 'Заявка не прошла модерацию.');
   else
@@ -392,7 +393,7 @@ begin
     v_body,
     '/me',
     'casting_agent_moderation',
-    jsonb_build_object('application_id', new.id, 'status', new.status)
+    jsonb_build_object('application_id', new.id, 'status', new.status::text)
   );
 
   return new;

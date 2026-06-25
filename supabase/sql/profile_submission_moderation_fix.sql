@@ -275,7 +275,7 @@ begin
     p.resume,
     p.unavailable_days,
     p.is_available,
-    p.status,
+    p.status::text,
     p.moderation_comment,
     p.is_verified,
     p.verification_status,
@@ -313,10 +313,10 @@ begin
 
   return query
   select
-    coalesce(nullif(btrim(p.status), ''), 'empty') as status,
+    coalesce(nullif(btrim(p.status::text), ''), 'empty') as status,
     count(*)::bigint as count
   from public.profiles p
-  group by coalesce(nullif(btrim(p.status), ''), 'empty')
+  group by coalesce(nullif(btrim(p.status::text), ''), 'empty')
   order by status;
 end;
 $$;
