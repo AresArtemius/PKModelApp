@@ -14,6 +14,7 @@ class CastingCard extends StatelessWidget {
     this.responseStatus,
     this.isDisabled = false,
     required this.onRespondTap,
+    this.onDeleteTap,
   });
 
   final CastingModel casting;
@@ -21,6 +22,7 @@ class CastingCard extends StatelessWidget {
   final CastingResponseStatus? responseStatus;
   final bool isDisabled;
   final void Function(String castingId) onRespondTap;
+  final void Function(String castingId)? onDeleteTap;
 
   @override
   Widget build(BuildContext context) {
@@ -61,6 +63,20 @@ class CastingCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 12),
+              if (onDeleteTap != null) ...[
+                SizedBox(
+                  width: 42,
+                  height: kCastingRespondButtonH,
+                  child: IconButton(
+                    tooltip: t.deleteUpper,
+                    visualDensity: VisualDensity.compact,
+                    icon: const Icon(Icons.delete_outline_rounded),
+                    color: BrandTheme.redTop,
+                    onPressed: () => onDeleteTap!(casting.id),
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ],
               SizedBox(
                 width: 176,
                 child: _CastingActionButton(

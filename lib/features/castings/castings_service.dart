@@ -129,4 +129,44 @@ class CastingsService {
       throw CastingsException('Failed to fetch response statuses', original: e);
     }
   }
+
+  Future<void> deleteCasting(String castingId) async {
+    final id = castingId.trim();
+    if (id.isEmpty) return;
+
+    try {
+      await _sb.rpc('admin_delete_casting', params: {'p_casting_id': id});
+    } on PostgrestException catch (e) {
+      if (!SupabaseCompat.isMissingRpc(e, 'admin_delete_casting')) {
+        throw CastingsException('Failed to delete casting', original: e);
+      }
+      try {
+        await _deleteCastingDirectly(id);
+      } on PostgrestException catch (second) {
+        throw CastingsException('Failed to delete casting', original: second);
+      }
+    } catch (e) {
+      throw CastingsException('Failed to delete casting', original: e);
+    }
+  }
+
+  Future<void> _deleteCastingDirectly(String castingId) async {
+    try {
+      await _sb.from('casting_responses').delete().eq('casting_id', castingId);
+    } on PostgrestException catch (e) {
+      if (!SupabaseCompat.isMissingRelation(e, const ['casting_responses'])) {
+        rethrow;
+      }
+    }
+
+    try {
+      await _sb.from('casting_chats').delete().eq('casting_id', castingId);
+    } on PostgrestException catch (e) {
+      if (!SupabaseCompat.isMissingRelation(e, const ['casting_chats'])) {
+        rethrow;
+      }
+    }
+
+    await _sb.from('castings').delete().eq('id', castingId);
+  }
 }

@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/app_error_mapper.dart';
 import '../../core/app_logger.dart';
 import '../../core/router.dart';
+import '../../core/roles_provider.dart';
 import '../../gen_l10n/app_localizations.dart';
 import '../profile/my_profile_controller.dart';
 import '../profile/profile_model.dart';
@@ -17,6 +19,22 @@ import 'casting_response_status.dart';
 import 'castings_service.dart';
 import 'castings_provider.dart';
 import 'casting_card.dart';
+
+String _castingAdminErrorText(Object error, AppLocalizations t) {
+  final source = error is CastingsException ? error.original : error;
+  if (source is PostgrestException) {
+    final parts = <String>[source.message.trim()];
+    final details = (source.details ?? '').toString().trim();
+    final hint = (source.hint ?? '').trim();
+    final code = (source.code ?? '').trim();
+    if (details.isNotEmpty) parts.add(details);
+    if (hint.isNotEmpty) parts.add(hint);
+    if (code.isNotEmpty) parts.add('code: $code');
+    parts.removeWhere((part) => part.isEmpty);
+    if (parts.isNotEmpty) return parts.join('\n');
+  }
+  return AppErrorMapper.message(error, t, original: source);
+}
 
 void _showSnack(BuildContext context, String text) {
   ScaffoldMessenger.of(context)
@@ -36,6 +54,65 @@ void _showSnack(BuildContext context, String text) {
         ),
       ),
     );
+}
+
+Future<bool> _showDeleteCastingConfirm(
+  BuildContext context,
+  AppLocalizations t,
+) async {
+  final isRu = Localizations.localeOf(context).languageCode == 'ru';
+  final result = await showDialog<bool>(
+    context: context,
+    barrierDismissible: true,
+    builder: (ctx) => Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: kCastingDialogInsetPad,
+      child: Container(
+        decoration: castingDialogDecoration(),
+        padding: kCastingDialogPad,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              isRu ? 'УДАЛИТЬ КАСТИНГ?' : 'DELETE CASTING?',
+              textAlign: TextAlign.center,
+              style: kCastingDialogTitleStyle,
+            ),
+            const SizedBox(height: kGap10),
+            Text(
+              isRu
+                  ? 'Кастинг, отклики и связанные чаты будут удалены.'
+                  : 'The casting, responses, and related chats will be deleted.',
+              textAlign: TextAlign.center,
+              style: kCastingDialogBodyStyle,
+            ),
+            const SizedBox(height: kGap16),
+            Row(
+              children: [
+                Expanded(
+                  child: BrandPillButton(
+                    label: t.cancelUpper,
+                    style: BrandPillStyle.light,
+                    onTap: () => Navigator.of(ctx).pop(false),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: BrandPillButton(
+                    label: t.deleteUpper,
+                    style: BrandPillStyle.dark,
+                    onTap: () => Navigator.of(ctx).pop(true),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+
+  return result ?? false;
 }
 
 Future<void> _showAuthRequiredDialog(
@@ -406,6 +483,41 @@ Future<void> _onRespondTap({
   }
 }
 
+Future<void> _onDeleteCastingTap({
+  required WidgetRef ref,
+  required BuildContext context,
+  required AppLocalizations t,
+  required String castingId,
+}) async {
+  final confirmed = await _showDeleteCastingConfirm(context, t);
+  if (!context.mounted || !confirmed) return;
+
+  try {
+    await ref.read(castingsServiceProvider).deleteCasting(castingId);
+    ref.invalidate(castingsProvider);
+    ref.invalidate(myCastingResponseStatusesProvider);
+    if (!context.mounted) return;
+    _showSnack(
+      context,
+      Localizations.localeOf(context).languageCode == 'ru'
+          ? 'Кастинг удален'
+          : 'Casting deleted',
+    );
+  } on CastingsException catch (e, st) {
+    AppLogger.error(
+      'Casting delete failed',
+      error: e.original ?? e,
+      stackTrace: st,
+    );
+    if (!context.mounted) return;
+    _showSnack(context, _castingAdminErrorText(e, t));
+  } catch (e, st) {
+    AppLogger.error('Casting delete failed', error: e, stackTrace: st);
+    if (!context.mounted) return;
+    _showSnack(context, _castingAdminErrorText(e, t));
+  }
+}
+
 class CastingPage extends ConsumerWidget {
   const CastingPage({super.key});
 
@@ -416,6 +528,9 @@ class CastingPage extends ConsumerWidget {
     final castings = ref.watch(castingsProvider);
     final responding = ref.watch(respondingCastingsProvider);
     final responseStatuses = ref.watch(myCastingResponseStatusesProvider);
+    final isAdmin = ref
+        .watch(isAdminProvider)
+        .maybeWhen(data: (value) => value, orElse: () => false);
 
     final profilesReady = myProfiles.hasValue;
     final profilesLoading = myProfiles.isLoading;
@@ -582,6 +697,14 @@ class CastingPage extends ConsumerWidget {
                                 isResponding: responding.contains(casting.id),
                                 responseStatus: responseStatusMap[casting.id],
                                 isDisabled: !profilesReady,
+                                onDeleteTap: isAdmin
+                                    ? (castingId) => _onDeleteCastingTap(
+                                        ref: ref,
+                                        context: context,
+                                        t: t,
+                                        castingId: castingId,
+                                      )
+                                    : null,
                                 onRespondTap: (castingId) {
                                   if (profilesLoading) {
                                     _showSnack(context, t.loadingDots);

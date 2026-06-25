@@ -40,6 +40,21 @@ String _formatModerationCounts(Map<String, int>? counts, {required bool ru}) {
   return 'Database statuses: pending $pending, draft $draft, approved $approved, rejected $rejected, total $total.';
 }
 
+String _adminSupabaseErrorText(Object error, AppLocalizations t) {
+  if (error is PostgrestException) {
+    final parts = <String>[error.message.trim()];
+    final details = (error.details ?? '').toString().trim();
+    final hint = (error.hint ?? '').trim();
+    final code = (error.code ?? '').trim();
+    if (details.isNotEmpty) parts.add(details);
+    if (hint.isNotEmpty) parts.add(hint);
+    if (code.isNotEmpty) parts.add('code: $code');
+    parts.removeWhere((part) => part.isEmpty);
+    if (parts.isNotEmpty) return parts.join('\n');
+  }
+  return AppErrorMapper.message(error, t);
+}
+
 final pendingProfilesProvider =
     FutureProvider.autoDispose<List<MyProfileState>>((ref) async {
       ref.watch(authStateProvider);
@@ -143,21 +158,28 @@ class ModerationAdminPage extends ConsumerWidget {
     final sb = ref.read(supabaseProvider);
 
     try {
-      await sb.rpc(
-        'admin_publish_profile',
-        params: {'p_profile_id': profileId},
-      );
+      await sb.rpc('approve_profile', params: {'p_profile_id': profileId});
     } on PostgrestException catch (e) {
-      if (!SupabaseCompat.isMissingRpc(e, 'admin_publish_profile')) {
+      if (!SupabaseCompat.isMissingRpc(e, 'approve_profile')) {
         rethrow;
       }
-      await sb
-          .from('profiles')
-          .update(<String, dynamic>{
-            'status': 'approved',
-            'moderation_comment': null,
-          })
-          .eq('id', profileId);
+      try {
+        await sb.rpc(
+          'admin_publish_profile',
+          params: {'p_profile_id': profileId},
+        );
+      } on PostgrestException catch (second) {
+        if (!SupabaseCompat.isMissingRpc(second, 'admin_publish_profile')) {
+          rethrow;
+        }
+        await sb
+            .from('profiles')
+            .update(<String, dynamic>{
+              'status': 'approved',
+              'moderation_comment': null,
+            })
+            .eq('id', profileId);
+      }
     }
 
     ref.invalidate(pendingProfilesProvider);
@@ -359,7 +381,7 @@ class ModerationAdminPage extends ConsumerWidget {
                                                   ).showSnackBar(
                                                     SnackBar(
                                                       content: Text(
-                                                        AppErrorMapper.message(
+                                                        _adminSupabaseErrorText(
                                                           e,
                                                           t,
                                                         ),
