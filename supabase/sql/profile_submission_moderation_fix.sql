@@ -158,6 +158,8 @@ $$;
 
 grant execute on function public.admin_publish_profile(uuid) to authenticated;
 
+drop function if exists public.approve_profile(uuid);
+
 create or replace function public.approve_profile(p_profile_id uuid)
 returns void
 language plpgsql
