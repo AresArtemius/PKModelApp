@@ -158,7 +158,36 @@ $$;
 
 grant execute on function public.admin_publish_profile(uuid) to authenticated;
 
-drop function if exists public.approve_profile(uuid);
+create or replace function public.admin_publish_profile(p_profile_id text)
+returns setof public.profiles
+language plpgsql
+security definer
+set search_path = public
+set row_security = off
+as $$
+begin
+  return query
+  select *
+  from public.admin_publish_profile(p_profile_id::uuid);
+end;
+$$;
+
+grant execute on function public.admin_publish_profile(text) to authenticated;
+
+do $$
+declare
+  fn record;
+begin
+  for fn in
+    select p.oid::regprocedure::text as signature
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public'
+      and p.proname = 'approve_profile'
+  loop
+    execute format('drop function if exists %s', fn.signature);
+  end loop;
+end $$;
 
 create or replace function public.approve_profile(p_profile_id uuid)
 returns void
@@ -174,6 +203,21 @@ end;
 $$;
 
 grant execute on function public.approve_profile(uuid) to authenticated;
+
+create or replace function public.approve_profile(p_profile_id text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+set row_security = off
+as $$
+begin
+  perform 1
+  from public.admin_publish_profile(p_profile_id::uuid);
+end;
+$$;
+
+grant execute on function public.approve_profile(text) to authenticated;
 
 create or replace function public.pending_profiles_for_moderation()
 returns table (
