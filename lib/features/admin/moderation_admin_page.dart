@@ -21,25 +21,6 @@ const int _moderationMediaCacheWidth = 280;
 const double _moderationMediaSize = 64;
 const double _moderationMediaRadius = 16;
 
-String _formatModerationCounts(Map<String, int>? counts, {required bool ru}) {
-  if (counts == null) {
-    return ru
-        ? 'SQL profile_submission_moderation_fix.sql еще не применен или приложение использует старую схему.'
-        : 'profile_submission_moderation_fix.sql is not applied yet, or the app is still using the old schema.';
-  }
-
-  final pending = counts['pending'] ?? 0;
-  final draft = counts['draft'] ?? 0;
-  final approved = counts['approved'] ?? 0;
-  final rejected = counts['rejected'] ?? 0;
-  final total = counts.values.fold<int>(0, (sum, value) => sum + value);
-
-  if (ru) {
-    return 'Статусы в базе: на модерации $pending, черновики $draft, одобрено $approved, отклонено $rejected, всего $total.';
-  }
-  return 'Database statuses: pending $pending, draft $draft, approved $approved, rejected $rejected, total $total.';
-}
-
 String _adminSupabaseErrorText(Object error, AppLocalizations t) {
   if (error is PostgrestException) {
     final parts = <String>[error.message.trim()];
@@ -118,34 +99,6 @@ final pendingProfilesProvider =
       return rows
           .map((row) => MyProfileState.fromMap(Map<String, dynamic>.from(row)))
           .toList(growable: false);
-    });
-
-final moderationStatusCountsProvider =
-    FutureProvider.autoDispose<Map<String, int>?>((ref) async {
-      ref.watch(authStateProvider);
-      final sb = ref.read(supabaseProvider);
-
-      try {
-        final rows = await sb.rpc('profile_moderation_status_counts');
-        final counts = <String, int>{};
-        for (final row in rows as List) {
-          final map = Map<String, dynamic>.from(row as Map);
-          final status = map['status']?.toString().trim();
-          final count = int.tryParse(map['count']?.toString() ?? '') ?? 0;
-          if (status != null && status.isNotEmpty) {
-            counts[status] = count;
-          }
-        }
-        return counts;
-      } on PostgrestException catch (e) {
-        if (SupabaseCompat.isMissingRpc(
-          e,
-          'profile_moderation_status_counts',
-        )) {
-          return null;
-        }
-        rethrow;
-      }
     });
 
 class ModerationAdminPage extends ConsumerWidget {
@@ -261,32 +214,8 @@ class ModerationAdminPage extends ConsumerWidget {
                                     context,
                                   ).languageCode ==
                                   'ru';
-                              final countsAsync = ref.watch(
-                                moderationStatusCountsProvider,
-                              );
-                              return countsAsync.when(
-                                loading: () => AdminMessageCard(
-                                  text: ru
-                                      ? 'ЗАЯВОК НЕТ\n\nПроверяю статусы анкет...'
-                                      : 'NO REQUESTS\n\nChecking profile statuses...',
-                                ),
-                                error: (e, _) => AdminMessageCard(
-                                  text: ru
-                                      ? 'ЗАЯВОК НЕТ\n\nНе удалось проверить статусы: ${AppErrorMapper.message(e, t)}'
-                                      : 'NO REQUESTS\n\nCould not check statuses: ${AppErrorMapper.message(e, t)}',
-                                  isError: true,
-                                ),
-                                data: (counts) {
-                                  final details = _formatModerationCounts(
-                                    counts,
-                                    ru: ru,
-                                  );
-                                  return AdminMessageCard(
-                                    text: ru
-                                        ? 'ЗАЯВОК НЕТ\n\n$details'
-                                        : 'NO REQUESTS\n\n$details',
-                                  );
-                                },
+                              return AdminMessageCard(
+                                text: ru ? 'ЗАЯВОК НЕТ' : 'NO REQUESTS',
                               );
                             }
 
