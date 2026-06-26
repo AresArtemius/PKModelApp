@@ -104,6 +104,7 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
 
   final _surnameC = TextEditingController();
   final _nameC = TextEditingController();
+  final _birthDateC = TextEditingController();
   final _ageC = TextEditingController();
   final _heightC = TextEditingController();
   final _bustC = TextEditingController();
@@ -129,6 +130,7 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
   String? _error;
   MyProfileState? _currentProfile;
   ProfessionalProfileType _profileType = ProfessionalProfileType.model;
+  String _birthDateIso = '';
 
   final _picker = ImagePicker();
   final List<XFile> _pickedPhotos = [];
@@ -150,6 +152,7 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
   List<TextEditingController> get _qualityControllers => [
     _surnameC,
     _nameC,
+    _birthDateC,
     _ageC,
     _heightC,
     _bustC,
@@ -249,6 +252,7 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
     }
     _surnameC.dispose();
     _nameC.dispose();
+    _birthDateC.dispose();
     _ageC.dispose();
     _heightC.dispose();
     _bustC.dispose();
@@ -273,6 +277,7 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
   void _clearForm() {
     _surnameC.clear();
     _nameC.clear();
+    _birthDateC.clear();
     _ageC.clear();
     _heightC.clear();
     _bustC.clear();
@@ -293,6 +298,7 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
     _equipmentC.clear();
 
     _profileType = widget.initialProfileType ?? ProfessionalProfileType.model;
+    _birthDateIso = '';
     _unavailableDays.clear();
     _photoUrls = [];
     _videoUrls = [];
@@ -321,6 +327,8 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
     _surnameC.text = nameParts.surname;
     _nameC.text = nameParts.name;
 
+    _birthDateIso = s.birthDate;
+    _birthDateC.text = _birthDateLabel(s.birthDate);
     _ageC.text = s.age > 0 ? s.age.toString() : '';
     _heightC.text = s.height > 0 ? s.height.toString() : '';
     _bustC.text = s.bust > 0 ? s.bust.toString() : '';
@@ -363,6 +371,63 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
 
   DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
 
+  DateTime? _parseIsoDate(String value) {
+    final text = value.trim();
+    if (text.isEmpty) return null;
+    return DateTime.tryParse(text);
+  }
+
+  int _ageFromBirthDate(DateTime birthDate) {
+    final today = _dateOnly(DateTime.now());
+    var age = today.year - birthDate.year;
+    final hadBirthdayThisYear =
+        today.month > birthDate.month ||
+        (today.month == birthDate.month && today.day >= birthDate.day);
+    if (!hadBirthdayThisYear) age -= 1;
+    return age.clamp(0, 120);
+  }
+
+  String _isoDate(DateTime date) => date.toIso8601String().split('T').first;
+
+  String _birthDateLabel(String iso) {
+    final date = _parseIsoDate(iso);
+    if (date == null) return '';
+
+    final day = date.day.toString().padLeft(2, '0');
+    final month = date.month.toString().padLeft(2, '0');
+    final year = date.year.toString();
+    final age = _ageFromBirthDate(date);
+    final lang = Localizations.localeOf(context).languageCode.toLowerCase();
+    final suffix = lang == 'ru' ? '$age лет' : '$age y.o.';
+    return '$day.$month.$year · $suffix';
+  }
+
+  Future<void> _pickBirthDate() async {
+    final now = DateTime.now();
+    final current = _parseIsoDate(_birthDateIso);
+    final initial = current ?? DateTime(now.year - 18, now.month, now.day);
+
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial.isAfter(now) ? now : initial,
+      firstDate: DateTime(now.year - 100, now.month, now.day),
+      lastDate: now,
+      helpText:
+          Localizations.localeOf(context).languageCode.toLowerCase() == 'ru'
+          ? 'Дата рождения'
+          : 'Birth date',
+    );
+    if (picked == null || !mounted) return;
+
+    final date = _dateOnly(picked);
+    final age = _ageFromBirthDate(date);
+    setState(() {
+      _birthDateIso = _isoDate(date);
+      _birthDateC.text = _birthDateLabel(_birthDateIso);
+      _ageC.text = age.toString();
+    });
+  }
+
   void _toggleUnavailableDay(DateTime d) {
     final dd = _dateOnly(d);
     setState(() {
@@ -394,6 +459,7 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
     return base.copyWith(
       profileType: _profileType,
       fullName: _ProfileNameHelper.buildFullName(nn),
+      birthDate: _birthDateIso,
       status: nextStatus,
       moderationComment: submitForReview || approveImmediately
           ? null
@@ -1007,12 +1073,16 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
                         const SizedBox(height: kGap10),
                         _Row2(
                           left: _Field(
-                            label: t.profileAge,
-                            controller: _ageC,
-                            keyboardType: TextInputType.number,
-                            inputFormatters: [
-                              FilteringTextInputFormatter.digitsOnly,
-                            ],
+                            label:
+                                Localizations.localeOf(
+                                      context,
+                                    ).languageCode.toLowerCase() ==
+                                    'ru'
+                                ? 'Дата рождения'
+                                : 'Birth date',
+                            controller: _birthDateC,
+                            readOnly: true,
+                            onTap: _pickBirthDate,
                           ),
                           right: _Field(
                             label: t.profileHeightCm,

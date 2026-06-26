@@ -72,6 +72,7 @@ class MyProfileController
     'user_id': uid,
     'profile_type': s.profileType.storageValue,
     'full_name': s.fullName,
+    'birth_date': s.birthDate.trim().isEmpty ? null : s.birthDate.trim(),
     'age': s.age,
     'height': s.height,
     'bust': s.bust,

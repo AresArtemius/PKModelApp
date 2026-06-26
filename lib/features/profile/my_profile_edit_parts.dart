@@ -1067,6 +1067,8 @@ class _Field extends StatelessWidget {
     this.keyboardType,
     this.inputFormatters,
     this.maxLines = 1,
+    this.readOnly = false,
+    this.onTap,
   });
 
   final String label;
@@ -1074,6 +1076,8 @@ class _Field extends StatelessWidget {
   final TextInputType? keyboardType;
   final List<TextInputFormatter>? inputFormatters;
   final int maxLines;
+  final bool readOnly;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -1082,6 +1086,8 @@ class _Field extends StatelessWidget {
       keyboardType: keyboardType,
       inputFormatters: inputFormatters,
       maxLines: maxLines,
+      readOnly: readOnly,
+      onTap: onTap,
       style: const TextStyle(color: kTextDark),
       decoration: profileFieldDecoration(label: label),
     );

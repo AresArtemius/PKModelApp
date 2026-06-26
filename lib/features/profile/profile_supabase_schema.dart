@@ -33,6 +33,7 @@ class ProfileSupabaseSchema {
 
   static const _identityColumns = <String>['id', 'user_id'];
   static const _publicIdentityColumns = <String>['id', 'user_id', 'full_name'];
+  static const _birthDateColumns = <String>['birth_date'];
   static const _measurementColumns = <String>[
     'age',
     'height',
@@ -66,6 +67,7 @@ class ProfileSupabaseSchema {
       ..._identityColumns,
       if (includeOptional) ...professionalColumns,
       'full_name',
+      if (includeOptional) ..._birthDateColumns,
       ..._measurementColumns,
       ..._appearanceColumns,
       ..._rateColumns,
@@ -161,9 +163,14 @@ class ProfileSupabaseSchema {
     return SupabaseCompat.isMissingAnyColumn(error, _pendingMediaColumns);
   }
 
+  static bool isMissingBirthDateColumn(PostgrestException error) {
+    return SupabaseCompat.isMissingAnyColumn(error, _birthDateColumns);
+  }
+
   static bool isMissingOwnOptionalColumn(PostgrestException error) {
     return isMissingProfessionalColumn(error) ||
         isMissingVerificationColumn(error) ||
+        isMissingBirthDateColumn(error) ||
         isMissingPendingMediaColumn(error);
   }
 
@@ -175,6 +182,7 @@ class ProfileSupabaseSchema {
       ...professionalColumns,
       ...verificationColumns,
       ..._pendingMediaColumns,
+      ..._birthDateColumns,
     ]) {
       next.remove(column);
     }

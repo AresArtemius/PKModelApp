@@ -149,6 +149,7 @@ class MyProfileState {
   final String userId;
   final ProfessionalProfileType profileType;
   final String fullName;
+  final String birthDate;
   final int age;
   final int height;
   final int bust;
@@ -187,6 +188,7 @@ class MyProfileState {
     required this.userId,
     this.profileType = ProfessionalProfileType.model,
     required this.fullName,
+    this.birthDate = '',
     required this.age,
     required this.height,
     required this.bust,
@@ -226,6 +228,7 @@ class MyProfileState {
       userId: userId,
       profileType: ProfessionalProfileType.model,
       fullName: '',
+      birthDate: '',
       age: 0,
       height: 0,
       bust: 0,
@@ -267,6 +270,7 @@ class MyProfileState {
     String? userId,
     ProfessionalProfileType? profileType,
     String? fullName,
+    String? birthDate,
     int? age,
     int? height,
     int? bust,
@@ -304,6 +308,7 @@ class MyProfileState {
       userId: userId ?? this.userId,
       profileType: profileType ?? this.profileType,
       fullName: fullName ?? this.fullName,
+      birthDate: birthDate ?? this.birthDate,
       age: age ?? this.age,
       height: height ?? this.height,
       bust: bust ?? this.bust,
@@ -347,6 +352,7 @@ class MyProfileState {
       userId: _stringFromMap(m, 'user_id'),
       profileType: profileTypeFromString(_stringFromMap(m, 'profile_type')),
       fullName: _stringFromMap(m, 'full_name').trim(),
+      birthDate: _stringFromMap(m, 'birth_date').trim(),
       age: _intFromMap(m, 'age'),
       height: _intFromMap(m, 'height'),
       bust: _intFromMap(m, 'bust'),
