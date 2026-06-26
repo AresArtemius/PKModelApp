@@ -113,10 +113,18 @@ class AccountOwnerProfile {
 
   factory AccountOwnerProfile.fromMap(Map<String, dynamic>? map, User user) {
     String value(String key) => (map?[key] ?? '').toString().trim();
+    final metadata = user.userMetadata ?? const <String, dynamic>{};
+    final metadataAvatarUrl = _firstNonEmptyValue([
+      metadata['avatar_url'],
+      metadata['picture'],
+    ]);
+    final storedAvatarUrl = value('avatar_url');
     return AccountOwnerProfile(
       email: value('email').isNotEmpty ? value('email') : user.email ?? '',
       phone: value('phone').isNotEmpty ? value('phone') : user.phone ?? '',
-      avatarUrl: value('avatar_url'),
+      avatarUrl: storedAvatarUrl.isNotEmpty
+          ? storedAvatarUrl
+          : metadataAvatarUrl ?? '',
       fullName: value('full_name'),
       companyName: value('company_name'),
       position: value('position'),
@@ -145,6 +153,14 @@ class AccountOwnerProfile {
       'updated_at': DateTime.now().toUtc().toIso8601String(),
     };
   }
+}
+
+String? _firstNonEmptyValue(Iterable<Object?> values) {
+  for (final value in values) {
+    final text = value?.toString().trim() ?? '';
+    if (text.isNotEmpty) return text;
+  }
+  return null;
 }
 
 class AccountProfileService {
@@ -205,14 +221,29 @@ class AccountProfileService {
 
   Future<void> saveOwnerProfile(User user, AccountOwnerProfile profile) async {
     final payload = profile.toPayload(user);
+    final avatarUrl = profile.avatarUrl.trim();
     try {
       await _sb.rpc('save_account_profile', params: {'p_profile': payload});
+      if (avatarUrl.isNotEmpty) {
+        await _persistAvatarUrl(user.id, avatarUrl);
+      }
       return;
     } on PostgrestException catch (e) {
       if (!SupabaseCompat.isMissingRpc(e, 'save_account_profile')) rethrow;
     }
 
     await _sb.from('user_profiles').upsert(payload, onConflict: 'user_id');
+    if (avatarUrl.isNotEmpty) {
+      await _persistAvatarUrl(user.id, avatarUrl);
+    }
+  }
+
+  Future<void> _persistAvatarUrl(String userId, String avatarUrl) async {
+    await _sb.from('user_profiles').upsert({
+      'user_id': userId,
+      'avatar_url': avatarUrl,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    }, onConflict: 'user_id');
   }
 
   Future<void> requestAccountMerge({
