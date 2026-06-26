@@ -20,6 +20,9 @@ import '../profile/profile_supabase_schema.dart';
 const int _moderationMediaCacheWidth = 280;
 const double _moderationMediaSize = 64;
 const double _moderationMediaRadius = 16;
+const double _moderationDesktopBreakpoint = 900;
+const double _moderationDesktopMaxWidth = 1540;
+const double _moderationDesktopListWidth = 430;
 
 List<String> _mergeUniqueMedia(List<String> published, List<String> pending) {
   final seen = <String>{};
@@ -112,8 +115,16 @@ final pendingProfilesProvider =
           .toList(growable: false);
     });
 
-class ModerationAdminPage extends ConsumerWidget {
+class ModerationAdminPage extends ConsumerStatefulWidget {
   const ModerationAdminPage({super.key});
+
+  @override
+  ConsumerState<ModerationAdminPage> createState() =>
+      _ModerationAdminPageState();
+}
+
+class _ModerationAdminPageState extends ConsumerState<ModerationAdminPage> {
+  String? _selectedProfileId;
 
   Future<void> _approveProfile(
     WidgetRef ref, {
@@ -225,9 +236,11 @@ class ModerationAdminPage extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
     final isAdminAsync = ref.watch(isAdminProvider);
+    final isDesktop =
+        MediaQuery.sizeOf(context).width >= _moderationDesktopBreakpoint;
 
     return Scaffold(
       bottomNavigationBar: null,
@@ -287,155 +300,75 @@ class ModerationAdminPage extends ConsumerWidget {
                               );
                             }
 
-                            return ListView.separated(
-                              padding: EdgeInsets.zero,
-                              itemCount: items.length,
-                              separatorBuilder: (_, _) =>
-                                  const SizedBox(height: 12),
-                              itemBuilder: (context, i) {
-                                final p = items[i];
-                                final previewPhotos =
-                                    p.pendingPhotoUrls.isNotEmpty
-                                    ? p.pendingPhotoUrls
-                                    : p.photoUrls;
-                                final previewVideos =
-                                    p.pendingVideoUrls.isNotEmpty
-                                    ? p.pendingVideoUrls
-                                    : p.videoUrls;
-                                final previewVideoThumbs =
-                                    p.pendingVideoPreviewUrls.isNotEmpty
-                                    ? p.pendingVideoPreviewUrls
-                                    : p.videoPreviewUrls;
+                            final selected = items.firstWhere(
+                              (item) => item.id == _selectedProfileId,
+                              orElse: () => items.first,
+                            );
+                            if (_selectedProfileId != selected.id) {
+                              WidgetsBinding.instance.addPostFrameCallback((_) {
+                                if (!mounted) return;
+                                setState(
+                                  () => _selectedProfileId = selected.id,
+                                );
+                              });
+                            }
 
-                                return InkWell(
-                                  borderRadius: BorderRadius.circular(
-                                    kCardRadius,
-                                  ),
-                                  onTap: () =>
-                                      _openProfileDetails(context, ref, p),
-                                  child: Container(
-                                    padding: const EdgeInsets.all(14),
-                                    decoration: catalogCardDecoration(),
-                                    child: Row(
-                                      children: [
-                                        _ModerationMediaStrip(
-                                          photoUrls: previewPhotos,
-                                          videoUrls: previewVideos,
-                                          videoPreviewUrls: previewVideoThumbs,
-                                        ),
-                                        const SizedBox(width: 14),
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              Text(
-                                                (p.fullName.trim().isEmpty)
-                                                    ? p.id
-                                                    : p.fullName.trim(),
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                                style: adminCommandStyle(
-                                                  size: 17,
-                                                  letterSpacing: 0.7,
-                                                ),
-                                              ),
-                                              const SizedBox(height: 6),
-                                              Text(
-                                                '${p.age} • ${p.height} cm',
-                                                style: adminBodyStyle(
-                                                  weight: FontWeight.w700,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                        const SizedBox(width: 10),
-                                        Column(
-                                          children: [
-                                            if (p.status ==
-                                                ProfileStatus.pending) ...[
-                                              IconButton(
-                                                tooltip: t
-                                                    .profileStatusApprovedUpper,
-                                                icon: const Icon(
-                                                  Icons.check_circle_rounded,
-                                                ),
-                                                color: kTextDark,
-                                                onPressed: () async {
-                                                  try {
-                                                    await _approveProfile(
-                                                      ref,
-                                                      profile: p,
-                                                    );
-                                                  } catch (e) {
-                                                    if (!context.mounted) {
-                                                      return;
-                                                    }
-                                                    ScaffoldMessenger.of(
-                                                      context,
-                                                    ).showSnackBar(
-                                                      SnackBar(
-                                                        content: Text(
-                                                          _adminSupabaseErrorText(
-                                                            e,
-                                                            t,
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    );
-                                                  }
-                                                },
-                                              ),
-                                              IconButton(
-                                                tooltip: t
-                                                    .moderationRejectActionUpper,
-                                                icon: const Icon(
-                                                  Icons.cancel_rounded,
-                                                ),
-                                                color: kTextDark,
-                                                onPressed: () async {
-                                                  try {
-                                                    final reason =
-                                                        await _askRejectReason(
-                                                          context,
-                                                        );
-                                                    if (!context.mounted ||
-                                                        reason == null) {
-                                                      return;
-                                                    }
-                                                    await _rejectProfile(
-                                                      ref,
-                                                      profileId: p.id,
-                                                      reason: reason,
-                                                    );
-                                                  } catch (e) {
-                                                    if (!context.mounted) {
-                                                      return;
-                                                    }
-                                                    ScaffoldMessenger.of(
-                                                      context,
-                                                    ).showSnackBar(
-                                                      SnackBar(
-                                                        content: Text(
-                                                          AppErrorMapper.message(
-                                                            e,
-                                                            t,
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    );
-                                                  }
-                                                },
-                                              ),
-                                            ],
-                                          ],
-                                        ),
-                                      ],
+                            Future<void> approve(MyProfileState profile) async {
+                              try {
+                                await _approveProfile(ref, profile: profile);
+                              } catch (e) {
+                                if (!context.mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      _adminSupabaseErrorText(e, t),
                                     ),
                                   ),
                                 );
-                              },
+                              }
+                            }
+
+                            Future<void> reject(MyProfileState profile) async {
+                              try {
+                                final reason = await _askRejectReason(context);
+                                if (!context.mounted || reason == null) return;
+                                await _rejectProfile(
+                                  ref,
+                                  profileId: profile.id,
+                                  reason: reason,
+                                );
+                              } catch (e) {
+                                if (!context.mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(AppErrorMapper.message(e, t)),
+                                  ),
+                                );
+                              }
+                            }
+
+                            if (isDesktop) {
+                              return _ModerationDesktopLayout(
+                                items: items,
+                                selected: selected,
+                                onSelect: (profile) {
+                                  setState(
+                                    () => _selectedProfileId = profile.id,
+                                  );
+                                },
+                                onApprove: approve,
+                                onReject: reject,
+                              );
+                            }
+
+                            return _ModerationRequestList(
+                              items: items,
+                              selectedId: null,
+                              onTap: (profile) =>
+                                  _openProfileDetails(context, ref, profile),
+                              onApprove: approve,
+                              onReject: reject,
+                              showInlineActions: true,
                             );
                           },
                         );
@@ -610,6 +543,434 @@ class _ModerationProfileDetailsSheet extends StatelessWidget {
       ),
     );
   }
+}
+
+class _ModerationDesktopLayout extends StatelessWidget {
+  const _ModerationDesktopLayout({
+    required this.items,
+    required this.selected,
+    required this.onSelect,
+    required this.onApprove,
+    required this.onReject,
+  });
+
+  final List<MyProfileState> items;
+  final MyProfileState selected;
+  final ValueChanged<MyProfileState> onSelect;
+  final Future<void> Function(MyProfileState profile) onApprove;
+  final Future<void> Function(MyProfileState profile) onReject;
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.topCenter,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: _moderationDesktopMaxWidth),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(
+              width: _moderationDesktopListWidth,
+              child: _ModerationRequestList(
+                items: items,
+                selectedId: selected.id,
+                onTap: onSelect,
+                onApprove: onApprove,
+                onReject: onReject,
+                showInlineActions: false,
+              ),
+            ),
+            const SizedBox(width: 18),
+            Expanded(
+              child: _ModerationProfileDetailsPanel(
+                profile: selected,
+                onApprove: () => onApprove(selected),
+                onReject: () => onReject(selected),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ModerationRequestList extends StatelessWidget {
+  const _ModerationRequestList({
+    required this.items,
+    required this.selectedId,
+    required this.onTap,
+    required this.onApprove,
+    required this.onReject,
+    required this.showInlineActions,
+  });
+
+  final List<MyProfileState> items;
+  final String? selectedId;
+  final ValueChanged<MyProfileState> onTap;
+  final Future<void> Function(MyProfileState profile) onApprove;
+  final Future<void> Function(MyProfileState profile) onReject;
+  final bool showInlineActions;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+
+    return ListView.separated(
+      padding: EdgeInsets.zero,
+      itemCount: items.length,
+      separatorBuilder: (_, _) => const SizedBox(height: 12),
+      itemBuilder: (context, i) {
+        final p = items[i];
+        return _ModerationRequestCard(
+          profile: p,
+          selected: selectedId == p.id,
+          showInlineActions: showInlineActions,
+          onTap: () => onTap(p),
+          onApprove: () => onApprove(p),
+          onReject: () => onReject(p),
+          approveTooltip: t.profileStatusApprovedUpper,
+          rejectTooltip: t.moderationRejectActionUpper,
+        );
+      },
+    );
+  }
+}
+
+class _ModerationRequestCard extends StatelessWidget {
+  const _ModerationRequestCard({
+    required this.profile,
+    required this.selected,
+    required this.showInlineActions,
+    required this.onTap,
+    required this.onApprove,
+    required this.onReject,
+    required this.approveTooltip,
+    required this.rejectTooltip,
+  });
+
+  final MyProfileState profile;
+  final bool selected;
+  final bool showInlineActions;
+  final VoidCallback onTap;
+  final VoidCallback onApprove;
+  final VoidCallback onReject;
+  final String approveTooltip;
+  final String rejectTooltip;
+
+  @override
+  Widget build(BuildContext context) {
+    final previewPhotos = profile.pendingPhotoUrls.isNotEmpty
+        ? profile.pendingPhotoUrls
+        : profile.photoUrls;
+    final previewVideos = profile.pendingVideoUrls.isNotEmpty
+        ? profile.pendingVideoUrls
+        : profile.videoUrls;
+    final previewVideoThumbs = profile.pendingVideoPreviewUrls.isNotEmpty
+        ? profile.pendingVideoPreviewUrls
+        : profile.videoPreviewUrls;
+    final name = profile.fullName.trim().isEmpty
+        ? profile.id
+        : profile.fullName.trim();
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(kCardRadius),
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.all(14),
+        decoration: catalogCardDecoration().copyWith(
+          border: Border.all(
+            color: selected
+                ? BrandTheme.redTop.withValues(alpha: 0.58)
+                : Colors.white.withValues(alpha: 0.78),
+            width: selected ? 1.4 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            _ModerationMediaStrip(
+              photoUrls: previewPhotos,
+              videoUrls: previewVideos,
+              videoPreviewUrls: previewVideoThumbs,
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: adminCommandStyle(size: 17, letterSpacing: 0.7),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '${profile.age} • ${profile.height} cm',
+                    style: adminBodyStyle(weight: FontWeight.w700),
+                  ),
+                  if (profile.hasPendingMedia) ...[
+                    const SizedBox(height: 5),
+                    Text(
+                      'MEDIA UPDATE',
+                      style: adminCommandStyle(
+                        size: 10,
+                        color: BrandTheme.redTop,
+                        letterSpacing: 0.9,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            if (showInlineActions && profile.status == ProfileStatus.pending)
+              Column(
+                children: [
+                  IconButton(
+                    tooltip: approveTooltip,
+                    icon: const Icon(Icons.check_circle_rounded),
+                    color: kTextDark,
+                    onPressed: onApprove,
+                  ),
+                  IconButton(
+                    tooltip: rejectTooltip,
+                    icon: const Icon(Icons.cancel_rounded),
+                    color: kTextDark,
+                    onPressed: onReject,
+                  ),
+                ],
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ModerationProfileDetailsPanel extends StatelessWidget {
+  const _ModerationProfileDetailsPanel({
+    required this.profile,
+    required this.onApprove,
+    required this.onReject,
+  });
+
+  final MyProfileState profile;
+  final Future<void> Function() onApprove;
+  final Future<void> Function() onReject;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final media = _moderationMedia(profile);
+
+    return Container(
+      decoration: catalogCardDecoration(),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(22, 20, 22, 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    ru ? 'АНКЕТА НА МОДЕРАЦИИ' : 'PROFILE REVIEW',
+                    style: adminCommandStyle(size: 18, letterSpacing: 1.4),
+                  ),
+                ),
+                if (profile.hasPendingMedia)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 7,
+                    ),
+                    decoration: BoxDecoration(
+                      color: BrandTheme.redTop.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(
+                        color: BrandTheme.redTop.withValues(alpha: 0.22),
+                      ),
+                    ),
+                    child: Text(
+                      ru ? 'НОВЫЕ МЕДИА' : 'NEW MEDIA',
+                      style: adminCommandStyle(
+                        size: 10,
+                        color: BrandTheme.redTop,
+                        letterSpacing: 0.9,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(22, 0, 22, 18),
+              children: [
+                if (media.isNotEmpty)
+                  SizedBox(
+                    height: 260,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: media.length,
+                      separatorBuilder: (_, _) => const SizedBox(width: 12),
+                      itemBuilder: (_, index) =>
+                          _ModerationLargeMedia(item: media[index]),
+                    ),
+                  )
+                else
+                  Container(
+                    height: 240,
+                    decoration: profileImagePlaceholderDecoration(),
+                  ),
+                const SizedBox(height: 22),
+                Text(
+                  profile.fullName.trim().isEmpty
+                      ? profile.id
+                      : profile.fullName.trim(),
+                  style: adminCommandStyle(size: 28, letterSpacing: 0.7),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '${profile.age} • ${profile.height} cm • ${profile.city} ${profile.country}',
+                  style: adminBodyStyle(weight: FontWeight.w800, size: 16),
+                ),
+                const SizedBox(height: 18),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: [
+                    _ModerationMetricChip(
+                      label: ru ? 'Параметры' : 'Measurements',
+                      value:
+                          '${profile.bust} / ${profile.waist} / ${profile.hips}',
+                    ),
+                    _ModerationMetricChip(
+                      label: ru ? 'Обувь' : 'Shoes',
+                      value: '${profile.shoeSize}',
+                    ),
+                    _ModerationMetricChip(
+                      label: ru ? 'Глаза' : 'Eyes',
+                      value: profile.eyeColor,
+                    ),
+                    _ModerationMetricChip(
+                      label: ru ? 'Волосы' : 'Hair',
+                      value: profile.hairColor,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                if (profile.resume.trim().isNotEmpty)
+                  _ModerationDetailLine(
+                    label: ru ? 'О себе' : 'About',
+                    value: profile.resume.trim(),
+                  ),
+                if (profile.experience.trim().isNotEmpty)
+                  _ModerationDetailLine(
+                    label: ru ? 'Опыт' : 'Experience',
+                    value: profile.experience.trim(),
+                  ),
+                if (profile.skills.trim().isNotEmpty)
+                  _ModerationDetailLine(
+                    label: ru ? 'Навыки' : 'Skills',
+                    value: profile.skills.trim(),
+                  ),
+                if (profile.services.trim().isNotEmpty)
+                  _ModerationDetailLine(
+                    label: ru ? 'Услуги' : 'Services',
+                    value: profile.services.trim(),
+                  ),
+                if (profile.genres.trim().isNotEmpty)
+                  _ModerationDetailLine(
+                    label: ru ? 'Жанры' : 'Genres',
+                    value: profile.genres.trim(),
+                  ),
+                if (profile.equipment.trim().isNotEmpty)
+                  _ModerationDetailLine(
+                    label: ru ? 'Оборудование' : 'Equipment',
+                    value: profile.equipment.trim(),
+                  ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(22, 10, 22, 22),
+            child: Row(
+              children: [
+                Expanded(
+                  child: SizedBox(
+                    height: BrandTheme.pillHeight,
+                    child: ElevatedButton.icon(
+                      onPressed: onReject,
+                      icon: const Icon(Icons.close_rounded),
+                      label: Text(t.moderationRejectActionUpper),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: SizedBox(
+                    height: BrandTheme.pillHeight,
+                    child: ElevatedButton.icon(
+                      onPressed: onApprove,
+                      icon: const Icon(Icons.check_rounded),
+                      label: Text(t.profileStatusApprovedUpper),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ModerationMetricChip extends StatelessWidget {
+  const _ModerationMetricChip({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(minWidth: 126),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: catalogSearchDecoration(radius: 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: adminCommandStyle(size: 10, letterSpacing: 0.8)),
+          const SizedBox(height: 5),
+          Text(
+            value.trim().isEmpty ? '—' : value.trim(),
+            style: adminBodyStyle(weight: FontWeight.w800, size: 15),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+List<_ModerationMediaItem> _moderationMedia(MyProfileState profile) {
+  final photos = _mergeUniqueMedia(profile.photoUrls, profile.pendingPhotoUrls);
+  final videos = _mergeUniqueMedia(profile.videoUrls, profile.pendingVideoUrls);
+  final videoThumbs = _mergeUniqueMedia(
+    profile.videoPreviewUrls,
+    profile.pendingVideoPreviewUrls,
+  );
+
+  return <_ModerationMediaItem>[
+    for (final url in photos) _ModerationMediaItem.photo(url),
+    for (var i = 0; i < videos.length; i += 1)
+      _ModerationMediaItem.video(
+        previewUrl: i < videoThumbs.length ? videoThumbs[i] : '',
+      ),
+  ];
 }
 
 class _ModerationDetailLine extends StatelessWidget {
