@@ -236,6 +236,9 @@ class _MediaBlock extends StatelessWidget {
     required this.onAddVideo,
     required this.photoUrls,
     required this.videoUrls,
+    required this.pendingPhotoUrls,
+    required this.pendingVideoUrls,
+    required this.pendingVideoPreviewUrls,
     required this.pickedPhotos,
     required this.pickedVideos,
     required this.onRemovePhoto,
@@ -248,6 +251,9 @@ class _MediaBlock extends StatelessWidget {
 
   final List<String> photoUrls;
   final List<String> videoUrls;
+  final List<String> pendingPhotoUrls;
+  final List<String> pendingVideoUrls;
+  final List<String> pendingVideoPreviewUrls;
 
   final List<XFile> pickedPhotos;
   final List<XFile> pickedVideos;
@@ -262,10 +268,18 @@ class _MediaBlock extends StatelessWidget {
     final hasAnything =
         photoUrls.isNotEmpty ||
         videoUrls.isNotEmpty ||
+        pendingPhotoUrls.isNotEmpty ||
+        pendingVideoUrls.isNotEmpty ||
         pickedPhotos.isNotEmpty ||
         pickedVideos.isNotEmpty;
-    final hasPhotos = photoUrls.isNotEmpty || pickedPhotos.isNotEmpty;
-    final hasVideo = videoUrls.isNotEmpty || pickedVideos.isNotEmpty;
+    final hasPhotos =
+        photoUrls.isNotEmpty ||
+        pendingPhotoUrls.isNotEmpty ||
+        pickedPhotos.isNotEmpty;
+    final hasVideo =
+        videoUrls.isNotEmpty ||
+        pendingVideoUrls.isNotEmpty ||
+        pickedVideos.isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -316,6 +330,7 @@ class _MediaBlock extends StatelessWidget {
                     if (hasPhotos)
                       _ThumbRow(
                         urls: photoUrls,
+                        pendingUrls: pendingPhotoUrls,
                         files: pickedPhotos,
                         onRemove: onRemovePhoto,
                       ),
@@ -323,6 +338,8 @@ class _MediaBlock extends StatelessWidget {
                       const SizedBox(height: kGap10),
                       _VideoThumbRow(
                         urls: videoUrls,
+                        pendingUrls: pendingVideoUrls,
+                        pendingPreviewUrls: pendingVideoPreviewUrls,
                         files: pickedVideos,
                         onRemove: onRemoveVideo,
                       ),
@@ -338,11 +355,15 @@ class _MediaBlock extends StatelessWidget {
 class _VideoThumbRow extends StatelessWidget {
   const _VideoThumbRow({
     required this.urls,
+    required this.pendingUrls,
+    required this.pendingPreviewUrls,
     required this.files,
     required this.onRemove,
   });
 
   final List<String> urls;
+  final List<String> pendingUrls;
+  final List<String> pendingPreviewUrls;
   final List<XFile> files;
   final Future<void> Function(int index, {required bool isPicked}) onRemove;
 
@@ -351,6 +372,13 @@ class _VideoThumbRow extends StatelessWidget {
     final items = <Widget>[
       for (int i = 0; i < urls.length; i++)
         _VideoThumb(url: urls[i], onRemove: () => onRemove(i, isPicked: false)),
+      for (int i = 0; i < pendingUrls.length; i++)
+        _VideoThumb(
+          url: i < pendingPreviewUrls.length && pendingPreviewUrls[i].isNotEmpty
+              ? pendingPreviewUrls[i]
+              : pendingUrls[i],
+          pending: true,
+        ),
       for (int i = 0; i < files.length; i++)
         _VideoThumb(
           file: files[i],
@@ -371,11 +399,12 @@ class _VideoThumbRow extends StatelessWidget {
 }
 
 class _VideoThumb extends StatelessWidget {
-  const _VideoThumb({this.url, this.file, required this.onRemove});
+  const _VideoThumb({this.url, this.file, this.onRemove, this.pending = false});
 
   final String? url;
   final XFile? file;
-  final VoidCallback onRemove;
+  final VoidCallback? onRemove;
+  final bool pending;
 
   @override
   Widget build(BuildContext context) {
@@ -412,11 +441,13 @@ class _VideoThumb extends StatelessWidget {
                 ),
               ),
             ),
-            Positioned(
-              top: kProfileRemoveButtonInset,
-              right: kProfileRemoveButtonInset,
-              child: _MediaRemoveButton(onTap: onRemove),
-            ),
+            if (pending) const _PendingMediaBadge(),
+            if (onRemove != null)
+              Positioned(
+                top: kProfileRemoveButtonInset,
+                right: kProfileRemoveButtonInset,
+                child: _MediaRemoveButton(onTap: onRemove!),
+              ),
           ],
         ),
       ),
@@ -713,11 +744,13 @@ class _VideoViewerPageState extends State<_VideoViewerPage> {
 class _ThumbRow extends StatelessWidget {
   const _ThumbRow({
     required this.urls,
+    required this.pendingUrls,
     required this.files,
     required this.onRemove,
   });
 
   final List<String> urls;
+  final List<String> pendingUrls;
   final List<XFile> files;
   final Future<void> Function(int index, {required bool isPicked}) onRemove;
 
@@ -728,6 +761,11 @@ class _ThumbRow extends StatelessWidget {
         _Thumb(
           image: _NetworkThumbImage(url: urls[i], fit: BoxFit.cover),
           onRemove: () => onRemove(i, isPicked: false),
+        ),
+      for (final url in pendingUrls)
+        _Thumb(
+          image: _NetworkThumbImage(url: url, fit: BoxFit.cover),
+          pending: true,
         ),
       for (int i = 0; i < files.length; i++)
         _Thumb(
@@ -749,10 +787,11 @@ class _ThumbRow extends StatelessWidget {
 }
 
 class _Thumb extends StatelessWidget {
-  const _Thumb({required this.image, required this.onRemove});
+  const _Thumb({required this.image, this.onRemove, this.pending = false});
 
   final Widget image;
-  final VoidCallback onRemove;
+  final VoidCallback? onRemove;
+  final bool pending;
 
   @override
   Widget build(BuildContext context) {
@@ -765,12 +804,48 @@ class _Thumb extends StatelessWidget {
         fit: StackFit.expand,
         children: [
           image,
-          Positioned(
-            top: _kMediaRemoveInset,
-            right: _kMediaRemoveInset,
-            child: _MediaRemoveButton(onTap: onRemove),
-          ),
+          if (pending) const _PendingMediaBadge(),
+          if (onRemove != null)
+            Positioned(
+              top: _kMediaRemoveInset,
+              right: _kMediaRemoveInset,
+              child: _MediaRemoveButton(onTap: onRemove!),
+            ),
         ],
+      ),
+    );
+  }
+}
+
+class _PendingMediaBadge extends StatelessWidget {
+  const _PendingMediaBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    final isRussian =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ru';
+    return Positioned(
+      left: 6,
+      right: 6,
+      bottom: 6,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.68),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Text(
+          isRussian ? 'НА МОДЕРАЦИИ' : 'PENDING',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 8,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 0.5,
+          ),
+        ),
       ),
     );
   }

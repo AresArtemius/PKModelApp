@@ -136,6 +136,9 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
   List<String> _photoUrls = [];
   List<String> _videoUrls = [];
   List<String> _videoPreviewUrls = [];
+  List<String> _pendingPhotoUrls = [];
+  List<String> _pendingVideoUrls = [];
+  List<String> _pendingVideoPreviewUrls = [];
   bool _uploading = false;
 
   static const String _bucket = _kProfileMediaBucket;
@@ -293,6 +296,9 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
     _photoUrls = [];
     _videoUrls = [];
     _videoPreviewUrls = [];
+    _pendingPhotoUrls = [];
+    _pendingVideoUrls = [];
+    _pendingVideoPreviewUrls = [];
     _pickedPhotos.clear();
     _pickedVideos.clear();
     _currentProfile = null;
@@ -347,6 +353,9 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
     _photoUrls = List<String>.from(s.photoUrls);
     _videoUrls = List<String>.from(s.videoUrls);
     _videoPreviewUrls = List<String>.from(s.videoPreviewUrls);
+    _pendingPhotoUrls = List<String>.from(s.pendingPhotoUrls);
+    _pendingVideoUrls = List<String>.from(s.pendingVideoUrls);
+    _pendingVideoPreviewUrls = List<String>.from(s.pendingVideoPreviewUrls);
   }
 
   int _intOrZero(String s) => int.tryParse(s.trim()) ?? 0;
@@ -410,6 +419,13 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
       photoUrls: List<String>.from(_photoUrls),
       videoUrls: List<String>.from(_videoUrls),
       videoPreviewUrls: List<String>.from(_videoPreviewUrls),
+      pendingPhotoUrls: List<String>.from(_pendingPhotoUrls),
+      pendingVideoUrls: List<String>.from(_pendingVideoUrls),
+      pendingVideoPreviewUrls: List<String>.from(_pendingVideoPreviewUrls),
+      hasPendingMedia:
+          _pendingPhotoUrls.isNotEmpty ||
+          _pendingVideoUrls.isNotEmpty ||
+          _pendingVideoPreviewUrls.isNotEmpty,
     );
   }
 
@@ -683,6 +699,11 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
         _photoUrls = List<String>.from(visibleSaved.photoUrls);
         _videoUrls = List<String>.from(visibleSaved.videoUrls);
         _videoPreviewUrls = List<String>.from(visibleSaved.videoPreviewUrls);
+        _pendingPhotoUrls = List<String>.from(visibleSaved.pendingPhotoUrls);
+        _pendingVideoUrls = List<String>.from(visibleSaved.pendingVideoUrls);
+        _pendingVideoPreviewUrls = List<String>.from(
+          visibleSaved.pendingVideoPreviewUrls,
+        );
       });
 
       if (closeAfter) Navigator.of(context).pop();
@@ -1127,6 +1148,9 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
                         onAddVideo: _pickVideo,
                         photoUrls: _photoUrls,
                         videoUrls: _videoUrls,
+                        pendingPhotoUrls: _pendingPhotoUrls,
+                        pendingVideoUrls: _pendingVideoUrls,
+                        pendingVideoPreviewUrls: _pendingVideoPreviewUrls,
                         pickedPhotos: _pickedPhotos,
                         pickedVideos: _pickedVideos,
                         onRemovePhoto: _removePhotoAt,
