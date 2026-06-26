@@ -17,6 +17,7 @@ import '../../ui/brand/brand_logo.dart';
 import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
 import '../analytics/profile_analytics.dart';
+import '../profile/profile_model.dart';
 import 'catalog_controller.dart';
 import 'advanced_search_dialog.dart';
 import 'catalog_providers.dart';
@@ -35,7 +36,9 @@ const double _overlayPreviewScaleBegin = 0.92;
 const int _catalogCardPhotoCacheWidth = 700;
 const int _catalogOverlayPhotoCacheWidth = 1200;
 const double _catalogDesktopBreakpoint = 900;
-const double _catalogDesktopMaxWidth = 1180;
+const double _catalogDesktopMaxWidth = 1680;
+const double _catalogDesktopSidePanelWidth = 320;
+const double _catalogDesktopDetailWidth = 360;
 const EdgeInsets _catalogDesktopPadding = EdgeInsets.fromLTRB(32, 28, 32, 28);
 
 class CatalogPage extends ConsumerStatefulWidget {
@@ -56,6 +59,7 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
   final _searchC = TextEditingController();
   Timer? _searchDebounce;
   bool _isSavingSelection = false;
+  String? _desktopPreviewModelId;
   late final ProviderSubscription<CatalogController> _controllerSub;
 
   CatalogController get _c => ref.read(catalogControllerProvider);
@@ -119,6 +123,11 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
     final current = ref.read(selectedCatalogModelIdsProvider);
     if (current.isEmpty) return;
     _setSelectedIds(<String>{});
+  }
+
+  void _setDesktopPreview(String modelId) {
+    if (!mounted || _desktopPreviewModelId == modelId) return;
+    setState(() => _desktopPreviewModelId = modelId);
   }
 
   bool _areAllVisibleSelected(Set<String> selectedIds, List<ModelVm> visible) {
@@ -802,6 +811,16 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
             kPagePadH,
             kPagePadBottom,
           );
+    final savedSearchItems = [
+      ..._builtInSavedSearches(t),
+      ...savedSearches.items,
+    ];
+    final previewModel = isDesktop && filteredItems.isNotEmpty
+        ? filteredItems.firstWhere(
+            (model) => model.id == _desktopPreviewModelId,
+            orElse: () => filteredItems.first,
+          )
+        : null;
 
     return Scaffold(
       body: Stack(
@@ -820,9 +839,9 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                   padding: pagePadding,
                   child: Stack(
                     children: [
-                      Column(
-                        children: [
-                          _TopBar(
+                      if (isDesktop)
+                        _CatalogDesktopLayout(
+                          topBar: _TopBar(
                             onAdvancedSearch: _openAdvancedSearch,
                             onFolders: canUseAgentFolders
                                 ? () => context.go(Routes.agentFolders)
@@ -830,12 +849,11 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                             accountLabel: accountLabel,
                             leading: widget.leading,
                             advancedSearchEnabled: !c.isInitialLoading,
-                            isDesktop: isDesktop,
+                            isDesktop: true,
                           ),
-
-                          const SizedBox(height: kGap12),
-
-                          _CatalogSearchRow(
+                          onAdvancedSearch: _openAdvancedSearch,
+                          advancedSearchEnabled: !c.isInitialLoading,
+                          search: _CatalogSearchRow(
                             controller: _searchC,
                             onChanged: _onSearchChanged,
                             hintText: t.catalogSearchHintUpper,
@@ -847,99 +865,136 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                               _toggleSelectAllVisible(items);
                             },
                           ),
-
-                          if (canCreateSelections) ...[
-                            _SavedSearchRail(
-                              searches: [
-                                ..._builtInSavedSearches(t),
-                                ...savedSearches.items,
-                              ],
-                              activeFilters: c.filterSnapshot,
-                              onApply: _applySavedSearch,
-                              onSaveCurrent: savedSearches.isLoading
-                                  ? null
-                                  : _saveCurrentSearch,
-                              onDelete: _deleteSavedSearch,
-                              saveLabel: t.savedSearchSaveCurrent,
+                          savedSearches: canCreateSelections
+                              ? _SavedSearchRail(
+                                  searches: savedSearchItems,
+                                  activeFilters: c.filterSnapshot,
+                                  onApply: _applySavedSearch,
+                                  onSaveCurrent: savedSearches.isLoading
+                                      ? null
+                                      : _saveCurrentSearch,
+                                  onDelete: _deleteSavedSearch,
+                                  saveLabel: t.savedSearchSaveCurrent,
+                                  isVertical: true,
+                                )
+                              : null,
+                          grid: _CatalogResultsBody(
+                            controller: c,
+                            filteredItems: filteredItems,
+                            selectedIds: effectiveSelectedIds,
+                            gridController: _gridC,
+                            onRefresh: _refresh,
+                            onOpenModel: (modelId) async {
+                              _unfocus();
+                              _setDesktopPreview(modelId);
+                            },
+                            onToggleSelected: _toggleSelected,
+                            onQuickAdd: _openQuickAdd,
+                            onPreviewPhoto: (heroTag, photoUrl) {
+                              _unfocus();
+                              _showOverlayPhoto(heroTag, photoUrl);
+                            },
+                            onHidePreviewPhoto: _hideOverlayPhoto,
+                            isSelectionMode: _isSelectionMode(
+                              effectiveSelectedIds,
+                            ),
+                            canSelect: canCreateSelections,
+                            cmLabel: t.cm,
+                            bottomInset: 24,
+                            onAutoLoadMore: () {
+                              if (!mounted) return;
+                              c.loadMore();
+                            },
+                          ),
+                          detail: _CatalogDesktopPreview(
+                            model: previewModel,
+                            cmLabel: t.cm,
+                            onOpen: previewModel == null
+                                ? null
+                                : () async {
+                                    _unfocus();
+                                    await context.push(
+                                      '/model/${previewModel.id}',
+                                    );
+                                  },
+                            onQuickAdd: previewModel == null
+                                ? null
+                                : () => _openQuickAdd(previewModel),
+                            canUseAgentTools: canCreateSelections,
+                          ),
+                        )
+                      else
+                        Column(
+                          children: [
+                            _TopBar(
+                              onAdvancedSearch: _openAdvancedSearch,
+                              onFolders: canUseAgentFolders
+                                  ? () => context.go(Routes.agentFolders)
+                                  : null,
+                              accountLabel: accountLabel,
+                              leading: widget.leading,
+                              advancedSearchEnabled: !c.isInitialLoading,
+                              isDesktop: false,
                             ),
                             const SizedBox(height: kGap12),
-                          ],
-
-                          const SizedBox(height: kGap12),
-
-                          Expanded(
-                            child: Builder(
-                              builder: (context) {
-                                if (c.isInitialLoading) {
-                                  return const Center(
-                                    child: CircularProgressIndicator(
-                                      valueColor: AlwaysStoppedAnimation<Color>(
-                                        kTextDark,
-                                      ),
-                                    ),
-                                  );
-                                }
-
-                                if (c.lastError != null && c.loaded.isEmpty) {
-                                  return _CatalogEmptyState(
-                                    onRefresh: _refresh,
-                                    title: AppErrorMapper.message(
-                                      c.lastError!,
-                                      t,
-                                    ),
-                                    subtitle: t.retryUpper,
-                                  );
-                                }
-
-                                c.maybeAutoFillMore(
-                                  itemsEmpty: filteredItems.isEmpty,
-                                );
-                                if (c.shouldAutoFillNow &&
-                                    filteredItems.isEmpty) {
-                                  WidgetsBinding.instance.addPostFrameCallback((
-                                    _,
-                                  ) {
-                                    if (!mounted) return;
-                                    c.loadMore();
-                                  });
-                                }
-
-                                if (filteredItems.isEmpty) {
-                                  return _CatalogEmptyState(
-                                    onRefresh: _refresh,
-                                    title: t.noApprovedProfilesYet,
-                                    subtitle: t.catalogSearchHintUpper,
-                                  );
-                                }
-
-                                return _CatalogGrid(
-                                  items: filteredItems,
-                                  selectedIds: effectiveSelectedIds,
-                                  gridController: _gridC,
-                                  onRefresh: _refresh,
-                                  onOpenModel: (modelId) async {
-                                    _unfocus();
-                                    await context.push('/model/$modelId');
-                                  },
-                                  onToggleSelected: _toggleSelected,
-                                  onQuickAdd: _openQuickAdd,
-                                  onPreviewPhoto: (heroTag, photoUrl) {
-                                    _unfocus();
-                                    _showOverlayPhoto(heroTag, photoUrl);
-                                  },
-                                  onHidePreviewPhoto: _hideOverlayPhoto,
-                                  isSelectionMode: _isSelectionMode(
-                                    effectiveSelectedIds,
-                                  ),
-                                  canSelect: canCreateSelections,
-                                  cmLabel: t.cm,
-                                  bottomInset: isDesktop ? 24 : 84,
-                                );
+                            _CatalogSearchRow(
+                              controller: _searchC,
+                              onChanged: _onSearchChanged,
+                              hintText: t.catalogSearchHintUpper,
+                              items: filteredItems,
+                              selectedIds: effectiveSelectedIds,
+                              canSelect: canCreateSelections,
+                              onSelectAllTap: (items) {
+                                _unfocus();
+                                _toggleSelectAllVisible(items);
                               },
                             ),
-                          ),
-                        ],
-                      ),
+                            if (canCreateSelections) ...[
+                              _SavedSearchRail(
+                                searches: savedSearchItems,
+                                activeFilters: c.filterSnapshot,
+                                onApply: _applySavedSearch,
+                                onSaveCurrent: savedSearches.isLoading
+                                    ? null
+                                    : _saveCurrentSearch,
+                                onDelete: _deleteSavedSearch,
+                                saveLabel: t.savedSearchSaveCurrent,
+                              ),
+                              const SizedBox(height: kGap12),
+                            ],
+                            const SizedBox(height: kGap12),
+                            Expanded(
+                              child: _CatalogResultsBody(
+                                controller: c,
+                                filteredItems: filteredItems,
+                                selectedIds: effectiveSelectedIds,
+                                gridController: _gridC,
+                                onRefresh: _refresh,
+                                onOpenModel: (modelId) async {
+                                  _unfocus();
+                                  await context.push('/model/$modelId');
+                                },
+                                onToggleSelected: _toggleSelected,
+                                onQuickAdd: _openQuickAdd,
+                                onPreviewPhoto: (heroTag, photoUrl) {
+                                  _unfocus();
+                                  _showOverlayPhoto(heroTag, photoUrl);
+                                },
+                                onHidePreviewPhoto: _hideOverlayPhoto,
+                                isSelectionMode: _isSelectionMode(
+                                  effectiveSelectedIds,
+                                ),
+                                canSelect: canCreateSelections,
+                                cmLabel: t.cm,
+                                bottomInset: 84,
+                                onAutoLoadMore: () {
+                                  if (!mounted) return;
+                                  c.loadMore();
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
                       _SelectModelsButton(
                         visible:
                             canCreateSelections &&

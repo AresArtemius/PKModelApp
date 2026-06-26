@@ -90,6 +90,7 @@ class _SavedSearchRail extends StatelessWidget {
     required this.onSaveCurrent,
     required this.onDelete,
     required this.saveLabel,
+    this.isVertical = false,
   });
 
   final List<CatalogSavedSearch> searches;
@@ -98,9 +99,34 @@ class _SavedSearchRail extends StatelessWidget {
   final VoidCallback? onSaveCurrent;
   final ValueChanged<CatalogSavedSearch> onDelete;
   final String saveLabel;
+  final bool isVertical;
 
   @override
   Widget build(BuildContext context) {
+    if (isVertical) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _SavedSearchSaveChip(
+            label: saveLabel,
+            onTap: onSaveCurrent,
+            isExpanded: true,
+          ),
+          const SizedBox(height: kGap8),
+          for (final search in searches) ...[
+            _SavedSearchChip(
+              search: search,
+              selected: search.filters == activeFilters,
+              onTap: () => onApply(search),
+              onDelete: search.isBuiltin ? null : () => onDelete(search),
+              isExpanded: true,
+            ),
+            const SizedBox(height: kGap8),
+          ],
+        ],
+      );
+    }
+
     return SizedBox(
       height: 42,
       child: ListView.separated(
@@ -127,10 +153,15 @@ class _SavedSearchRail extends StatelessWidget {
 }
 
 class _SavedSearchSaveChip extends StatelessWidget {
-  const _SavedSearchSaveChip({required this.label, required this.onTap});
+  const _SavedSearchSaveChip({
+    required this.label,
+    required this.onTap,
+    this.isExpanded = false,
+  });
 
   final String label;
   final VoidCallback? onTap;
+  final bool isExpanded;
 
   @override
   Widget build(BuildContext context) {
@@ -141,10 +172,11 @@ class _SavedSearchSaveChip extends StatelessWidget {
         onTap: onTap,
         child: Container(
           height: 42,
+          width: isExpanded ? double.infinity : null,
           padding: const EdgeInsets.symmetric(horizontal: 14),
           decoration: pillDecoration(isDark: true, radius: kPillRadius),
           child: Row(
-            mainAxisSize: MainAxisSize.min,
+            mainAxisSize: isExpanded ? MainAxisSize.max : MainAxisSize.min,
             children: [
               const Icon(
                 Icons.bookmark_add_rounded,
@@ -152,14 +184,30 @@ class _SavedSearchSaveChip extends StatelessWidget {
                 size: 19,
               ),
               const SizedBox(width: 7),
-              Text(
-                label,
-                style: BrandTheme.pillText.copyWith(
-                  color: Colors.white,
-                  fontSize: 12,
-                  letterSpacing: 0.75,
+              if (isExpanded)
+                Expanded(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: BrandTheme.pillText.copyWith(
+                      color: Colors.white,
+                      fontSize: 12,
+                      letterSpacing: 0.75,
+                    ),
+                  ),
+                )
+              else
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: BrandTheme.pillText.copyWith(
+                    color: Colors.white,
+                    fontSize: 12,
+                    letterSpacing: 0.75,
+                  ),
                 ),
-              ),
             ],
           ),
         ),
@@ -174,12 +222,14 @@ class _SavedSearchChip extends StatelessWidget {
     required this.selected,
     required this.onTap,
     required this.onDelete,
+    this.isExpanded = false,
   });
 
   final CatalogSavedSearch search;
   final bool selected;
   final VoidCallback onTap;
   final VoidCallback? onDelete;
+  final bool isExpanded;
 
   @override
   Widget build(BuildContext context) {
@@ -195,6 +245,7 @@ class _SavedSearchChip extends StatelessWidget {
         onTap: onTap,
         child: Container(
           height: 42,
+          width: isExpanded ? double.infinity : null,
           padding: EdgeInsets.only(left: 14, right: onDelete == null ? 14 : 7),
           decoration: BoxDecoration(
             color: bg,
@@ -204,7 +255,7 @@ class _SavedSearchChip extends StatelessWidget {
             ),
           ),
           child: Row(
-            mainAxisSize: MainAxisSize.min,
+            mainAxisSize: isExpanded ? MainAxisSize.max : MainAxisSize.min,
             children: [
               Icon(
                 search.isBuiltin
@@ -214,16 +265,30 @@ class _SavedSearchChip extends StatelessWidget {
                 size: 17,
               ),
               const SizedBox(width: 7),
-              Text(
-                search.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: BrandTheme.pillText.copyWith(
-                  color: fg,
-                  fontSize: 12,
-                  letterSpacing: 0.55,
+              if (isExpanded)
+                Expanded(
+                  child: Text(
+                    search.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: BrandTheme.pillText.copyWith(
+                      color: fg,
+                      fontSize: 12,
+                      letterSpacing: 0.55,
+                    ),
+                  ),
+                )
+              else
+                Text(
+                  search.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: BrandTheme.pillText.copyWith(
+                    color: fg,
+                    fontSize: 12,
+                    letterSpacing: 0.55,
+                  ),
                 ),
-              ),
               if (onDelete != null) ...[
                 const SizedBox(width: 3),
                 SizedBox(
@@ -310,6 +375,490 @@ class _CatalogEmptyState extends StatelessWidget {
       ),
     );
   }
+}
+
+class _CatalogDesktopLayout extends StatelessWidget {
+  const _CatalogDesktopLayout({
+    required this.topBar,
+    required this.onAdvancedSearch,
+    required this.advancedSearchEnabled,
+    required this.search,
+    required this.grid,
+    required this.detail,
+    this.savedSearches,
+  });
+
+  final Widget topBar;
+  final VoidCallback onAdvancedSearch;
+  final bool advancedSearchEnabled;
+  final Widget search;
+  final Widget? savedSearches;
+  final Widget grid;
+  final Widget detail;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        topBar,
+        const SizedBox(height: 18),
+        Expanded(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(
+                width: _catalogDesktopSidePanelWidth,
+                child: _CatalogDesktopFilterPanel(
+                  search: search,
+                  onAdvancedSearch: onAdvancedSearch,
+                  advancedSearchEnabled: advancedSearchEnabled,
+                  savedSearches: savedSearches,
+                ),
+              ),
+              const SizedBox(width: 18),
+              Expanded(child: grid),
+              const SizedBox(width: 18),
+              SizedBox(width: _catalogDesktopDetailWidth, child: detail),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CatalogDesktopFilterPanel extends StatelessWidget {
+  const _CatalogDesktopFilterPanel({
+    required this.search,
+    required this.onAdvancedSearch,
+    required this.advancedSearchEnabled,
+    this.savedSearches,
+  });
+
+  final Widget search;
+  final VoidCallback onAdvancedSearch;
+  final bool advancedSearchEnabled;
+  final Widget? savedSearches;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: catalogCardDecoration(),
+      child: ListView(
+        physics: const BouncingScrollPhysics(),
+        children: [
+          Text(
+            t.catalogUpper,
+            style: BrandTheme.pillText.copyWith(
+              color: kTextDark,
+              fontSize: 17,
+              letterSpacing: 2.0,
+            ),
+          ),
+          const SizedBox(height: 14),
+          search,
+          const SizedBox(height: 6),
+          _DesktopFilterAction(
+            icon: Icons.tune_rounded,
+            label: t.advancedSearchUpper,
+            onTap: advancedSearchEnabled ? onAdvancedSearch : null,
+          ),
+          if (savedSearches != null) ...[
+            const SizedBox(height: 18),
+            Text(
+              t.savedSearchSaveTitle,
+              style: BrandTheme.pillText.copyWith(
+                color: kTextMid,
+                fontSize: 12,
+                letterSpacing: 1.2,
+              ),
+            ),
+            const SizedBox(height: 10),
+            savedSearches!,
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _DesktopFilterAction extends StatelessWidget {
+  const _DesktopFilterAction({
+    required this.icon,
+    required this.label,
+    this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(kPillRadius),
+        onTap: onTap,
+        child: Container(
+          height: 46,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: pillDecoration(isDark: false, radius: kPillRadius),
+          child: Row(
+            children: [
+              Icon(icon, color: kTextDark, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: BrandTheme.pillText.copyWith(
+                    color: kTextDark,
+                    fontSize: 12,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CatalogResultsBody extends StatelessWidget {
+  const _CatalogResultsBody({
+    required this.controller,
+    required this.filteredItems,
+    required this.selectedIds,
+    required this.gridController,
+    required this.onRefresh,
+    required this.onOpenModel,
+    required this.onToggleSelected,
+    required this.onQuickAdd,
+    required this.onPreviewPhoto,
+    required this.onHidePreviewPhoto,
+    required this.isSelectionMode,
+    required this.canSelect,
+    required this.cmLabel,
+    required this.bottomInset,
+    required this.onAutoLoadMore,
+  });
+
+  final CatalogController controller;
+  final List<ModelVm> filteredItems;
+  final Set<String> selectedIds;
+  final ScrollController gridController;
+  final Future<void> Function() onRefresh;
+  final Future<void> Function(String modelId) onOpenModel;
+  final ValueChanged<String> onToggleSelected;
+  final ValueChanged<ModelVm> onQuickAdd;
+  final void Function(String heroTag, String photoUrl) onPreviewPhoto;
+  final VoidCallback onHidePreviewPhoto;
+  final bool isSelectionMode;
+  final bool canSelect;
+  final String cmLabel;
+  final double bottomInset;
+  final VoidCallback onAutoLoadMore;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+
+    if (controller.isInitialLoading) {
+      return const Center(
+        child: CircularProgressIndicator(
+          valueColor: AlwaysStoppedAnimation<Color>(kTextDark),
+        ),
+      );
+    }
+
+    if (controller.lastError != null && controller.loaded.isEmpty) {
+      return _CatalogEmptyState(
+        onRefresh: onRefresh,
+        title: AppErrorMapper.message(controller.lastError!, t),
+        subtitle: t.retryUpper,
+      );
+    }
+
+    controller.maybeAutoFillMore(itemsEmpty: filteredItems.isEmpty);
+    if (controller.shouldAutoFillNow && filteredItems.isEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => onAutoLoadMore());
+    }
+
+    if (filteredItems.isEmpty) {
+      return _CatalogEmptyState(
+        onRefresh: onRefresh,
+        title: t.noApprovedProfilesYet,
+        subtitle: t.catalogSearchHintUpper,
+      );
+    }
+
+    return _CatalogGrid(
+      items: filteredItems,
+      selectedIds: selectedIds,
+      gridController: gridController,
+      onRefresh: onRefresh,
+      onOpenModel: onOpenModel,
+      onToggleSelected: onToggleSelected,
+      onQuickAdd: onQuickAdd,
+      onPreviewPhoto: onPreviewPhoto,
+      onHidePreviewPhoto: onHidePreviewPhoto,
+      isSelectionMode: isSelectionMode,
+      canSelect: canSelect,
+      cmLabel: cmLabel,
+      bottomInset: bottomInset,
+    );
+  }
+}
+
+class _CatalogDesktopPreview extends StatelessWidget {
+  const _CatalogDesktopPreview({
+    required this.model,
+    required this.cmLabel,
+    required this.onOpen,
+    required this.onQuickAdd,
+    required this.canUseAgentTools,
+  });
+
+  final ModelVm? model;
+  final String cmLabel;
+  final VoidCallback? onOpen;
+  final VoidCallback? onQuickAdd;
+  final bool canUseAgentTools;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+    final m = model;
+
+    return Container(
+      decoration: catalogCardDecoration(),
+      clipBehavior: Clip.antiAlias,
+      child: m == null
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(
+                  t.noApprovedProfilesYet,
+                  textAlign: TextAlign.center,
+                  style: BrandTheme.pillText.copyWith(
+                    color: kTextMuted,
+                    fontSize: 14,
+                    letterSpacing: 0.4,
+                    height: 1.2,
+                  ),
+                ),
+              ),
+            )
+          : ListView(
+              physics: const BouncingScrollPhysics(),
+              padding: EdgeInsets.zero,
+              children: [
+                AspectRatio(
+                  aspectRatio: 0.86,
+                  child: m.primaryPhotoUrl == null
+                      ? const _CatalogPhotoPlaceholder()
+                      : CachedNetworkImage(
+                          imageUrl: m.primaryPhotoUrl!,
+                          memCacheWidth: _catalogOverlayPhotoCacheWidth,
+                          maxWidthDiskCache: _catalogOverlayPhotoCacheWidth,
+                          fit: BoxFit.cover,
+                          placeholder: (_, _) =>
+                              const _CatalogPhotoPlaceholder(),
+                          errorWidget: (_, _, _) =>
+                              const _CatalogPhotoPlaceholder(),
+                        ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 18, 18, 20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              m.fullName,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: kTextTitle,
+                                fontSize: 24,
+                                fontWeight: FontWeight.w800,
+                                height: 1.05,
+                                letterSpacing: 0,
+                              ),
+                            ),
+                          ),
+                          if (m.isProActive) const _ProBadge(),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      _PreviewInfoLine(
+                        icon: Icons.badge_rounded,
+                        text: _catalogProfileTypeLabel(t, m.profileType),
+                      ),
+                      _PreviewInfoLine(
+                        icon: Icons.straighten_rounded,
+                        text: '${m.age} • ${m.height} $cmLabel',
+                      ),
+                      if (m.city.isNotEmpty || m.country.isNotEmpty)
+                        _PreviewInfoLine(
+                          icon: Icons.place_rounded,
+                          text: [m.city, m.country]
+                              .where((value) => value.trim().isNotEmpty)
+                              .join(', '),
+                        ),
+                      if (m.photoUrls.isNotEmpty || m.videoUrls.isNotEmpty)
+                        _PreviewInfoLine(
+                          icon: Icons.perm_media_rounded,
+                          text:
+                              '${m.photoUrls.length} фото • ${m.videoUrls.length} видео',
+                        ),
+                      if (m.resume.isNotEmpty) ...[
+                        const SizedBox(height: 14),
+                        Text(
+                          m.resume,
+                          maxLines: 5,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: kTextMid,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            height: 1.28,
+                            letterSpacing: 0,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 18),
+                      _PreviewButton(
+                        label: t.profileUpper,
+                        isDark: true,
+                        icon: Icons.open_in_new_rounded,
+                        onTap: onOpen,
+                      ),
+                      if (canUseAgentTools) ...[
+                        const SizedBox(height: 10),
+                        _PreviewButton(
+                          label: t.quickAddTitleUpper,
+                          isDark: false,
+                          icon: Icons.playlist_add_rounded,
+                          onTap: onQuickAdd,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+    );
+  }
+}
+
+class _PreviewInfoLine extends StatelessWidget {
+  const _PreviewInfoLine({required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: kTextMuted),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: kTextMid,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                height: 1.1,
+                letterSpacing: 0,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PreviewButton extends StatelessWidget {
+  const _PreviewButton({
+    required this.label,
+    required this.isDark,
+    required this.icon,
+    this.onTap,
+  });
+
+  final String label;
+  final bool isDark;
+  final IconData icon;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isDark ? Colors.white : kTextDark;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(kPillRadius),
+        onTap: onTap,
+        child: Container(
+          height: 52,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: pillDecoration(isDark: isDark, radius: kPillRadius),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, color: color, size: 19),
+              const SizedBox(width: 9),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: BrandTheme.pillText.copyWith(
+                    color: color,
+                    fontSize: 13,
+                    letterSpacing: 1.0,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+String _catalogProfileTypeLabel(
+  AppLocalizations t,
+  ProfessionalProfileType type,
+) {
+  return switch (type) {
+    ProfessionalProfileType.model => t.profileTypeModel,
+    ProfessionalProfileType.actor => t.profileTypeActor,
+    ProfessionalProfileType.photographer => t.profileTypePhotographer,
+    ProfessionalProfileType.videographer => t.profileTypeVideographer,
+    ProfessionalProfileType.stylist => t.profileTypeStylist,
+    ProfessionalProfileType.makeupArtist => t.profileTypeMakeupArtist,
+    ProfessionalProfileType.hairStylist => t.profileTypeHairStylist,
+  };
 }
 
 class _CatalogGrid extends StatelessWidget {
