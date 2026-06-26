@@ -252,6 +252,10 @@ class _OwnerProfileEntryCard extends ConsumerWidget {
         (user?.phone?.trim().isNotEmpty ?? false) &&
         (user?.email?.trim().isEmpty ?? true);
     final profileAsync = ref.watch(accountOwnerProfileProvider);
+    final avatarUrl = profileAsync.maybeWhen(
+      data: (profile) => profile.avatarUrl,
+      orElse: () => '',
+    );
     final subtitle = profileAsync.maybeWhen(
       data: (profile) {
         if (needsEmail) {
@@ -272,6 +276,7 @@ class _OwnerProfileEntryCard extends ConsumerWidget {
 
     return _AccountEntryCard(
       icon: Icons.assignment_ind_rounded,
+      avatarUrl: avatarUrl,
       title: ru ? 'ПРОФИЛЬ АККАУНТА' : 'ACCOUNT PROFILE',
       subtitle: subtitle,
       onTap: () => _open(context, ref),
@@ -691,6 +696,7 @@ class _AccountEntryCard extends StatelessWidget {
     required this.subtitle,
     required this.onTap,
     this.foregroundColor,
+    this.avatarUrl,
   });
 
   final IconData icon;
@@ -698,10 +704,12 @@ class _AccountEntryCard extends StatelessWidget {
   final String subtitle;
   final VoidCallback? onTap;
   final Color? foregroundColor;
+  final String? avatarUrl;
 
   @override
   Widget build(BuildContext context) {
     final accent = foregroundColor;
+    final avatar = avatarUrl?.trim() ?? '';
 
     return GestureDetector(
       onTap: onTap,
@@ -716,7 +724,18 @@ class _AccountEntryCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(kCardRadius),
                 boxShadow: BrandTheme.basePillShadow(isDark: true),
               ),
-              child: Icon(icon, color: accent ?? Colors.white, size: 28),
+              clipBehavior: Clip.antiAlias,
+              child: avatar.isNotEmpty
+                  ? _NetworkThumbImage(
+                      url: avatar,
+                      fit: BoxFit.cover,
+                      placeholder: Icon(
+                        icon,
+                        color: accent ?? Colors.white,
+                        size: 28,
+                      ),
+                    )
+                  : Icon(icon, color: accent ?? Colors.white, size: 28),
             ),
             const SizedBox(width: kProfileSummaryGap),
             Expanded(
