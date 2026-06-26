@@ -71,7 +71,10 @@ abstract class Routes {
 
 const _routeParamId = 'id';
 const double _kDesktopShellBreakpoint = 900;
-const double _kDesktopNavWidth = 112;
+const double _kExpandedDesktopShellBreakpoint = 1180;
+const double _kCompactDesktopNavWidth = 112;
+const double _kExpandedDesktopNavWidth = 232;
+const double _kDesktopContentMaxWidth = 1720;
 
 class AppShell extends StatelessWidget {
   const AppShell({super.key, required this.child});
@@ -102,18 +105,37 @@ class AppShell extends StatelessWidget {
   Widget build(BuildContext context) {
     final path = GoRouterState.of(context).uri.path;
     final currentIndex = _indexFromLocation(path);
-    final isDesktop =
-        MediaQuery.sizeOf(context).width >= _kDesktopShellBreakpoint;
+    final width = MediaQuery.sizeOf(context).width;
+    final isDesktop = width >= _kDesktopShellBreakpoint;
+    final isExpandedDesktop = width >= _kExpandedDesktopShellBreakpoint;
 
     if (isDesktop) {
       return Scaffold(
         body: Row(
           children: [
             SizedBox(
-              width: _kDesktopNavWidth,
-              child: AppDesktopNav(currentIndex: currentIndex),
+              width: isExpandedDesktop
+                  ? _kExpandedDesktopNavWidth
+                  : _kCompactDesktopNavWidth,
+              child: AppDesktopNav(
+                currentIndex: currentIndex,
+                expanded: isExpandedDesktop,
+              ),
             ),
-            Expanded(child: child),
+            Expanded(
+              child: ColoredBox(
+                color: const Color(0xFFE8E8E8),
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(
+                      maxWidth: _kDesktopContentMaxWidth,
+                    ),
+                    child: child,
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
       );
@@ -127,9 +149,10 @@ class AppShell extends StatelessWidget {
 }
 
 class AppDesktopNav extends ConsumerWidget {
-  const AppDesktopNav({super.key, this.currentIndex});
+  const AppDesktopNav({super.key, this.currentIndex, this.expanded = false});
 
   final int? currentIndex;
+  final bool expanded;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -158,15 +181,21 @@ class AppDesktopNav extends ConsumerWidget {
       decoration: const BoxDecoration(gradient: BrandTheme.darkPillGradient),
       child: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 22, horizontal: 10),
+          padding: EdgeInsets.symmetric(
+            vertical: 22,
+            horizontal: expanded ? 16 : 10,
+          ),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const SizedBox(height: 10),
+              _DesktopNavBrand(expanded: expanded),
+              SizedBox(height: expanded ? 26 : 18),
               for (var i = 0; i < items.length; i++) ...[
                 _DesktopNavItem(
                   icon: items[i].icon,
                   label: items[i].label,
                   selected: currentIndex == i,
+                  expanded: expanded,
                   onTap: () => context.go(items[i].route),
                 ),
                 const SizedBox(height: 10),
@@ -180,17 +209,65 @@ class AppDesktopNav extends ConsumerWidget {
   }
 }
 
+class _DesktopNavBrand extends StatelessWidget {
+  const _DesktopNavBrand({required this.expanded});
+
+  final bool expanded;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!expanded) {
+      return Center(
+        child: Image.asset(
+          'assets/images/pk-logo-red-512.png',
+          width: 54,
+          height: 54,
+          fit: BoxFit.contain,
+        ),
+      );
+    }
+
+    return Row(
+      children: [
+        Image.asset(
+          'assets/images/pk-logo-red-512.png',
+          width: 48,
+          height: 48,
+          fit: BoxFit.contain,
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            'PK\nMANAGEMENT',
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: BrandTheme.pillText.copyWith(
+              color: Colors.white,
+              fontSize: 13,
+              height: 1.08,
+              letterSpacing: 2.2,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _DesktopNavItem extends StatelessWidget {
   const _DesktopNavItem({
     required this.icon,
     required this.label,
     required this.selected,
+    required this.expanded,
     required this.onTap,
   });
 
   final IconData icon;
   final String label;
   final bool selected;
+  final bool expanded;
   final VoidCallback onTap;
 
   @override
@@ -204,7 +281,11 @@ class _DesktopNavItem extends StatelessWidget {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 160),
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+          constraints: BoxConstraints(minHeight: expanded ? 58 : 0),
+          padding: EdgeInsets.symmetric(
+            vertical: expanded ? 13 : 12,
+            horizontal: expanded ? 14 : 8,
+          ),
           decoration: BoxDecoration(
             color: selected
                 ? Colors.white.withValues(alpha: 0.14)
@@ -216,25 +297,49 @@ class _DesktopNavItem extends StatelessWidget {
                   : Colors.transparent,
             ),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, color: color, size: 27),
-              const SizedBox(height: 6),
-              Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: color,
-                  fontWeight: selected ? FontWeight.w800 : FontWeight.w500,
-                  fontSize: 11,
-                  height: 1.05,
+          child: expanded
+              ? Row(
+                  children: [
+                    Icon(icon, color: color, size: 25),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: BrandTheme.pillText.copyWith(
+                          color: color,
+                          fontSize: 13,
+                          letterSpacing: 0.3,
+                          fontWeight: selected
+                              ? FontWeight.w800
+                              : FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                )
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(icon, color: color, size: 27),
+                    const SizedBox(height: 6),
+                    Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: color,
+                        fontWeight: selected
+                            ? FontWeight.w800
+                            : FontWeight.w500,
+                        fontSize: 11,
+                        height: 1.05,
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-            ],
-          ),
         ),
       ),
     );
