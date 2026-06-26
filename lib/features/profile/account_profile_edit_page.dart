@@ -755,6 +755,23 @@ class _AccountProfileEditPageState
             ),
           );
       final url = _sb.storage.from(_kAccountAvatarBucket).getPublicUrl(path);
+      final profile = AccountOwnerProfile(
+        email: _confirmedEmailForSave(user),
+        phone: _confirmedPhoneForSave(user),
+        avatarUrl: url,
+        fullName: _fullNameC.text,
+        companyName: _companyC.text,
+        position: _positionC.text,
+        city: _cityC.text,
+        country: _countryC.text,
+        website: _websiteC.text,
+        socialUrl: _socialC.text,
+        bio: _bioC.text,
+      );
+      await ref
+          .read(accountProfileServiceProvider)
+          .saveOwnerProfile(user, profile);
+      ref.invalidate(accountOwnerProfileProvider);
       if (mounted) {
         setState(() => _avatarUrl = url);
       }

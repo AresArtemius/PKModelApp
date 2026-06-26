@@ -29,9 +29,20 @@ class AuthController {
     if (!kIsWeb) return oauthRedirectTo;
     final base = Uri.base;
     if (!base.hasScheme || base.host.isEmpty) return oauthRedirectTo;
-    return base.hasPort
+    final origin = base.hasPort
         ? '${base.scheme}://${base.host}:${base.port}'
         : '${base.scheme}://${base.host}';
+    if (base.host == 'aresartemius.github.io') {
+      return '$origin/PKModelApp/';
+    }
+
+    final firstSegment = base.pathSegments
+        .where((segment) => segment.trim().isNotEmpty)
+        .firstOrNull;
+    if (firstSegment != null) {
+      return '$origin/$firstSegment/';
+    }
+    return origin;
   }
 
   SupabaseClient get _sb => ref.read(supabaseProvider);
