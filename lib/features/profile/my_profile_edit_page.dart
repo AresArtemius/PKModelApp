@@ -33,6 +33,9 @@ const String _kProfileMediaBucket = 'profile-media';
 const String _kSkipMediaDeleteConfirmKey = 'skip_media_delete_confirm';
 const double _kMediaRemoveInset = 4;
 const double _kDialogPrimaryGap = 18;
+const double _kProfileEditDesktopBreakpoint = 900.0;
+const double _kProfileEditDesktopMaxWidth = 1120.0;
+const EdgeInsets _kProfileEditDesktopPad = EdgeInsets.fromLTRB(32, 22, 32, 32);
 
 String _profileErrorText(Object e, AppLocalizations t) {
   if (e is MyProfileException) {
@@ -1002,349 +1005,394 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
         children: [
           const BrandBackground(),
           SafeArea(
-            child: ListView(
-              padding: kMyProfileEditPagePad,
-              children: [
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: GestureDetector(
-                    onTap: () => Navigator.of(context).pop(),
-                    child: const Padding(
-                      padding: kProfileBackButtonPad,
-                      child: Icon(
-                        Icons.arrow_back_ios_new_rounded,
-                        size: 22,
-                        color: kTextDark,
-                      ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final isDesktop =
+                    constraints.maxWidth >= _kProfileEditDesktopBreakpoint;
+                return Align(
+                  alignment: Alignment.topCenter,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: isDesktop
+                          ? _kProfileEditDesktopMaxWidth
+                          : double.infinity,
+                    ),
+                    child: ListView(
+                      padding: isDesktop
+                          ? _kProfileEditDesktopPad
+                          : kMyProfileEditPagePad,
+                      children: [
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: GestureDetector(
+                            onTap: () => Navigator.of(context).pop(),
+                            child: const Padding(
+                              padding: kProfileBackButtonPad,
+                              child: Icon(
+                                Icons.arrow_back_ios_new_rounded,
+                                size: 22,
+                                color: kTextDark,
+                              ),
+                            ),
+                          ),
+                        ),
+
+                        if (!widget.startBlank) ...[
+                          _Header(
+                            status: base.status,
+                            comment: base.moderationComment,
+                          ),
+                          const SizedBox(height: kGap14),
+                        ],
+
+                        _Card(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Text(
+                                t.profileTitleUpper,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 1.6,
+                                  color: kTextDark,
+                                ),
+                              ),
+                              const SizedBox(height: kGap16),
+
+                              _ProfileQualityCard(quality: _profileQuality()),
+                              const SizedBox(height: kGap16),
+
+                              _ProfileTypeSelector(
+                                selected: _profileType,
+                                onChanged: (type) =>
+                                    setState(() => _profileType = type),
+                              ),
+                              const SizedBox(height: kGap16),
+
+                              if (_error != null) ...[
+                                Text(
+                                  _error!,
+                                  textAlign: TextAlign.center,
+                                  style: kProfileErrorTextStyle,
+                                ),
+                                const SizedBox(height: kGap12),
+                              ],
+
+                              _Row2(
+                                left: _Field(
+                                  label: t.profileSurname,
+                                  controller: _surnameC,
+                                ),
+                                right: _Field(
+                                  label: t.profileName,
+                                  controller: _nameC,
+                                ),
+                              ),
+                              const SizedBox(height: kGap12),
+
+                              if (_profileType.usesPhysicalBasics) ...[
+                                _SectionTitle(t.profilePhysicalDetailsUpper),
+                                const SizedBox(height: kGap10),
+                                _Row2(
+                                  left: _Field(
+                                    label:
+                                        Localizations.localeOf(
+                                              context,
+                                            ).languageCode.toLowerCase() ==
+                                            'ru'
+                                        ? 'Дата рождения'
+                                        : 'Birth date',
+                                    controller: _birthDateC,
+                                    readOnly: true,
+                                    onTap: _pickBirthDate,
+                                  ),
+                                  right: _Field(
+                                    label: t.profileHeightCm,
+                                    controller: _heightC,
+                                    keyboardType: TextInputType.number,
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.digitsOnly,
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: kGap12),
+                              ],
+
+                              if (_profileType.usesModelMeasurements) ...[
+                                _Row2(
+                                  left: _Field(
+                                    label: t.profileBustCm,
+                                    controller: _bustC,
+                                    keyboardType: TextInputType.number,
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.digitsOnly,
+                                    ],
+                                  ),
+                                  right: _Field(
+                                    label: t.profileWaistCm,
+                                    controller: _waistC,
+                                    keyboardType: TextInputType.number,
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.digitsOnly,
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: kGap12),
+
+                                _Row2(
+                                  left: _Field(
+                                    label: t.profileHipsCm,
+                                    controller: _hipsC,
+                                    keyboardType: TextInputType.number,
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.digitsOnly,
+                                    ],
+                                  ),
+                                  right: _Field(
+                                    label: t.profileShoeSize,
+                                    controller: _shoeSizeC,
+                                    keyboardType: TextInputType.number,
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.digitsOnly,
+                                    ],
+                                  ),
+                                ),
+
+                                const SizedBox(height: kGap12),
+
+                                _Row2(
+                                  left: SearchableChoiceField(
+                                    label: t.profileEyeColor,
+                                    controller: _eyeColorC,
+                                    options: eyeColorOptions,
+                                  ),
+                                  right: SearchableChoiceField(
+                                    label: t.profileHairColor,
+                                    controller: _hairColorC,
+                                    options: hairColorOptions,
+                                  ),
+                                ),
+                                const SizedBox(height: kGap12),
+                              ],
+
+                              _Row2(
+                                left: SearchableChoiceField(
+                                  label: t.profileCountry,
+                                  controller: _countryC,
+                                  options: _countryOptions,
+                                  onChanged: _onCountryChanged,
+                                ),
+                                right: SearchableChoiceField(
+                                  label: t.profileCity,
+                                  controller: _cityC,
+                                  options: _cityOptions,
+                                  enabled: _countryC.text.trim().isNotEmpty,
+                                ),
+                              ),
+                              const SizedBox(height: kGap12),
+
+                              if (!_profileType.isModel) ...[
+                                const SizedBox(height: kGap4),
+                                _SectionTitle(t.profileProfessionalInfoUpper),
+                                const SizedBox(height: kGap10),
+                                _Field(
+                                  label: _professionalExperienceLabel(
+                                    t,
+                                    _profileType,
+                                  ),
+                                  controller: _experienceC,
+                                  maxLines: 4,
+                                ),
+                                const SizedBox(height: kGap12),
+                                _Field(
+                                  label: _professionalSkillsLabel(
+                                    t,
+                                    _profileType,
+                                  ),
+                                  controller: _skillsC,
+                                  maxLines: 3,
+                                ),
+                                const SizedBox(height: kGap12),
+                                _Field(
+                                  label: _professionalServicesLabel(
+                                    t,
+                                    _profileType,
+                                  ),
+                                  controller: _servicesC,
+                                  maxLines: 3,
+                                ),
+                                const SizedBox(height: kGap12),
+                                _Field(
+                                  label: _professionalGenresLabel(
+                                    t,
+                                    _profileType,
+                                  ),
+                                  controller: _genresC,
+                                  maxLines: 3,
+                                ),
+                                if (_profileType ==
+                                        ProfessionalProfileType.photographer ||
+                                    _profileType ==
+                                        ProfessionalProfileType
+                                            .videographer) ...[
+                                  const SizedBox(height: kGap12),
+                                  _Field(
+                                    label: t.profileEquipment,
+                                    controller: _equipmentC,
+                                    maxLines: 3,
+                                  ),
+                                ],
+                                const SizedBox(height: kGap12),
+                              ],
+
+                              _Row2(
+                                left: _Field(
+                                  label: t.profileMinHourlyRate,
+                                  controller: _minHourlyRateC,
+                                  keyboardType: TextInputType.number,
+                                  inputFormatters: [
+                                    FilteringTextInputFormatter.digitsOnly,
+                                  ],
+                                ),
+                                right: _Field(
+                                  label: t.profileMinDailyFee,
+                                  controller: _minDailyFeeC,
+                                  keyboardType: TextInputType.number,
+                                  inputFormatters: [
+                                    FilteringTextInputFormatter.digitsOnly,
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: kGap12),
+                              const SizedBox(height: kGap16),
+
+                              _SectionTitle(t.profileMediaUpper),
+                              const SizedBox(height: kGap10),
+                              _MediaBlock(
+                                uploading: _uploading,
+                                onAddPhoto: _pickPhotos,
+                                onAddVideo: _pickVideo,
+                                photoUrls: _photoUrls,
+                                videoUrls: _videoUrls,
+                                pendingPhotoUrls: _pendingPhotoUrls,
+                                pendingVideoUrls: _pendingVideoUrls,
+                                pendingVideoPreviewUrls:
+                                    _pendingVideoPreviewUrls,
+                                pickedPhotos: _pickedPhotos,
+                                pickedVideos: _pickedVideos,
+                                onRemovePhoto: _removePhotoAt,
+                                onRemoveVideo: _removeVideoAt,
+                              ),
+                              const SizedBox(height: kGap16),
+
+                              _SectionTitle(t.profileResumeUpper),
+                              const SizedBox(height: kGap10),
+                              _Field(
+                                label: t.profileAboutHint,
+                                controller: _resumeC,
+                                maxLines: 6,
+                              ),
+
+                              const SizedBox(height: kGap16),
+                              _SectionTitle(t.profileCalendarUpper),
+                              const SizedBox(height: kGap10),
+                              BrandCalendar(
+                                selectionMode:
+                                    BrandCalendarSelectionMode.multiple,
+                                selectedDates: _unavailableDays,
+                                allowPastDates: false,
+                                allowPreviousMonths: false,
+                                onDateToggled: _toggleUnavailableDay,
+                              ),
+
+                              const SizedBox(height: kGap14),
+
+                              if (isAdmin) ...[
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: BrandTheme.pillHeight,
+                                  child: BrandPillButton(
+                                    label: t.profileSaveUpper,
+                                    style: BrandPillStyle.dark,
+                                    onTap: _isBusy
+                                        ? null
+                                        : () => _saveAdminProfile(base),
+                                  ),
+                                ),
+                                if (showDelete) ...[
+                                  const SizedBox(height: kGap10),
+                                  SizedBox(
+                                    width: double.infinity,
+                                    height: BrandTheme.pillHeight,
+                                    child: BrandPillButton(
+                                      label: t.profileDeleteUpper,
+                                      style: BrandPillStyle.light,
+                                      onTap: _isBusy
+                                          ? null
+                                          : () => _delete(base),
+                                    ),
+                                  ),
+                                ],
+                              ] else if (widget.startBlank) ...[
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: BrandTheme.pillHeight,
+                                  child: BrandPillButton(
+                                    label: t.profileSubmitUpper,
+                                    style: BrandPillStyle.light,
+                                    onTap: _isBusy
+                                        ? null
+                                        : () => _submitNew(base),
+                                  ),
+                                ),
+                              ] else ...[
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: BrandTheme.pillHeight,
+                                  child: BrandPillButton(
+                                    label: t.profileSaveUpper,
+                                    style: BrandPillStyle.dark,
+                                    onTap: _isBusy
+                                        ? null
+                                        : () => _saveExistingProfile(base),
+                                  ),
+                                ),
+                                const SizedBox(height: kGap10),
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: BrandTheme.pillHeight,
+                                  child: BrandPillButton(
+                                    label: t.profileSubmitUpper,
+                                    style: BrandPillStyle.light,
+                                    onTap: _isBusy
+                                        ? null
+                                        : () => _submitExistingProfile(base),
+                                  ),
+                                ),
+                                if (showDelete) ...[
+                                  const SizedBox(height: kGap10),
+                                  SizedBox(
+                                    width: double.infinity,
+                                    height: BrandTheme.pillHeight,
+                                    child: BrandPillButton(
+                                      label: t.profileDeleteUpper,
+                                      style: BrandPillStyle.light,
+                                      onTap: _isBusy
+                                          ? null
+                                          : () => _delete(base),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ),
-
-                if (!widget.startBlank) ...[
-                  _Header(status: base.status, comment: base.moderationComment),
-                  const SizedBox(height: kGap14),
-                ],
-
-                _Card(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Text(
-                        t.profileTitleUpper,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 1.6,
-                          color: kTextDark,
-                        ),
-                      ),
-                      const SizedBox(height: kGap16),
-
-                      _ProfileQualityCard(quality: _profileQuality()),
-                      const SizedBox(height: kGap16),
-
-                      _ProfileTypeSelector(
-                        selected: _profileType,
-                        onChanged: (type) =>
-                            setState(() => _profileType = type),
-                      ),
-                      const SizedBox(height: kGap16),
-
-                      if (_error != null) ...[
-                        Text(
-                          _error!,
-                          textAlign: TextAlign.center,
-                          style: kProfileErrorTextStyle,
-                        ),
-                        const SizedBox(height: kGap12),
-                      ],
-
-                      _Row2(
-                        left: _Field(
-                          label: t.profileSurname,
-                          controller: _surnameC,
-                        ),
-                        right: _Field(label: t.profileName, controller: _nameC),
-                      ),
-                      const SizedBox(height: kGap12),
-
-                      if (_profileType.usesPhysicalBasics) ...[
-                        _SectionTitle(t.profilePhysicalDetailsUpper),
-                        const SizedBox(height: kGap10),
-                        _Row2(
-                          left: _Field(
-                            label:
-                                Localizations.localeOf(
-                                      context,
-                                    ).languageCode.toLowerCase() ==
-                                    'ru'
-                                ? 'Дата рождения'
-                                : 'Birth date',
-                            controller: _birthDateC,
-                            readOnly: true,
-                            onTap: _pickBirthDate,
-                          ),
-                          right: _Field(
-                            label: t.profileHeightCm,
-                            controller: _heightC,
-                            keyboardType: TextInputType.number,
-                            inputFormatters: [
-                              FilteringTextInputFormatter.digitsOnly,
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: kGap12),
-                      ],
-
-                      if (_profileType.usesModelMeasurements) ...[
-                        _Row2(
-                          left: _Field(
-                            label: t.profileBustCm,
-                            controller: _bustC,
-                            keyboardType: TextInputType.number,
-                            inputFormatters: [
-                              FilteringTextInputFormatter.digitsOnly,
-                            ],
-                          ),
-                          right: _Field(
-                            label: t.profileWaistCm,
-                            controller: _waistC,
-                            keyboardType: TextInputType.number,
-                            inputFormatters: [
-                              FilteringTextInputFormatter.digitsOnly,
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: kGap12),
-
-                        _Row2(
-                          left: _Field(
-                            label: t.profileHipsCm,
-                            controller: _hipsC,
-                            keyboardType: TextInputType.number,
-                            inputFormatters: [
-                              FilteringTextInputFormatter.digitsOnly,
-                            ],
-                          ),
-                          right: _Field(
-                            label: t.profileShoeSize,
-                            controller: _shoeSizeC,
-                            keyboardType: TextInputType.number,
-                            inputFormatters: [
-                              FilteringTextInputFormatter.digitsOnly,
-                            ],
-                          ),
-                        ),
-
-                        const SizedBox(height: kGap12),
-
-                        _Row2(
-                          left: SearchableChoiceField(
-                            label: t.profileEyeColor,
-                            controller: _eyeColorC,
-                            options: eyeColorOptions,
-                          ),
-                          right: SearchableChoiceField(
-                            label: t.profileHairColor,
-                            controller: _hairColorC,
-                            options: hairColorOptions,
-                          ),
-                        ),
-                        const SizedBox(height: kGap12),
-                      ],
-
-                      _Row2(
-                        left: SearchableChoiceField(
-                          label: t.profileCountry,
-                          controller: _countryC,
-                          options: _countryOptions,
-                          onChanged: _onCountryChanged,
-                        ),
-                        right: SearchableChoiceField(
-                          label: t.profileCity,
-                          controller: _cityC,
-                          options: _cityOptions,
-                          enabled: _countryC.text.trim().isNotEmpty,
-                        ),
-                      ),
-                      const SizedBox(height: kGap12),
-
-                      if (!_profileType.isModel) ...[
-                        const SizedBox(height: kGap4),
-                        _SectionTitle(t.profileProfessionalInfoUpper),
-                        const SizedBox(height: kGap10),
-                        _Field(
-                          label: _professionalExperienceLabel(t, _profileType),
-                          controller: _experienceC,
-                          maxLines: 4,
-                        ),
-                        const SizedBox(height: kGap12),
-                        _Field(
-                          label: _professionalSkillsLabel(t, _profileType),
-                          controller: _skillsC,
-                          maxLines: 3,
-                        ),
-                        const SizedBox(height: kGap12),
-                        _Field(
-                          label: _professionalServicesLabel(t, _profileType),
-                          controller: _servicesC,
-                          maxLines: 3,
-                        ),
-                        const SizedBox(height: kGap12),
-                        _Field(
-                          label: _professionalGenresLabel(t, _profileType),
-                          controller: _genresC,
-                          maxLines: 3,
-                        ),
-                        if (_profileType ==
-                                ProfessionalProfileType.photographer ||
-                            _profileType ==
-                                ProfessionalProfileType.videographer) ...[
-                          const SizedBox(height: kGap12),
-                          _Field(
-                            label: t.profileEquipment,
-                            controller: _equipmentC,
-                            maxLines: 3,
-                          ),
-                        ],
-                        const SizedBox(height: kGap12),
-                      ],
-
-                      _Row2(
-                        left: _Field(
-                          label: t.profileMinHourlyRate,
-                          controller: _minHourlyRateC,
-                          keyboardType: TextInputType.number,
-                          inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly,
-                          ],
-                        ),
-                        right: _Field(
-                          label: t.profileMinDailyFee,
-                          controller: _minDailyFeeC,
-                          keyboardType: TextInputType.number,
-                          inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly,
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: kGap12),
-                      const SizedBox(height: kGap16),
-
-                      _SectionTitle(t.profileMediaUpper),
-                      const SizedBox(height: kGap10),
-                      _MediaBlock(
-                        uploading: _uploading,
-                        onAddPhoto: _pickPhotos,
-                        onAddVideo: _pickVideo,
-                        photoUrls: _photoUrls,
-                        videoUrls: _videoUrls,
-                        pendingPhotoUrls: _pendingPhotoUrls,
-                        pendingVideoUrls: _pendingVideoUrls,
-                        pendingVideoPreviewUrls: _pendingVideoPreviewUrls,
-                        pickedPhotos: _pickedPhotos,
-                        pickedVideos: _pickedVideos,
-                        onRemovePhoto: _removePhotoAt,
-                        onRemoveVideo: _removeVideoAt,
-                      ),
-                      const SizedBox(height: kGap16),
-
-                      _SectionTitle(t.profileResumeUpper),
-                      const SizedBox(height: kGap10),
-                      _Field(
-                        label: t.profileAboutHint,
-                        controller: _resumeC,
-                        maxLines: 6,
-                      ),
-
-                      const SizedBox(height: kGap16),
-                      _SectionTitle(t.profileCalendarUpper),
-                      const SizedBox(height: kGap10),
-                      BrandCalendar(
-                        selectionMode: BrandCalendarSelectionMode.multiple,
-                        selectedDates: _unavailableDays,
-                        allowPastDates: false,
-                        allowPreviousMonths: false,
-                        onDateToggled: _toggleUnavailableDay,
-                      ),
-
-                      const SizedBox(height: kGap14),
-
-                      if (isAdmin) ...[
-                        SizedBox(
-                          width: double.infinity,
-                          height: BrandTheme.pillHeight,
-                          child: BrandPillButton(
-                            label: t.profileSaveUpper,
-                            style: BrandPillStyle.dark,
-                            onTap: _isBusy
-                                ? null
-                                : () => _saveAdminProfile(base),
-                          ),
-                        ),
-                        if (showDelete) ...[
-                          const SizedBox(height: kGap10),
-                          SizedBox(
-                            width: double.infinity,
-                            height: BrandTheme.pillHeight,
-                            child: BrandPillButton(
-                              label: t.profileDeleteUpper,
-                              style: BrandPillStyle.light,
-                              onTap: _isBusy ? null : () => _delete(base),
-                            ),
-                          ),
-                        ],
-                      ] else if (widget.startBlank) ...[
-                        SizedBox(
-                          width: double.infinity,
-                          height: BrandTheme.pillHeight,
-                          child: BrandPillButton(
-                            label: t.profileSubmitUpper,
-                            style: BrandPillStyle.light,
-                            onTap: _isBusy ? null : () => _submitNew(base),
-                          ),
-                        ),
-                      ] else ...[
-                        SizedBox(
-                          width: double.infinity,
-                          height: BrandTheme.pillHeight,
-                          child: BrandPillButton(
-                            label: t.profileSaveUpper,
-                            style: BrandPillStyle.dark,
-                            onTap: _isBusy
-                                ? null
-                                : () => _saveExistingProfile(base),
-                          ),
-                        ),
-                        const SizedBox(height: kGap10),
-                        SizedBox(
-                          width: double.infinity,
-                          height: BrandTheme.pillHeight,
-                          child: BrandPillButton(
-                            label: t.profileSubmitUpper,
-                            style: BrandPillStyle.light,
-                            onTap: _isBusy
-                                ? null
-                                : () => _submitExistingProfile(base),
-                          ),
-                        ),
-                        if (showDelete) ...[
-                          const SizedBox(height: kGap10),
-                          SizedBox(
-                            width: double.infinity,
-                            height: BrandTheme.pillHeight,
-                            child: BrandPillButton(
-                              label: t.profileDeleteUpper,
-                              style: BrandPillStyle.light,
-                              onTap: _isBusy ? null : () => _delete(base),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ],
-                  ),
-                ),
-              ],
+                );
+              },
             ),
           ),
         ],

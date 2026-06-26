@@ -24,6 +24,9 @@ import 'profile_type_selection_page.dart';
 
 const EdgeInsets _kProfileCardPad = kLoginCardPad;
 const double _kAccountLogoutButtonWidth = 112.0;
+const double _kAccountDesktopBreakpoint = 900.0;
+const double _kAccountDesktopMaxWidth = 1360.0;
+const EdgeInsets _kAccountDesktopPad = EdgeInsets.fromLTRB(32, 28, 32, 32);
 
 TextStyle _accountCommandStyle({
   Color color = kTextDark,
@@ -53,6 +56,12 @@ TextStyle _accountBodyStyle({
     fontWeight: weight,
     height: height,
   );
+}
+
+String _accountLocaleText(BuildContext context, String ru, String en) {
+  return Localizations.localeOf(context).languageCode.toLowerCase() == 'ru'
+      ? ru
+      : en;
 }
 
 class _LoadingView extends StatelessWidget {
@@ -149,6 +158,125 @@ class MyProfilePage extends ConsumerWidget {
     ];
   }
 
+  List<Widget> _profileCards(
+    BuildContext context,
+    List<MyProfileState> profiles,
+  ) {
+    return [
+      for (final p in profiles)
+        Padding(
+          padding: const EdgeInsets.only(bottom: kProfileItemBottomGap),
+          child: _ProfileSummaryCard(
+            fullName: p.fullName.trim(),
+            status: p.status,
+            photoUrl: p.photoUrls.isNotEmpty ? p.photoUrls.first : null,
+            onTap: () => _openEditor(context, startBlank: false, initial: p),
+          ),
+        ),
+    ];
+  }
+
+  Widget _mobileLayout(
+    BuildContext context,
+    List<MyProfileState> profiles,
+    Future<void> Function() logout,
+    AppLocalizations t,
+  ) {
+    return ListView(
+      padding: kMyProfilePagePad,
+      children: [
+        _AddProfileAction(
+          label: profiles.isEmpty ? t.profileCreateUpper : t.addProfileUpper,
+          onTap: () => _openTypeSelector(context),
+          onLogout: logout,
+          logoutLabel: t.logoutUpper,
+        ),
+        const SizedBox(height: kGap14),
+        ..._profileCards(context, profiles),
+        if (profiles.isNotEmpty) const SizedBox(height: kGap14),
+        ..._accountTools(context),
+      ],
+    );
+  }
+
+  Widget _desktopLayout(
+    BuildContext context,
+    List<MyProfileState> profiles,
+    Future<void> Function() logout,
+    AppLocalizations t,
+  ) {
+    return Align(
+      alignment: Alignment.topCenter,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: _kAccountDesktopMaxWidth),
+        child: ListView(
+          padding: _kAccountDesktopPad,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  flex: 6,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _DesktopSectionTitle(
+                        title: _accountLocaleText(
+                          context,
+                          'МОИ АНКЕТЫ',
+                          'MY PROFILES',
+                        ),
+                        subtitle: profiles.isEmpty
+                            ? t.profileCreateUpper
+                            : t.addProfileUpper,
+                      ),
+                      const SizedBox(height: 14),
+                      _AddProfileAction(
+                        label: profiles.isEmpty
+                            ? t.profileCreateUpper
+                            : t.addProfileUpper,
+                        onTap: () => _openTypeSelector(context),
+                        onLogout: logout,
+                        logoutLabel: t.logoutUpper,
+                      ),
+                      const SizedBox(height: kGap14),
+                      if (profiles.isEmpty)
+                        _DesktopEmptyProfilesCard(
+                          title: t.profileCreateUpper,
+                          onTap: () => _openTypeSelector(context),
+                        )
+                      else
+                        ..._profileCards(context, profiles),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 22),
+                Expanded(
+                  flex: 5,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _DesktopSectionTitle(
+                        title: t.accountUpper,
+                        subtitle: _accountLocaleText(
+                          context,
+                          'Тарифы, уведомления, аналитика и статус',
+                          'Billing, notifications, analytics, and status',
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      ..._accountTools(context),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(myProfileProvider);
@@ -171,54 +299,12 @@ class MyProfilePage extends ConsumerWidget {
                 message: t.profileLoadError(AppErrorMapper.message(e, t)),
               ),
               data: (profiles) {
-                if (profiles.isEmpty) {
-                  return ListView(
-                    padding: kMyProfilePagePad,
-                    children: [
-                      _AddProfileAction(
-                        label: t.profileCreateUpper,
-                        onTap: () => _openTypeSelector(context),
-                        onLogout: logout,
-                        logoutLabel: t.logoutUpper,
-                      ),
-                      const SizedBox(height: kGap14),
-                      ..._accountTools(context),
-                    ],
-                  );
-                }
-
-                return ListView(
-                  padding: kMyProfilePagePad,
-                  children: [
-                    _AddProfileAction(
-                      label: t.addProfileUpper,
-                      onTap: () => _openTypeSelector(context),
-                      onLogout: logout,
-                      logoutLabel: t.logoutUpper,
-                    ),
-                    const SizedBox(height: kGap14),
-                    for (final p in profiles)
-                      Padding(
-                        padding: const EdgeInsets.only(
-                          bottom: kProfileItemBottomGap,
-                        ),
-                        child: _ProfileSummaryCard(
-                          fullName: p.fullName.trim(),
-                          status: p.status,
-                          photoUrl: p.photoUrls.isNotEmpty
-                              ? p.photoUrls.first
-                              : null,
-                          onTap: () => _openEditor(
-                            context,
-                            startBlank: false,
-                            initial: p,
-                          ),
-                        ),
-                      ),
-                    const SizedBox(height: kGap14),
-                    ..._accountTools(context),
-                  ],
-                );
+                final isDesktop =
+                    MediaQuery.sizeOf(context).width >=
+                    _kAccountDesktopBreakpoint;
+                return isDesktop
+                    ? _desktopLayout(context, profiles, logout, t)
+                    : _mobileLayout(context, profiles, logout, t);
               },
             ),
           ),
@@ -685,6 +771,110 @@ class _BillingEntryCard extends StatelessWidget {
       title: t.billingTitleUpper,
       subtitle: t.billingAccountEntrySubtitle,
       onTap: onTap,
+    );
+  }
+}
+
+class _DesktopSectionTitle extends StatelessWidget {
+  const _DesktopSectionTitle({required this.title, required this.subtitle});
+
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: _accountCommandStyle(
+              size: 24,
+              spacing: 2.8,
+              weight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            subtitle,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: _accountBodyStyle(
+              color: kTextMuted,
+              size: 15,
+              weight: FontWeight.w600,
+              height: 1.25,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DesktopEmptyProfilesCard extends StatelessWidget {
+  const _DesktopEmptyProfilesCard({required this.title, required this.onTap});
+
+  final String title;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: _Card(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 168),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  gradient: BrandTheme.darkPillGradient,
+                  borderRadius: BorderRadius.circular(kCardRadius),
+                  boxShadow: BrandTheme.basePillShadow(isDark: true),
+                ),
+                child: const Icon(
+                  Icons.person_add_alt_1_rounded,
+                  color: Colors.white,
+                  size: 32,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: _accountCommandStyle(
+                  size: 15,
+                  spacing: 2.0,
+                  weight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                _accountLocaleText(
+                  context,
+                  'Выберите тип анкеты и заполните данные для каталога',
+                  'Choose a profile type and fill in catalog details',
+                ),
+                textAlign: TextAlign.center,
+                style: _accountBodyStyle(
+                  color: kTextMuted,
+                  size: 14,
+                  weight: FontWeight.w600,
+                  height: 1.25,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
