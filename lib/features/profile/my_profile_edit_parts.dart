@@ -317,14 +317,19 @@ class _MediaBlock extends StatelessWidget {
           decoration: profileMediaBoxDecoration(),
           alignment: Alignment.center,
           padding: kProfileMediaInnerPad,
-          child: uploading
-              ? const Center(child: CircularProgressIndicator())
-              : (!hasAnything)
-              ? Text(
-                  t.profileMediaPreviewPlaceholder,
-                  style: const TextStyle(color: kTextMuted),
+          child: Stack(
+            children: [
+              if (!hasAnything)
+                Center(
+                  child: uploading
+                      ? const CircularProgressIndicator()
+                      : Text(
+                          t.profileMediaPreviewPlaceholder,
+                          style: const TextStyle(color: kTextMuted),
+                        ),
                 )
-              : Column(
+              else
+                Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     if (hasPhotos)
@@ -346,6 +351,15 @@ class _MediaBlock extends StatelessWidget {
                     ],
                   ],
                 ),
+              if (uploading && hasAnything)
+                const Positioned(
+                  left: 0,
+                  right: 0,
+                  top: 0,
+                  child: LinearProgressIndicator(minHeight: 2),
+                ),
+            ],
+          ),
         ),
       ],
     );
@@ -492,12 +506,13 @@ class _VideoThumbImage extends StatefulWidget {
 }
 
 class _VideoThumbImageState extends State<_VideoThumbImage> {
-  Future<String?>? _thumbFuture;
+  VideoPlayerController? _controller;
+  Future<void>? _init;
 
   @override
   void initState() {
     super.initState();
-    _thumbFuture = _buildThumb();
+    _setup();
   }
 
   @override
@@ -505,71 +520,109 @@ class _VideoThumbImageState extends State<_VideoThumbImage> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.url != widget.url ||
         oldWidget.file?.path != widget.file?.path) {
-      _thumbFuture = _buildThumb();
+      _disposeController();
+      _setup();
     }
   }
 
-  Future<String?> _buildThumb() async {
-    final file = widget.file;
-    final url = widget.url;
+  void _setup() {
+    final controller = _videoControllerFor(file: widget.file, url: widget.url);
+    _controller = controller;
+    if (controller == null) return;
 
-    try {
-      if (file != null) {
-        return await VideoThumbnail.thumbnailFile(
-          video: file.path,
-          imageFormat: ImageFormat.JPEG,
-          maxWidth: kProfileVideoThumbMaxWidth.toInt(),
-          quality: kProfileVideoThumbQuality,
-        );
-      }
+    _init = controller.initialize().then((_) async {
+      await controller.setVolume(0);
+      await controller.pause();
+      if (mounted) setState(() {});
+    });
+  }
 
-      if (url != null && url.trim().isNotEmpty) {
-        return await VideoThumbnail.thumbnailFile(
-          video: url,
-          imageFormat: ImageFormat.JPEG,
-          maxWidth: kProfileVideoThumbMaxWidth.toInt(),
-          quality: kProfileVideoThumbQuality,
-        );
-      }
-    } catch (_) {}
+  void _disposeController() {
+    final controller = _controller;
+    _controller = null;
+    _init = null;
+    controller?.dispose();
+  }
 
-    return null;
+  @override
+  void dispose() {
+    _disposeController();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<String?>(
-      future: _thumbFuture,
+    final controller = _controller;
+    final init = _init;
+
+    if (controller == null || init == null) {
+      return const _VideoThumbFallback(showProgress: false);
+    }
+
+    return FutureBuilder<void>(
+      future: init,
       builder: (context, snap) {
-        final path = snap.data;
-        if (path == null || path.isEmpty) {
-          return Container(
-            color: kVideoFallbackBg,
-            alignment: Alignment.center,
-            child: const Icon(
+        if (snap.connectionState != ConnectionState.done ||
+            !controller.value.isInitialized) {
+          return const _VideoThumbFallback(showProgress: true);
+        }
+
+        final aspectRatio = controller.value.aspectRatio;
+        return FittedBox(
+          fit: BoxFit.cover,
+          child: SizedBox(
+            width: aspectRatio >= 1 ? kProfileVideoThumbMaxWidth : 96,
+            height: aspectRatio >= 1
+                ? kProfileVideoThumbMaxWidth / aspectRatio
+                : 96 / aspectRatio.clamp(0.2, 5),
+            child: VideoPlayer(controller),
+          ),
+        );
+      },
+    );
+  }
+}
+
+VideoPlayerController? _videoControllerFor({String? url, XFile? file}) {
+  final videoUrl = url?.trim() ?? '';
+
+  if (file != null) {
+    final path = file.path.trim();
+    if (path.isEmpty) return null;
+    if (kIsWeb) {
+      return VideoPlayerController.networkUrl(Uri.parse(path));
+    }
+    return VideoPlayerController.file(File(path));
+  }
+
+  if (videoUrl.isEmpty) return null;
+  return VideoPlayerController.networkUrl(Uri.parse(videoUrl));
+}
+
+class _VideoThumbFallback extends StatelessWidget {
+  const _VideoThumbFallback({required this.showProgress});
+
+  final bool showProgress;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: kVideoFallbackBg,
+      alignment: Alignment.center,
+      child: showProgress
+          ? const SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white,
+              ),
+            )
+          : const Icon(
               Icons.videocam,
               color: kVideoFallbackIcon,
               size: kProfileVideoFallbackIconSize,
             ),
-          );
-        }
-
-        return Image.file(
-          File(path),
-          fit: BoxFit.cover,
-          errorBuilder: (_, _, _) {
-            return Container(
-              color: kVideoFallbackBg,
-              alignment: Alignment.center,
-              child: const Icon(
-                Icons.videocam,
-                color: kVideoFallbackIcon,
-                size: kProfileVideoFallbackIconSize,
-              ),
-            );
-          },
-        );
-      },
     );
   }
 }
@@ -622,14 +675,8 @@ class _VideoViewerPageState extends State<_VideoViewerPage> {
   }
 
   void _setup() {
-    final file = widget.file != null ? File(widget.file!.path) : null;
-    final url = widget.url;
-
-    if (file == null && (url == null || url.isEmpty)) return;
-
-    final controller = file != null
-        ? VideoPlayerController.file(file)
-        : VideoPlayerController.networkUrl(Uri.parse(url!));
+    final controller = _videoControllerFor(file: widget.file, url: widget.url);
+    if (controller == null) return;
 
     _controller = controller;
     _init = controller.initialize().then((_) async {

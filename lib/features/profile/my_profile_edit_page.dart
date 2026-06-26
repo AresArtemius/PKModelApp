@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -529,17 +530,37 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
       setState(() => _error = null);
 
       try {
+        final picked = <XFile>[];
         final v = await _picker.pickVideo(source: ImageSource.gallery);
-        if (v == null || !mounted) return;
+        if (v != null) {
+          picked.add(v);
+        } else if (kIsWeb) {
+          final list = await _picker.pickMultipleMedia(limit: 6);
+          picked.addAll(list.where(_isPickedVideo));
+        }
+
+        if (picked.isEmpty || !mounted) return;
 
         setState(() {
-          _pickedVideos.add(v);
+          _pickedVideos.addAll(picked);
         });
       } catch (_) {
         if (!mounted) return;
         setState(() => _error = _t.profileErrorSaveFailed);
       }
     });
+  }
+
+  bool _isPickedVideo(XFile file) {
+    final mime = file.mimeType?.toLowerCase() ?? '';
+    if (mime.startsWith('video/')) return true;
+
+    final path = file.path.toLowerCase();
+    return path.endsWith('.mp4') ||
+        path.endsWith('.mov') ||
+        path.endsWith('.m4v') ||
+        path.endsWith('.webm') ||
+        path.endsWith('.avi');
   }
 
   Future<
