@@ -35,9 +35,16 @@ Uint8List? _buildChatImageThumbnail(Uint8List bytes) {
 }
 
 class ChatPage extends ConsumerStatefulWidget {
-  const ChatPage({super.key, required this.chatId});
+  const ChatPage({
+    super.key,
+    required this.chatId,
+    this.embedded = false,
+    this.onClose,
+  });
 
   final String chatId;
+  final bool embedded;
+  final VoidCallback? onClose;
 
   @override
   ConsumerState<ChatPage> createState() => _ChatPageState();
@@ -531,7 +538,12 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     );
     if (confirmed != true) return;
     await ref.read(chatServiceProvider).hideChatForMe(widget.chatId);
-    if (mounted) context.pop();
+    if (!mounted) return;
+    if (widget.embedded) {
+      widget.onClose?.call();
+    } else {
+      context.pop();
+    }
   }
 
   @override
@@ -558,102 +570,110 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       orElse: () => t.chatUpper,
     );
 
-    return Scaffold(
-      resizeToAvoidBottomInset: true,
-      body: Stack(
-        children: [
-          const BrandBackground(),
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-              child: Column(
-                children: [
-                  _ChatHeader(
-                    title: title,
-                    onBack: () => context.pop(),
-                    onDeleteChat: _deleteChat,
-                  ),
-                  const SizedBox(height: 12),
-                  Expanded(
-                    child: messages.when(
-                      loading: () =>
-                          const Center(child: CircularProgressIndicator()),
-                      error: (e, _) => Center(
-                        child: Text(
-                          '${t.errorUpper}: ${AppErrorMapper.message(e, t)}',
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(color: kTextDanger),
-                        ),
+    final content = Stack(
+      children: [
+        if (!widget.embedded) const BrandBackground(),
+        SafeArea(
+          top: !widget.embedded,
+          bottom: !widget.embedded,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              widget.embedded ? 18 : 16,
+              widget.embedded ? 18 : 12,
+              widget.embedded ? 18 : 16,
+              widget.embedded ? 18 : 12,
+            ),
+            child: Column(
+              children: [
+                _ChatHeader(
+                  title: title,
+                  onBack: widget.embedded ? null : () => context.pop(),
+                  onDeleteChat: _deleteChat,
+                ),
+                const SizedBox(height: 12),
+                Expanded(
+                  child: messages.when(
+                    loading: () =>
+                        const Center(child: CircularProgressIndicator()),
+                    error: (e, _) => Center(
+                      child: Text(
+                        '${t.errorUpper}: ${AppErrorMapper.message(e, t)}',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: kTextDanger),
                       ),
-                      data: (items) => items.isEmpty
-                          ? Center(
-                              child: Text(
-                                t.chatEmptyMessage,
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                  color: kTextMuted,
-                                  fontWeight: FontWeight.w700,
-                                ),
+                    ),
+                    data: (items) => items.isEmpty
+                        ? Center(
+                            child: Text(
+                              t.chatEmptyMessage,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                color: kTextMuted,
+                                fontWeight: FontWeight.w700,
                               ),
-                            )
-                          : Builder(
-                              builder: (context) {
-                                final visibleMessages = _mergedMessages(items);
-                                final canLoadOlder =
-                                    _hasOlderMessages &&
-                                    items.length >= _chatRealtimeMessageLimit;
+                            ),
+                          )
+                        : Builder(
+                            builder: (context) {
+                              final visibleMessages = _mergedMessages(items);
+                              final canLoadOlder =
+                                  _hasOlderMessages &&
+                                  items.length >= _chatRealtimeMessageLimit;
 
-                                return ListView.builder(
-                                  reverse: true,
-                                  itemCount:
-                                      visibleMessages.length +
-                                      (canLoadOlder ? 1 : 0),
-                                  itemBuilder: (context, index) {
-                                    if (index == visibleMessages.length) {
-                                      return _LoadOlderMessagesButton(
-                                        loading: _loadingOlderMessages,
-                                        onTap: () =>
-                                            _loadOlderMessages(visibleMessages),
-                                      );
-                                    }
-                                    final item =
-                                        visibleMessages[visibleMessages.length -
-                                            1 -
-                                            index];
-                                    return _MessageBubble(
+                              return ListView.builder(
+                                reverse: true,
+                                itemCount:
+                                    visibleMessages.length +
+                                    (canLoadOlder ? 1 : 0),
+                                itemBuilder: (context, index) {
+                                  if (index == visibleMessages.length) {
+                                    return _LoadOlderMessagesButton(
+                                      loading: _loadingOlderMessages,
+                                      onTap: () =>
+                                          _loadOlderMessages(visibleMessages),
+                                    );
+                                  }
+                                  final item =
+                                      visibleMessages[visibleMessages.length -
+                                          1 -
+                                          index];
+                                  return _MessageBubble(
+                                    message: item,
+                                    mine: item.senderId == userId,
+                                    avatarUrl: avatarMap[item.senderId] ?? '',
+                                    reactions:
+                                        reactionMap[item.id] ??
+                                        const <ChatReaction>[],
+                                    onLongPress: () => _showMessageActions(
                                       message: item,
                                       mine: item.senderId == userId,
-                                      avatarUrl: avatarMap[item.senderId] ?? '',
-                                      reactions:
-                                          reactionMap[item.id] ??
-                                          const <ChatReaction>[],
-                                      onLongPress: () => _showMessageActions(
-                                        message: item,
-                                        mine: item.senderId == userId,
-                                      ),
-                                    );
-                                  },
-                                );
-                              },
-                            ),
-                    ),
+                                    ),
+                                  );
+                                },
+                              );
+                            },
+                          ),
                   ),
-                  const SizedBox(height: 12),
-                  _Composer(
-                    controller: _messageController,
-                    hintText: t.messageHint,
-                    sending: _sending || _uploadingMedia,
-                    onSend: _send,
-                    onAttach: _showAttachMenu,
-                    onEmoji: _showEmojiMenu,
-                  ),
-                ],
-              ),
+                ),
+                const SizedBox(height: 12),
+                _Composer(
+                  controller: _messageController,
+                  hintText: t.messageHint,
+                  sending: _sending || _uploadingMedia,
+                  onSend: _send,
+                  onAttach: _showAttachMenu,
+                  onEmoji: _showEmojiMenu,
+                ),
+              ],
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
+
+    if (widget.embedded) return content;
+
+    return Scaffold(resizeToAvoidBottomInset: true, body: content);
   }
 }
 
@@ -704,14 +724,17 @@ class _ChatHeader extends StatelessWidget {
   });
 
   final String title;
-  final VoidCallback onBack;
+  final VoidCallback? onBack;
   final VoidCallback onDeleteChat;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        _IconPill(icon: Icons.arrow_back_ios_new_rounded, onTap: onBack),
+        if (onBack == null)
+          const SizedBox(width: 48)
+        else
+          _IconPill(icon: Icons.arrow_back_ios_new_rounded, onTap: onBack!),
         Expanded(
           child: Text(
             title,

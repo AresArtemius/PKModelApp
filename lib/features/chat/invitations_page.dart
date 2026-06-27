@@ -11,7 +11,18 @@ import '../../ui/brand/brand_pill_button.dart';
 import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
 import 'chat_models.dart';
+import 'chat_page.dart';
 import 'chat_providers.dart';
+
+const double _invitationsDesktopBreakpoint = 900;
+const double _invitationsDesktopMaxWidth = 1480;
+const double _invitationsDesktopListWidth = 430;
+const EdgeInsets _invitationsDesktopPadding = EdgeInsets.fromLTRB(
+  32,
+  24,
+  32,
+  28,
+);
 
 TextStyle _invitationCommandStyle({
   Color color = kTextDark,
@@ -43,13 +54,71 @@ TextStyle _invitationBodyStyle({
   );
 }
 
-class InvitationsPage extends ConsumerWidget {
+class InvitationsPage extends ConsumerStatefulWidget {
   const InvitationsPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<InvitationsPage> createState() => _InvitationsPageState();
+}
+
+class _InvitationsPageState extends ConsumerState<InvitationsPage> {
+  String? _selectedKey;
+  String? _selectedChatId;
+
+  String _key(CastingInvitation item) =>
+      '${item.selectionId}_${item.profileId}';
+
+  Future<String?> _ensureChat(
+    BuildContext context,
+    CastingInvitation item,
+  ) async {
+    final entitlements = await ref.read(accountEntitlementsProvider.future);
+    if (!context.mounted) return null;
+    if (!entitlements.canUseSelectionChat) {
+      await _showModelProRequiredDialog(context);
+      return null;
+    }
+    final chatId = await ref
+        .read(chatServiceProvider)
+        .ensureSelectionChat(
+          selectionId: item.selectionId,
+          profileId: item.profileId,
+          modelUserId: item.modelUserId,
+        );
+    if (!context.mounted || chatId.isEmpty) return null;
+    return chatId;
+  }
+
+  Future<void> _openChatMobile(
+    BuildContext context,
+    CastingInvitation item,
+  ) async {
+    final chatId = await _ensureChat(context, item);
+    if (!context.mounted || chatId == null) return;
+    context.push('${Routes.chatPrefix}$chatId');
+  }
+
+  Future<void> _openChatDesktop(
+    BuildContext context,
+    CastingInvitation item,
+  ) async {
+    final chatId = await _ensureChat(context, item);
+    if (!context.mounted || chatId == null) return;
+    setState(() {
+      _selectedKey = _key(item);
+      _selectedChatId = chatId;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
     final invitations = ref.watch(myInvitationsProvider);
+    final isDesktop =
+        MediaQuery.sizeOf(context).width >= _invitationsDesktopBreakpoint;
+    final pagePadding = isDesktop
+        ? _invitationsDesktopPadding
+        : const EdgeInsets.fromLTRB(16, 18, 16, 24);
 
     return Scaffold(
       body: Stack(
@@ -57,7 +126,7 @@ class InvitationsPage extends ConsumerWidget {
           const BrandBackground(),
           SafeArea(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
+              padding: pagePadding,
               child: Column(
                 children: [
                   Text(
@@ -93,65 +162,47 @@ class InvitationsPage extends ConsumerWidget {
                                   ),
                                 ],
                               )
-                            : ListView.separated(
-                                physics: const AlwaysScrollableScrollPhysics(),
-                                itemCount: items.length,
-                                separatorBuilder: (_, _) =>
-                                    const SizedBox(height: 12),
-                                itemBuilder: (context, index) {
-                                  final item = items[index];
-                                  return Dismissible(
-                                    key: ValueKey(
-                                      '${item.selectionId}_${item.profileId}',
-                                    ),
-                                    direction: DismissDirection.endToStart,
-                                    background: const _DeleteBackground(),
-                                    confirmDismiss: (_) async {
-                                      await _hideInvitation(
-                                        ref: ref,
-                                        item: item,
-                                      );
-                                      return true;
-                                    },
-                                    child: _InvitationCard(
-                                      item: item,
-                                      message: t.consideredForCastingMessage,
-                                      onDelete: () async {
-                                        await _deleteInvitationWithConfirmation(
-                                          context: context,
-                                          ref: ref,
-                                          item: item,
-                                        );
-                                      },
-                                      onOpenChat: () async {
-                                        final entitlements = await ref.read(
-                                          accountEntitlementsProvider.future,
-                                        );
-                                        if (!context.mounted) return;
-                                        if (!entitlements.canUseSelectionChat) {
-                                          await _showModelProRequiredDialog(
-                                            context,
-                                          );
-                                          return;
-                                        }
-                                        final chatId = await ref
-                                            .read(chatServiceProvider)
-                                            .ensureSelectionChat(
-                                              selectionId: item.selectionId,
-                                              profileId: item.profileId,
-                                              modelUserId: item.modelUserId,
-                                            );
-                                        if (!context.mounted ||
-                                            chatId.isEmpty) {
-                                          return;
-                                        }
-                                        context.push(
-                                          '${Routes.chatPrefix}$chatId',
-                                        );
-                                      },
-                                    ),
-                                  );
+                            : isDesktop
+                            ? _InvitationsDesktopLayout(
+                                items: items,
+                                selectedKey: _selectedKey,
+                                selectedChatId: _selectedChatId,
+                                message: t.consideredForCastingMessage,
+                                onSelect: (item) {
+                                  setState(() => _selectedKey = _key(item));
                                 },
+                                onDelete: (item) async {
+                                  await _deleteInvitationWithConfirmation(
+                                    context: context,
+                                    ref: ref,
+                                    item: item,
+                                  );
+                                  if (_selectedKey == _key(item)) {
+                                    setState(() {
+                                      _selectedKey = null;
+                                      _selectedChatId = null;
+                                    });
+                                  }
+                                },
+                                onOpenChat: (item) =>
+                                    _openChatDesktop(context, item),
+                                onCloseChat: () =>
+                                    setState(() => _selectedChatId = null),
+                              )
+                            : _InvitationsMobileList(
+                                items: items,
+                                message: t.consideredForCastingMessage,
+                                onDelete: (item) =>
+                                    _deleteInvitationWithConfirmation(
+                                      context: context,
+                                      ref: ref,
+                                      item: item,
+                                    ),
+                                onDismiss: (item) async {
+                                  await _hideInvitation(ref: ref, item: item);
+                                },
+                                onOpenChat: (item) =>
+                                    _openChatMobile(context, item),
                               ),
                       ),
                     ),
@@ -313,6 +364,388 @@ Future<void> _deleteInvitationWithConfirmation({
   final confirmed = await _confirmDeleteInvitation(context);
   if (!confirmed) return;
   await _hideInvitation(ref: ref, item: item);
+}
+
+class _InvitationsMobileList extends StatelessWidget {
+  const _InvitationsMobileList({
+    required this.items,
+    required this.message,
+    required this.onDelete,
+    required this.onDismiss,
+    required this.onOpenChat,
+  });
+
+  final List<CastingInvitation> items;
+  final String message;
+  final Future<void> Function(CastingInvitation item) onDelete;
+  final Future<void> Function(CastingInvitation item) onDismiss;
+  final Future<void> Function(CastingInvitation item) onOpenChat;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.separated(
+      physics: const AlwaysScrollableScrollPhysics(),
+      itemCount: items.length,
+      separatorBuilder: (_, _) => const SizedBox(height: 12),
+      itemBuilder: (context, index) {
+        final item = items[index];
+        return Dismissible(
+          key: ValueKey('${item.selectionId}_${item.profileId}'),
+          direction: DismissDirection.endToStart,
+          background: const _DeleteBackground(),
+          confirmDismiss: (_) async {
+            await onDismiss(item);
+            return true;
+          },
+          child: _InvitationCard(
+            item: item,
+            message: message,
+            onDelete: () => onDelete(item),
+            onOpenChat: () => onOpenChat(item),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _InvitationsDesktopLayout extends StatelessWidget {
+  const _InvitationsDesktopLayout({
+    required this.items,
+    required this.selectedKey,
+    required this.selectedChatId,
+    required this.message,
+    required this.onSelect,
+    required this.onDelete,
+    required this.onOpenChat,
+    required this.onCloseChat,
+  });
+
+  final List<CastingInvitation> items;
+  final String? selectedKey;
+  final String? selectedChatId;
+  final String message;
+  final ValueChanged<CastingInvitation> onSelect;
+  final Future<void> Function(CastingInvitation item) onDelete;
+  final Future<void> Function(CastingInvitation item) onOpenChat;
+  final VoidCallback onCloseChat;
+
+  String _key(CastingInvitation item) =>
+      '${item.selectionId}_${item.profileId}';
+
+  @override
+  Widget build(BuildContext context) {
+    final active = items.firstWhere(
+      (item) => _key(item) == selectedKey,
+      orElse: () => items.first,
+    );
+
+    return Align(
+      alignment: Alignment.topCenter,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(
+          maxWidth: _invitationsDesktopMaxWidth,
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(
+              width: _invitationsDesktopListWidth,
+              child: ListView.separated(
+                physics: const AlwaysScrollableScrollPhysics(),
+                itemCount: items.length,
+                separatorBuilder: (_, _) => const SizedBox(height: 12),
+                itemBuilder: (context, index) {
+                  final item = items[index];
+                  return _InvitationListTile(
+                    item: item,
+                    message: message,
+                    selected: _key(item) == _key(active),
+                    onTap: () => onSelect(item),
+                    onDelete: () => onDelete(item),
+                    onOpenChat: () => onOpenChat(item),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(width: 18),
+            Expanded(
+              child: selectedChatId == null
+                  ? _InvitationDesktopDetails(
+                      item: active,
+                      message: message,
+                      onDelete: () => onDelete(active),
+                      onOpenChat: () => onOpenChat(active),
+                    )
+                  : Container(
+                      decoration: catalogCardDecoration(),
+                      clipBehavior: Clip.antiAlias,
+                      child: ChatPage(
+                        key: ValueKey(selectedChatId),
+                        chatId: selectedChatId!,
+                        embedded: true,
+                        onClose: onCloseChat,
+                      ),
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _InvitationListTile extends StatelessWidget {
+  const _InvitationListTile({
+    required this.item,
+    required this.message,
+    required this.selected,
+    required this.onTap,
+    required this.onDelete,
+    required this.onOpenChat,
+  });
+
+  final CastingInvitation item;
+  final String message;
+  final bool selected;
+  final VoidCallback onTap;
+  final Future<void> Function() onDelete;
+  final Future<void> Function() onOpenChat;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(kCardRadius),
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          decoration: catalogCardDecoration().copyWith(
+            border: Border.all(
+              color: selected
+                  ? BrandTheme.redTop.withValues(alpha: 0.58)
+                  : Colors.white.withValues(alpha: 0.78),
+              width: selected ? 1.4 : 1,
+            ),
+          ),
+          padding: const EdgeInsets.fromLTRB(14, 14, 12, 14),
+          child: Row(
+            children: [
+              _InvitationThumb(url: item.photoUrl),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.selectionTitle.isEmpty
+                          ? message
+                          : item.selectionTitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: _invitationCommandStyle(
+                        color: kTextDark,
+                        size: 16,
+                        spacing: 0.4,
+                        weight: FontWeight.w700,
+                      ),
+                    ),
+                    if (item.profileName.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        item.profileName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: _invitationBodyStyle(
+                          color: kTextMuted,
+                          size: 13,
+                          weight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Column(
+                children: [
+                  _SmallIconButton(
+                    icon: Icons.chat_bubble_rounded,
+                    onTap: onOpenChat,
+                  ),
+                  const SizedBox(height: 8),
+                  _SmallIconButton(
+                    icon: Icons.delete_outline_rounded,
+                    color: BrandTheme.redTop,
+                    onTap: onDelete,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _InvitationDesktopDetails extends StatelessWidget {
+  const _InvitationDesktopDetails({
+    required this.item,
+    required this.message,
+    required this.onDelete,
+    required this.onOpenChat,
+  });
+
+  final CastingInvitation item;
+  final String message;
+  final Future<void> Function() onDelete;
+  final Future<void> Function() onOpenChat;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+
+    return Container(
+      decoration: catalogCardDecoration(),
+      padding: const EdgeInsets.all(28),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _InvitationThumb(url: item.photoUrl),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      message,
+                      style: _invitationCommandStyle(
+                        color: BrandTheme.redTop,
+                        size: 13,
+                        spacing: 1.2,
+                        weight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      item.selectionTitle.isEmpty ? '—' : item.selectionTitle,
+                      style: _invitationCommandStyle(
+                        color: kTextDark,
+                        size: 28,
+                        spacing: 0.4,
+                        weight: FontWeight.w800,
+                      ),
+                    ),
+                    if (item.profileName.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        item.profileName,
+                        style: _invitationBodyStyle(
+                          color: kTextMuted,
+                          size: 17,
+                          weight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (item.requestVideoIntro) ...[
+            const SizedBox(height: 22),
+            _VideoIntroNotice(
+              title: t.videoIntroRequiredMessage,
+              requirements: item.videoIntroRequirements,
+            ),
+          ],
+          const Spacer(),
+          Row(
+            children: [
+              SizedBox(
+                width: 190,
+                height: BrandTheme.pillHeight,
+                child: BrandPillButton(
+                  label: t.deleteUpper,
+                  style: BrandPillStyle.light,
+                  onTap: onDelete,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: SizedBox(
+                  height: BrandTheme.pillHeight,
+                  child: BrandPillButton(
+                    label: t.openChatUpper,
+                    style: BrandPillStyle.dark,
+                    onTap: onOpenChat,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SmallIconButton extends StatefulWidget {
+  const _SmallIconButton({
+    required this.icon,
+    required this.onTap,
+    this.color = kTextDark,
+  });
+
+  final IconData icon;
+  final Future<void> Function() onTap;
+  final Color color;
+
+  @override
+  State<_SmallIconButton> createState() => _SmallIconButtonState();
+}
+
+class _SmallIconButtonState extends State<_SmallIconButton> {
+  bool _busy = false;
+
+  Future<void> _tap() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      await widget.onTap();
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(15),
+        onTap: _busy ? null : _tap,
+        child: Container(
+          width: 36,
+          height: 36,
+          alignment: Alignment.center,
+          decoration: catalogSearchDecoration(radius: 15),
+          child: _busy
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : Icon(widget.icon, color: widget.color, size: 20),
+        ),
+      ),
+    );
+  }
 }
 
 class _InvitationCard extends StatelessWidget {
