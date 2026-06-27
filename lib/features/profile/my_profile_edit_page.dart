@@ -600,12 +600,16 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
 
       try {
         final picked = <XFile>[];
-        final v = await _picker.pickVideo(source: ImageSource.gallery);
-        if (v != null) {
-          picked.add(v);
-        } else if (kIsWeb) {
+        if (kIsWeb) {
           final list = await _picker.pickMultipleMedia(limit: 6);
           picked.addAll(list.where(_isPickedVideo));
+          if (picked.isEmpty) {
+            final v = await _picker.pickVideo(source: ImageSource.gallery);
+            if (v != null && _isPickedVideo(v)) picked.add(v);
+          }
+        } else {
+          final v = await _picker.pickVideo(source: ImageSource.gallery);
+          if (v != null) picked.add(v);
         }
 
         if (picked.isEmpty || !mounted) return;
@@ -625,11 +629,17 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
     if (mime.startsWith('video/')) return true;
 
     final path = file.path.toLowerCase();
+    final name = file.name.toLowerCase();
     return path.endsWith('.mp4') ||
         path.endsWith('.mov') ||
         path.endsWith('.m4v') ||
         path.endsWith('.webm') ||
-        path.endsWith('.avi');
+        path.endsWith('.avi') ||
+        name.endsWith('.mp4') ||
+        name.endsWith('.mov') ||
+        name.endsWith('.m4v') ||
+        name.endsWith('.webm') ||
+        name.endsWith('.avi');
   }
 
   Future<
@@ -1275,6 +1285,7 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
                                 onAddVideo: _pickVideo,
                                 photoUrls: _photoUrls,
                                 videoUrls: _videoUrls,
+                                videoPreviewUrls: _videoPreviewUrls,
                                 pendingPhotoUrls: _pendingPhotoUrls,
                                 pendingVideoUrls: _pendingVideoUrls,
                                 pendingVideoPreviewUrls:

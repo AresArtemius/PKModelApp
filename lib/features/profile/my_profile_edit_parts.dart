@@ -236,6 +236,7 @@ class _MediaBlock extends StatelessWidget {
     required this.onAddVideo,
     required this.photoUrls,
     required this.videoUrls,
+    required this.videoPreviewUrls,
     required this.pendingPhotoUrls,
     required this.pendingVideoUrls,
     required this.pendingVideoPreviewUrls,
@@ -251,6 +252,7 @@ class _MediaBlock extends StatelessWidget {
 
   final List<String> photoUrls;
   final List<String> videoUrls;
+  final List<String> videoPreviewUrls;
   final List<String> pendingPhotoUrls;
   final List<String> pendingVideoUrls;
   final List<String> pendingVideoPreviewUrls;
@@ -343,6 +345,7 @@ class _MediaBlock extends StatelessWidget {
                       const SizedBox(height: kGap10),
                       _VideoThumbRow(
                         urls: videoUrls,
+                        previewUrls: videoPreviewUrls,
                         pendingUrls: pendingVideoUrls,
                         pendingPreviewUrls: pendingVideoPreviewUrls,
                         files: pickedVideos,
@@ -369,6 +372,7 @@ class _MediaBlock extends StatelessWidget {
 class _VideoThumbRow extends StatelessWidget {
   const _VideoThumbRow({
     required this.urls,
+    required this.previewUrls,
     required this.pendingUrls,
     required this.pendingPreviewUrls,
     required this.files,
@@ -376,6 +380,7 @@ class _VideoThumbRow extends StatelessWidget {
   });
 
   final List<String> urls;
+  final List<String> previewUrls;
   final List<String> pendingUrls;
   final List<String> pendingPreviewUrls;
   final List<XFile> files;
@@ -385,12 +390,17 @@ class _VideoThumbRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final items = <Widget>[
       for (int i = 0; i < urls.length; i++)
-        _VideoThumb(url: urls[i], onRemove: () => onRemove(i, isPicked: false)),
+        _VideoThumb(
+          url: urls[i],
+          previewUrl: i < previewUrls.length ? previewUrls[i] : null,
+          onRemove: () => onRemove(i, isPicked: false),
+        ),
       for (int i = 0; i < pendingUrls.length; i++)
         _VideoThumb(
-          url: i < pendingPreviewUrls.length && pendingPreviewUrls[i].isNotEmpty
+          url: pendingUrls[i],
+          previewUrl: i < pendingPreviewUrls.length
               ? pendingPreviewUrls[i]
-              : pendingUrls[i],
+              : null,
           pending: true,
         ),
       for (int i = 0; i < files.length; i++)
@@ -413,9 +423,16 @@ class _VideoThumbRow extends StatelessWidget {
 }
 
 class _VideoThumb extends StatelessWidget {
-  const _VideoThumb({this.url, this.file, this.onRemove, this.pending = false});
+  const _VideoThumb({
+    this.url,
+    this.previewUrl,
+    this.file,
+    this.onRemove,
+    this.pending = false,
+  });
 
   final String? url;
+  final String? previewUrl;
   final XFile? file;
   final VoidCallback? onRemove;
   final bool pending;
@@ -438,7 +455,7 @@ class _VideoThumb extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            _VideoThumbImage(url: url, file: file),
+            _VideoThumbImage(url: url, previewUrl: previewUrl, file: file),
             const Center(
               child: DecoratedBox(
                 decoration: BoxDecoration(
@@ -496,9 +513,10 @@ class _PickedXFileImage extends StatelessWidget {
 }
 
 class _VideoThumbImage extends StatefulWidget {
-  const _VideoThumbImage({this.url, this.file});
+  const _VideoThumbImage({this.url, this.previewUrl, this.file});
 
   final String? url;
+  final String? previewUrl;
   final XFile? file;
 
   @override
@@ -519,6 +537,7 @@ class _VideoThumbImageState extends State<_VideoThumbImage> {
   void didUpdateWidget(covariant _VideoThumbImage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.url != widget.url ||
+        oldWidget.previewUrl != widget.previewUrl ||
         oldWidget.file?.path != widget.file?.path) {
       _disposeController();
       _setup();
@@ -552,6 +571,11 @@ class _VideoThumbImageState extends State<_VideoThumbImage> {
 
   @override
   Widget build(BuildContext context) {
+    final previewUrl = widget.previewUrl?.trim() ?? '';
+    if (previewUrl.isNotEmpty) {
+      return _NetworkThumbImage(url: previewUrl);
+    }
+
     final controller = _controller;
     final init = _init;
 
@@ -1179,18 +1203,28 @@ class _ProfileMediaStorage {
 
   final SupabaseClient _sb;
 
-  String _ext(String path) {
-    final p = path.toLowerCase();
+  String _ext(XFile file) {
+    final source = file.name.trim().isNotEmpty ? file.name : file.path;
+    final p = source.toLowerCase();
     final i = p.lastIndexOf('.');
     if (i == -1) return '';
     return p.substring(i + 1);
   }
 
-  String _contentType({required bool isVideo, required String ext}) {
+  String _contentType({
+    required bool isVideo,
+    required String ext,
+    String? mimeType,
+  }) {
+    final mime = mimeType?.trim().toLowerCase() ?? '';
+    if (mime.startsWith('image/') || mime.startsWith('video/')) return mime;
+
     if (isVideo) {
       if (ext == 'mov') return 'video/quicktime';
+      if (ext == 'webm') return 'video/webm';
       return 'video/mp4';
     }
+    if (ext == 'webp') return 'image/webp';
     if (ext == 'png') return 'image/png';
     return 'image/jpeg';
   }
@@ -1233,8 +1267,8 @@ class _ProfileMediaStorage {
 
     for (int i = 0; i < pickedPhotos.length; i++) {
       final xf = pickedPhotos[i];
-      final ext = _ext(xf.path);
-      final ct = _contentType(isVideo: false, ext: ext);
+      final ext = _ext(xf);
+      final ct = _contentType(isVideo: false, ext: ext, mimeType: xf.mimeType);
       final name = '${stamp}_$i.${ext.isEmpty ? 'jpg' : ext}';
       final storagePath = '$uid/photos/$name';
 
@@ -1250,8 +1284,8 @@ class _ProfileMediaStorage {
 
     for (int i = 0; i < pickedVideos.length; i++) {
       final xf = pickedVideos[i];
-      final ext = _ext(xf.path);
-      final ct = _contentType(isVideo: true, ext: ext);
+      final ext = _ext(xf);
+      final ct = _contentType(isVideo: true, ext: ext, mimeType: xf.mimeType);
       final name = '${stamp}_$i.${ext.isEmpty ? 'mp4' : ext}';
       final storagePath = '$uid/videos/$name';
 
