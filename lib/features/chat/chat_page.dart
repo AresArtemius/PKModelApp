@@ -861,6 +861,8 @@ class _MessageMedia extends StatelessWidget {
                     child: CachedNetworkImage(
                       imageUrl: message.mediaUrl,
                       fit: BoxFit.contain,
+                      memCacheWidth: 1200,
+                      maxWidthDiskCache: 1600,
                     ),
                   ),
                 ),

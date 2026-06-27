@@ -76,13 +76,13 @@ BoxDecoration castingCardDecoration() {
     boxShadow: [
       const BoxShadow(
         color: Color(0x22000000),
-        blurRadius: 24,
-        offset: Offset(0, 14),
+        blurRadius: 16,
+        offset: Offset(0, 10),
       ),
       BoxShadow(
         color: Colors.white.withValues(alpha: 0.92),
-        blurRadius: 12,
-        offset: const Offset(0, -5),
+        blurRadius: 8,
+        offset: const Offset(0, -3),
       ),
     ],
   );
@@ -102,13 +102,13 @@ BoxDecoration castingDialogDecoration() {
     boxShadow: [
       BoxShadow(
         color: Colors.black.withValues(alpha: 0.18),
-        blurRadius: 30,
-        offset: const Offset(0, 16),
+        blurRadius: 22,
+        offset: const Offset(0, 12),
       ),
       BoxShadow(
         color: Colors.white.withValues(alpha: 0.82),
-        blurRadius: 12,
-        offset: const Offset(0, -4),
+        blurRadius: 8,
+        offset: const Offset(0, -3),
       ),
     ],
     border: Border.all(color: Colors.white.withValues(alpha: 0.78), width: 1),
@@ -134,13 +134,13 @@ BoxDecoration catalogCardDecoration() {
     boxShadow: [
       const BoxShadow(
         color: Color(0x21000000),
-        blurRadius: 22,
-        offset: Offset(0, 13),
+        blurRadius: 15,
+        offset: Offset(0, 9),
       ),
       BoxShadow(
         color: Colors.white.withValues(alpha: 0.9),
-        blurRadius: 12,
-        offset: const Offset(0, -5),
+        blurRadius: 8,
+        offset: const Offset(0, -3),
       ),
     ],
   );
@@ -168,13 +168,13 @@ BoxDecoration catalogSearchDecoration({
     boxShadow: [
       const BoxShadow(
         color: Color(0x16000000),
-        blurRadius: 16,
-        offset: Offset(0, 9),
+        blurRadius: 11,
+        offset: Offset(0, 6),
       ),
       BoxShadow(
         color: Colors.white.withValues(alpha: 0.86),
-        blurRadius: 8,
-        offset: const Offset(0, -3),
+        blurRadius: 6,
+        offset: const Offset(0, -2),
       ),
     ],
   );
@@ -206,13 +206,13 @@ BoxDecoration catalogDialogDecoration() {
     boxShadow: [
       BoxShadow(
         color: Colors.black.withValues(alpha: 0.24),
-        blurRadius: 34,
-        offset: const Offset(0, 18),
+        blurRadius: 24,
+        offset: const Offset(0, 13),
       ),
       BoxShadow(
         color: Colors.white.withValues(alpha: 0.9),
-        blurRadius: 14,
-        offset: const Offset(0, -5),
+        blurRadius: 9,
+        offset: const Offset(0, -3),
       ),
     ],
   );

@@ -31,7 +31,7 @@ class BrandTheme {
   static const _bgVignetteCenter = Alignment(0.0, 0.0);
   static const _bgVignetteRadius = 1.1;
   static const _bgVignetteStops = <double>[0.55, 0.82, 1.0];
-  static const _bgBlurSigma = 8.0;
+  static const _bgBlurSigma = 5.0;
 
   // Shadows
   static const _baseShadowColor = Color(0x33000000);
@@ -39,22 +39,22 @@ class BrandTheme {
   static List<BoxShadow> basePillShadow({required bool isDark}) => [
     BoxShadow(
       color: _baseShadowColor,
-      blurRadius: isDark ? 26 : 18,
-      offset: const Offset(0, 10),
+      blurRadius: isDark ? 18 : 14,
+      offset: const Offset(0, 8),
     ),
     const BoxShadow(
       color: BrandTheme._white22,
-      blurRadius: 12,
-      offset: Offset(0, -6),
+      blurRadius: 8,
+      offset: Offset(0, -4),
     ),
   ];
 
   static List<BoxShadow> redGlow({required bool strong}) => [
     BoxShadow(
       color: strong ? const Color(0x88B00000) : const Color(0x66B00000),
-      blurRadius: strong ? 30 : 22,
-      spreadRadius: strong ? 4 : 2,
-      offset: const Offset(0, 12),
+      blurRadius: strong ? 22 : 16,
+      spreadRadius: strong ? 3 : 1,
+      offset: const Offset(0, 9),
     ),
   ];
 

@@ -30,11 +30,11 @@ import '../admin/selection_providers.dart';
 
 part 'catalog_page_widgets.dart';
 
-const double _overlayBlurSigma = 10;
+const double _overlayBlurSigma = 6;
 const double _overlayBarrierOpacity = 0.65;
 const double _overlayPreviewScaleBegin = 0.92;
-const int _catalogCardPhotoCacheWidth = 700;
-const int _catalogOverlayPhotoCacheWidth = 1200;
+const int _catalogCardPhotoCacheWidth = 560;
+const int _catalogOverlayPhotoCacheWidth = 1000;
 const double _catalogDesktopBreakpoint = 900;
 const double _catalogDesktopMaxWidth = 1680;
 const double _catalogDesktopSidePanelWidth = 320;
