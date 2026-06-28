@@ -16,6 +16,7 @@ import '../selection/selection_export_item.dart';
 import '../selection/selection_pdf_options.dart';
 import '../selection/selection_pdf_options_dialog.dart';
 import '../selection/selection_pdf_service.dart';
+import '../catalog/model_data.dart';
 
 const _bg = BrandTheme.greyMid;
 const _text = kTextDark;
@@ -39,6 +40,7 @@ final castingResponsesProvider = FutureProvider.autoDispose
         profile:profiles(
           id,
           full_name,
+          birth_date,
           age,
           height,
           city,
@@ -203,9 +205,11 @@ class SelectionCastingPage extends ConsumerWidget {
                                 final city = (profile['city'] ?? '').toString();
 
                                 final subtitleParts = <String>[];
-                                final age = profile['age'];
+                                final age = ModelVm.displayAgeFromMap(
+                                  Map<String, dynamic>.from(profile),
+                                );
                                 final height = profile['height'];
-                                if (age != null) {
+                                if (age > 0) {
                                   subtitleParts.add('${t.ageShort}: $age');
                                 }
                                 if (height != null) {

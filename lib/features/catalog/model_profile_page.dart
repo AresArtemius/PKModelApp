@@ -158,6 +158,7 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
     final sb = Supabase.instance.client;
 
     Future<Map<String, dynamic>?> run({
+      required bool includeBirthDate,
       required bool includePro,
       required bool includeVerification,
       required bool includeProfessional,
@@ -166,6 +167,7 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
           .from(ProfileSupabaseSchema.table)
           .select(
             ProfileSupabaseSchema.selectPublic(
+              includeBirthDate: includeBirthDate,
               includeProfessional: includeProfessional,
               includePro: includePro,
               includeVerification: includeVerification,
@@ -181,6 +183,7 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
     Map<String, dynamic>? row;
     try {
       row = await run(
+        includeBirthDate: true,
         includePro: true,
         includeVerification: true,
         includeProfessional: true,
@@ -191,10 +194,17 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
           ProfileSupabaseSchema.isMissingVerificationColumn(e);
       final missingProfessional =
           ProfileSupabaseSchema.isMissingProfessionalColumn(e);
-      if (!missingPro && !missingVerification && !missingProfessional) {
+      final missingBirthDate = ProfileSupabaseSchema.isMissingBirthDateColumn(
+        e,
+      );
+      if (!missingPro &&
+          !missingVerification &&
+          !missingProfessional &&
+          !missingBirthDate) {
         rethrow;
       }
       row = await run(
+        includeBirthDate: !missingBirthDate,
         includePro: !missingPro,
         includeVerification: !missingVerification,
         includeProfessional: !missingProfessional,

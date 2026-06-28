@@ -245,8 +245,9 @@ class MyProfileController
     if (p.profileType.usesPhysicalBasics && !hasBirthDate) {
       throw MyProfileException(MyProfileError.ageRequired);
     }
+    final displayAge = p.displayAge;
     if (p.profileType.usesPhysicalBasics &&
-        (p.age < _ageMin || p.age > _ageMax)) {
+        (displayAge < _ageMin || displayAge > _ageMax)) {
       throw MyProfileException(MyProfileError.ageOutOfRange);
     }
     if (p.profileType.usesPhysicalBasics && p.height <= 0) {

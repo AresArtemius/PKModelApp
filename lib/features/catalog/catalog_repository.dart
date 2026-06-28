@@ -49,6 +49,7 @@ class CatalogRepository {
     assert(offset >= 0 && limit > 0);
 
     Future<List<ModelVm>> run({
+      required bool includeBirthDate,
       required bool includeUnavailableDays,
       required bool includePro,
       required bool includeVerification,
@@ -57,6 +58,7 @@ class CatalogRepository {
           .from(ProfileSupabaseSchema.table)
           .select(
             ProfileSupabaseSchema.selectCatalog(
+              includeBirthDate: includeBirthDate,
               includeUnavailableDays: includeUnavailableDays,
               includePro: includePro,
               includeVerification: includeVerification,
@@ -122,6 +124,7 @@ class CatalogRepository {
 
     try {
       return await run(
+        includeBirthDate: true,
         includeUnavailableDays: true,
         includePro: true,
         includeVerification: true,
@@ -132,6 +135,9 @@ class CatalogRepository {
         e,
         'unavailable_days',
       );
+      final missingBirthDate = ProfileSupabaseSchema.isMissingBirthDateColumn(
+        e,
+      );
       final missingPro =
           SupabaseCompat.isMissingColumn(e, 'is_pro') ||
           SupabaseCompat.isMissingColumn(e, 'pro_until');
@@ -141,6 +147,7 @@ class CatalogRepository {
       );
       try {
         return await run(
+          includeBirthDate: !missingBirthDate,
           includeUnavailableDays: !missingUnavailable,
           includePro: !missingPro,
           includeVerification: !missingVerification,
@@ -148,6 +155,7 @@ class CatalogRepository {
       } on PostgrestException catch (second) {
         if (!_shouldFallbackToBasicSelect(second)) rethrow;
         return run(
+          includeBirthDate: false,
           includeUnavailableDays: false,
           includePro: false,
           includeVerification: false,

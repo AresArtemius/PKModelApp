@@ -23,6 +23,7 @@ class ProfileSupabaseSchema {
   ];
 
   static const catalogOptionalColumns = <String>[
+    'birth_date',
     'unavailable_days',
     'is_pro',
     'pro_until',
@@ -83,12 +84,14 @@ class ProfileSupabaseSchema {
   }
 
   static String selectCatalog({
+    required bool includeBirthDate,
     required bool includeUnavailableDays,
     required bool includePro,
     required bool includeVerification,
   }) {
     return _join([
       ..._publicIdentityColumns,
+      if (includeBirthDate) ..._birthDateColumns,
       ..._measurementColumns,
       ..._appearanceColumns,
       'status',
@@ -102,6 +105,7 @@ class ProfileSupabaseSchema {
   }
 
   static String selectPublic({
+    required bool includeBirthDate,
     required bool includeProfessional,
     required bool includePro,
     required bool includeVerification,
@@ -109,6 +113,7 @@ class ProfileSupabaseSchema {
     return _join([
       ..._publicIdentityColumns,
       'status',
+      if (includeBirthDate) ..._birthDateColumns,
       ..._measurementColumns,
       ..._appearanceColumns,
       'resume',
@@ -123,12 +128,14 @@ class ProfileSupabaseSchema {
   }
 
   static String selectModeration({
+    required bool includeBirthDate,
     required bool includeVerification,
     required bool includePendingMedia,
   }) {
     return _join([
       'id',
       'full_name',
+      if (includeBirthDate) ..._birthDateColumns,
       ..._measurementColumns,
       ..._appearanceColumns,
       'country',

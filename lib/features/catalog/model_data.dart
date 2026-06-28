@@ -5,6 +5,7 @@ class ModelVm {
   final String userId;
   final ProfessionalProfileType profileType;
   final String fullName;
+  final String birthDate;
   final int age;
   final int height;
   final int bust;
@@ -36,6 +37,7 @@ class ModelVm {
     this.userId = '',
     this.profileType = ProfessionalProfileType.model,
     required this.fullName,
+    this.birthDate = '',
     required this.age,
     required this.height,
     required this.bust,
@@ -104,6 +106,23 @@ class ModelVm {
     return DateTime.tryParse(s);
   }
 
+  static int _ageFromBirthDate(DateTime birthDate) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    var age = today.year - birthDate.year;
+    final hadBirthdayThisYear =
+        today.month > birthDate.month ||
+        (today.month == birthDate.month && today.day >= birthDate.day);
+    if (!hadBirthdayThisYear) age -= 1;
+    return age.clamp(0, 120);
+  }
+
+  static int displayAgeFromMap(Map<String, dynamic> map) {
+    final birthDate = _dateTime(map['birth_date']);
+    if (birthDate != null) return _ageFromBirthDate(birthDate);
+    return _intOrZero(map['age']);
+  }
+
   static List<String> _stringList(dynamic v) {
     if (v is! List) return const [];
 
@@ -142,7 +161,8 @@ class ModelVm {
       userId: _string(m['user_id']),
       profileType: profileTypeFromString(_string(m['profile_type'])),
       fullName: _string(m['full_name']),
-      age: _intOrZero(m['age']),
+      birthDate: _string(m['birth_date']),
+      age: displayAgeFromMap(m),
       height: _intOrZero(m['height']),
       bust: _intOrZero(m['bust']),
       waist: _intOrZero(m['waist']),

@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/supabase_compat.dart';
 import '../../core/supabase_provider.dart';
+import 'model_data.dart';
 
 class AgentFolder {
   const AgentFolder({
@@ -49,7 +50,7 @@ class AgentFolderProfile {
     return AgentFolderProfile(
       id: (map['id'] ?? '').toString(),
       fullName: (map['full_name'] ?? '').toString().trim(),
-      age: _intOrZero(map['age']),
+      age: ModelVm.displayAgeFromMap(map),
       height: _intOrZero(map['height']),
       city: (map['city'] ?? '').toString().trim(),
       photoUrl: photos.isEmpty ? '' : photos.first.toString().trim(),
@@ -116,7 +117,9 @@ class AgentWorkspaceService {
 
       final itemRows = await _sb
           .from('casting_agent_folder_items')
-          .select('profile:profiles(id,full_name,age,height,city,photo_urls)')
+          .select(
+            'profile:profiles(id,full_name,birth_date,age,height,city,photo_urls)',
+          )
           .eq('user_id', userId)
           .eq('folder_id', folderId)
           .order('created_at', ascending: false)

@@ -60,6 +60,7 @@ final pendingProfilesProvider =
       }
 
       Future<List<dynamic>> load({
+        required bool includeBirthDate,
         required bool includeVerification,
         required bool includePendingMedia,
       }) async {
@@ -67,6 +68,7 @@ final pendingProfilesProvider =
             .from(ProfileSupabaseSchema.table)
             .select(
               ProfileSupabaseSchema.selectModeration(
+                includeBirthDate: includeBirthDate,
                 includeVerification: includeVerification,
                 includePendingMedia: includePendingMedia,
               ),
@@ -78,6 +80,7 @@ final pendingProfilesProvider =
       List<dynamic> rows = const <dynamic>[];
       var includeVerification = true;
       var includePendingMedia = true;
+      var includeBirthDate = true;
       while (true) {
         try {
           try {
@@ -90,6 +93,7 @@ final pendingProfilesProvider =
               rethrow;
             }
             rows = await load(
+              includeBirthDate: includeBirthDate,
               includeVerification: includeVerification,
               includePendingMedia: includePendingMedia,
             );
@@ -102,11 +106,18 @@ final pendingProfilesProvider =
           final missingPendingMedia =
               includePendingMedia &&
               ProfileSupabaseSchema.isMissingPendingMediaColumn(e);
+          final missingBirthDate =
+              ProfileSupabaseSchema.isMissingBirthDateColumn(e);
 
-          if (!missingVerification && !missingPendingMedia) rethrow;
+          if (!missingVerification &&
+              !missingPendingMedia &&
+              !missingBirthDate) {
+            rethrow;
+          }
 
           if (missingVerification) includeVerification = false;
           if (missingPendingMedia) includePendingMedia = false;
+          if (missingBirthDate) includeBirthDate = false;
         }
       }
 
@@ -478,7 +489,7 @@ class _ModerationProfileDetailsSheet extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      '${profile.age} • ${profile.height} cm • ${profile.city} ${profile.country}',
+                      '${profile.displayAge} • ${profile.height} cm • ${profile.city} ${profile.country}',
                       style: adminBodyStyle(weight: FontWeight.w800, size: 15),
                     ),
                     const SizedBox(height: 14),
@@ -707,7 +718,7 @@ class _ModerationRequestCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    '${profile.age} • ${profile.height} cm',
+                    '${profile.displayAge} • ${profile.height} cm',
                     style: adminBodyStyle(weight: FontWeight.w700),
                   ),
                   if (profile.hasPendingMedia) ...[
@@ -834,7 +845,7 @@ class _ModerationProfileDetailsPanel extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  '${profile.age} • ${profile.height} cm • ${profile.city} ${profile.country}',
+                  '${profile.displayAge} • ${profile.height} cm • ${profile.city} ${profile.country}',
                   style: adminBodyStyle(weight: FontWeight.w800, size: 16),
                 ),
                 const SizedBox(height: 18),

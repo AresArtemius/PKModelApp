@@ -222,6 +222,25 @@ class MyProfileState {
     this.hasPendingMedia = false,
   });
 
+  int get displayAge {
+    final parsedBirthDate = DateTime.tryParse(birthDate.trim());
+    if (parsedBirthDate == null) return age;
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final birth = DateTime(
+      parsedBirthDate.year,
+      parsedBirthDate.month,
+      parsedBirthDate.day,
+    );
+    var calculated = today.year - birth.year;
+    final hadBirthdayThisYear =
+        today.month > birth.month ||
+        (today.month == birth.month && today.day >= birth.day);
+    if (!hadBirthdayThisYear) calculated -= 1;
+    return calculated.clamp(0, 120);
+  }
+
   factory MyProfileState.blank({required String userId}) {
     return MyProfileState(
       id: '',

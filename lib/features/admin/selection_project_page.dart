@@ -13,6 +13,7 @@ import '../../ui/brand/brand_admin_header.dart';
 import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
 import '../chat/chat_providers.dart';
+import '../catalog/model_data.dart';
 import '../selection/selection_export_item.dart';
 import '../selection/selection_pdf_options.dart';
 import '../selection/selection_pdf_options_dialog.dart';
@@ -95,6 +96,7 @@ final selectionProjectProvider = FutureProvider.autoDispose
           id,
           user_id,
           full_name,
+          birth_date,
           age,
           height,
           city,
@@ -456,9 +458,11 @@ class SelectionProjectPage extends ConsumerWidget {
                                 final city = (profile['city'] ?? '').toString();
 
                                 final subtitleParts = <String>[];
-                                final age = profile['age'];
+                                final age = ModelVm.displayAgeFromMap(
+                                  Map<String, dynamic>.from(profile),
+                                );
                                 final height = profile['height'];
-                                if (age != null) {
+                                if (age > 0) {
                                   subtitleParts.add('${t.ageShort}: $age');
                                 }
                                 if (height != null) {

@@ -45,7 +45,7 @@ class SelectionExportItem {
     return SelectionExportItem(
       id: (profile['id'] ?? '').toString(),
       fullName: (profile['full_name'] ?? '').toString(),
-      age: _toInt(profile['age']),
+      age: _displayAge(profile),
       height: _toInt(profile['height']),
       city: (profile['city'] ?? '').toString(),
       country: (profile['country'] ?? '').toString(),
@@ -66,5 +66,21 @@ class SelectionExportItem {
     if (v is int) return v;
     if (v is num) return v.toInt();
     return int.tryParse(v.toString()) ?? 0;
+  }
+
+  static int _displayAge(Map<String, dynamic> profile) {
+    final rawBirthDate = (profile['birth_date'] ?? '').toString().trim();
+    final birthDate = DateTime.tryParse(rawBirthDate);
+    if (birthDate == null) return _toInt(profile['age']);
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final birth = DateTime(birthDate.year, birthDate.month, birthDate.day);
+    var age = today.year - birth.year;
+    final hadBirthdayThisYear =
+        today.month > birth.month ||
+        (today.month == birth.month && today.day >= birth.day);
+    if (!hadBirthdayThisYear) age -= 1;
+    return age.clamp(0, 120);
   }
 }
