@@ -231,6 +231,7 @@ class _ProfileQualityLine extends StatelessWidget {
 
 class _MediaBlock extends StatelessWidget {
   const _MediaBlock({
+    this.desktop = false,
     required this.uploading,
     required this.onAddPhoto,
     required this.onAddVideo,
@@ -246,6 +247,7 @@ class _MediaBlock extends StatelessWidget {
     required this.onRemoveVideo,
   });
 
+  final bool desktop;
   final bool uploading;
   final VoidCallback onAddPhoto;
   final VoidCallback onAddVideo;
@@ -282,6 +284,9 @@ class _MediaBlock extends StatelessWidget {
         videoUrls.isNotEmpty ||
         pendingVideoUrls.isNotEmpty ||
         pickedVideos.isNotEmpty;
+    final thumbSize = desktop ? 112.0 : kProfileThumbSize;
+    final isRussian =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ru';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -313,8 +318,8 @@ class _MediaBlock extends StatelessWidget {
         ),
         const SizedBox(height: kGap12),
         Container(
-          constraints: const BoxConstraints(
-            minHeight: kProfileMediaPreviewMinHeight,
+          constraints: BoxConstraints(
+            minHeight: desktop ? 250 : kProfileMediaPreviewMinHeight,
           ),
           decoration: profileMediaBoxDecoration(),
           alignment: Alignment.center,
@@ -336,6 +341,8 @@ class _MediaBlock extends StatelessWidget {
                   children: [
                     if (hasPhotos)
                       _ThumbRow(
+                        wrap: desktop,
+                        size: thumbSize,
                         urls: photoUrls,
                         pendingUrls: pendingPhotoUrls,
                         files: pickedPhotos,
@@ -344,6 +351,8 @@ class _MediaBlock extends StatelessWidget {
                     if (hasVideo) ...[
                       const SizedBox(height: kGap10),
                       _VideoThumbRow(
+                        wrap: desktop,
+                        size: thumbSize,
                         urls: videoUrls,
                         previewUrls: videoPreviewUrls,
                         pendingUrls: pendingVideoUrls,
@@ -354,13 +363,51 @@ class _MediaBlock extends StatelessWidget {
                     ],
                   ],
                 ),
-              if (uploading && hasAnything)
+              if (uploading && hasAnything) ...[
                 const Positioned(
                   left: 0,
                   right: 0,
                   top: 0,
                   child: LinearProgressIndicator(minHeight: 2),
                 ),
+                if (desktop)
+                  Positioned.fill(
+                    child: Container(
+                      color: Colors.white.withValues(alpha: 0.72),
+                      alignment: Alignment.center,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                        decoration: pillDecoration(isDark: true, radius: 999),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Text(
+                              isRussian ? 'ЗАГРУЗКА МЕДИА' : 'UPLOADING MEDIA',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 1.2,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ],
           ),
         ),
@@ -371,6 +418,8 @@ class _MediaBlock extends StatelessWidget {
 
 class _VideoThumbRow extends StatelessWidget {
   const _VideoThumbRow({
+    this.wrap = false,
+    required this.size,
     required this.urls,
     required this.previewUrls,
     required this.pendingUrls,
@@ -379,6 +428,8 @@ class _VideoThumbRow extends StatelessWidget {
     required this.onRemove,
   });
 
+  final bool wrap;
+  final double size;
   final List<String> urls;
   final List<String> previewUrls;
   final List<String> pendingUrls;
@@ -391,12 +442,14 @@ class _VideoThumbRow extends StatelessWidget {
     final items = <Widget>[
       for (int i = 0; i < urls.length; i++)
         _VideoThumb(
+          size: size,
           url: urls[i],
           previewUrl: i < previewUrls.length ? previewUrls[i] : null,
           onRemove: () => onRemove(i, isPicked: false),
         ),
       for (int i = 0; i < pendingUrls.length; i++)
         _VideoThumb(
+          size: size,
           url: pendingUrls[i],
           previewUrl: i < pendingPreviewUrls.length
               ? pendingPreviewUrls[i]
@@ -405,10 +458,15 @@ class _VideoThumbRow extends StatelessWidget {
         ),
       for (int i = 0; i < files.length; i++)
         _VideoThumb(
+          size: size,
           file: files[i],
           onRemove: () => onRemove(i, isPicked: true),
         ),
     ];
+
+    if (wrap) {
+      return Wrap(spacing: kGap10, runSpacing: kGap10, children: items);
+    }
 
     return SizedBox(
       height: kProfileThumbSize,
@@ -424,6 +482,7 @@ class _VideoThumbRow extends StatelessWidget {
 
 class _VideoThumb extends StatelessWidget {
   const _VideoThumb({
+    required this.size,
     this.url,
     this.previewUrl,
     this.file,
@@ -431,6 +490,7 @@ class _VideoThumb extends StatelessWidget {
     this.pending = false,
   });
 
+  final double size;
   final String? url;
   final String? previewUrl;
   final XFile? file;
@@ -448,8 +508,8 @@ class _VideoThumb extends StatelessWidget {
         );
       },
       child: Container(
-        width: kProfileThumbSize,
-        height: kProfileThumbSize,
+        width: size,
+        height: size,
         clipBehavior: Clip.antiAlias,
         decoration: profileVideoThumbDecoration(),
         child: Stack(
@@ -814,12 +874,16 @@ class _VideoViewerPageState extends State<_VideoViewerPage> {
 
 class _ThumbRow extends StatelessWidget {
   const _ThumbRow({
+    this.wrap = false,
+    required this.size,
     required this.urls,
     required this.pendingUrls,
     required this.files,
     required this.onRemove,
   });
 
+  final bool wrap;
+  final double size;
   final List<String> urls;
   final List<String> pendingUrls;
   final List<XFile> files;
@@ -830,20 +894,27 @@ class _ThumbRow extends StatelessWidget {
     final items = <Widget>[
       for (int i = 0; i < urls.length; i++)
         _Thumb(
+          size: size,
           image: _NetworkThumbImage(url: urls[i], fit: BoxFit.cover),
           onRemove: () => onRemove(i, isPicked: false),
         ),
       for (final url in pendingUrls)
         _Thumb(
+          size: size,
           image: _NetworkThumbImage(url: url, fit: BoxFit.cover),
           pending: true,
         ),
       for (int i = 0; i < files.length; i++)
         _Thumb(
+          size: size,
           image: _PickedXFileImage(file: files[i], fit: BoxFit.cover),
           onRemove: () => onRemove(i, isPicked: true),
         ),
     ];
+
+    if (wrap) {
+      return Wrap(spacing: kGap10, runSpacing: kGap10, children: items);
+    }
 
     return SizedBox(
       height: kProfileThumbSize,
@@ -858,8 +929,14 @@ class _ThumbRow extends StatelessWidget {
 }
 
 class _Thumb extends StatelessWidget {
-  const _Thumb({required this.image, this.onRemove, this.pending = false});
+  const _Thumb({
+    required this.size,
+    required this.image,
+    this.onRemove,
+    this.pending = false,
+  });
 
+  final double size;
   final Widget image;
   final VoidCallback? onRemove;
   final bool pending;
@@ -867,8 +944,8 @@ class _Thumb extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: kProfileThumbSize,
-      height: kProfileThumbSize,
+      width: size,
+      height: size,
       clipBehavior: Clip.antiAlias,
       decoration: profileThumbDecoration(),
       child: Stack(

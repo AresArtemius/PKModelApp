@@ -1202,13 +1202,14 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
     );
   }
 
-  Widget _buildMediaBlock(AppLocalizations t) {
+  Widget _buildMediaBlock(AppLocalizations t, {bool desktop = false}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _SectionTitle(t.profileMediaUpper),
         const SizedBox(height: kGap10),
         _MediaBlock(
+          desktop: desktop,
           uploading: _uploading,
           onAddPhoto: _pickPhotos,
           onAddVideo: _pickVideo,
@@ -1387,7 +1388,7 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
                 ),
               ),
               const SizedBox(height: kGap16),
-              _Card(child: _buildMediaBlock(t)),
+              _Card(child: _buildMediaBlock(t, desktop: true)),
               const SizedBox(height: kGap16),
               _Card(
                 child: _buildDesktopActions(
