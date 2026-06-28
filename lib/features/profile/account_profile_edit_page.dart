@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:ui' as ui;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -703,17 +705,6 @@ class _AccountProfileEditPageState
     return phone.replaceAll(RegExp(r'[^0-9]'), '');
   }
 
-  String _ext(String path) {
-    final lower = path.toLowerCase();
-    final index = lower.lastIndexOf('.');
-    if (index == -1 || index == lower.length - 1) return 'jpg';
-    final ext = lower.substring(index + 1);
-    return switch (ext) {
-      'png' || 'webp' || 'heic' || 'heif' => ext,
-      _ => 'jpg',
-    };
-  }
-
   String _contentType(String ext) {
     return switch (ext) {
       'png' => 'image/png',
@@ -734,21 +725,30 @@ class _AccountProfileEditPageState
       maxWidth: 1400,
     );
     if (image == null) return;
+    final originalBytes = await image.readAsBytes();
+    if (!mounted) return;
+
+    final croppedBytes = await Navigator.of(context).push<Uint8List>(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => _AvatarCropPage(bytes: originalBytes),
+      ),
+    );
+    if (croppedBytes == null || croppedBytes.isEmpty || !mounted) return;
 
     setState(() {
       _uploadingAvatar = true;
       _error = null;
     });
     try {
-      final ext = _ext(image.path);
+      const ext = 'png';
       final path =
           '${user.id}/account_avatar/${DateTime.now().millisecondsSinceEpoch}.$ext';
-      final bytes = await image.readAsBytes();
       await _sb.storage
           .from(_kAccountAvatarBucket)
           .uploadBinary(
             path,
-            bytes,
+            croppedBytes,
             fileOptions: FileOptions(
               contentType: _contentType(ext),
               upsert: true,
@@ -1484,6 +1484,144 @@ class _AvatarPicker extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _AvatarCropPage extends StatefulWidget {
+  const _AvatarCropPage({required this.bytes});
+
+  final Uint8List bytes;
+
+  @override
+  State<_AvatarCropPage> createState() => _AvatarCropPageState();
+}
+
+class _AvatarCropPageState extends State<_AvatarCropPage> {
+  final _boundaryKey = GlobalKey();
+  final _controller = TransformationController();
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _confirm() async {
+    if (_saving) return;
+    setState(() => _saving = true);
+    try {
+      final boundary =
+          _boundaryKey.currentContext?.findRenderObject()
+              as RenderRepaintBoundary?;
+      if (boundary == null) return;
+      final image = await boundary.toImage(pixelRatio: 3);
+      final data = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (!mounted || data == null) return;
+      Navigator.of(context).pop(data.buffer.asUint8List());
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isRussian =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ru';
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+              child: Row(
+                children: [
+                  IconButton(
+                    onPressed: _saving
+                        ? null
+                        : () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close_rounded, color: Colors.white),
+                  ),
+                  Expanded(
+                    child: Text(
+                      isRussian ? 'ФОТО ПРОФИЛЯ' : 'PROFILE PHOTO',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 2,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 48),
+                ],
+              ),
+            ),
+            Expanded(
+              child: Center(
+                child: AspectRatio(
+                  aspectRatio: 1,
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: RepaintBoundary(
+                      key: _boundaryKey,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(34),
+                        child: Container(
+                          color: kTextDark,
+                          child: InteractiveViewer(
+                            transformationController: _controller,
+                            minScale: 1,
+                            maxScale: 5,
+                            boundaryMargin: const EdgeInsets.all(80),
+                            child: Image.memory(
+                              widget.bytes,
+                              fit: BoxFit.cover,
+                              width: double.infinity,
+                              height: double.infinity,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    isRussian
+                        ? 'Приблизьте и сдвиньте фото, чтобы лицо было в кадре.'
+                        : 'Zoom and move the photo to frame the face.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.76),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    height: BrandTheme.pillHeight,
+                    child: BrandPillButton(
+                      label: _saving
+                          ? '...'
+                          : (isRussian ? 'СОХРАНИТЬ КАДР' : 'SAVE FRAME'),
+                      style: BrandPillStyle.light,
+                      onTap: _saving ? null : _confirm,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

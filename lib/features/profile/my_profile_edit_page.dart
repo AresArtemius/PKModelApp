@@ -1011,6 +1011,20 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
     });
   }
 
+  void _makeCoverPhotoAt(int index, {required bool isPicked}) {
+    setState(() {
+      if (isPicked) {
+        if (index <= 0 || index >= _pickedPhotos.length) return;
+        final item = _pickedPhotos.removeAt(index);
+        _pickedPhotos.insert(0, item);
+      } else {
+        if (index <= 0 || index >= _photoUrls.length) return;
+        final item = _photoUrls.removeAt(index);
+        _photoUrls.insert(0, item);
+      }
+    });
+  }
+
   String _birthDateFieldLabel(BuildContext context) =>
       Localizations.localeOf(context).languageCode.toLowerCase() == 'ru'
       ? 'Дата рождения'
@@ -1223,6 +1237,7 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
           pickedVideos: _pickedVideos,
           onRemovePhoto: _removePhotoAt,
           onRemoveVideo: _removeVideoAt,
+          onMakeCoverPhoto: _makeCoverPhotoAt,
         ),
       ],
     );
@@ -1709,6 +1724,7 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
                                   pickedVideos: _pickedVideos,
                                   onRemovePhoto: _removePhotoAt,
                                   onRemoveVideo: _removeVideoAt,
+                                  onMakeCoverPhoto: _makeCoverPhotoAt,
                                 ),
                                 const SizedBox(height: kGap16),
 

@@ -13,6 +13,7 @@ import '../../core/supabase_provider.dart';
 import '../../core/roles_provider.dart';
 import '../../ui/brand/brand_admin_header.dart';
 import 'admin_style.dart';
+import 'package:video_player/video_player.dart';
 import '../auth/auth_controller.dart';
 import '../profile/profile_model.dart';
 import '../profile/profile_supabase_schema.dart';
@@ -427,6 +428,7 @@ class _ModerationProfileDetailsSheet extends StatelessWidget {
       for (final url in photos) _ModerationMediaItem.photo(url),
       for (var i = 0; i < videos.length; i += 1)
         _ModerationMediaItem.video(
+          videoUrl: videos[i],
           previewUrl: i < videoThumbs.length ? videoThumbs[i] : '',
         ),
     ];
@@ -471,8 +473,11 @@ class _ModerationProfileDetailsSheet extends StatelessWidget {
                           scrollDirection: Axis.horizontal,
                           itemCount: media.length,
                           separatorBuilder: (_, _) => const SizedBox(width: 10),
-                          itemBuilder: (_, index) =>
-                              _ModerationLargeMedia(item: media[index]),
+                          itemBuilder: (_, index) => _ModerationLargeMedia(
+                            item: media[index],
+                            media: media,
+                            initialIndex: index,
+                          ),
                         ),
                       )
                     else
@@ -827,8 +832,11 @@ class _ModerationProfileDetailsPanel extends StatelessWidget {
                       scrollDirection: Axis.horizontal,
                       itemCount: media.length,
                       separatorBuilder: (_, _) => const SizedBox(width: 12),
-                      itemBuilder: (_, index) =>
-                          _ModerationLargeMedia(item: media[index]),
+                      itemBuilder: (_, index) => _ModerationLargeMedia(
+                        item: media[index],
+                        media: media,
+                        initialIndex: index,
+                      ),
                     ),
                   )
                 else
@@ -979,6 +987,7 @@ List<_ModerationMediaItem> _moderationMedia(MyProfileState profile) {
     for (final url in photos) _ModerationMediaItem.photo(url),
     for (var i = 0; i < videos.length; i += 1)
       _ModerationMediaItem.video(
+        videoUrl: videos[i],
         previewUrl: i < videoThumbs.length ? videoThumbs[i] : '',
       ),
   ];
@@ -1007,47 +1016,65 @@ class _ModerationDetailLine extends StatelessWidget {
 }
 
 class _ModerationLargeMedia extends StatelessWidget {
-  const _ModerationLargeMedia({required this.item});
+  const _ModerationLargeMedia({
+    required this.item,
+    required this.media,
+    required this.initialIndex,
+  });
 
   final _ModerationMediaItem item;
+  final List<_ModerationMediaItem> media;
+  final int initialIndex;
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(22),
-      child: SizedBox(
-        width: 170,
-        height: 210,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            if (item.url.trim().isEmpty)
-              Container(color: const Color(0xFFE5E5E5))
-            else
-              CachedNetworkImage(
-                imageUrl: item.url,
-                fit: BoxFit.cover,
-                memCacheWidth: 540,
-                maxWidthDiskCache: 900,
+    return GestureDetector(
+      onTap: item.isEmpty
+          ? null
+          : () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => _ModerationMediaViewerPage(
+                  media: media,
+                  initialIndex: initialIndex,
+                ),
               ),
-            if (item.isVideo)
-              const Center(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: Color(0x77000000),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Padding(
-                    padding: EdgeInsets.all(10),
-                    child: Icon(
-                      Icons.play_arrow_rounded,
-                      color: Colors.white,
-                      size: 34,
+            ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(22),
+        child: SizedBox(
+          width: 170,
+          height: 210,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              if (item.url.trim().isEmpty)
+                Container(color: const Color(0xFFE5E5E5))
+              else
+                CachedNetworkImage(
+                  imageUrl: item.url,
+                  fit: BoxFit.cover,
+                  memCacheWidth: 540,
+                  maxWidthDiskCache: 900,
+                ),
+              if (item.isVideo)
+                const Center(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: Color(0x77000000),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Padding(
+                      padding: EdgeInsets.all(10),
+                      child: Icon(
+                        Icons.play_arrow_rounded,
+                        color: Colors.white,
+                        size: 34,
+                      ),
                     ),
                   ),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -1189,6 +1216,7 @@ class _ModerationMediaStrip extends StatelessWidget {
       for (final url in photoUrls) _ModerationMediaItem.photo(url),
       for (var i = 0; i < videoUrls.length; i += 1)
         _ModerationMediaItem.video(
+          videoUrl: videoUrls[i],
           previewUrl: i < videoPreviewUrls.length ? videoPreviewUrls[i] : '',
         ),
     ];
@@ -1209,7 +1237,11 @@ class _ModerationMediaStrip extends StatelessWidget {
         physics: const NeverScrollableScrollPhysics(),
         itemCount: visible.length,
         separatorBuilder: (_, _) => const SizedBox(width: 8),
-        itemBuilder: (_, index) => _ModerationMediaThumb(item: visible[index]),
+        itemBuilder: (_, index) => _ModerationMediaThumb(
+          item: visible[index],
+          media: media,
+          initialIndex: index,
+        ),
       ),
     );
   }
@@ -1218,70 +1250,323 @@ class _ModerationMediaStrip extends StatelessWidget {
 class _ModerationMediaItem {
   const _ModerationMediaItem._({
     required this.url,
+    required this.videoUrl,
     required this.isVideo,
     required this.isEmpty,
   });
 
   const _ModerationMediaItem.empty()
-    : this._(url: '', isVideo: false, isEmpty: true);
+    : this._(url: '', videoUrl: '', isVideo: false, isEmpty: true);
 
   const _ModerationMediaItem.photo(String url)
-    : this._(url: url, isVideo: false, isEmpty: false);
+    : this._(url: url, videoUrl: '', isVideo: false, isEmpty: false);
 
-  const _ModerationMediaItem.video({required String previewUrl})
-    : this._(url: previewUrl, isVideo: true, isEmpty: false);
+  const _ModerationMediaItem.video({
+    required String videoUrl,
+    required String previewUrl,
+  }) : this._(
+         url: previewUrl,
+         videoUrl: videoUrl,
+         isVideo: true,
+         isEmpty: false,
+       );
 
   final String url;
+  final String videoUrl;
   final bool isVideo;
   final bool isEmpty;
 }
 
-class _ModerationMediaThumb extends StatelessWidget {
-  const _ModerationMediaThumb({required this.item});
+class _ModerationMediaViewerPage extends StatefulWidget {
+  const _ModerationMediaViewerPage({
+    required this.media,
+    required this.initialIndex,
+  });
 
-  final _ModerationMediaItem item;
+  final List<_ModerationMediaItem> media;
+  final int initialIndex;
+
+  @override
+  State<_ModerationMediaViewerPage> createState() =>
+      _ModerationMediaViewerPageState();
+}
+
+class _ModerationMediaViewerPageState
+    extends State<_ModerationMediaViewerPage> {
+  late final PageController _pageController;
+  late int _index;
+
+  @override
+  void initState() {
+    super.initState();
+    _index = widget.initialIndex.clamp(0, widget.media.length - 1);
+    _pageController = PageController(initialPage: _index);
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(_moderationMediaRadius),
-      child: SizedBox(
-        width: _moderationMediaSize,
-        height: _moderationMediaSize,
+    final total = widget.media.length;
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: SafeArea(
         child: Stack(
-          fit: StackFit.expand,
           children: [
-            if (item.isEmpty || item.url.trim().isEmpty)
-              Container(color: const Color(0xFFE5E5E5))
-            else
-              CachedNetworkImage(
-                imageUrl: item.url,
-                fit: BoxFit.cover,
-                memCacheWidth: _moderationMediaCacheWidth,
-                maxWidthDiskCache: _moderationMediaCacheWidth,
-                placeholder: (_, _) =>
-                    Container(color: const Color(0xFFE5E5E5)),
-                errorWidget: (_, _, _) =>
-                    Container(color: const Color(0xFFE5E5E5)),
+            PageView.builder(
+              controller: _pageController,
+              itemCount: total,
+              onPageChanged: (value) => setState(() => _index = value),
+              itemBuilder: (_, index) =>
+                  _ModerationMediaViewerItem(item: widget.media[index]),
+            ),
+            Positioned(
+              top: 12,
+              left: 12,
+              child: IconButton(
+                onPressed: () => Navigator.of(context).pop(),
+                icon: const Icon(Icons.close_rounded, color: Colors.white),
               ),
-            if (item.isVideo)
-              const Center(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: Color(0x66000000),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Padding(
-                    padding: EdgeInsets.all(6),
-                    child: Icon(
-                      Icons.play_arrow,
-                      color: Colors.white,
-                      size: 22,
+            ),
+            if (total > 1)
+              Positioned(
+                top: 22,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 7,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.54),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      '${_index + 1} / $total',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                   ),
                 ),
               ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ModerationMediaViewerItem extends StatelessWidget {
+  const _ModerationMediaViewerItem({required this.item});
+
+  final _ModerationMediaItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    if (item.isVideo) {
+      return _ModerationVideoViewer(url: item.videoUrl);
+    }
+
+    final url = item.url.trim();
+    return Center(
+      child: InteractiveViewer(
+        minScale: 1,
+        maxScale: 5,
+        child: url.isEmpty
+            ? const Icon(
+                Icons.broken_image_rounded,
+                color: Colors.white,
+                size: 42,
+              )
+            : CachedNetworkImage(
+                imageUrl: url,
+                fit: BoxFit.contain,
+                placeholder: (_, _) => const Center(
+                  child: CircularProgressIndicator(color: Colors.white),
+                ),
+                errorWidget: (_, _, _) => const Icon(
+                  Icons.broken_image_rounded,
+                  color: Colors.white,
+                  size: 42,
+                ),
+              ),
+      ),
+    );
+  }
+}
+
+class _ModerationVideoViewer extends StatefulWidget {
+  const _ModerationVideoViewer({required this.url});
+
+  final String url;
+
+  @override
+  State<_ModerationVideoViewer> createState() => _ModerationVideoViewerState();
+}
+
+class _ModerationVideoViewerState extends State<_ModerationVideoViewer> {
+  VideoPlayerController? _controller;
+  Future<void>? _init;
+  bool _playing = true;
+
+  @override
+  void initState() {
+    super.initState();
+    final url = widget.url.trim();
+    if (url.isEmpty) return;
+    final controller = VideoPlayerController.networkUrl(Uri.parse(url))
+      ..setLooping(true);
+    _controller = controller;
+    _init = controller.initialize().then((_) async {
+      await controller.play();
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  Future<void> _toggle() async {
+    final controller = _controller;
+    if (controller == null || !controller.value.isInitialized) return;
+    if (controller.value.isPlaying) {
+      await controller.pause();
+      if (mounted) setState(() => _playing = false);
+    } else {
+      await controller.play();
+      if (mounted) setState(() => _playing = true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = _controller;
+    final init = _init;
+    if (controller == null || init == null) {
+      return const Center(
+        child: Icon(Icons.videocam_off_rounded, color: Colors.white, size: 44),
+      );
+    }
+
+    return Center(
+      child: FutureBuilder<void>(
+        future: init,
+        builder: (_, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done ||
+              !controller.value.isInitialized) {
+            return const CircularProgressIndicator(color: Colors.white);
+          }
+
+          return GestureDetector(
+            onTap: _toggle,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                AspectRatio(
+                  aspectRatio: controller.value.aspectRatio == 0
+                      ? 16 / 9
+                      : controller.value.aspectRatio,
+                  child: VideoPlayer(controller),
+                ),
+                if (!_playing)
+                  const DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: Color(0x77000000),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Icon(
+                        Icons.play_arrow_rounded,
+                        color: Colors.white,
+                        size: 42,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _ModerationMediaThumb extends StatelessWidget {
+  const _ModerationMediaThumb({
+    required this.item,
+    this.media = const <_ModerationMediaItem>[],
+    this.initialIndex = 0,
+  });
+
+  final _ModerationMediaItem item;
+  final List<_ModerationMediaItem> media;
+  final int initialIndex;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: item.isEmpty || media.isEmpty
+          ? null
+          : () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => _ModerationMediaViewerPage(
+                  media: media,
+                  initialIndex: initialIndex,
+                ),
+              ),
+            ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(_moderationMediaRadius),
+        child: SizedBox(
+          width: _moderationMediaSize,
+          height: _moderationMediaSize,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              if (item.isEmpty || item.url.trim().isEmpty)
+                Container(color: const Color(0xFFE5E5E5))
+              else
+                CachedNetworkImage(
+                  imageUrl: item.url,
+                  fit: BoxFit.cover,
+                  memCacheWidth: _moderationMediaCacheWidth,
+                  maxWidthDiskCache: _moderationMediaCacheWidth,
+                  placeholder: (_, _) =>
+                      Container(color: const Color(0xFFE5E5E5)),
+                  errorWidget: (_, _, _) =>
+                      Container(color: const Color(0xFFE5E5E5)),
+                ),
+              if (item.isVideo)
+                const Center(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: Color(0x66000000),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Padding(
+                      padding: EdgeInsets.all(6),
+                      child: Icon(
+                        Icons.play_arrow,
+                        color: Colors.white,
+                        size: 22,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
