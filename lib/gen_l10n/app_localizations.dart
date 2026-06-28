@@ -1961,13 +1961,13 @@ abstract class AppLocalizations {
   /// No description provided for @profileErrorAgeRequired.
   ///
   /// In en, this message translates to:
-  /// **'Add age'**
+  /// **'Add birth date'**
   String get profileErrorAgeRequired;
 
   /// No description provided for @profileErrorAgeRange.
   ///
   /// In en, this message translates to:
-  /// **'Age must be 14–70'**
+  /// **'Check birth date'**
   String get profileErrorAgeRange;
 
   /// No description provided for @profileErrorHeightRequired.

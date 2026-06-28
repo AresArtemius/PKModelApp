@@ -1007,10 +1007,10 @@ class AppLocalizationsRu extends AppLocalizations {
   String get profileErrorFullNameRequired => 'Заполни ФИО перед отправкой';
 
   @override
-  String get profileErrorAgeRequired => 'Добавьте возраст';
+  String get profileErrorAgeRequired => 'Добавьте дату рождения';
 
   @override
-  String get profileErrorAgeRange => 'Возраст должен быть 14–70';
+  String get profileErrorAgeRange => 'Проверьте дату рождения';
 
   @override
   String get profileErrorHeightRequired => 'Добавьте рост';

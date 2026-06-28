@@ -1007,10 +1007,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Fill in your full name before submitting';
 
   @override
-  String get profileErrorAgeRequired => 'Add age';
+  String get profileErrorAgeRequired => 'Add birth date';
 
   @override
-  String get profileErrorAgeRange => 'Age must be 14–70';
+  String get profileErrorAgeRange => 'Check birth date';
 
   @override
   String get profileErrorHeightRequired => 'Add height';

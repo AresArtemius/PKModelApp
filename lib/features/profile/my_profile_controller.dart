@@ -239,7 +239,10 @@ class MyProfileController
       throw MyProfileException(MyProfileError.fullNameRequired);
     }
 
-    if (p.profileType.usesPhysicalBasics && p.age <= 0) {
+    final birthDate = p.birthDate.trim();
+    final hasBirthDate =
+        birthDate.isNotEmpty && DateTime.tryParse(birthDate) != null;
+    if (p.profileType.usesPhysicalBasics && !hasBirthDate) {
       throw MyProfileException(MyProfileError.ageRequired);
     }
     if (p.profileType.usesPhysicalBasics &&

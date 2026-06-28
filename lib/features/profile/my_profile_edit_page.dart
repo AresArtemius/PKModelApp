@@ -332,7 +332,8 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
 
     _birthDateIso = s.birthDate;
     _birthDateC.text = _birthDateLabel(s.birthDate);
-    _ageC.text = s.age > 0 ? s.age.toString() : '';
+    final calculatedAge = _ageFromBirthDateIso(s.birthDate) ?? s.age;
+    _ageC.text = calculatedAge > 0 ? calculatedAge.toString() : '';
     _heightC.text = s.height > 0 ? s.height.toString() : '';
     _bustC.text = s.bust > 0 ? s.bust.toString() : '';
     _waistC.text = s.waist > 0 ? s.waist.toString() : '';
@@ -388,6 +389,12 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
         (today.month == birthDate.month && today.day >= birthDate.day);
     if (!hadBirthdayThisYear) age -= 1;
     return age.clamp(0, 120);
+  }
+
+  int? _ageFromBirthDateIso(String iso) {
+    final date = _parseIsoDate(iso);
+    if (date == null) return null;
+    return _ageFromBirthDate(date);
   }
 
   String _isoDate(DateTime date) => date.toIso8601String().split('T').first;
@@ -454,6 +461,9 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
     required bool submitForReview,
     required bool approveImmediately,
   }) {
+    final birthDate = _birthDateIso.trim();
+    final calculatedAge =
+        _ageFromBirthDateIso(birthDate) ?? _intOrZero(_ageC.text);
     final nextStatus = approveImmediately
         ? ProfileStatus.approved
         : submitForReview
@@ -462,12 +472,12 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
     return base.copyWith(
       profileType: _profileType,
       fullName: _ProfileNameHelper.buildFullName(nn),
-      birthDate: _birthDateIso,
+      birthDate: birthDate,
       status: nextStatus,
       moderationComment: submitForReview || approveImmediately
           ? null
           : base.moderationComment,
-      age: _intOrZero(_ageC.text),
+      age: calculatedAge,
       height: _intOrZero(_heightC.text),
       bust: _intOrZero(_bustC.text),
       waist: _intOrZero(_waistC.text),
@@ -505,6 +515,7 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
     final videoCount = _videoUrls.length + _pickedVideos.length;
     final isModel = _profileType.isModel;
     final usesPhysicalBasics = _profileType.usesPhysicalBasics;
+    final hasBirthDate = _parseIsoDate(_birthDateIso) != null;
     final hasProfessionalInfo =
         _experienceC.text.trim().isNotEmpty ||
         _skillsC.text.trim().isNotEmpty ||
@@ -514,7 +525,7 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
     final requiredChecks = <bool>[
       _surnameC.text.trim().isNotEmpty,
       _nameC.text.trim().isNotEmpty,
-      if (usesPhysicalBasics) _intOrZero(_ageC.text) > 0,
+      if (usesPhysicalBasics) hasBirthDate,
       if (usesPhysicalBasics) _intOrZero(_heightC.text) > 0,
       if (isModel) _intOrZero(_bustC.text) > 0,
       if (isModel) _intOrZero(_waistC.text) > 0,
