@@ -26,6 +26,8 @@ const _chatMediaBucket = 'profile-media';
 const _chatRealtimeMessageLimit = 120;
 const _quickReactions = ['👍', '❤️', '🔥', '👀', '🙌', '😂'];
 const _quickEmoji = ['🙂', '👍', '❤️', '🔥', '🙌', '👏', '✨', '😊'];
+const _replyPrefix = '↩ ';
+const _replySeparator = '\n\n';
 
 Uint8List? _buildChatImageThumbnail(Uint8List bytes) {
   final decoded = image_lib.decodeImage(bytes);
@@ -56,6 +58,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   bool _uploadingMedia = false;
   bool _loadingOlderMessages = false;
   bool _hasOlderMessages = true;
+  ChatMessage? _replyingTo;
   final List<ChatMessage> _olderMessages = [];
   final _picker = ImagePicker();
 
@@ -81,16 +84,40 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     if (!await _ensureCanUseChat()) return;
     final text = _messageController.text.trim();
     if (text.isEmpty) return;
+    final body = _composeOutgoingBody(text);
 
     setState(() => _sending = true);
     try {
       await ref
           .read(chatServiceProvider)
-          .sendMessage(chatId: widget.chatId, body: text);
+          .sendMessage(chatId: widget.chatId, body: body);
       _messageController.clear();
+      setState(() => _replyingTo = null);
     } finally {
       if (mounted) setState(() => _sending = false);
     }
+  }
+
+  String _composeOutgoingBody(String text) {
+    final reply = _replyingTo;
+    if (reply == null) return text;
+    final quote = _replyPreviewText(reply);
+    if (quote.isEmpty) return text;
+    return '$_replyPrefix$quote$_replySeparator$text';
+  }
+
+  String _replyPreviewText(ChatMessage message) {
+    final parsed = _ParsedMessageBody.from(message.body);
+    final source = parsed.body.trim().isNotEmpty
+        ? parsed.body.trim()
+        : message.isVideo
+        ? (_isRussian ? 'Видео' : 'Video')
+        : message.isImage
+        ? (_isRussian ? 'Фото' : 'Photo')
+        : '';
+    final compact = source.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (compact.length <= 90) return compact;
+    return '${compact.substring(0, 90)}...';
   }
 
   bool get _isRussian =>
@@ -494,6 +521,14 @@ class _ChatPageState extends ConsumerState<ChatPage> {
               await ref.read(chatServiceProvider).clearReaction(message.id);
             },
           ),
+          _ActionSheetTile(
+            icon: Icons.reply_rounded,
+            title: _isRussian ? 'Ответить' : 'Reply',
+            onTap: () {
+              Navigator.of(context).pop();
+              setState(() => _replyingTo = message);
+            },
+          ),
           if (mine)
             _ActionSheetTile(
               icon: Icons.delete_rounded,
@@ -646,6 +681,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                                     reactions:
                                         reactionMap[item.id] ??
                                         const <ChatReaction>[],
+                                    onMediaTap: () =>
+                                        _openMediaViewer(context, item),
                                     onLongPress: () => _showMessageActions(
                                       message: item,
                                       mine: item.senderId == userId,
@@ -658,10 +695,18 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                   ),
                 ),
                 const SizedBox(height: 12),
+                if (_uploadingMedia) ...[
+                  const _ChatUploadProgress(),
+                  const SizedBox(height: 10),
+                ],
                 _Composer(
                   controller: _messageController,
                   hintText: t.messageHint,
                   sending: _sending || _uploadingMedia,
+                  replyingToText: _replyingTo == null
+                      ? null
+                      : _replyPreviewText(_replyingTo!),
+                  onCancelReply: () => setState(() => _replyingTo = null),
                   onSend: _send,
                   onAttach: _showAttachMenu,
                   onEmoji: _showEmojiMenu,
@@ -676,6 +721,14 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     if (widget.embedded) return content;
 
     return Scaffold(resizeToAvoidBottomInset: true, body: content);
+  }
+
+  void _openMediaViewer(BuildContext context, ChatMessage message) {
+    if (!message.hasMedia) return;
+    showDialog<void>(
+      context: context,
+      builder: (context) => _MediaViewerDialog(message: message),
+    );
   }
 }
 
@@ -761,6 +814,7 @@ class _MessageBubble extends StatelessWidget {
     required this.mine,
     required this.avatarUrl,
     required this.reactions,
+    required this.onMediaTap,
     required this.onLongPress,
   });
 
@@ -768,16 +822,18 @@ class _MessageBubble extends StatelessWidget {
   final bool mine;
   final String avatarUrl;
   final List<ChatReaction> reactions;
+  final VoidCallback onMediaTap;
   final VoidCallback onLongPress;
 
   @override
   Widget build(BuildContext context) {
+    final parsedBody = _ParsedMessageBody.from(message.body);
     final visibleBody =
         message.hasMedia &&
-            ((message.isImage && message.body.trim() == 'Фото') ||
-                (message.isVideo && message.body.trim() == 'Видео'))
+            ((message.isImage && parsedBody.body.trim() == 'Фото') ||
+                (message.isVideo && parsedBody.body.trim() == 'Видео'))
         ? ''
-        : message.body.trim();
+        : parsedBody.body.trim();
     final bubble = GestureDetector(
       onLongPress: onLongPress,
       child: Container(
@@ -791,8 +847,12 @@ class _MessageBubble extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (parsedBody.replyQuote.isNotEmpty) ...[
+              _ReplyPreview(text: parsedBody.replyQuote, mine: mine),
+              const SizedBox(height: 8),
+            ],
             if (message.hasMedia) ...[
-              _MessageMedia(message: message),
+              _MessageMedia(message: message, onTap: onMediaTap),
               if (visibleBody.isNotEmpty) const SizedBox(height: 8),
             ],
             if (visibleBody.isNotEmpty)
@@ -841,10 +901,74 @@ class _MessageBubble extends StatelessWidget {
   }
 }
 
+class _ParsedMessageBody {
+  const _ParsedMessageBody({required this.replyQuote, required this.body});
+
+  final String replyQuote;
+  final String body;
+
+  factory _ParsedMessageBody.from(String raw) {
+    final text = raw.trim();
+    if (!text.startsWith(_replyPrefix)) {
+      return _ParsedMessageBody(replyQuote: '', body: text);
+    }
+    final withoutPrefix = text.substring(_replyPrefix.length);
+    final separatorIndex = withoutPrefix.indexOf(_replySeparator);
+    if (separatorIndex <= 0) {
+      return _ParsedMessageBody(replyQuote: '', body: text);
+    }
+    return _ParsedMessageBody(
+      replyQuote: withoutPrefix.substring(0, separatorIndex).trim(),
+      body: withoutPrefix
+          .substring(separatorIndex + _replySeparator.length)
+          .trim(),
+    );
+  }
+}
+
+class _ReplyPreview extends StatelessWidget {
+  const _ReplyPreview({required this.text, required this.mine});
+
+  final String text;
+  final bool mine;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+      decoration: BoxDecoration(
+        color: mine
+            ? Colors.white.withValues(alpha: 0.14)
+            : kTextDark.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border(
+          left: BorderSide(
+            color: mine ? Colors.white : BrandTheme.redTop,
+            width: 3,
+          ),
+        ),
+      ),
+      child: Text(
+        text,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          color: mine ? Colors.white.withValues(alpha: 0.78) : kTextMuted,
+          fontSize: 12,
+          fontWeight: FontWeight.w800,
+          height: 1.2,
+        ),
+      ),
+    );
+  }
+}
+
 class _MessageMedia extends StatelessWidget {
-  const _MessageMedia({required this.message});
+  const _MessageMedia({required this.message, required this.onTap});
 
   final ChatMessage message;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -852,32 +976,7 @@ class _MessageMedia extends StatelessWidget {
         ? message.mediaThumbnailUrl
         : message.mediaUrl;
     return GestureDetector(
-      onTap: message.isImage
-          ? () {
-              showDialog<void>(
-                context: context,
-                builder: (context) => Dialog(
-                  backgroundColor: Colors.black,
-                  insetPadding: const EdgeInsets.all(14),
-                  child: InteractiveViewer(
-                    child: CachedNetworkImage(
-                      imageUrl: message.mediaUrl,
-                      fit: BoxFit.contain,
-                      memCacheWidth: 1200,
-                      maxWidthDiskCache: 1600,
-                    ),
-                  ),
-                ),
-              );
-            }
-          : message.isVideo
-          ? () {
-              showDialog<void>(
-                context: context,
-                builder: (context) => _VideoPlayerDialog(url: message.mediaUrl),
-              );
-            }
-          : null,
+      onTap: onTap,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(14),
         child: SizedBox(
@@ -917,16 +1016,91 @@ class _MessageMedia extends StatelessWidget {
   }
 }
 
-class _VideoPlayerDialog extends StatefulWidget {
-  const _VideoPlayerDialog({required this.url});
+class _MediaViewerDialog extends StatelessWidget {
+  const _MediaViewerDialog({required this.message});
+
+  final ChatMessage message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog.fullscreen(
+      backgroundColor: Colors.black,
+      child: SafeArea(
+        child: Stack(
+          children: [
+            Center(
+              child: message.isVideo
+                  ? _VideoPlayerSurface(url: message.mediaUrl)
+                  : InteractiveViewer(
+                      minScale: 0.8,
+                      maxScale: 4,
+                      child: CachedNetworkImage(
+                        imageUrl: message.mediaUrl,
+                        fit: BoxFit.contain,
+                        memCacheWidth: 1400,
+                        maxWidthDiskCache: 2000,
+                        placeholder: (_, _) =>
+                            const Center(child: CircularProgressIndicator()),
+                        errorWidget: (_, _, _) => const Icon(
+                          Icons.broken_image_rounded,
+                          color: Colors.white,
+                          size: 48,
+                        ),
+                      ),
+                    ),
+            ),
+            Positioned(
+              top: 12,
+              right: 12,
+              child: _ViewerCloseButton(
+                onTap: () => Navigator.of(context).pop(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ViewerCloseButton extends StatelessWidget {
+  const _ViewerCloseButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: Container(
+          width: 44,
+          height: 44,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.58),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
+          ),
+          child: const Icon(Icons.close_rounded, color: Colors.white),
+        ),
+      ),
+    );
+  }
+}
+
+class _VideoPlayerSurface extends StatefulWidget {
+  const _VideoPlayerSurface({required this.url});
 
   final String url;
 
   @override
-  State<_VideoPlayerDialog> createState() => _VideoPlayerDialogState();
+  State<_VideoPlayerSurface> createState() => _VideoPlayerSurfaceState();
 }
 
-class _VideoPlayerDialogState extends State<_VideoPlayerDialog> {
+class _VideoPlayerSurfaceState extends State<_VideoPlayerSurface> {
   late final VideoPlayerController _controller;
   bool _ready = false;
 
@@ -949,35 +1123,46 @@ class _VideoPlayerDialogState extends State<_VideoPlayerDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: Colors.black,
-      insetPadding: const EdgeInsets.all(14),
-      child: AspectRatio(
-        aspectRatio: _ready ? _controller.value.aspectRatio : 1,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            if (_ready)
-              GestureDetector(
-                onTap: () {
-                  setState(() {
-                    _controller.value.isPlaying
-                        ? _controller.pause()
-                        : _controller.play();
-                  });
-                },
-                child: VideoPlayer(_controller),
-              )
-            else
-              const Center(child: CircularProgressIndicator()),
-            if (_ready && !_controller.value.isPlaying)
-              const Icon(
-                Icons.play_circle_fill_rounded,
-                color: Colors.white,
-                size: 68,
+    return AspectRatio(
+      aspectRatio: _ready ? _controller.value.aspectRatio : 1,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          if (_ready)
+            GestureDetector(
+              onTap: () {
+                setState(() {
+                  _controller.value.isPlaying
+                      ? _controller.pause()
+                      : _controller.play();
+                });
+              },
+              child: VideoPlayer(_controller),
+            )
+          else
+            const Center(child: CircularProgressIndicator()),
+          if (_ready && !_controller.value.isBuffering)
+            Positioned(
+              left: 18,
+              right: 18,
+              bottom: 18,
+              child: VideoProgressIndicator(
+                _controller,
+                allowScrubbing: true,
+                colors: const VideoProgressColors(
+                  playedColor: Colors.white,
+                  bufferedColor: Colors.white38,
+                  backgroundColor: Colors.white24,
+                ),
               ),
-          ],
-        ),
+            ),
+          if (_ready && !_controller.value.isPlaying)
+            const Icon(
+              Icons.play_circle_fill_rounded,
+              color: Colors.white,
+              size: 78,
+            ),
+        ],
       ),
     );
   }
@@ -1058,6 +1243,8 @@ class _Composer extends StatelessWidget {
     required this.controller,
     required this.hintText,
     required this.sending,
+    required this.replyingToText,
+    required this.onCancelReply,
     required this.onSend,
     required this.onAttach,
     required this.onEmoji,
@@ -1066,6 +1253,8 @@ class _Composer extends StatelessWidget {
   final TextEditingController controller;
   final String hintText;
   final bool sending;
+  final String? replyingToText;
+  final VoidCallback onCancelReply;
   final VoidCallback onSend;
   final VoidCallback onAttach;
   final VoidCallback onEmoji;
@@ -1080,36 +1269,125 @@ class _Composer extends StatelessWidget {
         border: Border.all(color: kBorderColor, width: 1),
         boxShadow: BrandTheme.basePillShadow(isDark: false),
       ),
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          IconButton(
-            onPressed: sending ? null : onAttach,
-            icon: const Icon(Icons.add_rounded, color: kTextDark),
-          ),
-          Expanded(
-            child: TextField(
-              controller: controller,
-              minLines: 1,
-              maxLines: 4,
-              decoration: InputDecoration(
-                hintText: hintText,
-                border: InputBorder.none,
+          if (replyingToText != null && replyingToText!.trim().isNotEmpty) ...[
+            Container(
+              margin: const EdgeInsets.only(bottom: 6),
+              padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+              decoration: BoxDecoration(
+                color: kTextDark.withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: kBorderColor),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.reply_rounded,
+                    size: 18,
+                    color: BrandTheme.redTop,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      replyingToText!,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: kTextMuted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        height: 1.2,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    onPressed: onCancelReply,
+                    icon: const Icon(Icons.close_rounded, color: kTextMuted),
+                  ),
+                ],
               ),
             ),
+          ],
+          Row(
+            children: [
+              IconButton(
+                onPressed: sending ? null : onAttach,
+                icon: const Icon(Icons.add_rounded, color: kTextDark),
+              ),
+              Expanded(
+                child: TextField(
+                  controller: controller,
+                  minLines: 1,
+                  maxLines: 4,
+                  textInputAction: TextInputAction.newline,
+                  decoration: InputDecoration(
+                    hintText: hintText,
+                    border: InputBorder.none,
+                  ),
+                ),
+              ),
+              IconButton(
+                onPressed: sending ? null : onEmoji,
+                icon: const Icon(
+                  Icons.emoji_emotions_rounded,
+                  color: kTextMuted,
+                ),
+              ),
+              IconButton(
+                onPressed: sending ? null : onSend,
+                icon: sending
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.send_rounded, color: BrandTheme.redTop),
+              ),
+            ],
           ),
-          IconButton(
-            onPressed: sending ? null : onEmoji,
-            icon: const Icon(Icons.emoji_emotions_rounded, color: kTextMuted),
+        ],
+      ),
+    );
+  }
+}
+
+class _ChatUploadProgress extends StatelessWidget {
+  const _ChatUploadProgress();
+
+  @override
+  Widget build(BuildContext context) {
+    final isRussian =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ru';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: kTextDark.withValues(alpha: 0.9),
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: BrandTheme.basePillShadow(isDark: true),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+            ),
           ),
-          IconButton(
-            onPressed: sending ? null : onSend,
-            icon: sending
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.send_rounded, color: BrandTheme.redTop),
+          const SizedBox(width: 10),
+          Text(
+            isRussian ? 'ЗАГРУЗКА МЕДИА' : 'UPLOADING MEDIA',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 1.1,
+            ),
           ),
         ],
       ),
