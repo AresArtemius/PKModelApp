@@ -244,6 +244,7 @@ class _MediaBlock extends StatelessWidget {
     required this.pendingVideoUrls,
     required this.pendingVideoPreviewUrls,
     required this.pickedPhotos,
+    required this.pickedCoverPhotoIndex,
     required this.pickedVideos,
     required this.onRemovePhoto,
     required this.onRemoveVideo,
@@ -265,6 +266,7 @@ class _MediaBlock extends StatelessWidget {
   final List<String> pendingVideoPreviewUrls;
 
   final List<XFile> pickedPhotos;
+  final int? pickedCoverPhotoIndex;
   final List<XFile> pickedVideos;
   final Future<void> Function(int index, {required bool isPicked})
   onRemovePhoto;
@@ -354,6 +356,7 @@ class _MediaBlock extends StatelessWidget {
                         pendingUrls: pendingPhotoUrls,
                         pendingCoverUrl: pendingCoverPhotoUrl,
                         files: pickedPhotos,
+                        pickedCoverIndex: pickedCoverPhotoIndex,
                         onRemove: onRemovePhoto,
                         onMakeCover: onMakeCoverPhoto,
                       ),
@@ -978,6 +981,7 @@ class _ThumbRow extends StatelessWidget {
     required this.pendingUrls,
     required this.pendingCoverUrl,
     required this.files,
+    required this.pickedCoverIndex,
     required this.onRemove,
     required this.onMakeCover,
   });
@@ -989,6 +993,7 @@ class _ThumbRow extends StatelessWidget {
   final List<String> pendingUrls;
   final String pendingCoverUrl;
   final List<XFile> files;
+  final int? pickedCoverIndex;
   final Future<void> Function(int index, {required bool isPicked}) onRemove;
   final void Function(int index, {required bool isPicked}) onMakeCover;
 
@@ -999,13 +1004,14 @@ class _ThumbRow extends StatelessWidget {
         ? selectedCoverUrl
         : (urls.isNotEmpty ? urls.first.trim() : '');
     final selectedPendingCoverUrl = pendingCoverUrl.trim();
+    final hasPickedCover = pickedCoverIndex != null;
     final items = <Widget>[
       for (int i = 0; i < urls.length; i++)
         _Thumb(
           size: size,
           image: _NetworkThumbImage(url: urls[i], fit: BoxFit.cover),
-          isCover: urls[i].trim() == fallbackCoverUrl,
-          onMakeCover: urls[i].trim() == fallbackCoverUrl
+          isCover: !hasPickedCover && urls[i].trim() == fallbackCoverUrl,
+          onMakeCover: !hasPickedCover && urls[i].trim() == fallbackCoverUrl
               ? null
               : () => onMakeCover(i, isPicked: false),
           onRemove: () => onRemove(i, isPicked: false),
@@ -1015,6 +1021,7 @@ class _ThumbRow extends StatelessWidget {
           size: size,
           image: _NetworkThumbImage(url: url, fit: BoxFit.cover),
           isCover:
+              !hasPickedCover &&
               selectedPendingCoverUrl.isNotEmpty &&
               url.trim() == selectedPendingCoverUrl,
           pending: true,
@@ -1023,8 +1030,13 @@ class _ThumbRow extends StatelessWidget {
         _Thumb(
           size: size,
           image: _PickedXFileImage(file: files[i], fit: BoxFit.cover),
-          isCover: urls.isEmpty && i == 0,
-          onMakeCover: urls.isNotEmpty || i == 0
+          isCover: hasPickedCover
+              ? pickedCoverIndex == i
+              : urls.isEmpty && pendingUrls.isEmpty && i == 0,
+          onMakeCover:
+              (hasPickedCover
+                  ? pickedCoverIndex == i
+                  : urls.isEmpty && pendingUrls.isEmpty && i == 0)
               ? null
               : () => onMakeCover(i, isPicked: true),
           onRemove: () => onRemove(i, isPicked: true),

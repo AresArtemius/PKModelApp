@@ -139,6 +139,7 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
   final _picker = ImagePicker();
   final List<XFile> _pickedPhotos = [];
   final List<XFile> _pickedVideos = [];
+  int? _pickedCoverPhotoIndex;
 
   List<String> _photoUrls = [];
   String _coverPhotoUrl = '';
@@ -316,6 +317,7 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
     _pendingVideoPreviewUrls = [];
     _pickedPhotos.clear();
     _pickedVideos.clear();
+    _pickedCoverPhotoIndex = null;
     _currentProfile = null;
     _error = null;
   }
@@ -467,6 +469,7 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
     _NameParts nn, {
     required bool submitForReview,
     required bool approveImmediately,
+    String selectedUploadedCoverPhotoUrl = '',
   }) {
     final birthDate = _birthDateIso.trim();
     final calculatedAge =
@@ -476,6 +479,16 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
         : submitForReview
         ? ProfileStatus.pending
         : base.status;
+    final uploadedCover = selectedUploadedCoverPhotoUrl.trim();
+    final nextCoverPhotoUrl = approveImmediately || base.id.trim().isEmpty
+        ? (uploadedCover.isNotEmpty ? uploadedCover : _coverPhotoUrl.trim())
+        : _coverPhotoUrl.trim();
+    final nextPendingCoverPhotoUrl =
+        !approveImmediately &&
+            base.id.trim().isNotEmpty &&
+            uploadedCover.isNotEmpty
+        ? uploadedCover
+        : _pendingCoverPhotoUrl.trim();
     return base.copyWith(
       profileType: _profileType,
       fullName: _ProfileNameHelper.buildFullName(nn),
@@ -504,11 +517,11 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
       equipment: _equipmentC.text.trim(),
       unavailableDays: _unavailableDaysAsIsoDates(),
       photoUrls: List<String>.from(_photoUrls),
-      coverPhotoUrl: _coverPhotoUrl.trim(),
+      coverPhotoUrl: nextCoverPhotoUrl,
       videoUrls: List<String>.from(_videoUrls),
       videoPreviewUrls: List<String>.from(_videoPreviewUrls),
       pendingPhotoUrls: List<String>.from(_pendingPhotoUrls),
-      pendingCoverPhotoUrl: _pendingCoverPhotoUrl.trim(),
+      pendingCoverPhotoUrl: nextPendingCoverPhotoUrl,
       pendingVideoUrls: List<String>.from(_pendingVideoUrls),
       pendingVideoPreviewUrls: List<String>.from(_pendingVideoPreviewUrls),
       hasPendingMedia:
@@ -604,8 +617,18 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
         );
         if (list.isEmpty || !mounted) return;
 
+        final hadNoPhotos =
+            _photoUrls.isEmpty &&
+            _pendingPhotoUrls.isEmpty &&
+            _pickedPhotos.isEmpty &&
+            _coverPhotoUrl.trim().isEmpty &&
+            _pendingCoverPhotoUrl.trim().isEmpty;
         setState(() {
+          final firstNewIndex = _pickedPhotos.length;
           _pickedPhotos.addAll(list);
+          if (hadNoPhotos && list.isNotEmpty) {
+            _pickedCoverPhotoIndex = firstNewIndex;
+          }
         });
       } catch (_) {
         if (!mounted) return;
@@ -779,12 +802,16 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
     try {
       final uid = await _requireUid();
       final uploaded = await _uploadPickedMediaToLists(uid);
+      final selectedUploadedCoverPhotoUrl = _uploadedCoverPhotoUrl(
+        uploaded.photoUrls,
+      );
 
       final next = _buildNextProfile(
         base,
         nn,
         submitForReview: submitForReview,
         approveImmediately: approveImmediately,
+        selectedUploadedCoverPhotoUrl: selectedUploadedCoverPhotoUrl,
       );
 
       final saved = await ref
@@ -815,6 +842,7 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
         _currentProfile = visibleSaved;
         _pickedPhotos.clear();
         _pickedVideos.clear();
+        _pickedCoverPhotoIndex = null;
 
         _photoUrls = List<String>.from(visibleSaved.photoUrls);
         _coverPhotoUrl = visibleSaved.coverPhotoUrl.trim();
@@ -1001,6 +1029,12 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
     setState(() {
       if (isPicked) {
         _removeAtSafe(_pickedPhotos, index);
+        final selected = _pickedCoverPhotoIndex;
+        if (selected == index) {
+          _pickedCoverPhotoIndex = null;
+        } else if (selected != null && selected > index) {
+          _pickedCoverPhotoIndex = selected - 1;
+        }
       } else {
         final removed = index >= 0 && index < _photoUrls.length
             ? _photoUrls[index]
@@ -1030,14 +1064,22 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
   void _makeCoverPhotoAt(int index, {required bool isPicked}) {
     setState(() {
       if (isPicked) {
-        if (index <= 0 || index >= _pickedPhotos.length) return;
-        final item = _pickedPhotos.removeAt(index);
-        _pickedPhotos.insert(0, item);
+        if (index < 0 || index >= _pickedPhotos.length) return;
+        _pickedCoverPhotoIndex = index;
       } else {
         if (index < 0 || index >= _photoUrls.length) return;
         _coverPhotoUrl = _photoUrls[index].trim();
+        _pickedCoverPhotoIndex = null;
       }
     });
+  }
+
+  String _uploadedCoverPhotoUrl(List<String> uploadedPhotoUrls) {
+    final index = _pickedCoverPhotoIndex;
+    if (index == null || index < 0 || index >= uploadedPhotoUrls.length) {
+      return '';
+    }
+    return uploadedPhotoUrls[index].trim();
   }
 
   String _birthDateFieldLabel(BuildContext context) =>
@@ -1251,6 +1293,7 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
           pendingVideoUrls: _pendingVideoUrls,
           pendingVideoPreviewUrls: _pendingVideoPreviewUrls,
           pickedPhotos: _pickedPhotos,
+          pickedCoverPhotoIndex: _pickedCoverPhotoIndex,
           pickedVideos: _pickedVideos,
           onRemovePhoto: _removePhotoAt,
           onRemoveVideo: _removeVideoAt,
@@ -1740,6 +1783,7 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
                                   pendingVideoPreviewUrls:
                                       _pendingVideoPreviewUrls,
                                   pickedPhotos: _pickedPhotos,
+                                  pickedCoverPhotoIndex: _pickedCoverPhotoIndex,
                                   pickedVideos: _pickedVideos,
                                   onRemovePhoto: _removePhotoAt,
                                   onRemoveVideo: _removeVideoAt,
