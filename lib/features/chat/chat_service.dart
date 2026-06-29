@@ -181,6 +181,152 @@ class ChatService {
     return ChatSummary.fromMap(Map<String, dynamic>.from(row));
   }
 
+  Future<List<ChatListItem>> fetchMyChats({
+    required String userId,
+    required bool archived,
+  }) async {
+    Future<List<dynamic>> run({required bool includeListState}) async {
+      return await _sb
+          .from('selection_chats')
+          .select('''
+            id,
+            model_user_id,
+            agent_user_id,
+            created_at,
+            updated_at,
+            model_deleted_at,
+            agent_deleted_at
+            ${includeListState ? ',model_pinned_at,agent_pinned_at,model_archived_at,agent_archived_at' : ''},
+            selection:selections(title),
+            profile:profiles(full_name,photo_urls,cover_photo_url)
+          ''')
+          .or('model_user_id.eq.$userId,agent_user_id.eq.$userId')
+          .order('updated_at', ascending: false)
+          .limit(100);
+    }
+
+    List<dynamic> rows;
+    try {
+      rows = await run(includeListState: true);
+    } on PostgrestException catch (e) {
+      final missingState = SupabaseCompat.isMissingAnyColumn(e, const [
+        'model_pinned_at',
+        'agent_pinned_at',
+        'model_archived_at',
+        'agent_archived_at',
+      ]);
+      if (!missingState) rethrow;
+      rows = await run(includeListState: false);
+    }
+
+    final items = <ChatListItem>[];
+    for (final raw in rows) {
+      final map = Map<String, dynamic>.from(raw as Map);
+      final chatId = (map['id'] ?? '').toString();
+      if (chatId.isEmpty) continue;
+
+      final modelUserId = (map['model_user_id'] ?? '').toString();
+      final isModel = userId == modelUserId;
+      final deletedAt = isModel
+          ? (map['model_deleted_at'] ?? '').toString()
+          : (map['agent_deleted_at'] ?? '').toString();
+      if (deletedAt.trim().isNotEmpty) continue;
+
+      final archivedAt = isModel
+          ? (map['model_archived_at'] ?? '').toString()
+          : (map['agent_archived_at'] ?? '').toString();
+      final isArchived = archivedAt.trim().isNotEmpty;
+      if (isArchived != archived) continue;
+
+      final pinnedAt = isModel
+          ? (map['model_pinned_at'] ?? '').toString()
+          : (map['agent_pinned_at'] ?? '').toString();
+      final selection = Map<String, dynamic>.from(
+        (map['selection'] as Map?) ?? {},
+      );
+      final profile = Map<String, dynamic>.from((map['profile'] as Map?) ?? {});
+      final photoUrlsRaw = profile['photo_urls'];
+      final photoUrls = photoUrlsRaw is List
+          ? photoUrlsRaw
+                .map((e) => e.toString().trim())
+                .where((e) => e.isNotEmpty)
+                .toList(growable: false)
+          : const <String>[];
+      final latest = await _fetchLatestMessage(chatId);
+      final fallbackTime = DateTime.tryParse(
+        (map['updated_at'] ?? map['created_at'] ?? '').toString(),
+      );
+      items.add(
+        ChatListItem(
+          id: chatId,
+          selectionTitle: (selection['title'] ?? '').toString().trim(),
+          profileName: (profile['full_name'] ?? '').toString().trim(),
+          photoUrl: _chatCoverPhoto(profile['cover_photo_url'], photoUrls),
+          lastMessage: latest == null ? '' : _chatPreview(latest),
+          lastMessageAt: latest?.createdAt ?? fallbackTime,
+          unreadCount: await _fetchUnreadCount(chatId, userId),
+          pinned: pinnedAt.trim().isNotEmpty,
+          archived: isArchived,
+        ),
+      );
+    }
+
+    items.sort((a, b) {
+      if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
+      final aTime = a.lastMessageAt;
+      final bTime = b.lastMessageAt;
+      if (aTime == null && bTime == null) return a.title.compareTo(b.title);
+      if (aTime == null) return 1;
+      if (bTime == null) return -1;
+      return bTime.compareTo(aTime);
+    });
+    return items;
+  }
+
+  String _chatPreview(ChatMessage message) {
+    final text = message.body.trim();
+    if (text.isNotEmpty && text != 'Фото' && text != 'Видео') return text;
+    if (message.isVideo) return 'Видео';
+    if (message.isImage) return 'Фото';
+    return text;
+  }
+
+  String _chatCoverPhoto(dynamic rawCover, List<String> photoUrls) {
+    final cover = (rawCover ?? '').toString().trim();
+    if (cover.isNotEmpty) return cover;
+    return photoUrls.isEmpty ? '' : photoUrls.first;
+  }
+
+  Future<ChatMessage?> _fetchLatestMessage(String chatId) async {
+    final rows = await _sb
+        .from('selection_chat_messages')
+        .select(
+          'id,chat_id,sender_id,body,media_type,media_url,media_thumbnail_url,deleted_at,created_at',
+        )
+        .eq('chat_id', chatId)
+        .filter('deleted_at', 'is', null)
+        .order('created_at', ascending: false)
+        .limit(1);
+    if ((rows as List).isEmpty) return null;
+    return ChatMessage.fromMap(Map<String, dynamic>.from(rows.first as Map));
+  }
+
+  Future<int> _fetchUnreadCount(String chatId, String userId) async {
+    try {
+      final rows = await _sb
+          .from('selection_chat_messages')
+          .select('id')
+          .eq('chat_id', chatId)
+          .neq('sender_id', userId)
+          .filter('deleted_at', 'is', null)
+          .filter('read_at', 'is', null);
+      return (rows as List).length;
+    } on PostgrestException catch (e) {
+      if (!SupabaseCompat.isMissingColumn(e, 'read_at')) rethrow;
+      return 0;
+    }
+  }
+
   Stream<List<ChatMessage>> watchMessages(String chatId) {
     return _sb
         .from('selection_chat_messages')
@@ -403,6 +549,40 @@ class ChatService {
         'selection_chat_typing_states',
       ]);
       if (!missingTable) rethrow;
+    }
+  }
+
+  Future<void> setChatPinned({
+    required String chatId,
+    required bool pinned,
+  }) async {
+    if (chatId.trim().isEmpty) return;
+    try {
+      await _sb.rpc(
+        'set_selection_chat_pinned',
+        params: {'p_chat_id': chatId, 'p_pinned': pinned},
+      );
+    } on PostgrestException catch (e) {
+      if (!SupabaseCompat.isMissingRpc(e, 'set_selection_chat_pinned')) {
+        rethrow;
+      }
+    }
+  }
+
+  Future<void> setChatArchived({
+    required String chatId,
+    required bool archived,
+  }) async {
+    if (chatId.trim().isEmpty) return;
+    try {
+      await _sb.rpc(
+        'set_selection_chat_archived',
+        params: {'p_chat_id': chatId, 'p_archived': archived},
+      );
+    } on PostgrestException catch (e) {
+      if (!SupabaseCompat.isMissingRpc(e, 'set_selection_chat_archived')) {
+        rethrow;
+      }
     }
   }
 

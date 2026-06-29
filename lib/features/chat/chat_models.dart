@@ -80,6 +80,45 @@ String _coverPhoto(dynamic rawCover, List<String> photoUrls) {
   return photoUrls.isEmpty ? '' : photoUrls.first;
 }
 
+class ChatListItem {
+  const ChatListItem({
+    required this.id,
+    required this.selectionTitle,
+    required this.profileName,
+    required this.photoUrl,
+    required this.lastMessage,
+    required this.lastMessageAt,
+    required this.unreadCount,
+    required this.pinned,
+    required this.archived,
+  });
+
+  final String id;
+  final String selectionTitle;
+  final String profileName;
+  final String photoUrl;
+  final String lastMessage;
+  final DateTime? lastMessageAt;
+  final int unreadCount;
+  final bool pinned;
+  final bool archived;
+
+  String get title {
+    final parts = [
+      selectionTitle,
+      profileName,
+    ].where((e) => e.trim().isNotEmpty).toList(growable: false);
+    return parts.isEmpty ? 'Чат' : parts.join(' • ');
+  }
+
+  bool matches(String query) {
+    final q = query.trim().toLowerCase();
+    if (q.isEmpty) return true;
+    return title.toLowerCase().contains(q) ||
+        lastMessage.toLowerCase().contains(q);
+  }
+}
+
 class ChatSummary {
   const ChatSummary({
     required this.id,

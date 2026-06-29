@@ -16,6 +16,15 @@ final myInvitationsProvider =
       return ref.watch(chatServiceProvider).fetchMyInvitations(userId);
     });
 
+final myChatsProvider = FutureProvider.autoDispose
+    .family<List<ChatListItem>, bool>((ref, archived) async {
+      final userId = ref.watch(currentUserIdProvider);
+      if (userId == null) return const <ChatListItem>[];
+      return ref
+          .watch(chatServiceProvider)
+          .fetchMyChats(userId: userId, archived: archived);
+    });
+
 final chatMessagesProvider = StreamProvider.autoDispose
     .family<List<ChatMessage>, String>((ref, chatId) {
       return ref.watch(chatServiceProvider).watchMessages(chatId);

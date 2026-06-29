@@ -80,7 +80,9 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       final isAdminRoute = _adminPaths.contains(path) || isAdminSelectionRoute;
 
       if (!loggedIn) {
-        if (path == Routes.me || path == Routes.invitations) {
+        if (path == Routes.me ||
+            path == Routes.chats ||
+            path == Routes.invitations) {
           return Routes.authRequired;
         }
         if (!isPublic) return Routes.login;

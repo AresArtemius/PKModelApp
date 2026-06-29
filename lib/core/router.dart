@@ -20,6 +20,7 @@ import '../features/auth/register_page.dart';
 import '../features/billing/billing_page.dart';
 import '../features/castings/casting_page.dart';
 import '../features/chat/chat_page.dart';
+import '../features/chat/chats_page.dart';
 import '../features/chat/invitations_page.dart';
 import '../features/catalog/agent_folders_page.dart';
 import '../features/catalog/catalog_page.dart';
@@ -42,6 +43,7 @@ abstract class Routes {
   static const castings = '/castings';
   static const search = '/search';
   static const agentFolders = '/agent_folders';
+  static const chats = '/chats';
   static const invitations = '/invitations';
   static const me = '/me';
   static const billing = '/billing';
@@ -84,6 +86,7 @@ class AppShell extends StatelessWidget {
     if (path.startsWith(Routes.castings)) return 0;
     if (path.startsWith(Routes.search)) return 1;
     if (path.startsWith(Routes.agentFolders)) return 1;
+    if (path.startsWith(Routes.chats)) return 2;
     if (path.startsWith(Routes.invitations)) return 2;
     if (path.startsWith(Routes.billing)) return 3;
     if (path.startsWith(Routes.notifications)) return 3;
@@ -163,11 +166,7 @@ class AppDesktopNav extends ConsumerWidget {
     final items = [
       (icon: Icons.videocam, label: t.castingsTab, route: Routes.castings),
       (icon: Icons.search, label: t.catalogTab, route: Routes.search),
-      (
-        icon: Icons.mail_rounded,
-        label: t.invitationsTab,
-        route: Routes.invitations,
-      ),
+      (icon: Icons.mail_rounded, label: 'Чаты', route: Routes.chats),
       (icon: Icons.person, label: t.myProfileTab, route: Routes.me),
       if (isAdmin)
         (
@@ -360,11 +359,7 @@ class AppBottomNav extends ConsumerWidget {
     final items = [
       (icon: Icons.videocam, label: t.castingsTab, route: Routes.castings),
       (icon: Icons.search, label: t.catalogTab, route: Routes.search),
-      (
-        icon: Icons.mail_rounded,
-        label: t.invitationsTab,
-        route: Routes.invitations,
-      ),
+      (icon: Icons.mail_rounded, label: 'Чаты', route: Routes.chats),
       (icon: Icons.person, label: t.myProfileTab, route: Routes.me),
       if (isAdmin)
         (
@@ -513,6 +508,10 @@ final List<RouteBase> appRoutes = [
       GoRoute(
         path: Routes.agentFolders,
         builder: (context, state) => const AgentFoldersPage(),
+      ),
+      GoRoute(
+        path: Routes.chats,
+        builder: (context, state) => const ChatsPage(),
       ),
       GoRoute(
         path: Routes.invitations,
