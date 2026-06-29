@@ -816,21 +816,73 @@ class _MediaCoverButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        width: kProfileRemoveButtonSize,
-        height: kProfileRemoveButtonSize,
-        decoration: BoxDecoration(
-          color: selected ? BrandTheme.redTop : kOverlayStrong,
-          shape: BoxShape.circle,
-          border: Border.all(color: Colors.white.withValues(alpha: 0.86)),
+    final isRussian =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ru';
+    final message = selected
+        ? (isRussian ? 'Главное фото анкеты' : 'Profile cover photo')
+        : (isRussian ? 'Сделать главным фото' : 'Make cover photo');
+    return Tooltip(
+      message: message,
+      waitDuration: const Duration(milliseconds: 350),
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Semantics(
+          button: true,
+          selected: selected,
+          label: message,
+          child: Container(
+            width: kProfileRemoveButtonSize,
+            height: kProfileRemoveButtonSize,
+            decoration: BoxDecoration(
+              color: selected ? BrandTheme.redTop : kOverlayStrong,
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white.withValues(alpha: 0.86)),
+            ),
+            child: Icon(
+              selected ? Icons.star_rounded : Icons.star_border_rounded,
+              size: 17,
+              color: Colors.white,
+            ),
+          ),
         ),
-        child: Icon(
-          selected ? Icons.star_rounded : Icons.star_border_rounded,
-          size: 17,
-          color: Colors.white,
+      ),
+    );
+  }
+}
+
+class _CoverMediaBadge extends StatelessWidget {
+  const _CoverMediaBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    final isRussian =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ru';
+    return Positioned(
+      left: 6,
+      right: 6,
+      bottom: 6,
+      child: IgnorePointer(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+          decoration: BoxDecoration(
+            color: BrandTheme.redTop.withValues(alpha: 0.9),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.72)),
+          ),
+          child: Text(
+            isRussian ? 'ГЛАВНОЕ ФОТО' : 'COVER PHOTO',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 9,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.8,
+              height: 1,
+            ),
+          ),
         ),
       ),
     );
@@ -1101,6 +1153,7 @@ class _Thumb extends StatelessWidget {
           fit: StackFit.expand,
           children: [
             image,
+            if (isCover && !pending) const _CoverMediaBadge(),
             if (!pending)
               Positioned(
                 left: _kMediaRemoveInset,
