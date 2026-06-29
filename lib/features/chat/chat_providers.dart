@@ -26,6 +26,15 @@ final chatReactionsProvider = StreamProvider.autoDispose
       return ref.watch(chatServiceProvider).watchReactions(chatId);
     });
 
+final chatTypingStatesProvider = StreamProvider.autoDispose
+    .family<List<ChatTypingState>, String>((ref, chatId) {
+      final userId = ref.watch(currentUserIdProvider);
+      if (userId == null) return const Stream<List<ChatTypingState>>.empty();
+      return ref
+          .watch(chatServiceProvider)
+          .watchTypingStates(chatId: chatId, currentUserId: userId);
+    });
+
 final chatSummaryProvider = FutureProvider.autoDispose
     .family<ChatSummary?, String>((ref, chatId) {
       return ref.watch(chatServiceProvider).fetchChat(chatId);

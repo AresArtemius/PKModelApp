@@ -9,6 +9,7 @@ class ChatService {
   static const int _invitationListLimit = 100;
   static const int _messageStreamLimit = 120;
   static const int _reactionStreamLimit = _messageStreamLimit * 3;
+  static const int _typingStreamLimit = 8;
 
   final SupabaseClient _sb;
 
@@ -210,22 +211,58 @@ class ChatService {
         );
   }
 
+  Stream<List<ChatTypingState>> watchTypingStates({
+    required String chatId,
+    required String currentUserId,
+  }) {
+    return _sb
+        .from('selection_chat_typing_states')
+        .stream(primaryKey: ['chat_id', 'user_id'])
+        .eq('chat_id', chatId)
+        .order('typed_at')
+        .limit(_typingStreamLimit)
+        .map(
+          (rows) => rows
+              .map((e) => ChatTypingState.fromMap(Map<String, dynamic>.from(e)))
+              .where(
+                (e) =>
+                    e.userId.isNotEmpty &&
+                    e.userId != currentUserId &&
+                    e.isTyping &&
+                    e.isFresh,
+              )
+              .toList(growable: false),
+        );
+  }
+
   Future<List<ChatMessage>> fetchMessagesBefore({
     required String chatId,
     required DateTime before,
     int limit = 60,
   }) async {
-    final rows = await _sb
-        .from('selection_chat_messages')
-        .select(
-          'id,chat_id,sender_id,body,media_type,media_url,media_thumbnail_url,deleted_at,created_at',
-        )
-        .eq('chat_id', chatId)
-        .lt('created_at', before.toUtc().toIso8601String())
-        .order('created_at', ascending: false)
-        .limit(limit);
+    Future<List<dynamic>> run({required bool includeReadAt}) async {
+      return await _sb
+          .from('selection_chat_messages')
+          .select(
+            includeReadAt
+                ? 'id,chat_id,sender_id,body,media_type,media_url,media_thumbnail_url,deleted_at,read_at,created_at'
+                : 'id,chat_id,sender_id,body,media_type,media_url,media_thumbnail_url,deleted_at,created_at',
+          )
+          .eq('chat_id', chatId)
+          .lt('created_at', before.toUtc().toIso8601String())
+          .order('created_at', ascending: false)
+          .limit(limit);
+    }
 
-    return (rows as List)
+    List<dynamic> rows;
+    try {
+      rows = await run(includeReadAt: true);
+    } on PostgrestException catch (e) {
+      if (!SupabaseCompat.isMissingColumn(e, 'read_at')) rethrow;
+      rows = await run(includeReadAt: false);
+    }
+
+    return rows
         .map((e) => ChatMessage.fromMap(Map<String, dynamic>.from(e as Map)))
         .where((e) => !e.isDeleted)
         .toList(growable: false)
@@ -306,6 +343,67 @@ class ChatService {
           ? null
           : mediaThumbnailUrl.trim(),
     });
+  }
+
+  Future<void> markChatRead(String chatId) async {
+    final userId = _sb.auth.currentUser?.id;
+    if (userId == null || chatId.trim().isEmpty) return;
+
+    try {
+      await _sb.rpc('mark_selection_chat_read', params: {'p_chat_id': chatId});
+      return;
+    } on PostgrestException catch (e) {
+      final missingSupport =
+          SupabaseCompat.isMissingRpc(e, 'mark_selection_chat_read') ||
+          SupabaseCompat.isMissingColumn(e, 'read_at');
+      if (!missingSupport) rethrow;
+    }
+
+    try {
+      await _sb
+          .from('selection_chat_messages')
+          .update({'read_at': DateTime.now().toUtc().toIso8601String()})
+          .eq('chat_id', chatId)
+          .neq('sender_id', userId)
+          .filter('read_at', 'is', null)
+          .filter('deleted_at', 'is', null);
+    } on PostgrestException catch (e) {
+      if (!SupabaseCompat.isMissingColumn(e, 'read_at')) rethrow;
+    }
+  }
+
+  Future<void> setTyping({
+    required String chatId,
+    required bool isTyping,
+  }) async {
+    final userId = _sb.auth.currentUser?.id;
+    if (userId == null || chatId.trim().isEmpty) return;
+
+    try {
+      await _sb.rpc(
+        'set_selection_chat_typing',
+        params: {'p_chat_id': chatId, 'p_is_typing': isTyping},
+      );
+      return;
+    } on PostgrestException catch (e) {
+      if (!SupabaseCompat.isMissingRpc(e, 'set_selection_chat_typing')) {
+        rethrow;
+      }
+    }
+
+    try {
+      await _sb.from('selection_chat_typing_states').upsert({
+        'chat_id': chatId,
+        'user_id': userId,
+        'is_typing': isTyping,
+        'typed_at': DateTime.now().toUtc().toIso8601String(),
+      }, onConflict: 'chat_id,user_id');
+    } on PostgrestException catch (e) {
+      final missingTable = SupabaseCompat.isMissingRelation(e, const [
+        'selection_chat_typing_states',
+      ]);
+      if (!missingTable) rethrow;
+    }
   }
 
   Future<void> deleteMessageForEveryone(String messageId) async {

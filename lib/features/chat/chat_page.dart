@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
@@ -59,6 +60,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   bool _loadingOlderMessages = false;
   bool _hasOlderMessages = true;
   ChatMessage? _replyingTo;
+  DateTime? _lastTypingSentAt;
+  Timer? _typingStopTimer;
   final List<ChatMessage> _olderMessages = [];
   final _picker = ImagePicker();
 
@@ -68,15 +71,64 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   void didUpdateWidget(covariant ChatPage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.chatId == widget.chatId) return;
+    unawaited(_setTyping(false));
     _olderMessages.clear();
     _hasOlderMessages = true;
     _loadingOlderMessages = false;
+    _replyingTo = null;
+    _lastTypingSentAt = null;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _messageController.addListener(_handleTypingChanged);
   }
 
   @override
   void dispose() {
+    _typingStopTimer?.cancel();
+    unawaited(_setTyping(false));
+    _messageController.removeListener(_handleTypingChanged);
     _messageController.dispose();
     super.dispose();
+  }
+
+  void _handleTypingChanged() {
+    final hasText = _messageController.text.trim().isNotEmpty;
+    _typingStopTimer?.cancel();
+    if (!hasText) {
+      unawaited(_setTyping(false));
+      return;
+    }
+
+    final now = DateTime.now();
+    final last = _lastTypingSentAt;
+    if (last == null || now.difference(last).inMilliseconds > 1500) {
+      _lastTypingSentAt = now;
+      unawaited(_setTyping(true));
+    }
+    _typingStopTimer = Timer(const Duration(milliseconds: 2500), () {
+      unawaited(_setTyping(false));
+    });
+  }
+
+  Future<void> _setTyping(bool isTyping) async {
+    try {
+      await ref
+          .read(chatServiceProvider)
+          .setTyping(chatId: widget.chatId, isTyping: isTyping);
+    } catch (_) {
+      // Typing is a soft realtime hint. If SQL is not applied yet, ignore it.
+    }
+  }
+
+  Future<void> _markRead() async {
+    try {
+      await ref.read(chatServiceProvider).markChatRead(widget.chatId);
+    } catch (_) {
+      // Read receipts are best effort while older SQL is still possible.
+    }
   }
 
   Future<void> _send() async {
@@ -587,6 +639,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     final userId = ref.watch(currentUserIdProvider) ?? '';
     final messages = ref.watch(chatMessagesProvider(widget.chatId));
     final reactions = ref.watch(chatReactionsProvider(widget.chatId));
+    final typingStates = ref.watch(chatTypingStatesProvider(widget.chatId));
     final summary = ref.watch(chatSummaryProvider(widget.chatId));
     final avatars = ref.watch(chatParticipantAvatarsProvider(widget.chatId));
     final avatarMap = avatars.valueOrNull ?? const <String, String>{};
@@ -656,6 +709,11 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                               final canLoadOlder =
                                   _hasOlderMessages &&
                                   items.length >= _chatRealtimeMessageLimit;
+                              if (items.any((e) => e.senderId != userId)) {
+                                WidgetsBinding.instance.addPostFrameCallback(
+                                  (_) => _markRead(),
+                                );
+                              }
 
                               return ListView.builder(
                                 reverse: true,
@@ -681,6 +739,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                                     reactions:
                                         reactionMap[item.id] ??
                                         const <ChatReaction>[],
+                                    showReadStatus:
+                                        item.senderId == userId && index == 0,
                                     onMediaTap: () =>
                                         _openMediaViewer(context, item),
                                     onLongPress: () => _showMessageActions(
@@ -697,6 +757,11 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                 const SizedBox(height: 12),
                 if (_uploadingMedia) ...[
                   const _ChatUploadProgress(),
+                  const SizedBox(height: 10),
+                ],
+                if ((typingStates.valueOrNull ?? const <ChatTypingState>[])
+                    .isNotEmpty) ...[
+                  const _TypingIndicator(),
                   const SizedBox(height: 10),
                 ],
                 _Composer(
@@ -814,6 +879,7 @@ class _MessageBubble extends StatelessWidget {
     required this.mine,
     required this.avatarUrl,
     required this.reactions,
+    required this.showReadStatus,
     required this.onMediaTap,
     required this.onLongPress,
   });
@@ -822,6 +888,7 @@ class _MessageBubble extends StatelessWidget {
   final bool mine;
   final String avatarUrl;
   final List<ChatReaction> reactions;
+  final bool showReadStatus;
   final VoidCallback onMediaTap;
   final VoidCallback onLongPress;
 
@@ -875,6 +942,7 @@ class _MessageBubble extends StatelessWidget {
       children: [
         bubble,
         if (reactions.isNotEmpty) _ReactionStrip(reactions: reactions),
+        if (showReadStatus) _MessageReadStatus(readAt: message.readAt),
       ],
     );
 
@@ -959,6 +1027,44 @@ class _ReplyPreview extends StatelessWidget {
           fontWeight: FontWeight.w800,
           height: 1.2,
         ),
+      ),
+    );
+  }
+}
+
+class _MessageReadStatus extends StatelessWidget {
+  const _MessageReadStatus({required this.readAt});
+
+  final DateTime? readAt;
+
+  @override
+  Widget build(BuildContext context) {
+    final isRussian =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ru';
+    final read = readAt != null;
+    return Padding(
+      padding: const EdgeInsets.only(top: 4, right: 4),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            read ? Icons.done_all_rounded : Icons.done_rounded,
+            size: 15,
+            color: read ? BrandTheme.redTop : kTextMuted,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            read
+                ? (isRussian ? 'прочитано' : 'read')
+                : (isRussian ? 'доставлено' : 'delivered'),
+            style: TextStyle(
+              color: read ? BrandTheme.redTop : kTextMuted,
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.2,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1391,6 +1497,98 @@ class _ChatUploadProgress extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _TypingIndicator extends StatelessWidget {
+  const _TypingIndicator();
+
+  @override
+  Widget build(BuildContext context) {
+    final isRussian =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ru';
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.9),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: kBorderColor),
+          boxShadow: BrandTheme.basePillShadow(isDark: false),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(width: 18, height: 18, child: _TypingDots()),
+            const SizedBox(width: 10),
+            Text(
+              isRussian ? 'ПЕЧАТАЕТ...' : 'TYPING...',
+              style: const TextStyle(
+                color: kTextMuted,
+                fontSize: 12,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TypingDots extends StatefulWidget {
+  const _TypingDots();
+
+  @override
+  State<_TypingDots> createState() => _TypingDotsState();
+}
+
+class _TypingDotsState extends State<_TypingDots>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: List.generate(3, (index) {
+            final value = (_controller.value + index / 3) % 1;
+            final opacity = value < 0.5 ? 1.0 : 0.35;
+            return Opacity(
+              opacity: opacity,
+              child: Container(
+                width: 4,
+                height: 4,
+                decoration: const BoxDecoration(
+                  color: kTextMuted,
+                  shape: BoxShape.circle,
+                ),
+              ),
+            );
+          }),
+        );
+      },
     );
   }
 }

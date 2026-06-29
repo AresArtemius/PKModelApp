@@ -126,6 +126,7 @@ class ChatMessage {
     required this.mediaUrl,
     required this.mediaThumbnailUrl,
     required this.deletedAt,
+    required this.readAt,
     required this.createdAt,
   });
 
@@ -137,6 +138,7 @@ class ChatMessage {
   final String mediaUrl;
   final String mediaThumbnailUrl;
   final DateTime? deletedAt;
+  final DateTime? readAt;
   final DateTime? createdAt;
 
   bool get isDeleted => deletedAt != null;
@@ -154,7 +156,37 @@ class ChatMessage {
       mediaUrl: (map['media_url'] ?? '').toString().trim(),
       mediaThumbnailUrl: (map['media_thumbnail_url'] ?? '').toString().trim(),
       deletedAt: DateTime.tryParse((map['deleted_at'] ?? '').toString()),
+      readAt: DateTime.tryParse((map['read_at'] ?? '').toString()),
       createdAt: DateTime.tryParse((map['created_at'] ?? '').toString()),
+    );
+  }
+}
+
+class ChatTypingState {
+  const ChatTypingState({
+    required this.chatId,
+    required this.userId,
+    required this.isTyping,
+    required this.typedAt,
+  });
+
+  final String chatId;
+  final String userId;
+  final bool isTyping;
+  final DateTime? typedAt;
+
+  bool get isFresh {
+    final typed = typedAt;
+    if (typed == null) return false;
+    return DateTime.now().toUtc().difference(typed.toUtc()).inSeconds <= 8;
+  }
+
+  factory ChatTypingState.fromMap(Map<String, dynamic> map) {
+    return ChatTypingState(
+      chatId: (map['chat_id'] ?? '').toString(),
+      userId: (map['user_id'] ?? '').toString(),
+      isTyping: map['is_typing'] == true,
+      typedAt: DateTime.tryParse((map['typed_at'] ?? '').toString()),
     );
   }
 }
