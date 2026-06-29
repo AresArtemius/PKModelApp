@@ -21,6 +21,7 @@ import '../features/billing/billing_page.dart';
 import '../features/castings/casting_page.dart';
 import '../features/chat/chat_page.dart';
 import '../features/chat/chats_page.dart';
+import '../features/chat/chat_providers.dart';
 import '../features/chat/invitations_page.dart';
 import '../features/catalog/agent_folders_page.dart';
 import '../features/catalog/catalog_page.dart';
@@ -163,16 +164,30 @@ class AppDesktopNav extends ConsumerWidget {
     final isAdmin = ref
         .watch(isAdminProvider)
         .maybeWhen(data: (value) => value, orElse: () => false);
+    final unreadChats = ref
+        .watch(unreadChatCountProvider)
+        .maybeWhen(data: (value) => value, orElse: () => 0);
     final items = [
-      (icon: Icons.videocam, label: t.castingsTab, route: Routes.castings),
-      (icon: Icons.search, label: t.catalogTab, route: Routes.search),
-      (icon: Icons.mail_rounded, label: 'Чаты', route: Routes.chats),
-      (icon: Icons.person, label: t.myProfileTab, route: Routes.me),
+      (
+        icon: Icons.videocam,
+        label: t.castingsTab,
+        route: Routes.castings,
+        badge: 0,
+      ),
+      (icon: Icons.search, label: t.catalogTab, route: Routes.search, badge: 0),
+      (
+        icon: Icons.mail_rounded,
+        label: 'Чаты',
+        route: Routes.chats,
+        badge: unreadChats,
+      ),
+      (icon: Icons.person, label: t.myProfileTab, route: Routes.me, badge: 0),
       if (isAdmin)
         (
           icon: Icons.admin_panel_settings_rounded,
           label: t.adminTab,
           route: Routes.admin,
+          badge: 0,
         ),
     ];
 
@@ -195,6 +210,7 @@ class AppDesktopNav extends ConsumerWidget {
                   label: items[i].label,
                   selected: currentIndex == i,
                   expanded: expanded,
+                  badge: items[i].badge,
                   onTap: () => context.go(items[i].route),
                 ),
                 const SizedBox(height: 10),
@@ -260,6 +276,7 @@ class _DesktopNavItem extends StatelessWidget {
     required this.label,
     required this.selected,
     required this.expanded,
+    required this.badge,
     required this.onTap,
   });
 
@@ -267,6 +284,7 @@ class _DesktopNavItem extends StatelessWidget {
   final String label;
   final bool selected;
   final bool expanded;
+  final int badge;
   final VoidCallback onTap;
 
   @override
@@ -299,7 +317,7 @@ class _DesktopNavItem extends StatelessWidget {
           child: expanded
               ? Row(
                   children: [
-                    Icon(icon, color: color, size: 25),
+                    _NavIconWithBadge(icon: icon, color: color, badge: badge),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
@@ -321,7 +339,7 @@ class _DesktopNavItem extends StatelessWidget {
               : Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(icon, color: color, size: 27),
+                    _NavIconWithBadge(icon: icon, color: color, badge: badge),
                     const SizedBox(height: 6),
                     Text(
                       label,
@@ -356,16 +374,30 @@ class AppBottomNav extends ConsumerWidget {
     final isAdmin = ref
         .watch(isAdminProvider)
         .maybeWhen(data: (value) => value, orElse: () => false);
+    final unreadChats = ref
+        .watch(unreadChatCountProvider)
+        .maybeWhen(data: (value) => value, orElse: () => 0);
     final items = [
-      (icon: Icons.videocam, label: t.castingsTab, route: Routes.castings),
-      (icon: Icons.search, label: t.catalogTab, route: Routes.search),
-      (icon: Icons.mail_rounded, label: 'Чаты', route: Routes.chats),
-      (icon: Icons.person, label: t.myProfileTab, route: Routes.me),
+      (
+        icon: Icons.videocam,
+        label: t.castingsTab,
+        route: Routes.castings,
+        badge: 0,
+      ),
+      (icon: Icons.search, label: t.catalogTab, route: Routes.search, badge: 0),
+      (
+        icon: Icons.mail_rounded,
+        label: 'Чаты',
+        route: Routes.chats,
+        badge: unreadChats,
+      ),
+      (icon: Icons.person, label: t.myProfileTab, route: Routes.me, badge: 0),
       if (isAdmin)
         (
           icon: Icons.admin_panel_settings_rounded,
           label: t.adminTab,
           route: Routes.admin,
+          badge: 0,
         ),
     ];
 
@@ -383,6 +415,7 @@ class AppBottomNav extends ConsumerWidget {
                     icon: items[i].icon,
                     label: items[i].label,
                     selected: currentIndex == i,
+                    badge: items[i].badge,
                     onTap: () => context.go(items[i].route),
                   ),
                 ),
@@ -399,12 +432,14 @@ class _BottomNavItem extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.selected,
+    required this.badge,
     required this.onTap,
   });
 
   final IconData icon;
   final String label;
   final bool selected;
+  final int badge;
   final VoidCallback onTap;
 
   @override
@@ -415,7 +450,7 @@ class _BottomNavItem extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, color: color, size: 27),
+          _NavIconWithBadge(icon: icon, color: color, badge: badge),
           const SizedBox(height: 4),
           Text(
             label,
@@ -428,6 +463,57 @@ class _BottomNavItem extends StatelessWidget {
               fontSize: 12,
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NavIconWithBadge extends StatelessWidget {
+  const _NavIconWithBadge({
+    required this.icon,
+    required this.color,
+    required this.badge,
+  });
+
+  final IconData icon;
+  final Color color;
+  final int badge;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 31,
+      height: 31,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Center(child: Icon(icon, color: color, size: 27)),
+          if (badge > 0)
+            Positioned(
+              top: -4,
+              right: -6,
+              child: Container(
+                constraints: const BoxConstraints(minWidth: 18),
+                height: 18,
+                alignment: Alignment.center,
+                padding: const EdgeInsets.symmetric(horizontal: 5),
+                decoration: BoxDecoration(
+                  color: BrandTheme.redTop,
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: Colors.white, width: 1),
+                ),
+                child: Text(
+                  badge > 99 ? '99+' : '$badge',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w900,
+                    height: 1,
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );

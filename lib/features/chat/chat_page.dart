@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
@@ -209,21 +208,6 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     return _sb.storage.from(_chatMediaBucket).getPublicUrl(path);
   }
 
-  Future<String> _uploadFile({
-    required String path,
-    required File file,
-    required String contentType,
-  }) async {
-    await _sb.storage
-        .from(_chatMediaBucket)
-        .upload(
-          path,
-          file,
-          fileOptions: FileOptions(contentType: contentType, upsert: true),
-        );
-    return _sb.storage.from(_chatMediaBucket).getPublicUrl(path);
-  }
-
   Future<void> _pickMedia({required bool video}) async {
     if (_sending || _uploadingMedia) return;
     if (!await _ensureCanUseChat()) return;
@@ -246,24 +230,17 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     try {
       final stamp = DateTime.now().millisecondsSinceEpoch;
       final ext = _ext(picked.path, video: video);
-      final pickedFile = File(picked.path);
-      final mediaBytes = video ? null : await pickedFile.readAsBytes();
+      final mediaBytes = await picked.readAsBytes();
       final mediaPath = '$userId/chats/${widget.chatId}/$stamp.$ext';
       final contentType = _contentType(ext, video: video);
-      final mediaUrl = video
-          ? await _uploadFile(
-              path: mediaPath,
-              file: pickedFile,
-              contentType: contentType,
-            )
-          : await _uploadBytes(
-              path: mediaPath,
-              bytes: mediaBytes!,
-              contentType: contentType,
-            );
+      final mediaUrl = await _uploadBytes(
+        path: mediaPath,
+        bytes: mediaBytes,
+        contentType: contentType,
+      );
 
       var thumbnailUrl = '';
-      if (video) {
+      if (video && !kIsWeb) {
         final thumbnail = await VideoThumbnail.thumbnailData(
           video: picked.path,
           imageFormat: ImageFormat.JPEG,
@@ -277,7 +254,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
             contentType: 'image/jpeg',
           );
         }
-      } else if (mediaBytes != null && mediaBytes.isNotEmpty) {
+      } else if (!video && mediaBytes.isNotEmpty) {
         final thumbnail = await compute(_buildChatImageThumbnail, mediaBytes);
         if (thumbnail != null && thumbnail.isNotEmpty) {
           thumbnailUrl = await _uploadBytes(
@@ -304,6 +281,11 @@ class _ChatPageState extends ConsumerState<ChatPage> {
 
   Future<String?> _showMediaPreview(XFile file, {required bool video}) async {
     final captionC = TextEditingController();
+    final previewBytes = video ? null : await file.readAsBytes();
+    if (!mounted) {
+      captionC.dispose();
+      return null;
+    }
     final result = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
@@ -334,7 +316,9 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                             size: 72,
                           ),
                         )
-                      : Image.file(File(file.path), fit: BoxFit.cover),
+                      : previewBytes == null
+                      ? Container(color: Colors.white)
+                      : Image.memory(previewBytes, fit: BoxFit.cover),
                 ),
               ),
               const SizedBox(height: 12),

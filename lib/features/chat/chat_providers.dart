@@ -25,6 +25,11 @@ final myChatsProvider = FutureProvider.autoDispose
           .fetchMyChats(userId: userId, archived: archived);
     });
 
+final unreadChatCountProvider = FutureProvider.autoDispose<int>((ref) async {
+  final chats = await ref.watch(myChatsProvider(false).future);
+  return chats.fold<int>(0, (sum, item) => sum + item.unreadCount);
+});
+
 final chatMessagesProvider = StreamProvider.autoDispose
     .family<List<ChatMessage>, String>((ref, chatId) {
       return ref.watch(chatServiceProvider).watchMessages(chatId);
