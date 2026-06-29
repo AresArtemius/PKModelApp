@@ -25,11 +25,42 @@ alter table public.selection_chats
   add column if not exists agent_deleted_at timestamptz;
 
 alter table public.selection_chat_messages
-  add column if not exists media_type text not null default 'text'
-    check (media_type in ('text', 'image', 'video')),
+  add column if not exists media_type text not null default 'text',
   add column if not exists media_url text,
   add column if not exists media_thumbnail_url text,
+  add column if not exists file_name text,
+  add column if not exists file_size bigint,
+  add column if not exists file_mime text,
   add column if not exists deleted_at timestamptz;
+
+do $$
+declare
+  v_constraint text;
+begin
+  for v_constraint in
+    select conname
+    from pg_constraint
+    where conrelid = 'public.selection_chat_messages'::regclass
+      and contype = 'c'
+      and pg_get_constraintdef(oid) ilike '%media_type%'
+  loop
+    execute format(
+      'alter table public.selection_chat_messages drop constraint if exists %I',
+      v_constraint
+    );
+  end loop;
+
+  alter table public.selection_chat_messages
+    add constraint selection_chat_messages_media_type_check
+    check (media_type in ('text', 'image', 'video', 'file'));
+end $$;
+
+alter table public.selection_chat_messages
+  drop constraint if exists selection_chat_messages_file_size_check;
+
+alter table public.selection_chat_messages
+  add constraint selection_chat_messages_file_size_check
+  check (file_size is null or file_size >= 0);
 
 create table if not exists public.selection_chat_message_reactions (
   message_id uuid not null references public.selection_chat_messages(id)

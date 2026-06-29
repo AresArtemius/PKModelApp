@@ -1,8 +1,10 @@
 import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image/image.dart' as image_lib;
@@ -34,6 +36,20 @@ Uint8List? _buildChatImageThumbnail(Uint8List bytes) {
   if (decoded == null) return null;
   final thumb = image_lib.copyResize(decoded, width: 640);
   return Uint8List.fromList(image_lib.encodeJpg(thumb, quality: 72));
+}
+
+String _formatFileSize(int? bytes) {
+  final value = bytes ?? 0;
+  if (value <= 0) return '';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  var size = value.toDouble();
+  var unit = 0;
+  while (size >= 1024 && unit < units.length - 1) {
+    size /= 1024;
+    unit += 1;
+  }
+  final text = unit == 0 ? size.toStringAsFixed(0) : size.toStringAsFixed(1);
+  return '$text ${units[unit]}';
 }
 
 class ChatPage extends ConsumerStatefulWidget {
@@ -175,6 +191,10 @@ class _ChatPageState extends ConsumerState<ChatPage> {
         ? (_isRussian ? 'Видео' : 'Video')
         : message.isImage
         ? (_isRussian ? 'Фото' : 'Photo')
+        : message.isFile
+        ? (message.fileDisplayName.isEmpty
+              ? (_isRussian ? 'Файл' : 'File')
+              : message.fileDisplayName)
         : '';
     final compact = source.replaceAll(RegExp(r'\s+'), ' ').trim();
     if (compact.length <= 90) return compact;
@@ -191,6 +211,14 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     return lower.substring(index + 1);
   }
 
+  String _fileExt(String name) {
+    final lower = name.toLowerCase();
+    final index = lower.lastIndexOf('.');
+    if (index == -1 || index == lower.length - 1) return 'bin';
+    final ext = lower.substring(index + 1).replaceAll(RegExp(r'[^a-z0-9]'), '');
+    return ext.isEmpty ? 'bin' : ext;
+  }
+
   String _contentType(String ext, {required bool video}) {
     if (video) {
       if (ext == 'mov') return 'video/quicktime';
@@ -200,6 +228,27 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       'png' => 'image/png',
       'webp' => 'image/webp',
       _ => 'image/jpeg',
+    };
+  }
+
+  String _documentContentType(String ext, String mimeType) {
+    final mime = mimeType.trim();
+    if (mime.isNotEmpty) return mime;
+    return switch (ext) {
+      'pdf' => 'application/pdf',
+      'doc' => 'application/msword',
+      'docx' =>
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'xls' => 'application/vnd.ms-excel',
+      'xlsx' =>
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'ppt' => 'application/vnd.ms-powerpoint',
+      'pptx' =>
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'txt' => 'text/plain',
+      'csv' => 'text/csv',
+      'zip' => 'application/zip',
+      _ => 'application/octet-stream',
     };
   }
 
@@ -255,8 +304,70 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     setState(() {
       _pendingAttachment = _PendingChatAttachment(
         file: selected,
-        isVideo: video,
+        kind: video
+            ? _PendingAttachmentKind.video
+            : _PendingAttachmentKind.image,
+        fileName: selected.name.trim().isEmpty
+            ? selected.path.split('/').last
+            : selected.name,
+        fileSize: bytes?.length,
+        mimeType: selected.mimeType ?? '',
         previewBytes: bytes,
+      );
+    });
+  }
+
+  Future<void> _selectPendingFile() async {
+    if (_sending || _uploadingMedia) return;
+    if (!await _ensureCanUseChat()) return;
+
+    FilePickerResult? result;
+    try {
+      result = await FilePicker.platform.pickFiles(withData: true);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _isRussian
+                ? 'Не удалось открыть файл. Проверьте разрешения устройства.'
+                : 'Could not open file. Check device permissions.',
+          ),
+        ),
+      );
+      return;
+    }
+    final picked = result?.files.single;
+    if (picked == null) return;
+
+    var bytes = picked.bytes;
+    if (bytes == null && picked.path != null) {
+      bytes = await XFile(picked.path!).readAsBytes();
+    }
+    if (bytes == null || bytes.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _isRussian
+                ? 'Файл пустой или недоступен для отправки.'
+                : 'The file is empty or unavailable.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _pendingAttachment = _PendingChatAttachment(
+        file: picked.path == null ? null : XFile(picked.path!),
+        kind: _PendingAttachmentKind.file,
+        fileName: picked.name,
+        fileSize: picked.size > 0 ? picked.size : bytes!.length,
+        mimeType: picked.extension == null ? '' : '',
+        bytes: bytes,
+        previewBytes: null,
       );
     });
   }
@@ -271,11 +382,20 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     setState(() => _uploadingMedia = true);
     try {
       final stamp = DateTime.now().millisecondsSinceEpoch;
-      final ext = _ext(attachment.file.path, video: attachment.isVideo);
+      final ext = attachment.isFile
+          ? _fileExt(attachment.fileName)
+          : _ext(
+              attachment.file?.path ?? attachment.fileName,
+              video: attachment.isVideo,
+            );
       final mediaBytes =
-          attachment.previewBytes ?? await attachment.file.readAsBytes();
+          attachment.bytes ??
+          attachment.previewBytes ??
+          await attachment.file!.readAsBytes();
       final mediaPath = '$userId/chats/${widget.chatId}/$stamp.$ext';
-      final contentType = _contentType(ext, video: attachment.isVideo);
+      final contentType = attachment.isFile
+          ? _documentContentType(ext, attachment.mimeType)
+          : _contentType(ext, video: attachment.isVideo);
       final mediaUrl = await _uploadBytes(
         path: mediaPath,
         bytes: mediaBytes,
@@ -283,9 +403,9 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       );
 
       var thumbnailUrl = '';
-      if (attachment.isVideo && !kIsWeb) {
+      if (attachment.isVideo && !kIsWeb && attachment.file != null) {
         final thumbnail = await VideoThumbnail.thumbnailData(
-          video: attachment.file.path,
+          video: attachment.file!.path,
           imageFormat: ImageFormat.JPEG,
           maxWidth: 900,
           quality: 80,
@@ -297,7 +417,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
             contentType: 'image/jpeg',
           );
         }
-      } else if (!attachment.isVideo && mediaBytes.isNotEmpty) {
+      } else if (attachment.isImage && mediaBytes.isNotEmpty) {
         final thumbnail = await compute(_buildChatImageThumbnail, mediaBytes);
         if (thumbnail != null && thumbnail.isNotEmpty) {
           thumbnailUrl = await _uploadBytes(
@@ -313,9 +433,12 @@ class _ChatPageState extends ConsumerState<ChatPage> {
           .sendMessage(
             chatId: widget.chatId,
             body: body,
-            mediaType: attachment.isVideo ? 'video' : 'image',
+            mediaType: attachment.mediaType,
             mediaUrl: mediaUrl,
             mediaThumbnailUrl: thumbnailUrl,
+            fileName: attachment.isFile ? attachment.fileName : '',
+            fileSize: attachment.isFile ? attachment.fileSize : null,
+            fileMime: attachment.isFile ? contentType : '',
           );
     } finally {
       if (mounted) setState(() => _uploadingMedia = false);
@@ -359,16 +482,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
             title: _isRussian ? 'Файл' : 'File',
             onTap: () {
               Navigator.of(context).pop();
-              if (!mounted) return;
-              ScaffoldMessenger.of(this.context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    _isRussian
-                        ? 'Файлы добавим отдельным шагом после расширения схемы чата.'
-                        : 'Files will be added after the chat schema is extended.',
-                  ),
-                ),
-              );
+              _selectPendingFile();
             },
           ),
         ],
@@ -1051,6 +1165,9 @@ class _MessageMedia extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (message.isFile) {
+      return _MessageFileCard(message: message, onTap: onTap);
+    }
     final imageUrl = message.mediaThumbnailUrl.isNotEmpty
         ? message.mediaThumbnailUrl
         : message.mediaUrl;
@@ -1095,6 +1212,81 @@ class _MessageMedia extends StatelessWidget {
   }
 }
 
+class _MessageFileCard extends StatelessWidget {
+  const _MessageFileCard({required this.message, required this.onTap});
+
+  final ChatMessage message;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final size = _formatFileSize(message.fileSize);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Container(
+          width: 220,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: kTextDark,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.insert_drive_file_rounded,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      message.fileDisplayName.isEmpty
+                          ? 'Файл'
+                          : message.fileDisplayName,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: kTextDark,
+                        fontWeight: FontWeight.w900,
+                        height: 1.1,
+                      ),
+                    ),
+                    if (size.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        size,
+                        style: const TextStyle(
+                          color: kTextMuted,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _MediaViewerDialog extends StatelessWidget {
   const _MediaViewerDialog({required this.message});
 
@@ -1102,6 +1294,9 @@ class _MediaViewerDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (message.isFile) {
+      return _FileViewerDialog(message: message);
+    }
     return Dialog.fullscreen(
       backgroundColor: Colors.black,
       child: SafeArea(
@@ -1134,6 +1329,124 @@ class _MediaViewerDialog extends StatelessWidget {
               child: _ViewerCloseButton(
                 onTap: () => Navigator.of(context).pop(),
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FileViewerDialog extends StatelessWidget {
+  const _FileViewerDialog({required this.message});
+
+  final ChatMessage message;
+
+  @override
+  Widget build(BuildContext context) {
+    final isRussian =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ru';
+    final size = _formatFileSize(message.fileSize);
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      child: Container(
+        width: 520,
+        constraints: const BoxConstraints(maxWidth: 520),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: BrandTheme.basePillShadow(isDark: false),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: kTextDark,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: const Icon(
+                    Icons.insert_drive_file_rounded,
+                    color: Colors.white,
+                    size: 30,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        message.fileDisplayName.isEmpty
+                            ? (isRussian ? 'Файл' : 'File')
+                            : message.fileDisplayName,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: kTextDark,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 18,
+                          height: 1.15,
+                        ),
+                      ),
+                      if (size.isNotEmpty || message.fileMime.isNotEmpty)
+                        Text(
+                          [
+                            if (size.isNotEmpty) size,
+                            if (message.fileMime.isNotEmpty) message.fileMime,
+                          ].join(' • '),
+                          style: const TextStyle(
+                            color: kTextMuted,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            SelectableText(
+              message.mediaUrl,
+              style: const TextStyle(
+                color: kTextMuted,
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      await Clipboard.setData(
+                        ClipboardData(text: message.mediaUrl),
+                      );
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            isRussian ? 'Ссылка скопирована' : 'Link copied',
+                          ),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.copy_rounded),
+                    label: Text(isRussian ? 'СКОПИРОВАТЬ' : 'COPY'),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -1247,16 +1560,35 @@ class _VideoPlayerSurfaceState extends State<_VideoPlayerSurface> {
   }
 }
 
+enum _PendingAttachmentKind { image, video, file }
+
 class _PendingChatAttachment {
   const _PendingChatAttachment({
-    required this.file,
-    required this.isVideo,
+    required this.kind,
+    required this.fileName,
+    required this.fileSize,
+    required this.mimeType,
     required this.previewBytes,
+    this.file,
+    this.bytes,
   });
 
-  final XFile file;
-  final bool isVideo;
+  final _PendingAttachmentKind kind;
+  final XFile? file;
+  final String fileName;
+  final int? fileSize;
+  final String mimeType;
+  final Uint8List? bytes;
   final Uint8List? previewBytes;
+
+  bool get isImage => kind == _PendingAttachmentKind.image;
+  bool get isVideo => kind == _PendingAttachmentKind.video;
+  bool get isFile => kind == _PendingAttachmentKind.file;
+  String get mediaType => switch (kind) {
+    _PendingAttachmentKind.image => 'image',
+    _PendingAttachmentKind.video => 'video',
+    _PendingAttachmentKind.file => 'file',
+  };
 }
 
 class _ReactionStrip extends StatelessWidget {
@@ -1469,6 +1801,8 @@ class _PendingAttachmentPreview extends StatelessWidget {
   Widget build(BuildContext context) {
     final isRussian =
         Localizations.localeOf(context).languageCode.toLowerCase() == 'ru';
+    final isFile = attachment.isFile;
+    final size = _formatFileSize(attachment.fileSize);
     return Container(
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
@@ -1483,7 +1817,16 @@ class _PendingAttachmentPreview extends StatelessWidget {
             child: SizedBox(
               width: 74,
               height: 74,
-              child: attachment.isVideo
+              child: isFile
+                  ? Container(
+                      color: kTextDark,
+                      child: const Icon(
+                        Icons.insert_drive_file_rounded,
+                        color: Colors.white,
+                        size: 34,
+                      ),
+                    )
+                  : attachment.isVideo
                   ? Container(
                       color: kTextDark,
                       child: const Icon(
@@ -1503,7 +1846,9 @@ class _PendingAttachmentPreview extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  attachment.isVideo
+                  isFile
+                      ? (isRussian ? 'ФАЙЛ ГОТОВ' : 'FILE READY')
+                      : attachment.isVideo
                       ? (isRussian ? 'ВИДЕО ГОТОВО' : 'VIDEO READY')
                       : (isRussian ? 'ФОТО ГОТОВО' : 'PHOTO READY'),
                   style: const TextStyle(
@@ -1515,7 +1860,12 @@ class _PendingAttachmentPreview extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  isRussian
+                  isFile
+                      ? [
+                          attachment.fileName,
+                          if (size.isNotEmpty) size,
+                        ].where((e) => e.trim().isNotEmpty).join(' • ')
+                      : isRussian
                       ? 'Добавьте подпись и нажмите отправить.'
                       : 'Add a caption and tap send.',
                   maxLines: 2,

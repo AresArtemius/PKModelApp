@@ -234,6 +234,7 @@ begin
         case
           when new.media_type = 'image' then 'Фото'
           when new.media_type = 'video' then 'Видео'
+          when new.media_type = 'file' then coalesce(nullif(new.file_name, ''), 'Файл')
           else 'Новое сообщение'
         end
       ),
@@ -244,7 +245,11 @@ begin
     jsonb_build_object(
       'chat_id', new.chat_id,
       'selection_id', v_chat.selection_id,
-      'profile_id', v_chat.profile_id
+      'profile_id', v_chat.profile_id,
+      'media_type', new.media_type,
+      'file_name', new.file_name,
+      'file_size', new.file_size,
+      'file_mime', new.file_mime
     )
   );
 

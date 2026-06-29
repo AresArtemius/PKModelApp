@@ -10,8 +10,20 @@ class ChatService {
   static const int _messageStreamLimit = 120;
   static const int _reactionStreamLimit = _messageStreamLimit * 3;
   static const int _typingStreamLimit = 8;
+  static const String _baseMessageSelect =
+      'id,chat_id,sender_id,body,media_type,media_url,media_thumbnail_url,deleted_at,created_at';
+  static const String _fileMessageFields = ',file_name,file_size,file_mime';
 
   final SupabaseClient _sb;
+
+  String _messageSelect({
+    bool includeReadAt = false,
+    bool includeFileFields = true,
+  }) {
+    final readAt = includeReadAt ? ',read_at' : '';
+    final fileFields = includeFileFields ? _fileMessageFields : '';
+    return '$_baseMessageSelect$readAt$fileFields';
+  }
 
   Future<List<CastingInvitation>> fetchMyInvitations(String userId) async {
     try {
@@ -111,6 +123,12 @@ class ChatService {
 
   bool _isRlsRecursion(PostgrestException e) {
     return SupabaseCompat.isRlsRecursion(e);
+  }
+
+  bool _isMissingChatFileColumn(PostgrestException e) {
+    return SupabaseCompat.isMissingColumn(e, 'file_name') ||
+        SupabaseCompat.isMissingColumn(e, 'file_size') ||
+        SupabaseCompat.isMissingColumn(e, 'file_mime');
   }
 
   Future<String> ensureSelectionChat({
@@ -285,7 +303,15 @@ class ChatService {
 
   String _chatPreview(ChatMessage message) {
     final text = message.body.trim();
-    if (text.isNotEmpty && text != 'Фото' && text != 'Видео') return text;
+    if (text.isNotEmpty &&
+        text != 'Фото' &&
+        text != 'Видео' &&
+        text != 'Файл') {
+      return text;
+    }
+    if (message.isFile) {
+      return message.fileDisplayName.isEmpty ? 'Файл' : message.fileDisplayName;
+    }
     if (message.isVideo) return 'Видео';
     if (message.isImage) return 'Фото';
     return text;
@@ -298,16 +324,24 @@ class ChatService {
   }
 
   Future<ChatMessage?> _fetchLatestMessage(String chatId) async {
-    final rows = await _sb
-        .from('selection_chat_messages')
-        .select(
-          'id,chat_id,sender_id,body,media_type,media_url,media_thumbnail_url,deleted_at,created_at',
-        )
-        .eq('chat_id', chatId)
-        .filter('deleted_at', 'is', null)
-        .order('created_at', ascending: false)
-        .limit(1);
-    if ((rows as List).isEmpty) return null;
+    Future<List<dynamic>> run({required bool includeFileFields}) async {
+      return await _sb
+          .from('selection_chat_messages')
+          .select(_messageSelect(includeFileFields: includeFileFields))
+          .eq('chat_id', chatId)
+          .filter('deleted_at', 'is', null)
+          .order('created_at', ascending: false)
+          .limit(1);
+    }
+
+    List<dynamic> rows;
+    try {
+      rows = await run(includeFileFields: true);
+    } on PostgrestException catch (e) {
+      if (!_isMissingChatFileColumn(e)) rethrow;
+      rows = await run(includeFileFields: false);
+    }
+    if (rows.isEmpty) return null;
     return ChatMessage.fromMap(Map<String, dynamic>.from(rows.first as Map));
   }
 
@@ -389,11 +423,7 @@ class ChatService {
     Future<List<dynamic>> run({required bool includeReadAt}) async {
       return await _sb
           .from('selection_chat_messages')
-          .select(
-            includeReadAt
-                ? 'id,chat_id,sender_id,body,media_type,media_url,media_thumbnail_url,deleted_at,read_at,created_at'
-                : 'id,chat_id,sender_id,body,media_type,media_url,media_thumbnail_url,deleted_at,created_at',
-          )
+          .select(_messageSelect(includeReadAt: includeReadAt))
           .eq('chat_id', chatId)
           .lt('created_at', before.toUtc().toIso8601String())
           .order('created_at', ascending: false)
@@ -404,8 +434,21 @@ class ChatService {
     try {
       rows = await run(includeReadAt: true);
     } on PostgrestException catch (e) {
-      if (!SupabaseCompat.isMissingColumn(e, 'read_at')) rethrow;
-      rows = await run(includeReadAt: false);
+      if (_isMissingChatFileColumn(e)) {
+        rows = await _sb
+            .from('selection_chat_messages')
+            .select(
+              _messageSelect(includeReadAt: true, includeFileFields: false),
+            )
+            .eq('chat_id', chatId)
+            .lt('created_at', before.toUtc().toIso8601String())
+            .order('created_at', ascending: false)
+            .limit(limit);
+      } else if (!SupabaseCompat.isMissingColumn(e, 'read_at')) {
+        rethrow;
+      } else {
+        rows = await run(includeReadAt: false);
+      }
     }
 
     return rows
@@ -471,24 +514,45 @@ class ChatService {
     String mediaType = 'text',
     String mediaUrl = '',
     String mediaThumbnailUrl = '',
+    String fileName = '',
+    int? fileSize,
+    String fileMime = '',
   }) async {
     final text = body.trim();
     final userId = _sb.auth.currentUser?.id;
     final hasMedia = mediaUrl.trim().isNotEmpty;
     if ((text.isEmpty && !hasMedia) || userId == null) return;
 
-    await _sb.from('selection_chat_messages').insert({
+    final payload = <String, dynamic>{
       'chat_id': chatId,
       'sender_id': userId,
       'body': text.isEmpty && hasMedia
-          ? (mediaType == 'video' ? 'Видео' : 'Фото')
+          ? (mediaType == 'video'
+                ? 'Видео'
+                : mediaType == 'file'
+                ? 'Файл'
+                : 'Фото')
           : text,
       'media_type': mediaType,
       'media_url': mediaUrl.trim().isEmpty ? null : mediaUrl.trim(),
       'media_thumbnail_url': mediaThumbnailUrl.trim().isEmpty
           ? null
           : mediaThumbnailUrl.trim(),
-    });
+      'file_name': fileName.trim().isEmpty ? null : fileName.trim(),
+      'file_size': fileSize,
+      'file_mime': fileMime.trim().isEmpty ? null : fileMime.trim(),
+    };
+
+    try {
+      await _sb.from('selection_chat_messages').insert(payload);
+    } on PostgrestException catch (e) {
+      if (!_isMissingChatFileColumn(e) || mediaType == 'file') rethrow;
+      payload
+        ..remove('file_name')
+        ..remove('file_size')
+        ..remove('file_mime');
+      await _sb.from('selection_chat_messages').insert(payload);
+    }
   }
 
   Future<void> markChatRead(String chatId) async {

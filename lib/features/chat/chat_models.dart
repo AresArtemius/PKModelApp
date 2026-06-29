@@ -164,6 +164,9 @@ class ChatMessage {
     required this.mediaType,
     required this.mediaUrl,
     required this.mediaThumbnailUrl,
+    required this.fileName,
+    required this.fileSize,
+    required this.fileMime,
     required this.deletedAt,
     required this.readAt,
     required this.createdAt,
@@ -176,6 +179,9 @@ class ChatMessage {
   final String mediaType;
   final String mediaUrl;
   final String mediaThumbnailUrl;
+  final String fileName;
+  final int? fileSize;
+  final String fileMime;
   final DateTime? deletedAt;
   final DateTime? readAt;
   final DateTime? createdAt;
@@ -184,6 +190,14 @@ class ChatMessage {
   bool get hasMedia => mediaUrl.trim().isNotEmpty;
   bool get isImage => mediaType == 'image';
   bool get isVideo => mediaType == 'video';
+  bool get isFile => mediaType == 'file';
+  String get fileDisplayName {
+    final explicit = fileName.trim();
+    if (explicit.isNotEmpty) return explicit;
+    final path = Uri.tryParse(mediaUrl)?.path ?? mediaUrl;
+    final slash = path.lastIndexOf('/');
+    return slash == -1 ? path : path.substring(slash + 1);
+  }
 
   factory ChatMessage.fromMap(Map<String, dynamic> map) {
     return ChatMessage(
@@ -194,11 +208,20 @@ class ChatMessage {
       mediaType: (map['media_type'] ?? 'text').toString().trim(),
       mediaUrl: (map['media_url'] ?? '').toString().trim(),
       mediaThumbnailUrl: (map['media_thumbnail_url'] ?? '').toString().trim(),
+      fileName: (map['file_name'] ?? '').toString().trim(),
+      fileSize: _intOrNull(map['file_size']),
+      fileMime: (map['file_mime'] ?? '').toString().trim(),
       deletedAt: DateTime.tryParse((map['deleted_at'] ?? '').toString()),
       readAt: DateTime.tryParse((map['read_at'] ?? '').toString()),
       createdAt: DateTime.tryParse((map['created_at'] ?? '').toString()),
     );
   }
+}
+
+int? _intOrNull(dynamic raw) {
+  if (raw == null) return null;
+  if (raw is int) return raw;
+  return int.tryParse(raw.toString());
 }
 
 class ChatTypingState {
