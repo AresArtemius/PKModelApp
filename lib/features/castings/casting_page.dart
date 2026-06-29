@@ -24,6 +24,7 @@ import 'casting_card.dart';
 const double _castingsDesktopBreakpoint = 900;
 const double _castingsDesktopMaxWidth = 1480;
 const double _castingsDesktopListWidth = 440;
+const double _castingsDesktopDetailBreakpoint = 1040;
 const EdgeInsets _castingsDesktopPadding = EdgeInsets.fromLTRB(32, 24, 32, 28);
 
 String _castingLocaleText(BuildContext context, String ru, String en) {
@@ -831,27 +832,14 @@ class _CastingsDesktopLayout extends StatelessWidget {
           children: [
             SizedBox(
               width: _castingsDesktopListWidth,
-              child: RefreshIndicator(
-                color: BrandTheme.redTop,
-                backgroundColor: Colors.white,
+              child: _CastingsDesktopQueuePanel(
+                items: items,
+                selected: selected,
+                respondingIds: respondingIds,
+                responseStatusMap: responseStatusMap,
+                isAdmin: isAdmin,
+                onSelect: onSelect,
                 onRefresh: onRefresh,
-                child: ListView.separated(
-                  physics: const BouncingScrollPhysics(
-                    parent: AlwaysScrollableScrollPhysics(),
-                  ),
-                  itemCount: items.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 12),
-                  itemBuilder: (context, index) {
-                    final casting = items[index];
-                    return _CastingListTile(
-                      casting: casting,
-                      selected: selected.id == casting.id,
-                      status: responseStatusMap[casting.id],
-                      isResponding: respondingIds.contains(casting.id),
-                      onTap: () => onSelect(casting),
-                    );
-                  },
-                ),
               ),
             ),
             const SizedBox(width: 18),
@@ -870,6 +858,136 @@ class _CastingsDesktopLayout extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _CastingsDesktopQueuePanel extends StatelessWidget {
+  const _CastingsDesktopQueuePanel({
+    required this.items,
+    required this.selected,
+    required this.respondingIds,
+    required this.responseStatusMap,
+    required this.isAdmin,
+    required this.onSelect,
+    required this.onRefresh,
+  });
+
+  final List<CastingModel> items;
+  final CastingModel selected;
+  final Set<String> respondingIds;
+  final Map<String, CastingResponseStatus> responseStatusMap;
+  final bool isAdmin;
+  final ValueChanged<CastingModel> onSelect;
+  final Future<void> Function() onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+
+    return Container(
+      decoration: castingCardDecoration(),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 18, 18, 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    ru ? 'КАСТИНГИ' : 'CASTINGS',
+                    style: BrandTheme.pillText.copyWith(
+                      color: kTextDark,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 11,
+                    vertical: 7,
+                  ),
+                  decoration: BoxDecoration(
+                    color: kTextDark,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    '${items.length}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                      height: 1,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 0, 18, 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    ru
+                        ? 'Выберите кастинг, чтобы открыть детали и управление.'
+                        : 'Select a casting to view details and manage it.',
+                    style: kCastingBodyStyle.copyWith(
+                      color: kTextMuted,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                if (isAdmin) ...[
+                  const SizedBox(width: 10),
+                  Tooltip(
+                    message: ru ? 'Создать кастинг' : 'Create casting',
+                    child: IconButton.filled(
+                      onPressed: () => context.go(Routes.createCastingAdmin),
+                      icon: const Icon(Icons.add_rounded),
+                      style: IconButton.styleFrom(
+                        backgroundColor: kTextDark,
+                        foregroundColor: Colors.white,
+                        fixedSize: const Size(38, 38),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          Expanded(
+            child: RefreshIndicator(
+              color: BrandTheme.redTop,
+              backgroundColor: Colors.white,
+              onRefresh: onRefresh,
+              child: ListView.separated(
+                padding: const EdgeInsets.fromLTRB(14, 0, 14, 16),
+                physics: const BouncingScrollPhysics(
+                  parent: AlwaysScrollableScrollPhysics(),
+                ),
+                itemCount: items.length,
+                separatorBuilder: (_, _) => const SizedBox(height: 12),
+                itemBuilder: (context, index) {
+                  final casting = items[index];
+                  return _CastingListTile(
+                    casting: casting,
+                    selected: selected.id == casting.id,
+                    status: responseStatusMap[casting.id],
+                    isResponding: respondingIds.contains(casting.id),
+                    onTap: () => onSelect(casting),
+                  );
+                },
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -997,105 +1115,298 @@ class _CastingDesktopDetailPanel extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Expanded(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(28, 28, 28, 20),
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        casting.title,
-                        style: kCastingTitleStyle.copyWith(
-                          fontSize: 32,
-                          height: 1.05,
-                        ),
-                      ),
-                    ),
-                    if (isAdmin && onDeleteTap != null) ...[
-                      const SizedBox(width: 16),
-                      IconButton(
-                        tooltip: t.deleteUpper,
-                        icon: const Icon(Icons.delete_outline_rounded),
-                        color: BrandTheme.redTop,
-                        onPressed: onDeleteTap,
-                      ),
-                    ],
-                  ],
-                ),
-                const SizedBox(height: 18),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: [
-                    if (casting.datesText.isNotEmpty)
-                      _CastingInfoChip(
-                        icon: Icons.event_rounded,
-                        label: casting.datesText,
-                      ),
-                    if (casting.fee.isNotEmpty)
-                      _CastingInfoChip(
-                        icon: Icons.payments_rounded,
-                        label: casting.fee,
-                      ),
-                    if (status != null)
-                      _CastingInfoChip(
-                        icon: Icons.check_circle_rounded,
-                        label: castingResponseStatusLabel(t, status!),
-                      ),
-                  ],
-                ),
-                if (casting.description.isNotEmpty) ...[
-                  const SizedBox(height: 24),
-                  _CastingDetailSection(
-                    title: _castingLocaleText(
-                      context,
-                      'Описание',
-                      'Description',
-                    ),
-                    text: casting.description,
-                  ),
-                ],
-                if (casting.rights.isNotEmpty) ...[
-                  const SizedBox(height: 18),
-                  _CastingDetailSection(
-                    title: _castingLocaleText(context, 'Права', 'Rights'),
-                    text: casting.rights,
-                  ),
-                ],
-                if (casting.fee.isNotEmpty) ...[
-                  const SizedBox(height: 18),
-                  _CastingDetailSection(
-                    title: _castingLocaleText(context, 'Гонорар', 'Fee'),
-                    text: casting.fee,
-                  ),
-                ],
-              ],
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return _CastingDesktopDetailBody(
+                  casting: casting,
+                  status: status,
+                  wide:
+                      constraints.maxWidth >= _castingsDesktopDetailBreakpoint,
+                );
+              },
             ),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(28, 10, 28, 28),
-            child: Row(
-              children: [
-                if (isAdmin && onDeleteTap != null) ...[
-                  SizedBox(
-                    height: BrandTheme.pillHeight,
-                    width: 190,
-                    child: BrandPillButton(
-                      label: t.deleteUpper,
-                      style: BrandPillStyle.light,
-                      onTap: onDeleteTap,
-                    ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final adminActions = isAdmin && onDeleteTap != null;
+                final stacked = adminActions && constraints.maxWidth < 560;
+                final respondButton = SizedBox(
+                  height: BrandTheme.pillHeight,
+                  child: BrandPillButton(
+                    label: responseLabel,
+                    style: BrandPillStyle.dark,
+                    onTap: canRespond ? onRespondTap : null,
                   ),
-                  const SizedBox(width: 12),
-                ],
-                Expanded(
-                  child: SizedBox(
-                    height: BrandTheme.pillHeight,
-                    child: BrandPillButton(
-                      label: responseLabel,
-                      style: BrandPillStyle.dark,
-                      onTap: canRespond ? onRespondTap : null,
-                    ),
+                );
+
+                if (!adminActions) return respondButton;
+
+                final deleteButton = SizedBox(
+                  height: BrandTheme.pillHeight,
+                  child: BrandPillButton(
+                    label: t.deleteUpper,
+                    style: BrandPillStyle.light,
+                    onTap: onDeleteTap,
+                  ),
+                );
+                final responsesButton = SizedBox(
+                  height: BrandTheme.pillHeight,
+                  child: BrandPillButton(
+                    label: _castingLocaleText(context, 'ОТКЛИКИ', 'RESPONSES'),
+                    style: BrandPillStyle.light,
+                    onTap: () =>
+                        context.go('${Routes.adminSelection}/${casting.id}'),
+                  ),
+                );
+
+                if (stacked) {
+                  return Column(
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(child: deleteButton),
+                          const SizedBox(width: 12),
+                          Expanded(child: responsesButton),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      respondButton,
+                    ],
+                  );
+                }
+
+                return Row(
+                  children: [
+                    SizedBox(width: 172, child: deleteButton),
+                    const SizedBox(width: 12),
+                    SizedBox(width: 190, child: responsesButton),
+                    const SizedBox(width: 12),
+                    Expanded(child: respondButton),
+                  ],
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CastingDesktopDetailBody extends StatelessWidget {
+  const _CastingDesktopDetailBody({
+    required this.casting,
+    required this.status,
+    required this.wide,
+  });
+
+  final CastingModel casting;
+  final CastingResponseStatus? status;
+  final bool wide;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!wide) {
+      return ListView(
+        padding: const EdgeInsets.fromLTRB(28, 28, 28, 20),
+        children: [
+          _CastingDetailHeader(casting: casting, status: status),
+          const SizedBox(height: 22),
+          _CastingDetailTextSections(casting: casting),
+        ],
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(28, 28, 28, 20),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            width: 330,
+            child: _CastingSummaryPanel(casting: casting, status: status),
+          ),
+          const SizedBox(width: 22),
+          Expanded(
+            child: ListView(
+              padding: EdgeInsets.zero,
+              children: [
+                _CastingDetailHeader(casting: casting, status: status),
+                const SizedBox(height: 22),
+                _CastingDetailTextSections(casting: casting),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CastingDetailHeader extends StatelessWidget {
+  const _CastingDetailHeader({required this.casting, required this.status});
+
+  final CastingModel casting;
+  final CastingResponseStatus? status;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          casting.title,
+          style: kCastingTitleStyle.copyWith(fontSize: 32, height: 1.05),
+        ),
+        const SizedBox(height: 18),
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            if (casting.datesText.isNotEmpty)
+              _CastingInfoChip(
+                icon: Icons.event_rounded,
+                label: casting.datesText,
+              ),
+            if (casting.fee.isNotEmpty)
+              _CastingInfoChip(
+                icon: Icons.payments_rounded,
+                label: casting.fee,
+              ),
+            if (status != null)
+              _CastingInfoChip(
+                icon: Icons.check_circle_rounded,
+                label: castingResponseStatusLabel(t, status!),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _CastingSummaryPanel extends StatelessWidget {
+  const _CastingSummaryPanel({required this.casting, required this.status});
+
+  final CastingModel casting;
+  final CastingResponseStatus? status;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+    final statusText = status == null
+        ? _castingLocaleText(context, 'ОТКЛИК НЕ ОТПРАВЛЕН', 'NOT SUBMITTED')
+        : castingResponseStatusLabel(t, status!);
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.58),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _CastingSummaryTile(
+            icon: Icons.circle_rounded,
+            label: _castingLocaleText(context, 'Статус', 'Status'),
+            value: statusText,
+          ),
+          if (casting.datesText.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _CastingSummaryTile(
+              icon: Icons.event_rounded,
+              label: _castingLocaleText(context, 'Даты', 'Dates'),
+              value: casting.datesText,
+            ),
+          ],
+          if (casting.fee.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _CastingSummaryTile(
+              icon: Icons.payments_rounded,
+              label: _castingLocaleText(context, 'Гонорар', 'Fee'),
+              value: casting.fee,
+            ),
+          ],
+          if (casting.rights.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _CastingSummaryTile(
+              icon: Icons.copyright_rounded,
+              label: _castingLocaleText(context, 'Права', 'Rights'),
+              value: casting.rights,
+            ),
+          ],
+          const Spacer(),
+          Text(
+            _castingLocaleText(
+              context,
+              'Детали выбранного кастинга отображаются справа.',
+              'Selected casting details are shown on the right.',
+            ),
+            style: kCastingBodyStyle.copyWith(
+              color: kTextMuted,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CastingSummaryTile extends StatelessWidget {
+  const _CastingSummaryTile({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: BrandTheme.redTop, size: 18),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label.toUpperCase(),
+                  style: BrandTheme.pillText.copyWith(
+                    color: kTextMuted,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  value,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: kCastingBodyStyle.copyWith(
+                    color: kTextDark,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    height: 1.2,
                   ),
                 ),
               ],
@@ -1103,6 +1414,40 @@ class _CastingDesktopDetailPanel extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _CastingDetailTextSections extends StatelessWidget {
+  const _CastingDetailTextSections({required this.casting});
+
+  final CastingModel casting;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (casting.description.isNotEmpty)
+          _CastingDetailSection(
+            title: _castingLocaleText(context, 'Описание', 'Description'),
+            text: casting.description,
+          ),
+        if (casting.rights.isNotEmpty) ...[
+          const SizedBox(height: 18),
+          _CastingDetailSection(
+            title: _castingLocaleText(context, 'Права', 'Rights'),
+            text: casting.rights,
+          ),
+        ],
+        if (casting.fee.isNotEmpty) ...[
+          const SizedBox(height: 18),
+          _CastingDetailSection(
+            title: _castingLocaleText(context, 'Гонорар', 'Fee'),
+            text: casting.fee,
+          ),
+        ],
+      ],
     );
   }
 }
