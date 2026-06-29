@@ -59,6 +59,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   bool _loadingOlderMessages = false;
   bool _hasOlderMessages = true;
   ChatMessage? _replyingTo;
+  _PendingChatAttachment? _pendingAttachment;
   DateTime? _lastTypingSentAt;
   Timer? _typingStopTimer;
   final List<ChatMessage> _olderMessages = [];
@@ -75,6 +76,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     _hasOlderMessages = true;
     _loadingOlderMessages = false;
     _replyingTo = null;
+    _pendingAttachment = null;
     _lastTypingSentAt = null;
   }
 
@@ -134,16 +136,24 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     if (_sending || _uploadingMedia) return;
     if (!await _ensureCanUseChat()) return;
     final text = _messageController.text.trim();
-    if (text.isEmpty) return;
-    final body = _composeOutgoingBody(text);
+    final attachment = _pendingAttachment;
+    if (text.isEmpty && attachment == null) return;
+    final body = text.isEmpty ? '' : _composeOutgoingBody(text);
 
     setState(() => _sending = true);
     try {
-      await ref
-          .read(chatServiceProvider)
-          .sendMessage(chatId: widget.chatId, body: body);
+      if (attachment == null) {
+        await ref
+            .read(chatServiceProvider)
+            .sendMessage(chatId: widget.chatId, body: body);
+      } else {
+        await _sendAttachment(attachment: attachment, body: body);
+      }
       _messageController.clear();
-      setState(() => _replyingTo = null);
+      setState(() {
+        _replyingTo = null;
+        _pendingAttachment = null;
+      });
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -208,31 +218,64 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     return _sb.storage.from(_chatMediaBucket).getPublicUrl(path);
   }
 
-  Future<void> _pickMedia({required bool video}) async {
+  Future<void> _selectPendingMedia({
+    required bool video,
+    ImageSource source = ImageSource.gallery,
+  }) async {
     if (_sending || _uploadingMedia) return;
     if (!await _ensureCanUseChat()) return;
+
+    XFile? picked;
+    try {
+      picked = video
+          ? await _picker.pickVideo(source: source)
+          : await _picker.pickImage(
+              source: source,
+              imageQuality: 88,
+              maxWidth: 1800,
+            );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _isRussian
+                ? 'Не удалось открыть медиа. Проверьте разрешения устройства.'
+                : 'Could not open media. Check device permissions.',
+          ),
+        ),
+      );
+      return;
+    }
+    if (picked == null) return;
+    final selected = picked;
+
+    final bytes = video ? null : await selected.readAsBytes();
+    if (!mounted) return;
+    setState(() {
+      _pendingAttachment = _PendingChatAttachment(
+        file: selected,
+        isVideo: video,
+        previewBytes: bytes,
+      );
+    });
+  }
+
+  Future<void> _sendAttachment({
+    required _PendingChatAttachment attachment,
+    required String body,
+  }) async {
     final userId = ref.read(currentUserIdProvider);
     if (userId == null) return;
-
-    final picked = video
-        ? await _picker.pickVideo(source: ImageSource.gallery)
-        : await _picker.pickImage(
-            source: ImageSource.gallery,
-            imageQuality: 88,
-            maxWidth: 1800,
-          );
-    if (picked == null) return;
-
-    final caption = await _showMediaPreview(picked, video: video);
-    if (caption == null) return;
 
     setState(() => _uploadingMedia = true);
     try {
       final stamp = DateTime.now().millisecondsSinceEpoch;
-      final ext = _ext(picked.path, video: video);
-      final mediaBytes = await picked.readAsBytes();
+      final ext = _ext(attachment.file.path, video: attachment.isVideo);
+      final mediaBytes =
+          attachment.previewBytes ?? await attachment.file.readAsBytes();
       final mediaPath = '$userId/chats/${widget.chatId}/$stamp.$ext';
-      final contentType = _contentType(ext, video: video);
+      final contentType = _contentType(ext, video: attachment.isVideo);
       final mediaUrl = await _uploadBytes(
         path: mediaPath,
         bytes: mediaBytes,
@@ -240,9 +283,9 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       );
 
       var thumbnailUrl = '';
-      if (video && !kIsWeb) {
+      if (attachment.isVideo && !kIsWeb) {
         final thumbnail = await VideoThumbnail.thumbnailData(
-          video: picked.path,
+          video: attachment.file.path,
           imageFormat: ImageFormat.JPEG,
           maxWidth: 900,
           quality: 80,
@@ -254,7 +297,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
             contentType: 'image/jpeg',
           );
         }
-      } else if (!video && mediaBytes.isNotEmpty) {
+      } else if (!attachment.isVideo && mediaBytes.isNotEmpty) {
         final thumbnail = await compute(_buildChatImageThumbnail, mediaBytes);
         if (thumbnail != null && thumbnail.isNotEmpty) {
           thumbnailUrl = await _uploadBytes(
@@ -269,96 +312,14 @@ class _ChatPageState extends ConsumerState<ChatPage> {
           .read(chatServiceProvider)
           .sendMessage(
             chatId: widget.chatId,
-            body: caption,
-            mediaType: video ? 'video' : 'image',
+            body: body,
+            mediaType: attachment.isVideo ? 'video' : 'image',
             mediaUrl: mediaUrl,
             mediaThumbnailUrl: thumbnailUrl,
           );
     } finally {
       if (mounted) setState(() => _uploadingMedia = false);
     }
-  }
-
-  Future<String?> _showMediaPreview(XFile file, {required bool video}) async {
-    final captionC = TextEditingController();
-    final previewBytes = video ? null : await file.readAsBytes();
-    if (!mounted) {
-      captionC.dispose();
-      return null;
-    }
-    final result = await showModalBottomSheet<String>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Padding(
-        padding: EdgeInsets.only(
-          left: 16,
-          right: 16,
-          bottom: MediaQuery.of(context).viewInsets.bottom + 16,
-        ),
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: profileCardDecoration(),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(18),
-                child: SizedBox(
-                  height: 220,
-                  width: double.infinity,
-                  child: video
-                      ? Container(
-                          color: kTextDark,
-                          child: const Icon(
-                            Icons.play_circle_fill_rounded,
-                            color: Colors.white,
-                            size: 72,
-                          ),
-                        )
-                      : previewBytes == null
-                      ? Container(color: Colors.white)
-                      : Image.memory(previewBytes, fit: BoxFit.cover),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: captionC,
-                maxLines: 3,
-                decoration: InputDecoration(
-                  hintText: _isRussian ? 'Комментарий' : 'Caption',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: _SheetActionButton(
-                      label: _isRussian ? 'ОТМЕНА' : 'CANCEL',
-                      dark: false,
-                      onTap: () => Navigator.of(context).pop(null),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _SheetActionButton(
-                      label: _isRussian ? 'ОТПРАВИТЬ' : 'SEND',
-                      dark: true,
-                      onTap: () => Navigator.of(context).pop(captionC.text),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-    captionC.dispose();
-    return result;
   }
 
   Future<void> _showAttachMenu() async {
@@ -374,7 +335,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
             title: _isRussian ? 'Фото' : 'Photo',
             onTap: () {
               Navigator.of(context).pop();
-              _pickMedia(video: false);
+              _selectPendingMedia(video: false);
             },
           ),
           _ActionSheetTile(
@@ -382,7 +343,32 @@ class _ChatPageState extends ConsumerState<ChatPage> {
             title: _isRussian ? 'Видео' : 'Video',
             onTap: () {
               Navigator.of(context).pop();
-              _pickMedia(video: true);
+              _selectPendingMedia(video: true);
+            },
+          ),
+          _ActionSheetTile(
+            icon: Icons.photo_camera_rounded,
+            title: _isRussian ? 'Камера' : 'Camera',
+            onTap: () {
+              Navigator.of(context).pop();
+              _selectPendingMedia(video: false, source: ImageSource.camera);
+            },
+          ),
+          _ActionSheetTile(
+            icon: Icons.attach_file_rounded,
+            title: _isRussian ? 'Файл' : 'File',
+            onTap: () {
+              Navigator.of(context).pop();
+              if (!mounted) return;
+              ScaffoldMessenger.of(this.context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    _isRussian
+                        ? 'Файлы добавим отдельным шагом после расширения схемы чата.'
+                        : 'Files will be added after the chat schema is extended.',
+                  ),
+                ),
+              );
             },
           ),
         ],
@@ -755,7 +741,10 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                   replyingToText: _replyingTo == null
                       ? null
                       : _replyPreviewText(_replyingTo!),
+                  attachment: _pendingAttachment,
                   onCancelReply: () => setState(() => _replyingTo = null),
+                  onRemoveAttachment: () =>
+                      setState(() => _pendingAttachment = null),
                   onSend: _send,
                   onAttach: _showAttachMenu,
                   onEmoji: _showEmojiMenu,
@@ -1258,6 +1247,18 @@ class _VideoPlayerSurfaceState extends State<_VideoPlayerSurface> {
   }
 }
 
+class _PendingChatAttachment {
+  const _PendingChatAttachment({
+    required this.file,
+    required this.isVideo,
+    required this.previewBytes,
+  });
+
+  final XFile file;
+  final bool isVideo;
+  final Uint8List? previewBytes;
+}
+
 class _ReactionStrip extends StatelessWidget {
   const _ReactionStrip({required this.reactions});
 
@@ -1334,7 +1335,9 @@ class _Composer extends StatelessWidget {
     required this.hintText,
     required this.sending,
     required this.replyingToText,
+    required this.attachment,
     required this.onCancelReply,
+    required this.onRemoveAttachment,
     required this.onSend,
     required this.onAttach,
     required this.onEmoji,
@@ -1344,7 +1347,9 @@ class _Composer extends StatelessWidget {
   final String hintText;
   final bool sending;
   final String? replyingToText;
+  final _PendingChatAttachment? attachment;
   final VoidCallback onCancelReply;
+  final VoidCallback onRemoveAttachment;
   final VoidCallback onSend;
   final VoidCallback onAttach;
   final VoidCallback onEmoji;
@@ -1401,6 +1406,13 @@ class _Composer extends StatelessWidget {
               ),
             ),
           ],
+          if (attachment != null) ...[
+            _PendingAttachmentPreview(
+              attachment: attachment!,
+              onRemove: onRemoveAttachment,
+            ),
+            const SizedBox(height: 8),
+          ],
           Row(
             children: [
               IconButton(
@@ -1437,6 +1449,91 @@ class _Composer extends StatelessWidget {
                     : const Icon(Icons.send_rounded, color: BrandTheme.redTop),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PendingAttachmentPreview extends StatelessWidget {
+  const _PendingAttachmentPreview({
+    required this.attachment,
+    required this.onRemove,
+  });
+
+  final _PendingChatAttachment attachment;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final isRussian =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ru';
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: kTextDark.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: kBorderColor),
+      ),
+      child: Row(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(14),
+            child: SizedBox(
+              width: 74,
+              height: 74,
+              child: attachment.isVideo
+                  ? Container(
+                      color: kTextDark,
+                      child: const Icon(
+                        Icons.play_circle_fill_rounded,
+                        color: Colors.white,
+                        size: 34,
+                      ),
+                    )
+                  : attachment.previewBytes == null
+                  ? Container(color: Colors.white)
+                  : Image.memory(attachment.previewBytes!, fit: BoxFit.cover),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  attachment.isVideo
+                      ? (isRussian ? 'ВИДЕО ГОТОВО' : 'VIDEO READY')
+                      : (isRussian ? 'ФОТО ГОТОВО' : 'PHOTO READY'),
+                  style: const TextStyle(
+                    color: kTextDark,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.1,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  isRussian
+                      ? 'Добавьте подпись и нажмите отправить.'
+                      : 'Add a caption and tap send.',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: kTextMuted,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    height: 1.18,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            onPressed: onRemove,
+            icon: const Icon(Icons.close_rounded, color: kTextMuted),
           ),
         ],
       ),
@@ -1620,38 +1717,6 @@ class _ActionSheetTile extends StatelessWidget {
         style: TextStyle(color: color, fontWeight: FontWeight.w900),
       ),
       onTap: onTap,
-    );
-  }
-}
-
-class _SheetActionButton extends StatelessWidget {
-  const _SheetActionButton({
-    required this.label,
-    required this.dark,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool dark;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        height: 48,
-        alignment: Alignment.center,
-        decoration: pillDecoration(isDark: dark, radius: 999),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: dark ? Colors.white : kTextDark,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 1,
-          ),
-        ),
-      ),
     );
   }
 }
