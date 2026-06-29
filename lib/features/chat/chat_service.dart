@@ -154,6 +154,28 @@ class ChatService {
       // Older SQL may not expose created_by to the current user yet.
     }
 
+    final resolvedAgentUserId = userId == modelUserId ? agentUserId : userId;
+    if (resolvedAgentUserId != null && resolvedAgentUserId.isNotEmpty) {
+      final existingConversation = await _sb
+          .from('selection_chats')
+          .select('id')
+          .eq('model_user_id', modelUserId)
+          .eq('agent_user_id', resolvedAgentUserId)
+          .maybeSingle();
+
+      if (existingConversation != null) {
+        final id = (existingConversation['id'] ?? '').toString();
+        if (id.isNotEmpty) {
+          await _updateChatContext(
+            chatId: id,
+            selectionId: selectionId,
+            profileId: profileId,
+          );
+          return id;
+        }
+      }
+    }
+
     final existing = await _sb
         .from('selection_chats')
         .select('id')
@@ -166,18 +188,52 @@ class ChatService {
       if (id.isNotEmpty) return id;
     }
 
-    final data = await _sb
-        .from('selection_chats')
-        .upsert({
-          'selection_id': selectionId,
-          'profile_id': profileId,
-          'model_user_id': modelUserId,
-          'agent_user_id': userId == modelUserId ? agentUserId : userId,
-        }, onConflict: 'selection_id,profile_id')
-        .select('id')
-        .single();
+    Map<String, dynamic> data;
+    try {
+      data = await _sb
+          .from('selection_chats')
+          .insert({
+            'selection_id': selectionId,
+            'profile_id': profileId,
+            'model_user_id': modelUserId,
+            'agent_user_id': resolvedAgentUserId,
+          })
+          .select('id')
+          .single();
+    } on PostgrestException catch (e) {
+      if (e.code != '23505' || resolvedAgentUserId == null) rethrow;
+      final row = await _sb
+          .from('selection_chats')
+          .select('id')
+          .eq('model_user_id', modelUserId)
+          .eq('agent_user_id', resolvedAgentUserId)
+          .maybeSingle();
+      if (row == null) rethrow;
+      data = Map<String, dynamic>.from(row);
+    }
 
     return (data['id'] ?? '').toString();
+  }
+
+  Future<void> _updateChatContext({
+    required String chatId,
+    required String selectionId,
+    required String profileId,
+  }) async {
+    try {
+      await _sb
+          .from('selection_chats')
+          .update({
+            'selection_id': selectionId,
+            'profile_id': profileId,
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+            'model_deleted_at': null,
+            'agent_deleted_at': null,
+          })
+          .eq('id', chatId);
+    } on PostgrestException {
+      // Context refresh is helpful, but the existing conversation is usable.
+    }
   }
 
   Future<ChatSummary?> fetchChat(String chatId) async {
@@ -237,14 +293,18 @@ class ChatService {
       rows = await run(includeListState: false);
     }
 
-    final items = <ChatListItem>[];
+    final byParticipant = <String, ChatListItem>{};
+    final unreadByParticipant = <String, int>{};
     for (final raw in rows) {
       final map = Map<String, dynamic>.from(raw as Map);
       final chatId = (map['id'] ?? '').toString();
       if (chatId.isEmpty) continue;
 
       final modelUserId = (map['model_user_id'] ?? '').toString();
+      final agentUserId = (map['agent_user_id'] ?? '').toString();
       final isModel = userId == modelUserId;
+      final otherUserId = isModel ? agentUserId : modelUserId;
+      final participantKey = otherUserId.isEmpty ? chatId : otherUserId;
       final deletedAt = isModel
           ? (map['model_deleted_at'] ?? '').toString()
           : (map['agent_deleted_at'] ?? '').toString();
@@ -274,20 +334,37 @@ class ChatService {
       final fallbackTime = DateTime.tryParse(
         (map['updated_at'] ?? map['created_at'] ?? '').toString(),
       );
-      items.add(
-        ChatListItem(
-          id: chatId,
-          selectionTitle: (selection['title'] ?? '').toString().trim(),
-          profileName: (profile['full_name'] ?? '').toString().trim(),
-          photoUrl: _chatCoverPhoto(profile['cover_photo_url'], photoUrls),
-          lastMessage: latest == null ? '' : _chatPreview(latest),
-          lastMessageAt: latest?.createdAt ?? fallbackTime,
-          unreadCount: await _fetchUnreadCount(chatId, userId),
-          pinned: pinnedAt.trim().isNotEmpty,
-          archived: isArchived,
-        ),
+      final unreadCount = await _fetchUnreadCount(chatId, userId);
+      final nextItem = ChatListItem(
+        id: chatId,
+        selectionTitle: (selection['title'] ?? '').toString().trim(),
+        profileName: (profile['full_name'] ?? '').toString().trim(),
+        photoUrl: _chatCoverPhoto(profile['cover_photo_url'], photoUrls),
+        lastMessage: latest == null ? '' : _chatPreview(latest),
+        lastMessageAt: latest?.createdAt ?? fallbackTime,
+        unreadCount: unreadCount,
+        pinned: pinnedAt.trim().isNotEmpty,
+        archived: isArchived,
       );
+
+      unreadByParticipant[participantKey] =
+          (unreadByParticipant[participantKey] ?? 0) + unreadCount;
+      final current = byParticipant[participantKey];
+      if (current == null || _chatListItemIsNewer(nextItem, current)) {
+        byParticipant[participantKey] = nextItem;
+      } else if (nextItem.pinned && !current.pinned) {
+        byParticipant[participantKey] = nextItem;
+      }
     }
+
+    final items = byParticipant.entries
+        .map((entry) {
+          final item = entry.value;
+          return item.copyWith(
+            unreadCount: unreadByParticipant[entry.key] ?? 0,
+          );
+        })
+        .toList(growable: false);
 
     items.sort((a, b) {
       if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
@@ -299,6 +376,15 @@ class ChatService {
       return bTime.compareTo(aTime);
     });
     return items;
+  }
+
+  bool _chatListItemIsNewer(ChatListItem a, ChatListItem b) {
+    final aTime = a.lastMessageAt;
+    final bTime = b.lastMessageAt;
+    if (aTime == null && bTime == null) return false;
+    if (aTime == null) return false;
+    if (bTime == null) return true;
+    return aTime.isAfter(bTime);
   }
 
   String _chatPreview(ChatMessage message) {

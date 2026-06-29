@@ -103,6 +103,30 @@ class ChatListItem {
   final bool pinned;
   final bool archived;
 
+  ChatListItem copyWith({
+    String? id,
+    String? selectionTitle,
+    String? profileName,
+    String? photoUrl,
+    String? lastMessage,
+    DateTime? lastMessageAt,
+    int? unreadCount,
+    bool? pinned,
+    bool? archived,
+  }) {
+    return ChatListItem(
+      id: id ?? this.id,
+      selectionTitle: selectionTitle ?? this.selectionTitle,
+      profileName: profileName ?? this.profileName,
+      photoUrl: photoUrl ?? this.photoUrl,
+      lastMessage: lastMessage ?? this.lastMessage,
+      lastMessageAt: lastMessageAt ?? this.lastMessageAt,
+      unreadCount: unreadCount ?? this.unreadCount,
+      pinned: pinned ?? this.pinned,
+      archived: archived ?? this.archived,
+    );
+  }
+
   String get title {
     final parts = [
       selectionTitle,

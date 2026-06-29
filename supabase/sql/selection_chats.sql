@@ -73,6 +73,54 @@ create table if not exists public.selection_chat_message_reactions (
   primary key (message_id, user_id)
 );
 
+do $$
+begin
+  create temp table if not exists tmp_selection_chat_dupes (
+    id uuid primary key,
+    keeper_id uuid not null
+  ) on commit drop;
+
+  truncate table tmp_selection_chat_dupes;
+
+  insert into tmp_selection_chat_dupes (id, keeper_id)
+  select id, keeper_id
+  from (
+    select
+      id,
+      first_value(id) over (
+        partition by model_user_id, agent_user_id
+        order by coalesce(updated_at, created_at) desc, created_at desc, id
+      ) as keeper_id
+    from public.selection_chats
+    where agent_user_id is not null
+  ) ranked
+  where id <> keeper_id;
+
+  update public.selection_chat_messages m
+  set chat_id = d.keeper_id
+  from tmp_selection_chat_dupes d
+  where m.chat_id = d.id;
+
+  update public.selection_chat_message_reactions r
+  set chat_id = d.keeper_id
+  from tmp_selection_chat_dupes d
+  where r.chat_id = d.id;
+
+  if to_regclass('public.selection_chat_typing_states') is not null then
+    delete from public.selection_chat_typing_states t
+    using tmp_selection_chat_dupes d
+    where t.chat_id = d.id;
+  end if;
+
+  delete from public.selection_chats c
+  using tmp_selection_chat_dupes d
+  where c.id = d.id;
+end $$;
+
+create unique index if not exists selection_chats_account_pair_unique_idx
+  on public.selection_chats (model_user_id, agent_user_id)
+  where agent_user_id is not null;
+
 create table if not exists public.app_notifications (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
