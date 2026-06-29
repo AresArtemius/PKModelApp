@@ -587,7 +587,9 @@ class _ChatPageState extends ConsumerState<ChatPage> {
               children: [
                 _ChatHeader(
                   title: title,
-                  onBack: widget.embedded ? null : () => context.pop(),
+                  onBack: widget.embedded
+                      ? widget.onClose
+                      : () => context.pop(),
                   onDeleteChat: _deleteChat,
                 ),
                 const SizedBox(height: 12),

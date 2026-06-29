@@ -169,7 +169,10 @@ class _InvitationsPageState extends ConsumerState<InvitationsPage> {
                                 selectedChatId: _selectedChatId,
                                 message: t.consideredForCastingMessage,
                                 onSelect: (item) {
-                                  setState(() => _selectedKey = _key(item));
+                                  setState(() {
+                                    _selectedKey = _key(item);
+                                    _selectedChatId = null;
+                                  });
                                 },
                                 onDelete: (item) async {
                                   await _deleteInvitationWithConfirmation(
@@ -451,21 +454,15 @@ class _InvitationsDesktopLayout extends StatelessWidget {
           children: [
             SizedBox(
               width: _invitationsDesktopListWidth,
-              child: ListView.separated(
-                physics: const AlwaysScrollableScrollPhysics(),
-                itemCount: items.length,
-                separatorBuilder: (_, _) => const SizedBox(height: 12),
-                itemBuilder: (context, index) {
-                  final item = items[index];
-                  return _InvitationListTile(
-                    item: item,
-                    message: message,
-                    selected: _key(item) == _key(active),
-                    onTap: () => onSelect(item),
-                    onDelete: () => onDelete(item),
-                    onOpenChat: () => onOpenChat(item),
-                  );
-                },
+              child: _InvitationsDesktopQueuePanel(
+                items: items,
+                active: active,
+                activeChatId: selectedChatId,
+                message: message,
+                itemKey: _key,
+                onSelect: onSelect,
+                onDelete: onDelete,
+                onOpenChat: onOpenChat,
               ),
             ),
             const SizedBox(width: 18),
@@ -495,11 +492,113 @@ class _InvitationsDesktopLayout extends StatelessWidget {
   }
 }
 
+class _InvitationsDesktopQueuePanel extends StatelessWidget {
+  const _InvitationsDesktopQueuePanel({
+    required this.items,
+    required this.active,
+    required this.activeChatId,
+    required this.message,
+    required this.itemKey,
+    required this.onSelect,
+    required this.onDelete,
+    required this.onOpenChat,
+  });
+
+  final List<CastingInvitation> items;
+  final CastingInvitation active;
+  final String? activeChatId;
+  final String message;
+  final String Function(CastingInvitation item) itemKey;
+  final ValueChanged<CastingInvitation> onSelect;
+  final Future<void> Function(CastingInvitation item) onDelete;
+  final Future<void> Function(CastingInvitation item) onOpenChat;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: catalogCardDecoration(),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 14),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'ДИАЛОГИ И ПРИГЛАШЕНИЯ',
+                    style: _invitationCommandStyle(
+                      size: 17,
+                      spacing: 1.8,
+                      weight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 7,
+                  ),
+                  decoration: pillDecoration(isDark: true, radius: 999),
+                  child: Text(
+                    '${items.length}',
+                    style: _invitationCommandStyle(
+                      color: Colors.white,
+                      size: 12,
+                      spacing: 0.8,
+                      weight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+            child: Text(
+              'Выберите приглашение слева, чтобы открыть карточку или продолжить чат справа.',
+              style: _invitationBodyStyle(
+                color: kTextMuted,
+                size: 14,
+                weight: FontWeight.w600,
+                height: 1.3,
+              ),
+            ),
+          ),
+          Expanded(
+            child: ListView.separated(
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 16),
+              physics: const AlwaysScrollableScrollPhysics(),
+              itemCount: items.length,
+              separatorBuilder: (_, _) => const SizedBox(height: 10),
+              itemBuilder: (context, index) {
+                final item = items[index];
+                final selected = itemKey(item) == itemKey(active);
+                return _InvitationListTile(
+                  item: item,
+                  message: message,
+                  selected: selected,
+                  chatOpen: selected && activeChatId != null,
+                  onTap: () => onSelect(item),
+                  onDelete: () => onDelete(item),
+                  onOpenChat: () => onOpenChat(item),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _InvitationListTile extends StatelessWidget {
   const _InvitationListTile({
     required this.item,
     required this.message,
     required this.selected,
+    required this.chatOpen,
     required this.onTap,
     required this.onDelete,
     required this.onOpenChat,
@@ -508,6 +607,7 @@ class _InvitationListTile extends StatelessWidget {
   final CastingInvitation item;
   final String message;
   final bool selected;
+  final bool chatOpen;
   final VoidCallback onTap;
   final Future<void> Function() onDelete;
   final Future<void> Function() onOpenChat;
@@ -532,7 +632,7 @@ class _InvitationListTile extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(14, 14, 12, 14),
           child: Row(
             children: [
-              _InvitationThumb(url: item.photoUrl),
+              _InvitationThumb(url: item.photoUrl, size: 58),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -562,6 +662,28 @@ class _InvitationListTile extends StatelessWidget {
                           size: 13,
                           weight: FontWeight.w600,
                         ),
+                      ),
+                    ],
+                    if (chatOpen) ...[
+                      const SizedBox(height: 7),
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.chat_bubble_rounded,
+                            size: 14,
+                            color: BrandTheme.redTop,
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            'ЧАТ ОТКРЫТ',
+                            style: _invitationCommandStyle(
+                              color: BrandTheme.redTop,
+                              size: 10,
+                              spacing: 1.2,
+                              weight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ],
@@ -613,10 +735,20 @@ class _InvitationDesktopDetails extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          Text(
+            'КАРТОЧКА ПРИГЛАШЕНИЯ',
+            style: _invitationCommandStyle(
+              color: kTextMuted,
+              size: 13,
+              spacing: 2,
+              weight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 18),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _InvitationThumb(url: item.photoUrl),
+              _InvitationThumb(url: item.photoUrl, size: 112, radius: 24),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
@@ -664,6 +796,36 @@ class _InvitationDesktopDetails extends StatelessWidget {
               requirements: item.videoIntroRequirements,
             ),
           ],
+          const SizedBox(height: 22),
+          Container(
+            padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.7),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: kBorderColor),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.info_outline_rounded,
+                  color: kTextMuted,
+                  size: 22,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Здесь отображается выбранное приглашение. Откройте чат, чтобы обсудить детали кастинга без перехода на отдельный экран.',
+                    style: _invitationBodyStyle(
+                      color: kTextMuted,
+                      size: 14,
+                      weight: FontWeight.w600,
+                      height: 1.35,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
           const Spacer(),
           Row(
             children: [
@@ -1045,17 +1207,19 @@ class _VideoIntroNotice extends StatelessWidget {
 }
 
 class _InvitationThumb extends StatelessWidget {
-  const _InvitationThumb({required this.url});
+  const _InvitationThumb({required this.url, this.size = 64, this.radius = 14});
 
   final String url;
+  final double size;
+  final double radius;
 
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(radius),
       child: SizedBox(
-        width: 64,
-        height: 64,
+        width: size,
+        height: size,
         child: url.trim().isEmpty
             ? Container(
                 decoration: catalogPhotoPlaceholderDecoration(),
