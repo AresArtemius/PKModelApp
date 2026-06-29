@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/app_error_mapper.dart';
+import '../../core/push_notifications_service.dart';
 import '../../core/router.dart';
 import '../../gen_l10n/app_localizations.dart';
 import '../../ui/brand/brand_admin_header.dart';
@@ -144,6 +145,8 @@ class NotificationsPage extends ConsumerWidget {
                     ),
                   ),
                   const SizedBox(height: kGap16),
+                  const _PushStatusCard(),
+                  const SizedBox(height: kGap16),
                   Expanded(
                     child: async.when(
                       loading: () =>
@@ -207,6 +210,242 @@ class NotificationsPage extends ConsumerWidget {
                   ),
                 ],
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PushStatusCard extends ConsumerWidget {
+  const _PushStatusCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final async = ref.watch(pushDeviceStatusProvider);
+
+    Future<void> enable() async {
+      await ref.read(pushNotificationsServiceProvider).enableForCurrentUser();
+      ref.invalidate(pushDeviceStatusProvider);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            ru
+                ? 'Статус уведомлений обновлен.'
+                : 'Notification status updated.',
+          ),
+        ),
+      );
+    }
+
+    Future<void> disable() async {
+      await ref
+          .read(pushNotificationsServiceProvider)
+          .disableForCurrentDevice();
+      ref.invalidate(pushDeviceStatusProvider);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            ru
+                ? 'Push-уведомления выключены для этого устройства.'
+                : 'Push notifications are disabled for this device.',
+          ),
+        ),
+      );
+    }
+
+    return async.when(
+      loading: () => _PushStatusShell(
+        icon: Icons.notifications_rounded,
+        title: ru ? 'PUSH-УВЕДОМЛЕНИЯ' : 'PUSH NOTIFICATIONS',
+        body: ru
+            ? 'Проверяем статус устройства...'
+            : 'Checking device status...',
+        actionLabel: null,
+        secondaryLabel: null,
+        onAction: null,
+        onSecondary: null,
+      ),
+      error: (e, _) => _PushStatusShell(
+        icon: Icons.notifications_off_rounded,
+        title: ru ? 'PUSH-УВЕДОМЛЕНИЯ' : 'PUSH NOTIFICATIONS',
+        body: AppErrorMapper.message(e, AppLocalizations.of(context)!),
+        actionLabel: ru ? 'ПОВТОРИТЬ' : 'RETRY',
+        secondaryLabel: null,
+        onAction: () => ref.invalidate(pushDeviceStatusProvider),
+        onSecondary: null,
+        danger: true,
+      ),
+      data: (status) {
+        final copy = _pushStatusCopy(status.state, ru: ru);
+        return _PushStatusShell(
+          icon: copy.icon,
+          title: copy.title,
+          body:
+              '${copy.body}\n${ru ? 'Устройство' : 'Device'}: ${status.platform}',
+          actionLabel: status.canRequestPermission
+              ? (ru ? 'ВКЛЮЧИТЬ' : 'ENABLE')
+              : null,
+          secondaryLabel: status.canDisable
+              ? (ru ? 'ВЫКЛЮЧИТЬ' : 'DISABLE')
+              : null,
+          onAction: status.canRequestPermission ? enable : null,
+          onSecondary: status.canDisable ? disable : null,
+          enabled: status.isEnabled,
+          danger: status.state == PushPermissionState.denied,
+        );
+      },
+    );
+  }
+
+  ({IconData icon, String title, String body}) _pushStatusCopy(
+    PushPermissionState state, {
+    required bool ru,
+  }) {
+    return switch (state) {
+      PushPermissionState.enabled => (
+        icon: Icons.notifications_active_rounded,
+        title: ru ? 'PUSH ВКЛЮЧЕНЫ' : 'PUSH ENABLED',
+        body: ru
+            ? 'Уведомления для этого устройства разрешены.'
+            : 'Notifications are enabled for this device.',
+      ),
+      PushPermissionState.denied => (
+        icon: Icons.notifications_off_rounded,
+        title: ru ? 'PUSH ЗАПРЕЩЕНЫ' : 'PUSH BLOCKED',
+        body: ru
+            ? 'Разрешите уведомления в настройках браузера или устройства.'
+            : 'Allow notifications in browser or device settings.',
+      ),
+      PushPermissionState.notDetermined => (
+        icon: Icons.notifications_none_rounded,
+        title: ru ? 'PUSH НЕ ВКЛЮЧЕНЫ' : 'PUSH NOT ENABLED',
+        body: ru
+            ? 'Можно включить уведомления для новых сообщений и приглашений.'
+            : 'You can enable notifications for new messages and invitations.',
+      ),
+      PushPermissionState.unsupported => (
+        icon: Icons.notifications_off_rounded,
+        title: ru ? 'PUSH НЕДОСТУПНЫ' : 'PUSH UNSUPPORTED',
+        body: ru
+            ? 'Этот браузер или платформа не поддерживает push-уведомления.'
+            : 'This browser or platform does not support push notifications.',
+      ),
+      PushPermissionState.notConfigured => (
+        icon: Icons.notifications_paused_rounded,
+        title: ru ? 'PUSH ГОТОВЯТСЯ' : 'PUSH PENDING',
+        body: ru
+            ? 'Клиентская часть готова, но Firebase/Web Push еще не настроены полностью.'
+            : 'The client is ready, but Firebase/Web Push is not fully configured yet.',
+      ),
+    };
+  }
+}
+
+class _PushStatusShell extends StatelessWidget {
+  const _PushStatusShell({
+    required this.icon,
+    required this.title,
+    required this.body,
+    required this.actionLabel,
+    required this.secondaryLabel,
+    required this.onAction,
+    required this.onSecondary,
+    this.enabled = false,
+    this.danger = false,
+  });
+
+  final IconData icon;
+  final String title;
+  final String body;
+  final String? actionLabel;
+  final String? secondaryLabel;
+  final VoidCallback? onAction;
+  final VoidCallback? onSecondary;
+  final bool enabled;
+  final bool danger;
+
+  @override
+  Widget build(BuildContext context) {
+    final iconColor = enabled
+        ? Colors.white
+        : danger
+        ? Colors.white
+        : kTextMuted;
+    return Container(
+      width: double.infinity,
+      padding: kLoginCardPad,
+      decoration: catalogCardDecoration().copyWith(
+        border: Border.all(
+          color: danger
+              ? BrandTheme.redTop
+              : enabled
+              ? kTextDark
+              : kBorderColor,
+          width: danger || enabled ? 1.4 : 1,
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: kProfileSummaryImageSize,
+            height: kProfileSummaryImageSize,
+            decoration: BoxDecoration(
+              gradient: enabled || danger
+                  ? BrandTheme.darkPillGradient
+                  : BrandTheme.lightPillGradient,
+              borderRadius: BorderRadius.circular(kProfileImageRadius),
+            ),
+            child: Icon(icon, color: iconColor),
+          ),
+          const SizedBox(width: kProfileSummaryGap),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: _notificationCommandStyle(
+                    size: 18,
+                    spacing: 1.4,
+                    weight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(body, style: _notificationBodyStyle()),
+                if (actionLabel != null || secondaryLabel != null) ...[
+                  const SizedBox(height: kGap12),
+                  Wrap(
+                    spacing: kGap12,
+                    runSpacing: kGap8,
+                    children: [
+                      if (actionLabel != null)
+                        SizedBox(
+                          width: 180,
+                          child: BrandPillButton(
+                            label: actionLabel!,
+                            style: BrandPillStyle.dark,
+                            onTap: onAction,
+                          ),
+                        ),
+                      if (secondaryLabel != null)
+                        SizedBox(
+                          width: 180,
+                          child: BrandPillButton(
+                            label: secondaryLabel!,
+                            style: BrandPillStyle.light,
+                            onTap: onSecondary,
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ],
             ),
           ),
         ],

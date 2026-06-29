@@ -39,6 +39,37 @@ final pushRegistrationProvider = FutureProvider<void>((ref) async {
   ref.onDispose(() => tokenRefresh?.cancel());
 });
 
+final pushDeviceStatusProvider = FutureProvider.autoDispose<PushDeviceStatus>((
+  ref,
+) async {
+  ref.watch(currentUserIdProvider);
+  return ref.read(pushNotificationsServiceProvider).readDeviceStatus();
+});
+
+enum PushPermissionState {
+  unsupported,
+  notConfigured,
+  notDetermined,
+  denied,
+  enabled,
+}
+
+class PushDeviceStatus {
+  const PushDeviceStatus({
+    required this.state,
+    required this.platform,
+    required this.canRequestPermission,
+    required this.canDisable,
+  });
+
+  final PushPermissionState state;
+  final String platform;
+  final bool canRequestPermission;
+  final bool canDisable;
+
+  bool get isEnabled => state == PushPermissionState.enabled;
+}
+
 class PushNotificationsService {
   PushNotificationsService(this._ref);
 
@@ -112,6 +143,82 @@ class PushNotificationsService {
     } catch (e, stack) {
       AppLogger.warning('Push token sync skipped', error: e, stackTrace: stack);
     }
+  }
+
+  Future<PushDeviceStatus> readDeviceStatus() async {
+    final messaging = await _messagingOrNull();
+    if (messaging == null) {
+      return PushDeviceStatus(
+        state: PushPermissionState.notConfigured,
+        platform: _platformName,
+        canRequestPermission: false,
+        canDisable: false,
+      );
+    }
+
+    try {
+      final supported = await messaging.isSupported();
+      if (!supported) {
+        return PushDeviceStatus(
+          state: PushPermissionState.unsupported,
+          platform: _platformName,
+          canRequestPermission: false,
+          canDisable: false,
+        );
+      }
+
+      final settings = await messaging.getNotificationSettings();
+      final state = switch (settings.authorizationStatus) {
+        AuthorizationStatus.authorized ||
+        AuthorizationStatus.provisional => PushPermissionState.enabled,
+        AuthorizationStatus.denied => PushPermissionState.denied,
+        AuthorizationStatus.notDetermined => PushPermissionState.notDetermined,
+      };
+
+      return PushDeviceStatus(
+        state: state,
+        platform: _platformName,
+        canRequestPermission:
+            state == PushPermissionState.notDetermined ||
+            state == PushPermissionState.denied,
+        canDisable: state == PushPermissionState.enabled,
+      );
+    } catch (e, stack) {
+      AppLogger.warning(
+        'Push status read skipped',
+        error: e,
+        stackTrace: stack,
+      );
+      return PushDeviceStatus(
+        state: PushPermissionState.notConfigured,
+        platform: _platformName,
+        canRequestPermission: false,
+        canDisable: false,
+      );
+    }
+  }
+
+  Future<void> enableForCurrentUser() async {
+    final userId = _ref.read(currentUserIdProvider);
+    if (userId == null || userId.isEmpty) return;
+    await syncTokenForUser(userId);
+  }
+
+  Future<void> disableForCurrentDevice() async {
+    final messaging = await _messagingOrNull();
+    if (messaging == null) return;
+
+    final token = await messaging.getToken(vapidKey: _webVapidKeyOrNull);
+    if (token != null && token.trim().isNotEmpty) {
+      final now = DateTime.now().toUtc().toIso8601String();
+      await _ref
+          .read(supabaseProvider)
+          .from('push_device_tokens')
+          .update({'enabled': false, 'updated_at': now})
+          .eq('token', token.trim());
+    }
+
+    await messaging.deleteToken();
   }
 
   StreamSubscription<String>? listenForTokenRefresh(String userId) {
