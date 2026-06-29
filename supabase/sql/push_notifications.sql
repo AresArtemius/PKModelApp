@@ -228,7 +228,17 @@ begin
   perform public.enqueue_app_notification(
     v_recipient,
     coalesce(v_title, 'Чат'),
-    left(new.body, 180),
+    left(
+      coalesce(
+        nullif(btrim(new.body), ''),
+        case
+          when new.media_type = 'image' then 'Фото'
+          when new.media_type = 'video' then 'Видео'
+          else 'Новое сообщение'
+        end
+      ),
+      180
+    ),
     '/chat/' || new.chat_id::text,
     'chat_message',
     jsonb_build_object(

@@ -17,6 +17,14 @@ permissions:
 env:
   SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
   SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+  FIREBASE_WEB_API_KEY: ${{ secrets.FIREBASE_WEB_API_KEY }}
+  FIREBASE_WEB_AUTH_DOMAIN: ${{ secrets.FIREBASE_WEB_AUTH_DOMAIN }}
+  FIREBASE_WEB_PROJECT_ID: ${{ secrets.FIREBASE_WEB_PROJECT_ID }}
+  FIREBASE_WEB_STORAGE_BUCKET: ${{ secrets.FIREBASE_WEB_STORAGE_BUCKET }}
+  FIREBASE_WEB_MESSAGING_SENDER_ID: ${{ secrets.FIREBASE_WEB_MESSAGING_SENDER_ID }}
+  FIREBASE_WEB_APP_ID: ${{ secrets.FIREBASE_WEB_APP_ID }}
+  FIREBASE_WEB_MEASUREMENT_ID: ${{ secrets.FIREBASE_WEB_MEASUREMENT_ID }}
+  FIREBASE_WEB_VAPID_KEY: ${{ secrets.FIREBASE_WEB_VAPID_KEY }}
 
 jobs:
   build:
@@ -32,6 +40,30 @@ jobs:
           if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
             echo "Missing GitHub secrets: SUPABASE_URL and/or SUPABASE_ANON_KEY."
             exit 1
+          fi
+
+      - name: Prepare Firebase Web push config
+        run: |
+          if [ -n "$FIREBASE_WEB_API_KEY" ] &&
+             [ -n "$FIREBASE_WEB_AUTH_DOMAIN" ] &&
+             [ -n "$FIREBASE_WEB_PROJECT_ID" ] &&
+             [ -n "$FIREBASE_WEB_STORAGE_BUCKET" ] &&
+             [ -n "$FIREBASE_WEB_MESSAGING_SENDER_ID" ] &&
+             [ -n "$FIREBASE_WEB_APP_ID" ]; then
+            printf '%s\n' \
+              'self.firebaseWebConfig = {' \
+              "  apiKey: \"$FIREBASE_WEB_API_KEY\"," \
+              "  authDomain: \"$FIREBASE_WEB_AUTH_DOMAIN\"," \
+              "  projectId: \"$FIREBASE_WEB_PROJECT_ID\"," \
+              "  storageBucket: \"$FIREBASE_WEB_STORAGE_BUCKET\"," \
+              "  messagingSenderId: \"$FIREBASE_WEB_MESSAGING_SENDER_ID\"," \
+              "  appId: \"$FIREBASE_WEB_APP_ID\"," \
+              "  measurementId: \"$FIREBASE_WEB_MEASUREMENT_ID\"," \
+              '};' \
+              > web/firebase-web-config.js
+          else
+            echo "Firebase Web Push secrets are incomplete; Web Push will be disabled for this build."
+            echo "self.firebaseWebConfig = {};" > web/firebase-web-config.js
           fi
 
       - name: Set up Flutter
@@ -51,6 +83,14 @@ jobs:
           --base-href=/PKModelApp/
           --dart-define=SUPABASE_URL=$SUPABASE_URL
           --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY
+          --dart-define=FIREBASE_WEB_API_KEY=$FIREBASE_WEB_API_KEY
+          --dart-define=FIREBASE_WEB_AUTH_DOMAIN=$FIREBASE_WEB_AUTH_DOMAIN
+          --dart-define=FIREBASE_WEB_PROJECT_ID=$FIREBASE_WEB_PROJECT_ID
+          --dart-define=FIREBASE_WEB_STORAGE_BUCKET=$FIREBASE_WEB_STORAGE_BUCKET
+          --dart-define=FIREBASE_WEB_MESSAGING_SENDER_ID=$FIREBASE_WEB_MESSAGING_SENDER_ID
+          --dart-define=FIREBASE_WEB_APP_ID=$FIREBASE_WEB_APP_ID
+          --dart-define=FIREBASE_WEB_MEASUREMENT_ID=$FIREBASE_WEB_MEASUREMENT_ID
+          --dart-define=FIREBASE_WEB_VAPID_KEY=$FIREBASE_WEB_VAPID_KEY
 
       - name: Configure Pages
         uses: actions/configure-pages@v5

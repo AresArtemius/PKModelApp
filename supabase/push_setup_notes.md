@@ -21,7 +21,7 @@ It adds:
 
 ## 2. Configure Firebase
 
-Create or open a Firebase project and add iOS/Android apps.
+Create or open a Firebase project and add iOS/Android/Web apps.
 
 For iOS:
 
@@ -33,6 +33,23 @@ For Android:
 
 - add `google-services.json` to `android/app`;
 - configure the Gradle Google Services plugin if it is not already configured.
+
+For Web/GitHub Pages:
+
+- add a Web app in Firebase Console;
+- create a Web Push certificate and copy the public VAPID key;
+- add these GitHub Actions secrets:
+  - `FIREBASE_WEB_API_KEY`
+  - `FIREBASE_WEB_AUTH_DOMAIN`
+  - `FIREBASE_WEB_PROJECT_ID`
+  - `FIREBASE_WEB_STORAGE_BUCKET`
+  - `FIREBASE_WEB_MESSAGING_SENDER_ID`
+  - `FIREBASE_WEB_APP_ID`
+  - `FIREBASE_WEB_MEASUREMENT_ID` (optional)
+  - `FIREBASE_WEB_VAPID_KEY`
+
+The Pages workflow writes `web/firebase-web-config.js` during build, so Firebase
+Web keys do not need to be hardcoded in the repository.
 
 ## 3. Deploy Edge Function
 

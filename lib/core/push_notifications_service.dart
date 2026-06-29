@@ -4,6 +4,7 @@ import 'dart:io' show Platform;
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -43,9 +44,11 @@ class PushNotificationsService {
 
   final Ref _ref;
   StreamSubscription<RemoteMessage>? _messageOpenedSub;
+  StreamSubscription<RemoteMessage>? _foregroundMessageSub;
   bool _backgroundHandlerRegistered = false;
   bool _tapHandlingConfigured = false;
   String? _lastOpenedMessageId;
+  String? _lastForegroundMessageId;
 
   Future<void> configureTapHandling(GoRouter router) async {
     if (_tapHandlingConfigured) return;
@@ -59,6 +62,9 @@ class PushNotificationsService {
 
     _messageOpenedSub ??= FirebaseMessaging.onMessageOpenedApp.listen(
       (message) => _openMessageRoute(router, message),
+    );
+    _foregroundMessageSub ??= FirebaseMessaging.onMessage.listen(
+      (message) => _showForegroundMessage(router, message),
     );
 
     try {
@@ -94,7 +100,7 @@ class PushNotificationsService {
         sound: true,
       );
 
-      final token = await messaging.getToken();
+      final token = await messaging.getToken(vapidKey: _webVapidKeyOrNull);
       if (token == null || token.isEmpty) {
         AppLogger.warning('Push token is empty');
         return;
@@ -130,7 +136,18 @@ class PushNotificationsService {
   Future<FirebaseMessaging?> _messagingOrNull() async {
     try {
       if (!_isFirebaseInitialized) {
-        await Firebase.initializeApp();
+        if (kIsWeb) {
+          final options = _firebaseWebOptionsOrNull;
+          if (options == null) {
+            AppLogger.warning(
+              'Web push disabled: Firebase Web options are not configured',
+            );
+            return null;
+          }
+          await Firebase.initializeApp(options: options);
+        } else {
+          await Firebase.initializeApp();
+        }
       }
       if (!_backgroundHandlerRegistered) {
         FirebaseMessaging.onBackgroundMessage(
@@ -158,6 +175,48 @@ class PushNotificationsService {
     if (route == null || route.isEmpty || !_isAllowedRoute(route)) return;
 
     router.go(route);
+  }
+
+  void _showForegroundMessage(GoRouter router, RemoteMessage message) {
+    final messageId = message.messageId;
+    if (messageId != null && messageId == _lastForegroundMessageId) return;
+    _lastForegroundMessageId = messageId;
+
+    final context = router.routerDelegate.navigatorKey.currentContext;
+    if (context == null || !context.mounted) return;
+
+    final title = _displayText(message.notification?.title).isEmpty
+        ? _displayText(message.data['title'])
+        : _displayText(message.notification?.title);
+    final body = _displayText(message.notification?.body).isEmpty
+        ? _displayText(message.data['body'])
+        : _displayText(message.notification?.body);
+    final route = _displayText(message.data['route']);
+    final text = [
+      if (title.isNotEmpty) title,
+      if (body.isNotEmpty) body,
+    ].join('\n');
+
+    if (text.trim().isEmpty) return;
+
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    if (messenger == null) return;
+
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(text),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 5),
+          action: route.isNotEmpty && _isAllowedRoute(route)
+              ? SnackBarAction(
+                  label: 'ОТКРЫТЬ',
+                  onPressed: () => router.go(route),
+                )
+              : null,
+        ),
+      );
   }
 
   bool _isAllowedRoute(String route) {
@@ -197,6 +256,48 @@ class PushNotificationsService {
   }
 
   bool get _isFirebaseInitialized => Firebase.apps.isNotEmpty;
+
+  String? get _webVapidKeyOrNull {
+    if (!kIsWeb) return null;
+    const key = String.fromEnvironment('FIREBASE_WEB_VAPID_KEY');
+    return key.trim().isEmpty ? null : key.trim();
+  }
+
+  FirebaseOptions? get _firebaseWebOptionsOrNull {
+    const apiKey = String.fromEnvironment('FIREBASE_WEB_API_KEY');
+    const authDomain = String.fromEnvironment('FIREBASE_WEB_AUTH_DOMAIN');
+    const projectId = String.fromEnvironment('FIREBASE_WEB_PROJECT_ID');
+    const storageBucket = String.fromEnvironment('FIREBASE_WEB_STORAGE_BUCKET');
+    const messagingSenderId = String.fromEnvironment(
+      'FIREBASE_WEB_MESSAGING_SENDER_ID',
+    );
+    const appId = String.fromEnvironment('FIREBASE_WEB_APP_ID');
+    const measurementId = String.fromEnvironment('FIREBASE_WEB_MEASUREMENT_ID');
+
+    final required = [
+      apiKey,
+      authDomain,
+      projectId,
+      storageBucket,
+      messagingSenderId,
+      appId,
+    ];
+    if (required.any((value) => value.trim().isEmpty)) return null;
+
+    return FirebaseOptions(
+      apiKey: apiKey,
+      authDomain: authDomain,
+      projectId: projectId,
+      storageBucket: storageBucket,
+      messagingSenderId: messagingSenderId,
+      appId: appId,
+      measurementId: measurementId.trim().isEmpty ? null : measurementId,
+    );
+  }
+
+  String _displayText(Object? value) {
+    return (value ?? '').toString().trim();
+  }
 
   String get _platformName {
     if (kIsWeb) return 'web';
