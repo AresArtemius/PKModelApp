@@ -169,7 +169,9 @@ class MyProfilePage extends ConsumerWidget {
           child: _ProfileSummaryCard(
             fullName: p.fullName.trim(),
             status: p.status,
-            photoUrl: p.photoUrls.isNotEmpty ? p.photoUrls.first : null,
+            photoUrl: p.effectiveCoverPhotoUrl.isEmpty
+                ? null
+                : p.effectiveCoverPhotoUrl,
             onTap: () => _openEditor(context, startBlank: false, initial: p),
           ),
         ),

@@ -36,6 +36,22 @@ List<String> _mergeUniqueMedia(List<String> published, List<String> pending) {
   return result;
 }
 
+String _coverPhotoFrom(String preferred, List<String> photoUrls) {
+  final cover = preferred.trim();
+  final photos = photoUrls.map((e) => e.trim()).where((e) => e.isNotEmpty);
+  if (cover.isNotEmpty && photos.contains(cover)) return cover;
+  return photos.isEmpty ? '' : photos.first;
+}
+
+List<String> _photosWithCoverFirst(
+  List<String> photoUrls,
+  String preferredCover,
+) {
+  final cover = _coverPhotoFrom(preferredCover, photoUrls);
+  if (cover.isEmpty) return photoUrls;
+  return [cover, ...photoUrls.where((url) => url.trim() != cover)];
+}
+
 String _adminSupabaseErrorText(Object error, AppLocalizations t) {
   if (error is PostgrestException) {
     final parts = <String>[error.message.trim()];
@@ -144,6 +160,13 @@ class _ModerationAdminPageState extends ConsumerState<ModerationAdminPage> {
   }) async {
     final sb = ref.read(supabaseProvider);
     final profileId = profile.id;
+    final photoUrls = _mergeUniqueMedia(
+      profile.photoUrls,
+      profile.pendingPhotoUrls,
+    );
+    final preferredCover = profile.pendingCoverPhotoUrl.trim().isNotEmpty
+        ? profile.pendingCoverPhotoUrl
+        : profile.coverPhotoUrl;
 
     try {
       await sb
@@ -151,10 +174,8 @@ class _ModerationAdminPageState extends ConsumerState<ModerationAdminPage> {
           .update(<String, dynamic>{
             'status': 'approved',
             'moderation_comment': null,
-            'photo_urls': _mergeUniqueMedia(
-              profile.photoUrls,
-              profile.pendingPhotoUrls,
-            ),
+            'photo_urls': photoUrls,
+            'cover_photo_url': _coverPhotoFrom(preferredCover, photoUrls),
             'video_urls': _mergeUniqueMedia(
               profile.videoUrls,
               profile.pendingVideoUrls,
@@ -164,6 +185,7 @@ class _ModerationAdminPageState extends ConsumerState<ModerationAdminPage> {
               profile.pendingVideoPreviewUrls,
             ),
             'pending_photo_urls': const <String>[],
+            'pending_cover_photo_url': '',
             'pending_video_urls': const <String>[],
             'pending_video_preview_urls': const <String>[],
             'has_pending_media': false,
@@ -412,9 +434,11 @@ class _ModerationProfileDetailsSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
     final ru = Localizations.localeOf(context).languageCode == 'ru';
-    final photos = _mergeUniqueMedia(
-      profile.photoUrls,
-      profile.pendingPhotoUrls,
+    final photos = _photosWithCoverFirst(
+      _mergeUniqueMedia(profile.photoUrls, profile.pendingPhotoUrls),
+      profile.pendingCoverPhotoUrl.trim().isNotEmpty
+          ? profile.pendingCoverPhotoUrl
+          : profile.coverPhotoUrl,
     );
     final videos = _mergeUniqueMedia(
       profile.videoUrls,
@@ -676,9 +700,14 @@ class _ModerationRequestCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final previewPhotos = profile.pendingPhotoUrls.isNotEmpty
-        ? profile.pendingPhotoUrls
-        : profile.photoUrls;
+    final previewPhotos = _photosWithCoverFirst(
+      profile.pendingPhotoUrls.isNotEmpty
+          ? profile.pendingPhotoUrls
+          : profile.photoUrls,
+      profile.pendingCoverPhotoUrl.trim().isNotEmpty
+          ? profile.pendingCoverPhotoUrl
+          : profile.coverPhotoUrl,
+    );
     final previewVideos = profile.pendingVideoUrls.isNotEmpty
         ? profile.pendingVideoUrls
         : profile.videoUrls;
@@ -976,7 +1005,12 @@ class _ModerationMetricChip extends StatelessWidget {
 }
 
 List<_ModerationMediaItem> _moderationMedia(MyProfileState profile) {
-  final photos = _mergeUniqueMedia(profile.photoUrls, profile.pendingPhotoUrls);
+  final photos = _photosWithCoverFirst(
+    _mergeUniqueMedia(profile.photoUrls, profile.pendingPhotoUrls),
+    profile.pendingCoverPhotoUrl.trim().isNotEmpty
+        ? profile.pendingCoverPhotoUrl
+        : profile.coverPhotoUrl,
+  );
   final videos = _mergeUniqueMedia(profile.videoUrls, profile.pendingVideoUrls);
   final videoThumbs = _mergeUniqueMedia(
     profile.videoPreviewUrls,

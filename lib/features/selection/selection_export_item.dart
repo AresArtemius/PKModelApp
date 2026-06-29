@@ -41,6 +41,7 @@ class SelectionExportItem {
               .where((e) => e.trim().isNotEmpty)
               .toList(growable: false)
         : const <String>[];
+    final coverPhotoUrl = (profile['cover_photo_url'] ?? '').toString().trim();
 
     return SelectionExportItem(
       id: (profile['id'] ?? '').toString(),
@@ -57,7 +58,9 @@ class SelectionExportItem {
       shoeSize: _toInt(profile['shoe_size']),
       minHourlyRate: _toInt(profile['min_hourly_rate']),
       minDailyFee: _toInt(profile['min_daily_fee']),
-      photoUrl: photoUrls.isNotEmpty ? photoUrls.first : '',
+      photoUrl: coverPhotoUrl.isNotEmpty
+          ? coverPhotoUrl
+          : (photoUrls.isNotEmpty ? photoUrls.first : ''),
     );
   }
 

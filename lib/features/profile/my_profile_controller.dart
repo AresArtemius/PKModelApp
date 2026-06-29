@@ -97,6 +97,15 @@ class MyProfileController
     'moderation_comment': s.moderationComment,
   };
 
+  String _normalizedCoverPhotoUrl(String cover, List<String> photos) {
+    final cleanCover = cover.trim();
+    final cleanPhotos = photos.map((e) => e.trim()).where((e) => e.isNotEmpty);
+    if (cleanCover.isNotEmpty && cleanPhotos.contains(cleanCover)) {
+      return cleanCover;
+    }
+    return cleanPhotos.isEmpty ? '' : cleanPhotos.first;
+  }
+
   bool _isMissingOptionalProfileColumn(PostgrestException e) {
     return ProfileSupabaseSchema.isMissingOwnOptionalColumn(e);
   }
@@ -192,9 +201,14 @@ class MyProfileController
   Map<String, dynamic> _payloadFor(MyProfileState s, String uid) => {
     ..._basePayloadFor(s, uid),
     'photo_urls': s.photoUrls,
+    'cover_photo_url': _normalizedCoverPhotoUrl(s.coverPhotoUrl, s.photoUrls),
     'video_urls': s.videoUrls,
     'video_preview_urls': s.videoPreviewUrls,
     'pending_photo_urls': s.pendingPhotoUrls,
+    'pending_cover_photo_url': _normalizedCoverPhotoUrl(
+      s.pendingCoverPhotoUrl,
+      s.pendingPhotoUrls,
+    ),
     'pending_video_urls': s.pendingVideoUrls,
     'pending_video_preview_urls': s.pendingVideoPreviewUrls,
     'has_pending_media': s.hasPendingMedia,
@@ -337,15 +351,21 @@ class MyProfileController
 
     if (profileId.isEmpty) {
       await _ensureCanCreateProfile(uid);
+      final photoUrls = [...profile.photoUrls, ...newPhotoUrls];
       final payload = {
         ...basePayload,
-        'photo_urls': [...profile.photoUrls, ...newPhotoUrls],
+        'photo_urls': photoUrls,
+        'cover_photo_url': _normalizedCoverPhotoUrl(
+          profile.coverPhotoUrl,
+          photoUrls,
+        ),
         'video_urls': [...profile.videoUrls, ...newVideoUrls],
         'video_preview_urls': [
           ...profile.videoPreviewUrls,
           ...newVideoPreviewUrls,
         ],
         'pending_photo_urls': const <String>[],
+        'pending_cover_photo_url': '',
         'pending_video_urls': const <String>[],
         'pending_video_preview_urls': const <String>[],
         'has_pending_media': false,
@@ -357,11 +377,31 @@ class MyProfileController
       return created;
     }
 
+    final publishedPhotoUrls = publishImmediately
+        ? [...profile.photoUrls, ...profile.pendingPhotoUrls, ...newPhotoUrls]
+        : profile.photoUrls;
+    final pendingPhotoUrls = publishImmediately
+        ? const <String>[]
+        : [...profile.pendingPhotoUrls, ...newPhotoUrls];
+    final nextCoverPhotoUrl = publishImmediately
+        ? _normalizedCoverPhotoUrl(
+            profile.pendingCoverPhotoUrl.trim().isNotEmpty
+                ? profile.pendingCoverPhotoUrl
+                : profile.coverPhotoUrl,
+            publishedPhotoUrls,
+          )
+        : _normalizedCoverPhotoUrl(profile.coverPhotoUrl, publishedPhotoUrls);
+    final nextPendingCoverPhotoUrl = publishImmediately
+        ? ''
+        : _normalizedCoverPhotoUrl(
+            profile.pendingCoverPhotoUrl,
+            pendingPhotoUrls,
+          );
+
     final payload = {
       ...basePayload,
-      'photo_urls': publishImmediately
-          ? [...profile.photoUrls, ...profile.pendingPhotoUrls, ...newPhotoUrls]
-          : profile.photoUrls,
+      'photo_urls': publishedPhotoUrls,
+      'cover_photo_url': nextCoverPhotoUrl,
       'video_urls': publishImmediately
           ? [...profile.videoUrls, ...profile.pendingVideoUrls, ...newVideoUrls]
           : profile.videoUrls,
@@ -372,9 +412,8 @@ class MyProfileController
               ...newVideoPreviewUrls,
             ]
           : profile.videoPreviewUrls,
-      'pending_photo_urls': publishImmediately
-          ? const <String>[]
-          : [...profile.pendingPhotoUrls, ...newPhotoUrls],
+      'pending_photo_urls': pendingPhotoUrls,
+      'pending_cover_photo_url': nextPendingCoverPhotoUrl,
       'pending_video_urls': publishImmediately
           ? const <String>[]
           : [...profile.pendingVideoUrls, ...newVideoUrls],
@@ -422,10 +461,27 @@ class MyProfileController
       }
     }
 
+    final current = _findById(_currentList, id);
+    final photoUrls = [...?current?.photoUrls, ...?current?.pendingPhotoUrls];
+    final videoUrls = [...?current?.videoUrls, ...?current?.pendingVideoUrls];
+    final videoPreviewUrls = [
+      ...?current?.videoPreviewUrls,
+      ...?current?.pendingVideoPreviewUrls,
+    ];
+    final preferredCover =
+        current?.pendingCoverPhotoUrl.trim().isNotEmpty == true
+        ? current!.pendingCoverPhotoUrl
+        : current?.coverPhotoUrl ?? '';
+
     final data = await _updateProfileAndSelect(id, uid, {
       'status': 'approved',
       'moderation_comment': null,
+      'photo_urls': photoUrls,
+      'cover_photo_url': _normalizedCoverPhotoUrl(preferredCover, photoUrls),
+      'video_urls': videoUrls,
+      'video_preview_urls': videoPreviewUrls,
       'pending_photo_urls': const <String>[],
+      'pending_cover_photo_url': '',
       'pending_video_urls': const <String>[],
       'pending_video_preview_urls': const <String>[],
       'has_pending_media': false,

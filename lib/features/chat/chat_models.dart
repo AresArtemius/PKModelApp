@@ -44,7 +44,7 @@ class CastingInvitation {
           .toString()
           .trim(),
       profileName: (profile['full_name'] ?? '').toString().trim(),
-      photoUrl: photoUrls.isEmpty ? '' : photoUrls.first,
+      photoUrl: _coverPhoto(profile['cover_photo_url'], photoUrls),
       createdAt: DateTime.tryParse((map['created_at'] ?? '').toString()),
     );
   }
@@ -68,10 +68,16 @@ class CastingInvitation {
           .toString()
           .trim(),
       profileName: (map['profile_name'] ?? '').toString().trim(),
-      photoUrl: photoUrls.isEmpty ? '' : photoUrls.first,
+      photoUrl: _coverPhoto(map['cover_photo_url'], photoUrls),
       createdAt: DateTime.tryParse((map['created_at'] ?? '').toString()),
     );
   }
+}
+
+String _coverPhoto(dynamic rawCover, List<String> photoUrls) {
+  final cover = (rawCover ?? '').toString().trim();
+  if (cover.isNotEmpty) return cover;
+  return photoUrls.isEmpty ? '' : photoUrls.first;
 }
 
 class ChatSummary {

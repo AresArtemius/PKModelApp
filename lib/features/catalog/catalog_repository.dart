@@ -53,6 +53,7 @@ class CatalogRepository {
       required bool includeUnavailableDays,
       required bool includePro,
       required bool includeVerification,
+      required bool includeCoverPhoto,
     }) async {
       PostgrestFilterBuilder<List<Map<String, dynamic>>> q = _client
           .from(ProfileSupabaseSchema.table)
@@ -62,6 +63,7 @@ class CatalogRepository {
               includeUnavailableDays: includeUnavailableDays,
               includePro: includePro,
               includeVerification: includeVerification,
+              includeCoverPhoto: includeCoverPhoto,
             ),
           );
 
@@ -128,6 +130,7 @@ class CatalogRepository {
         includeUnavailableDays: true,
         includePro: true,
         includeVerification: true,
+        includeCoverPhoto: true,
       );
     } on PostgrestException catch (e) {
       if (!_shouldFallbackToBasicSelect(e)) rethrow;
@@ -145,12 +148,17 @@ class CatalogRepository {
         e,
         'is_verified',
       );
+      final missingCoverPhoto = SupabaseCompat.isMissingColumn(
+        e,
+        'cover_photo_url',
+      );
       try {
         return await run(
           includeBirthDate: !missingBirthDate,
           includeUnavailableDays: !missingUnavailable,
           includePro: !missingPro,
           includeVerification: !missingVerification,
+          includeCoverPhoto: !missingCoverPhoto,
         );
       } on PostgrestException catch (second) {
         if (!_shouldFallbackToBasicSelect(second)) rethrow;
@@ -159,6 +167,7 @@ class CatalogRepository {
           includeUnavailableDays: false,
           includePro: false,
           includeVerification: false,
+          includeCoverPhoto: false,
         );
       }
     }

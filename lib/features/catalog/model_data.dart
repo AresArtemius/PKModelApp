@@ -13,6 +13,7 @@ class ModelVm {
   final int hips;
   final String city;
   final List<String> photoUrls;
+  final String coverPhotoUrl;
   final List<String> videoUrls;
   final List<String> videoPreviewUrls;
   final String resume;
@@ -45,6 +46,7 @@ class ModelVm {
     required this.hips,
     required this.city,
     required this.photoUrls,
+    this.coverPhotoUrl = '',
     this.videoUrls = const [],
     this.videoPreviewUrls = const [],
     this.resume = '',
@@ -68,7 +70,19 @@ class ModelVm {
   bool get hasPhotos => photoUrls.isNotEmpty;
   bool get hasVideos => videoUrls.isNotEmpty;
   bool get hasVideoPreviews => videoPreviewUrls.isNotEmpty;
-  String? get primaryPhotoUrl => hasPhotos ? photoUrls.first : null;
+  String? get primaryPhotoUrl {
+    final cover = coverPhotoUrl.trim();
+    if (cover.isNotEmpty) return cover;
+    return hasPhotos ? photoUrls.first : null;
+  }
+
+  List<String> get displayPhotoUrls {
+    final primary = primaryPhotoUrl?.trim() ?? '';
+    if (primary.isEmpty) return photoUrls;
+    final rest = photoUrls.where((url) => url.trim() != primary);
+    return [primary, ...rest];
+  }
+
   bool get isProActive {
     if (!isPro) return false;
     final until = proUntil;
@@ -169,6 +183,7 @@ class ModelVm {
       hips: _intOrZero(m['hips']),
       city: _string(m['city']),
       photoUrls: _stringList(m['photo_urls']),
+      coverPhotoUrl: _string(m['cover_photo_url']),
       videoUrls: _stringList(m['video_urls']),
       videoPreviewUrls: _stringList(m['video_preview_urls']),
       resume: _string(m['resume']),

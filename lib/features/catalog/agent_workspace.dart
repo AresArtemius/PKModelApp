@@ -47,13 +47,16 @@ class AgentFolderProfile {
     final photos = map['photo_urls'] is List
         ? map['photo_urls'] as List
         : const [];
+    final coverPhotoUrl = (map['cover_photo_url'] ?? '').toString().trim();
     return AgentFolderProfile(
       id: (map['id'] ?? '').toString(),
       fullName: (map['full_name'] ?? '').toString().trim(),
       age: ModelVm.displayAgeFromMap(map),
       height: _intOrZero(map['height']),
       city: (map['city'] ?? '').toString().trim(),
-      photoUrl: photos.isEmpty ? '' : photos.first.toString().trim(),
+      photoUrl: coverPhotoUrl.isNotEmpty
+          ? coverPhotoUrl
+          : (photos.isEmpty ? '' : photos.first.toString().trim()),
     );
   }
 }
@@ -118,7 +121,7 @@ class AgentWorkspaceService {
       final itemRows = await _sb
           .from('casting_agent_folder_items')
           .select(
-            'profile:profiles(id,full_name,birth_date,age,height,city,photo_urls)',
+            'profile:profiles(id,full_name,birth_date,age,height,city,photo_urls,cover_photo_url)',
           )
           .eq('user_id', userId)
           .eq('folder_id', folderId)

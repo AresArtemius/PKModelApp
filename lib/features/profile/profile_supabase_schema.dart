@@ -28,9 +28,14 @@ class ProfileSupabaseSchema {
     'is_pro',
     'pro_until',
     'is_verified',
+    'cover_photo_url',
   ];
 
   static const proColumns = <String>['is_pro', 'pro_until'];
+  static const coverPhotoColumns = <String>[
+    'cover_photo_url',
+    'pending_cover_photo_url',
+  ];
 
   static const _identityColumns = <String>['id', 'user_id'];
   static const _publicIdentityColumns = <String>['id', 'user_id', 'full_name'];
@@ -79,6 +84,7 @@ class ProfileSupabaseSchema {
       if (includeOptional) 'is_verified',
       if (includeOptional) 'verification_status',
       ..._mediaColumns,
+      if (includeOptional) ...coverPhotoColumns,
       if (includeOptional) ..._pendingMediaColumns,
     ]);
   }
@@ -88,6 +94,7 @@ class ProfileSupabaseSchema {
     required bool includeUnavailableDays,
     required bool includePro,
     required bool includeVerification,
+    required bool includeCoverPhoto,
   }) {
     return _join([
       ..._publicIdentityColumns,
@@ -100,6 +107,7 @@ class ProfileSupabaseSchema {
       if (includePro) 'is_pro',
       if (includePro) 'pro_until',
       if (includeVerification) 'is_verified',
+      if (includeCoverPhoto) 'cover_photo_url',
       'photo_urls',
     ]);
   }
@@ -109,6 +117,7 @@ class ProfileSupabaseSchema {
     required bool includeProfessional,
     required bool includePro,
     required bool includeVerification,
+    required bool includeCoverPhoto,
   }) {
     return _join([
       ..._publicIdentityColumns,
@@ -124,6 +133,7 @@ class ProfileSupabaseSchema {
       if (includePro) 'is_pro',
       if (includePro) 'pro_until',
       if (includeVerification) 'is_verified',
+      if (includeCoverPhoto) 'cover_photo_url',
     ]);
   }
 
@@ -146,6 +156,7 @@ class ProfileSupabaseSchema {
       if (includeVerification) 'is_verified',
       if (includeVerification) 'verification_status',
       ..._mediaColumns,
+      if (includePendingMedia) ...coverPhotoColumns,
       if (includePendingMedia) ..._pendingMediaColumns,
     ]);
   }
@@ -170,6 +181,10 @@ class ProfileSupabaseSchema {
     return SupabaseCompat.isMissingAnyColumn(error, _pendingMediaColumns);
   }
 
+  static bool isMissingCoverPhotoColumn(PostgrestException error) {
+    return SupabaseCompat.isMissingAnyColumn(error, coverPhotoColumns);
+  }
+
   static bool isMissingBirthDateColumn(PostgrestException error) {
     return SupabaseCompat.isMissingAnyColumn(error, _birthDateColumns);
   }
@@ -178,6 +193,7 @@ class ProfileSupabaseSchema {
     return isMissingProfessionalColumn(error) ||
         isMissingVerificationColumn(error) ||
         isMissingBirthDateColumn(error) ||
+        isMissingCoverPhotoColumn(error) ||
         isMissingPendingMediaColumn(error);
   }
 
@@ -190,6 +206,7 @@ class ProfileSupabaseSchema {
       ...verificationColumns,
       ..._pendingMediaColumns,
       ..._birthDateColumns,
+      ...coverPhotoColumns,
     ]) {
       next.remove(column);
     }

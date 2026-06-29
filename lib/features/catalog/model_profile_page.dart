@@ -162,6 +162,7 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
       required bool includePro,
       required bool includeVerification,
       required bool includeProfessional,
+      required bool includeCoverPhoto,
     }) async {
       final row = await sb
           .from(ProfileSupabaseSchema.table)
@@ -171,6 +172,7 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
               includeProfessional: includeProfessional,
               includePro: includePro,
               includeVerification: includeVerification,
+              includeCoverPhoto: includeCoverPhoto,
             ),
           )
           .eq('id', widget.modelId)
@@ -187,6 +189,7 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
         includePro: true,
         includeVerification: true,
         includeProfessional: true,
+        includeCoverPhoto: true,
       );
     } on PostgrestException catch (e) {
       final missingPro = ProfileSupabaseSchema.isMissingProColumn(e);
@@ -197,10 +200,14 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
       final missingBirthDate = ProfileSupabaseSchema.isMissingBirthDateColumn(
         e,
       );
+      final missingCoverPhoto = ProfileSupabaseSchema.isMissingCoverPhotoColumn(
+        e,
+      );
       if (!missingPro &&
           !missingVerification &&
           !missingProfessional &&
-          !missingBirthDate) {
+          !missingBirthDate &&
+          !missingCoverPhoto) {
         rethrow;
       }
       row = await run(
@@ -208,6 +215,7 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
         includePro: !missingPro,
         includeVerification: !missingVerification,
         includeProfessional: !missingProfessional,
+        includeCoverPhoto: !missingCoverPhoto,
       );
     }
 
@@ -363,6 +371,8 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
                   );
                 }
 
+                final displayPhotoUrls = m.displayPhotoUrls;
+
                 return RefreshIndicator(
                   onRefresh: _refresh,
                   child: ListView(
@@ -384,21 +394,24 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
                       ),
                       const SizedBox(height: _sectionGap),
 
-                      (m.photoUrls.isNotEmpty || m.videoUrls.isNotEmpty)
+                      (displayPhotoUrls.isNotEmpty || m.videoUrls.isNotEmpty)
                           ? _Card(
                               child: _HeroMedia(
-                                photoUrls: m.photoUrls,
+                                photoUrls: displayPhotoUrls,
                                 videoUrls: m.videoUrls,
                                 videoPreviewUrls: m.videoPreviewUrls,
                                 heroTag: 'model-photo-${m.id}',
-                                onOpenPhotos: (index) =>
-                                    _openPhotos(context, m.photoUrls, index),
+                                onOpenPhotos: (index) => _openPhotos(
+                                  context,
+                                  displayPhotoUrls,
+                                  index,
+                                ),
                                 onOpenVideo: () =>
                                     _openVideo(context, m.videoUrls.first),
                               ),
                             )
                           : const SizedBox.shrink(),
-                      (m.photoUrls.isNotEmpty || m.videoUrls.isNotEmpty)
+                      (displayPhotoUrls.isNotEmpty || m.videoUrls.isNotEmpty)
                           ? const SizedBox(height: 14)
                           : const SizedBox.shrink(),
 
@@ -550,15 +563,18 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
                           children: [
                             Text(t.profileMediaUpper, style: _commandStyle()),
                             const SizedBox(height: 14),
-                            if (m.photoUrls.isEmpty && m.videoUrls.isEmpty)
+                            if (displayPhotoUrls.isEmpty && m.videoUrls.isEmpty)
                               Text(t.profileMediaEmpty, style: _bodyStyle())
                             else
                               _MediaGrid(
-                                photoUrls: m.photoUrls,
+                                photoUrls: displayPhotoUrls,
                                 videoUrls: m.videoUrls,
                                 videoPreviewUrls: m.videoPreviewUrls,
-                                onOpenPhotos: (index) =>
-                                    _openPhotos(context, m.photoUrls, index),
+                                onOpenPhotos: (index) => _openPhotos(
+                                  context,
+                                  displayPhotoUrls,
+                                  index,
+                                ),
                                 onOpenVideo: (index) =>
                                     _openVideo(context, m.videoUrls[index]),
                               ),

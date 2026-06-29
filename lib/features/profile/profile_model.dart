@@ -178,9 +178,11 @@ class MyProfileState {
   final List<String> photoUrls;
   final List<String> videoUrls;
   final List<String> videoPreviewUrls;
+  final String coverPhotoUrl;
   final List<String> pendingPhotoUrls;
   final List<String> pendingVideoUrls;
   final List<String> pendingVideoPreviewUrls;
+  final String pendingCoverPhotoUrl;
   final bool hasPendingMedia;
 
   const MyProfileState({
@@ -216,9 +218,11 @@ class MyProfileState {
     this.photoUrls = const [],
     this.videoUrls = const [],
     this.videoPreviewUrls = const [],
+    this.coverPhotoUrl = '',
     this.pendingPhotoUrls = const [],
     this.pendingVideoUrls = const [],
     this.pendingVideoPreviewUrls = const [],
+    this.pendingCoverPhotoUrl = '',
     this.hasPendingMedia = false,
   });
 
@@ -275,9 +279,11 @@ class MyProfileState {
       photoUrls: const [],
       videoUrls: const [],
       videoPreviewUrls: const [],
+      coverPhotoUrl: '',
       pendingPhotoUrls: const [],
       pendingVideoUrls: const [],
       pendingVideoPreviewUrls: const [],
+      pendingCoverPhotoUrl: '',
       hasPendingMedia: false,
     );
   }
@@ -317,9 +323,11 @@ class MyProfileState {
     List<String>? photoUrls,
     List<String>? videoUrls,
     List<String>? videoPreviewUrls,
+    String? coverPhotoUrl,
     List<String>? pendingPhotoUrls,
     List<String>? pendingVideoUrls,
     List<String>? pendingVideoPreviewUrls,
+    String? pendingCoverPhotoUrl,
     bool? hasPendingMedia,
   }) {
     return MyProfileState(
@@ -357,10 +365,12 @@ class MyProfileState {
       photoUrls: photoUrls ?? this.photoUrls,
       videoUrls: videoUrls ?? this.videoUrls,
       videoPreviewUrls: videoPreviewUrls ?? this.videoPreviewUrls,
+      coverPhotoUrl: coverPhotoUrl ?? this.coverPhotoUrl,
       pendingPhotoUrls: pendingPhotoUrls ?? this.pendingPhotoUrls,
       pendingVideoUrls: pendingVideoUrls ?? this.pendingVideoUrls,
       pendingVideoPreviewUrls:
           pendingVideoPreviewUrls ?? this.pendingVideoPreviewUrls,
+      pendingCoverPhotoUrl: pendingCoverPhotoUrl ?? this.pendingCoverPhotoUrl,
       hasPendingMedia: hasPendingMedia ?? this.hasPendingMedia,
     );
   }
@@ -401,13 +411,21 @@ class MyProfileState {
       photoUrls: _stringListFromMap(m, 'photo_urls'),
       videoUrls: _stringListFromMap(m, 'video_urls'),
       videoPreviewUrls: _stringListFromMap(m, 'video_preview_urls'),
+      coverPhotoUrl: _stringFromMap(m, 'cover_photo_url').trim(),
       pendingPhotoUrls: _stringListFromMap(m, 'pending_photo_urls'),
       pendingVideoUrls: _stringListFromMap(m, 'pending_video_urls'),
       pendingVideoPreviewUrls: _stringListFromMap(
         m,
         'pending_video_preview_urls',
       ),
+      pendingCoverPhotoUrl: _stringFromMap(m, 'pending_cover_photo_url').trim(),
       hasPendingMedia: _boolFromMap(m, 'has_pending_media'),
     );
+  }
+
+  String get effectiveCoverPhotoUrl {
+    final cover = coverPhotoUrl.trim();
+    if (cover.isNotEmpty) return cover;
+    return photoUrls.isNotEmpty ? photoUrls.first : '';
   }
 }

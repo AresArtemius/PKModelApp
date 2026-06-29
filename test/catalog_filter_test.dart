@@ -119,6 +119,7 @@ void main() {
       'height': 170.8,
       'city': ' Berlin ',
       'photo_urls': ['a.jpg', 'a.jpg', ' ', 'b.jpg'],
+      'cover_photo_url': 'b.jpg',
       'unavailable_days': ['2026-06-02T18:00:00Z', 'bad-date', '2026-06-01'],
       'is_pro': 'yes',
       'pro_until': '2026-12-01T00:00:00Z',
@@ -130,6 +131,8 @@ void main() {
     expect(vm.age, 31);
     expect(vm.height, 170);
     expect(vm.photoUrls, ['a.jpg', 'b.jpg']);
+    expect(vm.primaryPhotoUrl, 'b.jpg');
+    expect(vm.displayPhotoUrls, ['b.jpg', 'a.jpg']);
     expect(vm.unavailableDays, [DateTime(2026, 6, 1), DateTime(2026, 6, 2)]);
     expect(vm.isPro, isTrue);
     expect(vm.proUntil, DateTime.parse('2026-12-01T00:00:00Z'));

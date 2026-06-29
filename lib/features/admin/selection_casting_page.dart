@@ -53,6 +53,7 @@ final castingResponsesProvider = FutureProvider.autoDispose
           shoe_size,
           min_hourly_rate,
           min_daily_fee,
+          cover_photo_url,
           photo_urls
         )
         ''';
@@ -228,9 +229,17 @@ class SelectionCastingPage extends ConsumerWidget {
                                           .where((e) => e.trim().isNotEmpty)
                                           .toList()
                                     : <String>[];
-                                final coverUrl = photoUrls.isNotEmpty
-                                    ? photoUrls.first
-                                    : '';
+                                final coverUrl =
+                                    (profile['cover_photo_url'] ?? '')
+                                        .toString()
+                                        .trim()
+                                        .isNotEmpty
+                                    ? (profile['cover_photo_url'] ?? '')
+                                          .toString()
+                                          .trim()
+                                    : (photoUrls.isNotEmpty
+                                          ? photoUrls.first
+                                          : '');
 
                                 return Container(
                                   decoration: BoxDecoration(

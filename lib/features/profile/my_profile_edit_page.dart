@@ -141,9 +141,11 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
   final List<XFile> _pickedVideos = [];
 
   List<String> _photoUrls = [];
+  String _coverPhotoUrl = '';
   List<String> _videoUrls = [];
   List<String> _videoPreviewUrls = [];
   List<String> _pendingPhotoUrls = [];
+  String _pendingCoverPhotoUrl = '';
   List<String> _pendingVideoUrls = [];
   List<String> _pendingVideoPreviewUrls = [];
   bool _uploading = false;
@@ -305,9 +307,11 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
     _birthDateIso = '';
     _unavailableDays.clear();
     _photoUrls = [];
+    _coverPhotoUrl = '';
     _videoUrls = [];
     _videoPreviewUrls = [];
     _pendingPhotoUrls = [];
+    _pendingCoverPhotoUrl = '';
     _pendingVideoUrls = [];
     _pendingVideoPreviewUrls = [];
     _pickedPhotos.clear();
@@ -365,9 +369,11 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
       );
 
     _photoUrls = List<String>.from(s.photoUrls);
+    _coverPhotoUrl = s.coverPhotoUrl.trim();
     _videoUrls = List<String>.from(s.videoUrls);
     _videoPreviewUrls = List<String>.from(s.videoPreviewUrls);
     _pendingPhotoUrls = List<String>.from(s.pendingPhotoUrls);
+    _pendingCoverPhotoUrl = s.pendingCoverPhotoUrl.trim();
     _pendingVideoUrls = List<String>.from(s.pendingVideoUrls);
     _pendingVideoPreviewUrls = List<String>.from(s.pendingVideoPreviewUrls);
   }
@@ -498,9 +504,11 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
       equipment: _equipmentC.text.trim(),
       unavailableDays: _unavailableDaysAsIsoDates(),
       photoUrls: List<String>.from(_photoUrls),
+      coverPhotoUrl: _coverPhotoUrl.trim(),
       videoUrls: List<String>.from(_videoUrls),
       videoPreviewUrls: List<String>.from(_videoPreviewUrls),
       pendingPhotoUrls: List<String>.from(_pendingPhotoUrls),
+      pendingCoverPhotoUrl: _pendingCoverPhotoUrl.trim(),
       pendingVideoUrls: List<String>.from(_pendingVideoUrls),
       pendingVideoPreviewUrls: List<String>.from(_pendingVideoPreviewUrls),
       hasPendingMedia:
@@ -809,9 +817,11 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
         _pickedVideos.clear();
 
         _photoUrls = List<String>.from(visibleSaved.photoUrls);
+        _coverPhotoUrl = visibleSaved.coverPhotoUrl.trim();
         _videoUrls = List<String>.from(visibleSaved.videoUrls);
         _videoPreviewUrls = List<String>.from(visibleSaved.videoPreviewUrls);
         _pendingPhotoUrls = List<String>.from(visibleSaved.pendingPhotoUrls);
+        _pendingCoverPhotoUrl = visibleSaved.pendingCoverPhotoUrl.trim();
         _pendingVideoUrls = List<String>.from(visibleSaved.pendingVideoUrls);
         _pendingVideoPreviewUrls = List<String>.from(
           visibleSaved.pendingVideoPreviewUrls,
@@ -992,7 +1002,13 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
       if (isPicked) {
         _removeAtSafe(_pickedPhotos, index);
       } else {
+        final removed = index >= 0 && index < _photoUrls.length
+            ? _photoUrls[index]
+            : '';
         _removeAtSafe(_photoUrls, index);
+        if (_coverPhotoUrl.trim() == removed.trim()) {
+          _coverPhotoUrl = _photoUrls.isEmpty ? '' : _photoUrls.first;
+        }
       }
     });
   }
@@ -1018,9 +1034,8 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
         final item = _pickedPhotos.removeAt(index);
         _pickedPhotos.insert(0, item);
       } else {
-        if (index <= 0 || index >= _photoUrls.length) return;
-        final item = _photoUrls.removeAt(index);
-        _photoUrls.insert(0, item);
+        if (index < 0 || index >= _photoUrls.length) return;
+        _coverPhotoUrl = _photoUrls[index].trim();
       }
     });
   }
@@ -1228,9 +1243,11 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
           onAddPhoto: _pickPhotos,
           onAddVideo: _pickVideo,
           photoUrls: _photoUrls,
+          coverPhotoUrl: _coverPhotoUrl,
           videoUrls: _videoUrls,
           videoPreviewUrls: _videoPreviewUrls,
           pendingPhotoUrls: _pendingPhotoUrls,
+          pendingCoverPhotoUrl: _pendingCoverPhotoUrl,
           pendingVideoUrls: _pendingVideoUrls,
           pendingVideoPreviewUrls: _pendingVideoPreviewUrls,
           pickedPhotos: _pickedPhotos,
@@ -1714,9 +1731,11 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
                                   onAddPhoto: _pickPhotos,
                                   onAddVideo: _pickVideo,
                                   photoUrls: _photoUrls,
+                                  coverPhotoUrl: _coverPhotoUrl,
                                   videoUrls: _videoUrls,
                                   videoPreviewUrls: _videoPreviewUrls,
                                   pendingPhotoUrls: _pendingPhotoUrls,
+                                  pendingCoverPhotoUrl: _pendingCoverPhotoUrl,
                                   pendingVideoUrls: _pendingVideoUrls,
                                   pendingVideoPreviewUrls:
                                       _pendingVideoPreviewUrls,

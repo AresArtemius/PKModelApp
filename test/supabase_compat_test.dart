@@ -56,9 +56,11 @@ void main() {
       final ownFull = ProfileSupabaseSchema.selectOwn(includeOptional: true);
       final ownBasic = ProfileSupabaseSchema.selectOwn(includeOptional: false);
       final catalog = ProfileSupabaseSchema.selectCatalog(
+        includeBirthDate: true,
         includeUnavailableDays: true,
         includePro: true,
         includeVerification: true,
+        includeCoverPhoto: true,
       );
 
       expect(ownFull, contains('profile_type'));
@@ -69,6 +71,7 @@ void main() {
       expect(catalog, contains('pro_until'));
       expect(catalog, contains('unavailable_days'));
       expect(catalog, contains('is_verified'));
+      expect(catalog, contains('cover_photo_url'));
     });
 
     test('removes unsupported professional payload fields', () {

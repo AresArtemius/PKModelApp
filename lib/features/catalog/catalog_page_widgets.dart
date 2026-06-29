@@ -928,7 +928,7 @@ class _CatalogGrid extends StatelessWidget {
             itemBuilder: (context, i) {
               final m = items[i];
               final selected = selectedIds.contains(m.id);
-              final photo = m.photoUrls.isNotEmpty ? m.photoUrls.first : null;
+              final photo = m.primaryPhotoUrl;
               final heroTag = 'model-photo-${m.id}';
 
               return _GridProfileCard(

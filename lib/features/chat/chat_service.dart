@@ -43,7 +43,7 @@ class ChatService {
             created_at
             ${includeVideoRequest ? ',request_video_intro,video_intro_requirements' : ''}
           ),
-          profile:profiles!inner(id,user_id,full_name,photo_urls)
+          profile:profiles!inner(id,user_id,full_name,photo_urls,cover_photo_url)
         ''')
           .eq('profile.user_id', userId)
           .filter('model_hidden_at', 'is', null)
@@ -101,7 +101,7 @@ class ChatService {
             created_at
             ${includeVideoRequest ? ',request_video_intro,video_intro_requirements' : ''}
           ),
-          profile:profiles!inner(id,user_id,full_name,photo_urls)
+          profile:profiles!inner(id,user_id,full_name,photo_urls,cover_photo_url)
         ''')
         .eq('profile.user_id', userId)
         .order('created_at', ascending: false)
