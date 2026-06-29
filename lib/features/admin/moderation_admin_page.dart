@@ -52,6 +52,18 @@ List<String> _photosWithCoverFirst(
   return [cover, ...photoUrls.where((url) => url.trim() != cover)];
 }
 
+String _moderationCoverLabel(BuildContext context) {
+  final ru = Localizations.localeOf(context).languageCode == 'ru';
+  return ru ? 'ГЛАВНОЕ ФОТО' : 'COVER PHOTO';
+}
+
+String _moderationCoverHint(BuildContext context) {
+  final ru = Localizations.localeOf(context).languageCode == 'ru';
+  return ru
+      ? 'Это фото станет обложкой после одобрения'
+      : 'This photo will become the cover after approval';
+}
+
 String _adminSupabaseErrorText(Object error, AppLocalizations t) {
   if (error is PostgrestException) {
     final parts = <String>[error.message.trim()];
@@ -449,7 +461,8 @@ class _ModerationProfileDetailsSheet extends StatelessWidget {
       profile.pendingVideoPreviewUrls,
     );
     final media = <_ModerationMediaItem>[
-      for (final url in photos) _ModerationMediaItem.photo(url),
+      for (var i = 0; i < photos.length; i += 1)
+        _ModerationMediaItem.photo(photos[i], isCover: i == 0),
       for (var i = 0; i < videos.length; i += 1)
         _ModerationMediaItem.video(
           videoUrl: videos[i],
@@ -509,6 +522,12 @@ class _ModerationProfileDetailsSheet extends StatelessWidget {
                         height: 180,
                         decoration: profileImagePlaceholderDecoration(),
                       ),
+                    if (media.isNotEmpty && media.first.isCover) ...[
+                      const SizedBox(height: 10),
+                      _ModerationCoverHintLine(
+                        text: _moderationCoverHint(context),
+                      ),
+                    ],
                     const SizedBox(height: 18),
                     Text(
                       profile.fullName.trim().isEmpty
@@ -873,6 +892,10 @@ class _ModerationProfileDetailsPanel extends StatelessWidget {
                     height: 240,
                     decoration: profileImagePlaceholderDecoration(),
                   ),
+                if (media.isNotEmpty && media.first.isCover) ...[
+                  const SizedBox(height: 12),
+                  _ModerationCoverHintLine(text: _moderationCoverHint(context)),
+                ],
                 const SizedBox(height: 22),
                 Text(
                   profile.fullName.trim().isEmpty
@@ -1018,7 +1041,8 @@ List<_ModerationMediaItem> _moderationMedia(MyProfileState profile) {
   );
 
   return <_ModerationMediaItem>[
-    for (final url in photos) _ModerationMediaItem.photo(url),
+    for (var i = 0; i < photos.length; i += 1)
+      _ModerationMediaItem.photo(photos[i], isCover: i == 0),
     for (var i = 0; i < videos.length; i += 1)
       _ModerationMediaItem.video(
         videoUrl: videos[i],
@@ -1090,6 +1114,11 @@ class _ModerationLargeMedia extends StatelessWidget {
                   memCacheWidth: 540,
                   maxWidthDiskCache: 900,
                 ),
+              if (item.isCover)
+                _ModerationCoverBadge(
+                  label: _moderationCoverLabel(context),
+                  large: true,
+                ),
               if (item.isVideo)
                 const Center(
                   child: DecoratedBox(
@@ -1110,6 +1139,89 @@ class _ModerationLargeMedia extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _ModerationCoverBadge extends StatelessWidget {
+  const _ModerationCoverBadge({required this.label, this.large = false});
+
+  final String label;
+  final bool large;
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      left: large ? 10 : 5,
+      right: large ? 10 : 5,
+      bottom: large ? 10 : 5,
+      child: IgnorePointer(
+        child: Container(
+          padding: EdgeInsets.symmetric(
+            horizontal: large ? 10 : 5,
+            vertical: large ? 6 : 3,
+          ),
+          decoration: BoxDecoration(
+            color: BrandTheme.redTop.withValues(alpha: 0.92),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.76)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.22),
+                blurRadius: large ? 12 : 8,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: large ? 10 : 7,
+              fontWeight: FontWeight.w900,
+              letterSpacing: large ? 0.9 : 0.5,
+              height: 1,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ModerationCoverHintLine extends StatelessWidget {
+  const _ModerationCoverHintLine({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      decoration: BoxDecoration(
+        color: BrandTheme.redTop.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: BrandTheme.redTop.withValues(alpha: 0.18)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.star_rounded, color: BrandTheme.redTop, size: 17),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: adminBodyStyle(
+                weight: FontWeight.w800,
+                size: 12,
+                color: BrandTheme.redTop,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1247,7 +1359,8 @@ class _ModerationMediaStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final media = <_ModerationMediaItem>[
-      for (final url in photoUrls) _ModerationMediaItem.photo(url),
+      for (var i = 0; i < photoUrls.length; i += 1)
+        _ModerationMediaItem.photo(photoUrls[i], isCover: i == 0),
       for (var i = 0; i < videoUrls.length; i += 1)
         _ModerationMediaItem.video(
           videoUrl: videoUrls[i],
@@ -1287,13 +1400,26 @@ class _ModerationMediaItem {
     required this.videoUrl,
     required this.isVideo,
     required this.isEmpty,
+    required this.isCover,
   });
 
   const _ModerationMediaItem.empty()
-    : this._(url: '', videoUrl: '', isVideo: false, isEmpty: true);
+    : this._(
+        url: '',
+        videoUrl: '',
+        isVideo: false,
+        isEmpty: true,
+        isCover: false,
+      );
 
-  const _ModerationMediaItem.photo(String url)
-    : this._(url: url, videoUrl: '', isVideo: false, isEmpty: false);
+  const _ModerationMediaItem.photo(String url, {bool isCover = false})
+    : this._(
+        url: url,
+        videoUrl: '',
+        isVideo: false,
+        isEmpty: false,
+        isCover: isCover,
+      );
 
   const _ModerationMediaItem.video({
     required String videoUrl,
@@ -1303,12 +1429,14 @@ class _ModerationMediaItem {
          videoUrl: videoUrl,
          isVideo: true,
          isEmpty: false,
+         isCover: false,
        );
 
   final String url;
   final String videoUrl;
   final bool isVideo;
   final bool isEmpty;
+  final bool isCover;
 }
 
 class _ModerationMediaViewerPage extends StatefulWidget {
@@ -1387,6 +1515,55 @@ class _ModerationMediaViewerPageState
                         color: Colors.white,
                         fontWeight: FontWeight.w800,
                       ),
+                    ),
+                  ),
+                ),
+              ),
+            if (widget.media[_index].isCover)
+              Positioned(
+                left: 24,
+                right: 24,
+                bottom: 24,
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: BrandTheme.redTop.withValues(alpha: 0.92),
+                      borderRadius: BorderRadius.circular(999),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.35),
+                          blurRadius: 18,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.star_rounded,
+                          color: Colors.white,
+                          size: 18,
+                        ),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            _moderationCoverHint(context),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.4,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -1599,6 +1776,8 @@ class _ModerationMediaThumb extends StatelessWidget {
                     ),
                   ),
                 ),
+              if (item.isCover)
+                _ModerationCoverBadge(label: _moderationCoverLabel(context)),
             ],
           ),
         ),
