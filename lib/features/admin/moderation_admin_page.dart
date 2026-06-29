@@ -24,6 +24,7 @@ const double _moderationMediaRadius = 16;
 const double _moderationDesktopBreakpoint = 900;
 const double _moderationDesktopMaxWidth = 1540;
 const double _moderationDesktopListWidth = 430;
+const double _moderationDesktopDetailBreakpoint = 1040;
 
 List<String> _mergeUniqueMedia(List<String> published, List<String> pending) {
   final seen = <String>{};
@@ -630,13 +631,12 @@ class _ModerationDesktopLayout extends StatelessWidget {
           children: [
             SizedBox(
               width: _moderationDesktopListWidth,
-              child: _ModerationRequestList(
+              child: _ModerationDesktopQueuePanel(
                 items: items,
                 selectedId: selected.id,
                 onTap: onSelect,
                 onApprove: onApprove,
                 onReject: onReject,
-                showInlineActions: false,
               ),
             ),
             const SizedBox(width: 18),
@@ -654,6 +654,95 @@ class _ModerationDesktopLayout extends StatelessWidget {
   }
 }
 
+class _ModerationDesktopQueuePanel extends StatelessWidget {
+  const _ModerationDesktopQueuePanel({
+    required this.items,
+    required this.selectedId,
+    required this.onTap,
+    required this.onApprove,
+    required this.onReject,
+  });
+
+  final List<MyProfileState> items;
+  final String? selectedId;
+  final ValueChanged<MyProfileState> onTap;
+  final Future<void> Function(MyProfileState profile) onApprove;
+  final Future<void> Function(MyProfileState profile) onReject;
+
+  @override
+  Widget build(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+
+    return Container(
+      decoration: catalogCardDecoration(),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 18, 18, 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    ru ? 'ОЧЕРЕДЬ' : 'QUEUE',
+                    style: adminCommandStyle(size: 17, letterSpacing: 1.2),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 11,
+                    vertical: 7,
+                  ),
+                  decoration: BoxDecoration(
+                    color: kTextDark,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    '${items.length}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                      height: 1,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 0, 18, 12),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                ru
+                    ? 'Выберите заявку, чтобы проверить анкету и медиа.'
+                    : 'Select a request to review profile data and media.',
+                style: adminBodyStyle(
+                  size: 12,
+                  weight: FontWeight.w700,
+                  color: kTextMuted,
+                ),
+              ),
+            ),
+          ),
+          Expanded(
+            child: _ModerationRequestList(
+              items: items,
+              selectedId: selectedId,
+              onTap: onTap,
+              onApprove: onApprove,
+              onReject: onReject,
+              showInlineActions: false,
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 16),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ModerationRequestList extends StatelessWidget {
   const _ModerationRequestList({
     required this.items,
@@ -662,6 +751,7 @@ class _ModerationRequestList extends StatelessWidget {
     required this.onApprove,
     required this.onReject,
     required this.showInlineActions,
+    this.padding = EdgeInsets.zero,
   });
 
   final List<MyProfileState> items;
@@ -670,13 +760,14 @@ class _ModerationRequestList extends StatelessWidget {
   final Future<void> Function(MyProfileState profile) onApprove;
   final Future<void> Function(MyProfileState profile) onReject;
   final bool showInlineActions;
+  final EdgeInsetsGeometry padding;
 
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
 
     return ListView.separated(
-      padding: EdgeInsets.zero,
+      padding: padding,
       itemCount: items.length,
       separatorBuilder: (_, _) => const SizedBox(height: 12),
       itemBuilder: (context, i) {
@@ -870,100 +961,16 @@ class _ModerationProfileDetailsPanel extends StatelessWidget {
             ),
           ),
           Expanded(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(22, 0, 22, 18),
-              children: [
-                if (media.isNotEmpty)
-                  SizedBox(
-                    height: 260,
-                    child: ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: media.length,
-                      separatorBuilder: (_, _) => const SizedBox(width: 12),
-                      itemBuilder: (_, index) => _ModerationLargeMedia(
-                        item: media[index],
-                        media: media,
-                        initialIndex: index,
-                      ),
-                    ),
-                  )
-                else
-                  Container(
-                    height: 240,
-                    decoration: profileImagePlaceholderDecoration(),
-                  ),
-                if (media.isNotEmpty && media.first.isCover) ...[
-                  const SizedBox(height: 12),
-                  _ModerationCoverHintLine(text: _moderationCoverHint(context)),
-                ],
-                const SizedBox(height: 22),
-                Text(
-                  profile.fullName.trim().isEmpty
-                      ? profile.id
-                      : profile.fullName.trim(),
-                  style: adminCommandStyle(size: 28, letterSpacing: 0.7),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  '${profile.displayAge} • ${profile.height} cm • ${profile.city} ${profile.country}',
-                  style: adminBodyStyle(weight: FontWeight.w800, size: 16),
-                ),
-                const SizedBox(height: 18),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  children: [
-                    _ModerationMetricChip(
-                      label: ru ? 'Параметры' : 'Measurements',
-                      value:
-                          '${profile.bust} / ${profile.waist} / ${profile.hips}',
-                    ),
-                    _ModerationMetricChip(
-                      label: ru ? 'Обувь' : 'Shoes',
-                      value: '${profile.shoeSize}',
-                    ),
-                    _ModerationMetricChip(
-                      label: ru ? 'Глаза' : 'Eyes',
-                      value: profile.eyeColor,
-                    ),
-                    _ModerationMetricChip(
-                      label: ru ? 'Волосы' : 'Hair',
-                      value: profile.hairColor,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 18),
-                if (profile.resume.trim().isNotEmpty)
-                  _ModerationDetailLine(
-                    label: ru ? 'О себе' : 'About',
-                    value: profile.resume.trim(),
-                  ),
-                if (profile.experience.trim().isNotEmpty)
-                  _ModerationDetailLine(
-                    label: ru ? 'Опыт' : 'Experience',
-                    value: profile.experience.trim(),
-                  ),
-                if (profile.skills.trim().isNotEmpty)
-                  _ModerationDetailLine(
-                    label: ru ? 'Навыки' : 'Skills',
-                    value: profile.skills.trim(),
-                  ),
-                if (profile.services.trim().isNotEmpty)
-                  _ModerationDetailLine(
-                    label: ru ? 'Услуги' : 'Services',
-                    value: profile.services.trim(),
-                  ),
-                if (profile.genres.trim().isNotEmpty)
-                  _ModerationDetailLine(
-                    label: ru ? 'Жанры' : 'Genres',
-                    value: profile.genres.trim(),
-                  ),
-                if (profile.equipment.trim().isNotEmpty)
-                  _ModerationDetailLine(
-                    label: ru ? 'Оборудование' : 'Equipment',
-                    value: profile.equipment.trim(),
-                  ),
-              ],
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return _ModerationDesktopReviewBody(
+                  profile: profile,
+                  media: media,
+                  twoColumn:
+                      constraints.maxWidth >=
+                      _moderationDesktopDetailBreakpoint,
+                );
+              },
             ),
           ),
           Padding(
@@ -996,6 +1003,196 @@ class _ModerationProfileDetailsPanel extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _ModerationDesktopReviewBody extends StatelessWidget {
+  const _ModerationDesktopReviewBody({
+    required this.profile,
+    required this.media,
+    required this.twoColumn,
+  });
+
+  final MyProfileState profile;
+  final List<_ModerationMediaItem> media;
+  final bool twoColumn;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!twoColumn) {
+      return ListView(
+        padding: const EdgeInsets.fromLTRB(22, 0, 22, 18),
+        children: [
+          _ModerationReviewMediaGallery(media: media, compact: true),
+          const SizedBox(height: 22),
+          _ModerationReviewProfileInfo(profile: profile),
+        ],
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(22, 0, 22, 18),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            width: 390,
+            child: _ModerationReviewMediaGallery(media: media),
+          ),
+          const SizedBox(width: 22),
+          Expanded(
+            child: ListView(
+              padding: EdgeInsets.zero,
+              children: [_ModerationReviewProfileInfo(profile: profile)],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ModerationReviewMediaGallery extends StatelessWidget {
+  const _ModerationReviewMediaGallery({
+    required this.media,
+    this.compact = false,
+  });
+
+  final List<_ModerationMediaItem> media;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+
+    if (media.isEmpty) {
+      return Container(
+        height: compact ? 240 : null,
+        decoration: profileImagePlaceholderDecoration(),
+      );
+    }
+
+    final primary = media.first;
+    final rest = media.skip(1).toList(growable: false);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          ru ? 'МЕДИА' : 'MEDIA',
+          style: adminCommandStyle(size: 13, letterSpacing: 1.2),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: compact ? 260 : 360,
+          child: _ModerationHeroMedia(
+            item: primary,
+            media: media,
+            initialIndex: 0,
+          ),
+        ),
+        if (primary.isCover) ...[
+          const SizedBox(height: 12),
+          _ModerationCoverHintLine(text: _moderationCoverHint(context)),
+        ],
+        if (rest.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          SizedBox(
+            height: _moderationMediaSize,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: rest.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
+              itemBuilder: (_, index) => _ModerationMediaThumb(
+                item: rest[index],
+                media: media,
+                initialIndex: index + 1,
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _ModerationReviewProfileInfo extends StatelessWidget {
+  const _ModerationReviewProfileInfo({required this.profile});
+
+  final MyProfileState profile;
+
+  @override
+  Widget build(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final name = profile.fullName.trim().isEmpty
+        ? profile.id
+        : profile.fullName.trim();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(name, style: adminCommandStyle(size: 28, letterSpacing: 0.7)),
+        const SizedBox(height: 8),
+        Text(
+          '${profile.displayAge} • ${profile.height} cm • ${profile.city} ${profile.country}',
+          style: adminBodyStyle(weight: FontWeight.w800, size: 16),
+        ),
+        const SizedBox(height: 18),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            _ModerationMetricChip(
+              label: ru ? 'Параметры' : 'Measurements',
+              value: '${profile.bust} / ${profile.waist} / ${profile.hips}',
+            ),
+            _ModerationMetricChip(
+              label: ru ? 'Обувь' : 'Shoes',
+              value: '${profile.shoeSize}',
+            ),
+            _ModerationMetricChip(
+              label: ru ? 'Глаза' : 'Eyes',
+              value: profile.eyeColor,
+            ),
+            _ModerationMetricChip(
+              label: ru ? 'Волосы' : 'Hair',
+              value: profile.hairColor,
+            ),
+          ],
+        ),
+        const SizedBox(height: 18),
+        if (profile.resume.trim().isNotEmpty)
+          _ModerationDetailLine(
+            label: ru ? 'О себе' : 'About',
+            value: profile.resume.trim(),
+          ),
+        if (profile.experience.trim().isNotEmpty)
+          _ModerationDetailLine(
+            label: ru ? 'Опыт' : 'Experience',
+            value: profile.experience.trim(),
+          ),
+        if (profile.skills.trim().isNotEmpty)
+          _ModerationDetailLine(
+            label: ru ? 'Навыки' : 'Skills',
+            value: profile.skills.trim(),
+          ),
+        if (profile.services.trim().isNotEmpty)
+          _ModerationDetailLine(
+            label: ru ? 'Услуги' : 'Services',
+            value: profile.services.trim(),
+          ),
+        if (profile.genres.trim().isNotEmpty)
+          _ModerationDetailLine(
+            label: ru ? 'Жанры' : 'Genres',
+            value: profile.genres.trim(),
+          ),
+        if (profile.equipment.trim().isNotEmpty)
+          _ModerationDetailLine(
+            label: ru ? 'Оборудование' : 'Equipment',
+            value: profile.equipment.trim(),
+          ),
+      ],
     );
   }
 }
@@ -1068,6 +1265,77 @@ class _ModerationDetailLine extends StatelessWidget {
           const SizedBox(height: 4),
           Text(value, style: adminBodyStyle(weight: FontWeight.w700)),
         ],
+      ),
+    );
+  }
+}
+
+class _ModerationHeroMedia extends StatelessWidget {
+  const _ModerationHeroMedia({
+    required this.item,
+    required this.media,
+    required this.initialIndex,
+  });
+
+  final _ModerationMediaItem item;
+  final List<_ModerationMediaItem> media;
+  final int initialIndex;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: item.isEmpty
+          ? null
+          : () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => _ModerationMediaViewerPage(
+                  media: media,
+                  initialIndex: initialIndex,
+                ),
+              ),
+            ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (item.url.trim().isEmpty)
+              Container(color: const Color(0xFFE5E5E5))
+            else
+              CachedNetworkImage(
+                imageUrl: item.url,
+                fit: BoxFit.cover,
+                memCacheWidth: 900,
+                maxWidthDiskCache: 1400,
+                placeholder: (_, _) =>
+                    Container(color: const Color(0xFFE5E5E5)),
+                errorWidget: (_, _, _) =>
+                    Container(color: const Color(0xFFE5E5E5)),
+              ),
+            if (item.isCover)
+              _ModerationCoverBadge(
+                label: _moderationCoverLabel(context),
+                large: true,
+              ),
+            if (item.isVideo)
+              const Center(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: Color(0x77000000),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Padding(
+                    padding: EdgeInsets.all(12),
+                    child: Icon(
+                      Icons.play_arrow_rounded,
+                      color: Colors.white,
+                      size: 42,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
