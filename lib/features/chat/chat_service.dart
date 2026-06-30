@@ -280,14 +280,22 @@ class ChatService {
 
     final existing = await _sb
         .from('selection_chats')
-        .select('id')
+        .select('id,model_user_id,agent_user_id')
         .eq('selection_id', selectionId)
         .eq('profile_id', profileId)
         .maybeSingle();
 
     if (existing != null) {
       final id = (existing['id'] ?? '').toString();
-      if (id.isNotEmpty) return id;
+      if (id.isNotEmpty) {
+        return _normalizeExistingSelectionChat(
+          chatId: id,
+          selectionId: selectionId,
+          profileId: profileId,
+          modelUserId: modelUserId,
+          agentUserId: resolvedAgentUserId,
+        );
+      }
     }
 
     Map<String, dynamic> data;
@@ -314,7 +322,54 @@ class ChatService {
       data = Map<String, dynamic>.from(row);
     }
 
-    return (data['id'] ?? '').toString();
+    final id = (data['id'] ?? '').toString();
+    if (id.isNotEmpty) {
+      await _updateChatContext(
+        chatId: id,
+        selectionId: selectionId,
+        profileId: profileId,
+      );
+    }
+    return id;
+  }
+
+  Future<String> _normalizeExistingSelectionChat({
+    required String chatId,
+    required String selectionId,
+    required String profileId,
+    required String modelUserId,
+    required String? agentUserId,
+  }) async {
+    if (agentUserId == null || agentUserId.isEmpty) return chatId;
+    try {
+      await _sb
+          .from('selection_chats')
+          .update({
+            'model_user_id': modelUserId,
+            'agent_user_id': agentUserId,
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+            'model_deleted_at': null,
+            'agent_deleted_at': null,
+          })
+          .eq('id', chatId);
+      return chatId;
+    } on PostgrestException catch (e) {
+      if (e.code != '23505') rethrow;
+      final accountChat = await _sb
+          .from('selection_chats')
+          .select('id')
+          .eq('model_user_id', modelUserId)
+          .eq('agent_user_id', agentUserId)
+          .maybeSingle();
+      final accountChatId = (accountChat?['id'] ?? '').toString();
+      if (accountChatId.isEmpty) rethrow;
+      await _updateChatContext(
+        chatId: accountChatId,
+        selectionId: selectionId,
+        profileId: profileId,
+      );
+      return accountChatId;
+    }
   }
 
   Future<void> _updateChatContext({

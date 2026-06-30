@@ -33,6 +33,16 @@ alter table public.selection_chat_messages
   add column if not exists file_mime text,
   add column if not exists deleted_at timestamptz;
 
+update public.selection_chats sc
+set
+  agent_user_id = s.created_by,
+  updated_at = coalesce(sc.updated_at, now())
+from public.selections s
+where sc.selection_id = s.id
+  and sc.agent_user_id is null
+  and s.created_by is not null
+  and s.created_by <> sc.model_user_id;
+
 do $$
 declare
   v_constraint text;
