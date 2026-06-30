@@ -305,10 +305,7 @@ class _MediaBlock extends StatelessWidget {
               child: BrandPillButton(
                 label: t.profileAddPhotoUpper,
                 style: BrandPillStyle.light,
-                onTap: () {
-                  if (uploading) return;
-                  onAddPhoto();
-                },
+                onTap: onAddPhoto,
               ),
             ),
             const SizedBox(width: kGap10),
@@ -316,10 +313,7 @@ class _MediaBlock extends StatelessWidget {
               child: BrandPillButton(
                 label: t.profileAddVideoUpper,
                 style: BrandPillStyle.light,
-                onTap: () {
-                  if (uploading) return;
-                  onAddVideo();
-                },
+                onTap: onAddVideo,
               ),
             ),
           ],
@@ -1547,12 +1541,7 @@ class _ProfileMediaStorage {
     }
 
     final stamp = DateTime.now().millisecondsSinceEpoch;
-    final uploadedPhotos = <String>[];
-    final uploadedVideos = <String>[];
-    final uploadedVideoPreviews = <String>[];
-
-    for (int i = 0; i < pickedPhotos.length; i++) {
-      final xf = pickedPhotos[i];
+    Future<String> uploadPhoto(int i, XFile xf) async {
       final ext = _ext(xf);
       final ct = _contentType(isVideo: false, ext: ext, mimeType: xf.mimeType);
       final name = '${stamp}_$i.${ext.isEmpty ? 'jpg' : ext}';
@@ -1565,11 +1554,13 @@ class _ProfileMediaStorage {
         bytes: bytes,
         contentType: ct,
       );
-      uploadedPhotos.add(url);
+      return url;
     }
 
-    for (int i = 0; i < pickedVideos.length; i++) {
-      final xf = pickedVideos[i];
+    Future<({String videoUrl, String previewUrl})> uploadVideo(
+      int i,
+      XFile xf,
+    ) async {
       final ext = _ext(xf);
       final ct = _contentType(isVideo: true, ext: ext, mimeType: xf.mimeType);
       final name = '${stamp}_$i.${ext.isEmpty ? 'mp4' : ext}';
@@ -1583,31 +1574,38 @@ class _ProfileMediaStorage {
         bytes: videoBytes,
         contentType: ct,
       );
-      uploadedVideos.add(videoUrl);
 
+      var previewUrl = '';
       try {
         final previewBytes = await previewBytesFuture;
         if (previewBytes != null && previewBytes.isNotEmpty) {
           final previewPath = '$uid/video_previews/${stamp}_$i.jpg';
-          final previewUrl = await uploadBinary(
+          previewUrl = await uploadBinary(
             bucket: bucket,
             path: previewPath,
             bytes: previewBytes,
             contentType: 'image/jpeg',
           );
-          uploadedVideoPreviews.add(previewUrl);
-        } else {
-          uploadedVideoPreviews.add('');
         }
       } catch (_) {
-        uploadedVideoPreviews.add('');
+        previewUrl = '';
       }
+      return (videoUrl: videoUrl, previewUrl: previewUrl);
     }
+
+    final uploadedPhotos = await Future.wait([
+      for (int i = 0; i < pickedPhotos.length; i++)
+        uploadPhoto(i, pickedPhotos[i]),
+    ]);
+    final uploadedVideoItems = await Future.wait([
+      for (int i = 0; i < pickedVideos.length; i++)
+        uploadVideo(i, pickedVideos[i]),
+    ]);
 
     return _ProfileMediaUploadResult(
       photoUrls: List<String>.from(uploadedPhotos),
-      videoUrls: List<String>.from(uploadedVideos),
-      videoPreviewUrls: List<String>.from(uploadedVideoPreviews),
+      videoUrls: uploadedVideoItems.map((e) => e.videoUrl).toList(),
+      videoPreviewUrls: uploadedVideoItems.map((e) => e.previewUrl).toList(),
     );
   }
 

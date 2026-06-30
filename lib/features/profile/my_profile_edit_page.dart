@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
@@ -97,7 +98,7 @@ class MyProfileEditPage extends ConsumerStatefulWidget {
 
 class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
   _ProfileMediaStorage get _mediaStorage => _ProfileMediaStorage(_sb);
-  bool get _isBusy => _actionBusy || _uploading || _saving;
+  bool get _isBusy => _actionBusy || _saving;
   SupabaseClient get _sb => ref.read(supabaseProvider);
   static const _skipMediaDeleteConfirmKey = _kSkipMediaDeleteConfirmKey;
 
@@ -144,7 +145,7 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
   String _pendingCoverPhotoUrl = '';
   List<String> _pendingVideoUrls = [];
   List<String> _pendingVideoPreviewUrls = [];
-  bool _uploading = false;
+  final bool _uploading = false;
 
   static const String _bucket = _kProfileMediaBucket;
 
@@ -671,43 +672,6 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
         name.endsWith('.avi');
   }
 
-  Future<
-    ({
-      List<String> photoUrls,
-      List<String> videoUrls,
-      List<String> videoPreviewUrls,
-    })
-  >
-  _uploadPickedMediaToLists(String uid) async {
-    if (_pickedPhotos.isEmpty && _pickedVideos.isEmpty) {
-      return (
-        photoUrls: const <String>[],
-        videoUrls: const <String>[],
-        videoPreviewUrls: const <String>[],
-      );
-    }
-
-    setState(() => _uploading = true);
-    try {
-      final result = await _mediaStorage.uploadPickedMedia(
-        bucket: _bucket,
-        uid: uid,
-        pickedPhotos: _pickedPhotos,
-        pickedVideos: _pickedVideos,
-      );
-
-      return (
-        photoUrls: List<String>.from(result.photoUrls),
-        videoUrls: List<String>.from(result.videoUrls),
-        videoPreviewUrls: List<String>.from(result.videoPreviewUrls),
-      );
-    } finally {
-      if (mounted) {
-        setState(() => _uploading = false);
-      }
-    }
-  }
-
   Future<void> _saveExistingProfile(MyProfileState base) async {
     await _runIfIdle(() async {
       await _saveAndMaybeSubmit(base, submitForReview: false);
@@ -726,7 +690,7 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
     bool approveImmediately = false,
     bool closeAfter = true,
   }) async {
-    if (_saving || _uploading) return null;
+    if (_saving) return null;
 
     FocusScope.of(context).unfocus();
     setState(() {
@@ -744,26 +708,25 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
 
     try {
       final uid = await _requireUid();
-      final uploaded = await _uploadPickedMediaToLists(uid);
-      final selectedUploadedCoverPhotoUrl = _uploadedCoverPhotoUrl(
-        uploaded.photoUrls,
-      );
+      final pickedPhotos = List<XFile>.from(_pickedPhotos);
+      final pickedVideos = List<XFile>.from(_pickedVideos);
+      final pickedCoverPhotoIndex = _pickedCoverPhotoIndex;
+      final hasPickedMedia = pickedPhotos.isNotEmpty || pickedVideos.isNotEmpty;
 
       final next = _buildNextProfile(
         base,
         nn,
         submitForReview: submitForReview,
         approveImmediately: approveImmediately,
-        selectedUploadedCoverPhotoUrl: selectedUploadedCoverPhotoUrl,
       );
 
       final saved = await ref
           .read(myProfileProvider.notifier)
           .saveProfileWithPendingMedia(
             profile: next,
-            newPhotoUrls: uploaded.photoUrls,
-            newVideoUrls: uploaded.videoUrls,
-            newVideoPreviewUrls: uploaded.videoPreviewUrls,
+            newPhotoUrls: const <String>[],
+            newVideoUrls: const <String>[],
+            newVideoPreviewUrls: const <String>[],
           );
       final visibleSaved = approveImmediately
           ? await ref
@@ -799,6 +762,18 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
         );
       });
 
+      if (hasPickedMedia) {
+        _showMediaUploadQueuedSnack();
+        _uploadPickedMediaAfterSave(
+          uid: uid,
+          profile: visibleSaved,
+          pickedPhotos: pickedPhotos,
+          pickedVideos: pickedVideos,
+          pickedCoverPhotoIndex: pickedCoverPhotoIndex,
+          approveImmediately: approveImmediately,
+        );
+      }
+
       if (closeAfter) Navigator.of(context).pop();
       return visibleSaved.id;
     } catch (e, st) {
@@ -815,6 +790,72 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
         setState(() => _saving = false);
       }
     }
+  }
+
+  void _showMediaUploadQueuedSnack() {
+    final isRussian =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ru';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          isRussian
+              ? 'Анкета сохранена. Фото и видео догружаются в фоне.'
+              : 'Profile saved. Photos and videos are uploading in the background.',
+        ),
+      ),
+    );
+  }
+
+  void _uploadPickedMediaAfterSave({
+    required String uid,
+    required MyProfileState profile,
+    required List<XFile> pickedPhotos,
+    required List<XFile> pickedVideos,
+    required int? pickedCoverPhotoIndex,
+    required bool approveImmediately,
+  }) {
+    final storage = _mediaStorage;
+    final notifier = ref.read(myProfileProvider.notifier);
+
+    unawaited(() async {
+      try {
+        final result = await storage.uploadPickedMedia(
+          bucket: _bucket,
+          uid: uid,
+          pickedPhotos: pickedPhotos,
+          pickedVideos: pickedVideos,
+        );
+        final selectedCoverPhotoUrl = _uploadedCoverPhotoUrlFrom(
+          result.photoUrls,
+          pickedCoverPhotoIndex,
+        );
+        final profileForMedia = profile.copyWith(
+          pendingCoverPhotoUrl:
+              !approveImmediately && selectedCoverPhotoUrl.isNotEmpty
+              ? selectedCoverPhotoUrl
+              : profile.pendingCoverPhotoUrl,
+          coverPhotoUrl: approveImmediately && selectedCoverPhotoUrl.isNotEmpty
+              ? selectedCoverPhotoUrl
+              : profile.coverPhotoUrl,
+        );
+
+        final saved = await notifier.saveProfileWithPendingMedia(
+          profile: profileForMedia,
+          newPhotoUrls: result.photoUrls,
+          newVideoUrls: result.videoUrls,
+          newVideoPreviewUrls: result.videoPreviewUrls,
+        );
+        if (approveImmediately) {
+          await notifier.publishAdminProfile(saved.id);
+        }
+      } catch (e, st) {
+        AppLogger.error(
+          'Failed to upload profile media in background',
+          error: e,
+          stackTrace: st,
+        );
+      }
+    }());
   }
 
   Future<void> _submitNew(MyProfileState base) async {
@@ -1017,8 +1058,11 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
     });
   }
 
-  String _uploadedCoverPhotoUrl(List<String> uploadedPhotoUrls) {
-    final index = _pickedCoverPhotoIndex;
+  String _uploadedCoverPhotoUrlFrom(
+    List<String> uploadedPhotoUrls,
+    int? selectedIndex,
+  ) {
+    final index = selectedIndex;
     if (index == null || index < 0 || index >= uploadedPhotoUrls.length) {
       return '';
     }
