@@ -742,6 +742,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       },
       orElse: () => _ChatHeaderData(title: t.chatUpper),
     );
+    final chatContext = summary.valueOrNull;
 
     final content = Stack(
       children: [
@@ -768,6 +769,12 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                   onDeleteChat: _deleteChat,
                 ),
                 const SizedBox(height: 12),
+                if (chatContext != null &&
+                    (chatContext.profileName.trim().isNotEmpty ||
+                        chatContext.selectionTitle.trim().isNotEmpty)) ...[
+                  _ChatContextCard(summary: chatContext),
+                  const SizedBox(height: 12),
+                ],
                 Expanded(
                   child: messages.when(
                     loading: () =>
@@ -1034,6 +1041,168 @@ class _ChatHeaderAvatar extends StatelessWidget {
                 errorWidget: (_, _, _) =>
                     const Icon(Icons.person_rounded, color: Colors.white),
               ),
+      ),
+    );
+  }
+}
+
+class _ChatContextCard extends StatelessWidget {
+  const _ChatContextCard({required this.summary});
+
+  final ChatSummary summary;
+
+  @override
+  Widget build(BuildContext context) {
+    final profileName = summary.profileName.trim();
+    final selectionTitle = summary.selectionTitle.trim();
+    final hasProfile = summary.profileId.trim().isNotEmpty;
+    final hasSelection = summary.selectionId.trim().isNotEmpty;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: kBorderColor),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: pillDecoration(isDark: true, radius: 15),
+            child: const Icon(
+              Icons.account_tree_rounded,
+              color: Colors.white,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'КОНТЕКСТ ДИАЛОГА',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: kTextMuted,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                if (profileName.isNotEmpty)
+                  _ContextLine(label: 'Анкета', value: profileName),
+                if (selectionTitle.isNotEmpty)
+                  _ContextLine(label: 'Кастинг', value: selectionTitle),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (hasProfile)
+                _ContextIconButton(
+                  icon: Icons.badge_rounded,
+                  tooltip: 'Открыть анкету',
+                  onTap: () =>
+                      context.push('${Routes.modelPrefix}${summary.profileId}'),
+                ),
+              if (hasProfile && hasSelection) const SizedBox(width: 6),
+              if (hasSelection)
+                _ContextIconButton(
+                  icon: Icons.video_camera_front_rounded,
+                  tooltip: 'Открыть кастинг',
+                  onTap: () => context.push(
+                    '${Routes.publicSelectionPrefix}${summary.selectionId}',
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ContextLine extends StatelessWidget {
+  const _ContextLine({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 2),
+      child: Text.rich(
+        TextSpan(
+          children: [
+            TextSpan(
+              text: '$label: ',
+              style: const TextStyle(
+                color: kTextMuted,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            TextSpan(
+              text: value,
+              style: const TextStyle(
+                color: kTextDark,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
+        ),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(fontSize: 12, letterSpacing: 0),
+      ),
+    );
+  }
+}
+
+class _ContextIconButton extends StatelessWidget {
+  const _ContextIconButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(15),
+          onTap: onTap,
+          child: Container(
+            width: 36,
+            height: 36,
+            alignment: Alignment.center,
+            decoration: catalogSearchDecoration(radius: 15),
+            child: Icon(icon, color: kTextDark, size: 20),
+          ),
+        ),
       ),
     );
   }
