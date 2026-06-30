@@ -17,6 +17,49 @@ const double _chatsDesktopBreakpoint = 900;
 const double _chatsDesktopMaxWidth = 1480;
 const double _chatsDesktopListWidth = 430;
 
+enum _ChatRoleFilter {
+  all,
+  model,
+  client;
+
+  String get label {
+    return switch (this) {
+      _ChatRoleFilter.all => 'ВСЕ',
+      _ChatRoleFilter.model => 'КАК МОДЕЛЬ',
+      _ChatRoleFilter.client => 'КАК ЗАКАЗЧИК',
+    };
+  }
+
+  bool matches(ChatListItem item) {
+    return switch (this) {
+      _ChatRoleFilter.all => true,
+      _ChatRoleFilter.model =>
+        item.participantRole == ChatParticipantRole.model,
+      _ChatRoleFilter.client =>
+        item.participantRole == ChatParticipantRole.client,
+    };
+  }
+
+  String get emptyTitle {
+    return switch (this) {
+      _ChatRoleFilter.all => 'ЧАТОВ НЕТ',
+      _ChatRoleFilter.model => 'ЧАТОВ КАК МОДЕЛЬ НЕТ',
+      _ChatRoleFilter.client => 'ЧАТОВ КАК ЗАКАЗЧИК НЕТ',
+    };
+  }
+
+  String get emptyMessage {
+    return switch (this) {
+      _ChatRoleFilter.all =>
+        'Откройте приглашение или подборку, чтобы начать диалог.',
+      _ChatRoleFilter.model =>
+        'Здесь будут диалоги, где пишут по вашим анкетам.',
+      _ChatRoleFilter.client =>
+        'Здесь будут диалоги, которые вы начали как заказчик.',
+    };
+  }
+}
+
 TextStyle _chatTitleStyle({
   Color color = kTextDark,
   double size = 18,
@@ -43,6 +86,7 @@ class _ChatsPageState extends ConsumerState<ChatsPage> {
   String _query = '';
   String? _selectedChatId;
   bool _archived = false;
+  _ChatRoleFilter _roleFilter = _ChatRoleFilter.all;
 
   @override
   void initState() {
@@ -108,6 +152,16 @@ class _ChatsPageState extends ConsumerState<ChatsPage> {
                   const SizedBox(height: 14),
                   _ChatsSearch(controller: _searchController),
                   const SizedBox(height: 14),
+                  _ChatRoleSegments(
+                    value: _roleFilter,
+                    onChanged: (value) {
+                      setState(() {
+                        _roleFilter = value;
+                        _selectedChatId = null;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 14),
                   Expanded(
                     child: chats.when(
                       loading: () =>
@@ -118,14 +172,20 @@ class _ChatsPageState extends ConsumerState<ChatsPage> {
                       ),
                       data: (items) {
                         final visible = items
-                            .where((item) => item.matches(_query))
+                            .where(
+                              (item) =>
+                                  item.matches(_query) &&
+                                  _roleFilter.matches(item),
+                            )
                             .toList(growable: false);
                         if (visible.isEmpty) {
                           return _ChatsEmptyState(
-                            title: _archived ? 'АРХИВ ПУСТ' : 'ЧАТОВ НЕТ',
+                            title: _archived
+                                ? 'АРХИВ ПУСТ'
+                                : _roleFilter.emptyTitle,
                             message: _archived
                                 ? 'Архивированные диалоги появятся здесь.'
-                                : 'Откройте приглашение или подборку, чтобы начать диалог.',
+                                : _roleFilter.emptyMessage,
                           );
                         }
                         if (isDesktop) {
@@ -339,6 +399,53 @@ class _ChatsDesktopLayout extends StatelessWidget {
   }
 }
 
+class _ChatRoleSegments extends StatelessWidget {
+  const _ChatRoleSegments({required this.value, required this.onChanged});
+
+  final _ChatRoleFilter value;
+  final ValueChanged<_ChatRoleFilter> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: _ChatRoleFilter.values
+            .map((filter) {
+              final selected = filter == value;
+              return Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(999),
+                    onTap: () => onChanged(filter),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 160),
+                      height: 40,
+                      alignment: Alignment.center,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      decoration: pillDecoration(isDark: selected, radius: 999),
+                      child: Text(
+                        filter.label,
+                        style: _chatTitleStyle(
+                          color: selected ? Colors.white : kTextMuted,
+                          size: 11,
+                          spacing: 1,
+                          weight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            })
+            .toList(growable: false),
+      ),
+    );
+  }
+}
+
 class _ChatListTile extends StatelessWidget {
   const _ChatListTile({
     required this.item,
@@ -430,6 +537,35 @@ class _ChatListTile extends StatelessWidget {
                       ),
                       const SizedBox(height: 5),
                     ],
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: pillDecoration(
+                          isDark:
+                              item.participantRole ==
+                              ChatParticipantRole.client,
+                          radius: 999,
+                        ),
+                        child: Text(
+                          item.participantRole.label,
+                          style: _chatTitleStyle(
+                            color:
+                                item.participantRole ==
+                                    ChatParticipantRole.client
+                                ? Colors.white
+                                : kTextMuted,
+                            size: 9,
+                            spacing: 0.8,
+                            weight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 5),
                     Row(
                       children: [
                         Expanded(

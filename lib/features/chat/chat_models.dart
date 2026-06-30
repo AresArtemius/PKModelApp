@@ -157,6 +157,7 @@ class ChatListItem {
     required this.profileName,
     required this.photoUrl,
     required this.contextLabel,
+    required this.participantRole,
     required this.lastMessage,
     required this.lastMessageAt,
     required this.unreadCount,
@@ -169,6 +170,7 @@ class ChatListItem {
   final String profileName;
   final String photoUrl;
   final String contextLabel;
+  final ChatParticipantRole participantRole;
   final String lastMessage;
   final DateTime? lastMessageAt;
   final int unreadCount;
@@ -181,6 +183,7 @@ class ChatListItem {
     String? profileName,
     String? photoUrl,
     String? contextLabel,
+    ChatParticipantRole? participantRole,
     String? lastMessage,
     DateTime? lastMessageAt,
     int? unreadCount,
@@ -193,6 +196,7 @@ class ChatListItem {
       profileName: profileName ?? this.profileName,
       photoUrl: photoUrl ?? this.photoUrl,
       contextLabel: contextLabel ?? this.contextLabel,
+      participantRole: participantRole ?? this.participantRole,
       lastMessage: lastMessage ?? this.lastMessage,
       lastMessageAt: lastMessageAt ?? this.lastMessageAt,
       unreadCount: unreadCount ?? this.unreadCount,
@@ -214,7 +218,20 @@ class ChatListItem {
     if (q.isEmpty) return true;
     return title.toLowerCase().contains(q) ||
         contextLabel.toLowerCase().contains(q) ||
+        participantRole.label.toLowerCase().contains(q) ||
         lastMessage.toLowerCase().contains(q);
+  }
+}
+
+enum ChatParticipantRole {
+  model,
+  client;
+
+  String get label {
+    return switch (this) {
+      ChatParticipantRole.model => 'КАК МОДЕЛЬ',
+      ChatParticipantRole.client => 'КАК ЗАКАЗЧИК',
+    };
   }
 }
 

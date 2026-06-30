@@ -619,6 +619,9 @@ class ChatService {
           profileName: modelProfileName,
           selectionTitle: selectionTitle,
         ),
+        participantRole: isModel
+            ? ChatParticipantRole.model
+            : ChatParticipantRole.client,
         lastMessage: latest == null ? '' : _chatPreview(latest),
         lastMessageAt: latest?.createdAt ?? fallbackTime,
         unreadCount: unreadCount,
