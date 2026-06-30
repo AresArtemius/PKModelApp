@@ -58,6 +58,11 @@ final chatSummaryProvider = FutureProvider.autoDispose
           .fetchChat(chatId: chatId, currentUserId: userId);
     });
 
+final chatContextsProvider = FutureProvider.autoDispose
+    .family<List<ChatContextEntry>, String>((ref, chatId) {
+      return ref.watch(chatServiceProvider).fetchChatContexts(chatId);
+    });
+
 final chatParticipantAvatarsProvider = FutureProvider.autoDispose
     .family<Map<String, String>, String>((ref, chatId) {
       return ref.watch(chatServiceProvider).fetchChatParticipantAvatars(chatId);

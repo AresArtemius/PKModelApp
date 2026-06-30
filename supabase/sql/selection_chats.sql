@@ -20,6 +20,16 @@ create table if not exists public.selection_chat_messages (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.selection_chat_contexts (
+  id uuid primary key default gen_random_uuid(),
+  chat_id uuid not null references public.selection_chats(id) on delete cascade,
+  selection_id uuid not null references public.selections(id) on delete cascade,
+  profile_id uuid not null references public.profiles(id) on delete cascade,
+  created_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  unique (chat_id, selection_id, profile_id)
+);
+
 alter table public.selection_chats
   add column if not exists model_deleted_at timestamptz,
   add column if not exists agent_deleted_at timestamptz;
@@ -131,6 +141,22 @@ create unique index if not exists selection_chats_account_pair_unique_idx
   on public.selection_chats (model_user_id, agent_user_id)
   where agent_user_id is not null;
 
+insert into public.selection_chat_contexts (
+  chat_id,
+  selection_id,
+  profile_id,
+  created_by,
+  created_at
+)
+select
+  id,
+  selection_id,
+  profile_id,
+  coalesce(agent_user_id, model_user_id),
+  created_at
+from public.selection_chats
+on conflict (chat_id, selection_id, profile_id) do nothing;
+
 create table if not exists public.app_notifications (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
@@ -157,10 +183,14 @@ create index if not exists selection_chat_messages_chat_created_idx
 create index if not exists selection_chat_reactions_chat_idx
   on public.selection_chat_message_reactions (chat_id);
 
+create index if not exists selection_chat_contexts_chat_created_idx
+  on public.selection_chat_contexts (chat_id, created_at desc);
+
 create index if not exists app_notifications_user_created_idx
   on public.app_notifications (user_id, created_at desc);
 
 alter table public.selection_chats enable row level security;
+alter table public.selection_chat_contexts enable row level security;
 alter table public.selection_chat_messages enable row level security;
 alter table public.selection_chat_message_reactions enable row level security;
 alter table public.app_notifications enable row level security;
@@ -260,6 +290,47 @@ $hide_selection_chat_for_me$;
 
 grant execute on function public.hide_selection_chat_for_me(uuid)
   to authenticated;
+
+drop policy if exists "Selection chat participants can view contexts"
+  on public.selection_chat_contexts;
+
+create policy "Selection chat participants can view contexts"
+  on public.selection_chat_contexts
+  for select
+  to authenticated
+  using (
+    exists (
+      select 1
+      from public.selection_chats sc
+      where sc.id = selection_chat_contexts.chat_id
+        and (
+          auth.uid() = sc.model_user_id
+          or auth.uid() = sc.agent_user_id
+          or public.current_user_is_admin()
+        )
+    )
+  );
+
+drop policy if exists "Selection chat participants can create contexts"
+  on public.selection_chat_contexts;
+
+create policy "Selection chat participants can create contexts"
+  on public.selection_chat_contexts
+  for insert
+  to authenticated
+  with check (
+    auth.uid() = created_by
+    and exists (
+      select 1
+      from public.selection_chats sc
+      where sc.id = selection_chat_contexts.chat_id
+        and (
+          auth.uid() = sc.model_user_id
+          or auth.uid() = sc.agent_user_id
+          or public.current_user_is_admin()
+        )
+    )
+  );
 
 drop policy if exists "Selection chat participants can view messages"
   on public.selection_chat_messages;

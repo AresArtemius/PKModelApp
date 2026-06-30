@@ -340,7 +340,14 @@ class ChatService {
     required String modelUserId,
     required String? agentUserId,
   }) async {
-    if (agentUserId == null || agentUserId.isEmpty) return chatId;
+    if (agentUserId == null || agentUserId.isEmpty) {
+      await _recordChatContext(
+        chatId: chatId,
+        selectionId: selectionId,
+        profileId: profileId,
+      );
+      return chatId;
+    }
     try {
       await _sb
           .from('selection_chats')
@@ -352,6 +359,11 @@ class ChatService {
             'agent_deleted_at': null,
           })
           .eq('id', chatId);
+      await _recordChatContext(
+        chatId: chatId,
+        selectionId: selectionId,
+        profileId: profileId,
+      );
       return chatId;
     } on PostgrestException catch (e) {
       if (e.code != '23505') rethrow;
@@ -390,6 +402,71 @@ class ChatService {
           .eq('id', chatId);
     } on PostgrestException {
       // Context refresh is helpful, but the existing conversation is usable.
+    }
+    await _recordChatContext(
+      chatId: chatId,
+      selectionId: selectionId,
+      profileId: profileId,
+    );
+  }
+
+  Future<void> _recordChatContext({
+    required String chatId,
+    required String selectionId,
+    required String profileId,
+  }) async {
+    final userId = _sb.auth.currentUser?.id;
+    if (userId == null ||
+        chatId.trim().isEmpty ||
+        selectionId.trim().isEmpty ||
+        profileId.trim().isEmpty) {
+      return;
+    }
+
+    try {
+      await _sb.from('selection_chat_contexts').insert({
+        'chat_id': chatId,
+        'selection_id': selectionId,
+        'profile_id': profileId,
+        'created_by': userId,
+      });
+    } on PostgrestException catch (e) {
+      if (e.code == '23505') return;
+      final missingTable = SupabaseCompat.isMissingRelation(e, const [
+        'selection_chat_contexts',
+      ]);
+      if (!missingTable && !_isRlsRecursion(e)) rethrow;
+    }
+  }
+
+  Future<List<ChatContextEntry>> fetchChatContexts(String chatId) async {
+    if (chatId.trim().isEmpty) return const <ChatContextEntry>[];
+    try {
+      final rows = await _sb
+          .from('selection_chat_contexts')
+          .select('''
+            id,
+            chat_id,
+            selection_id,
+            profile_id,
+            created_at,
+            selection:selections(title),
+            profile:profiles(full_name)
+          ''')
+          .eq('chat_id', chatId)
+          .order('created_at', ascending: false)
+          .limit(12);
+      return (rows as List)
+          .map((e) => ChatContextEntry.fromMap(Map<String, dynamic>.from(e)))
+          .toList(growable: false);
+    } on PostgrestException catch (e) {
+      final missingTable = SupabaseCompat.isMissingRelation(e, const [
+        'selection_chat_contexts',
+      ]);
+      if (missingTable || _isRlsRecursion(e)) {
+        return const <ChatContextEntry>[];
+      }
+      rethrow;
     }
   }
 

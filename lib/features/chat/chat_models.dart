@@ -272,6 +272,42 @@ class ChatSummary {
   }
 }
 
+class ChatContextEntry {
+  const ChatContextEntry({
+    required this.id,
+    required this.chatId,
+    required this.selectionId,
+    required this.profileId,
+    required this.selectionTitle,
+    required this.profileName,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String chatId;
+  final String selectionId;
+  final String profileId;
+  final String selectionTitle;
+  final String profileName;
+  final DateTime? createdAt;
+
+  factory ChatContextEntry.fromMap(Map<String, dynamic> map) {
+    final selection = Map<String, dynamic>.from(
+      (map['selection'] as Map?) ?? {},
+    );
+    final profile = Map<String, dynamic>.from((map['profile'] as Map?) ?? {});
+    return ChatContextEntry(
+      id: (map['id'] ?? '').toString(),
+      chatId: (map['chat_id'] ?? '').toString(),
+      selectionId: (map['selection_id'] ?? '').toString(),
+      profileId: (map['profile_id'] ?? '').toString(),
+      selectionTitle: (selection['title'] ?? '').toString().trim(),
+      profileName: (profile['full_name'] ?? '').toString().trim(),
+      createdAt: DateTime.tryParse((map['created_at'] ?? '').toString()),
+    );
+  }
+}
+
 class ChatMessage {
   const ChatMessage({
     required this.id,

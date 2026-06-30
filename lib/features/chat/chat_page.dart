@@ -725,6 +725,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     final reactions = ref.watch(chatReactionsProvider(widget.chatId));
     final typingStates = ref.watch(chatTypingStatesProvider(widget.chatId));
     final summary = ref.watch(chatSummaryProvider(widget.chatId));
+    final contexts = ref.watch(chatContextsProvider(widget.chatId));
     final avatars = ref.watch(chatParticipantAvatarsProvider(widget.chatId));
     final avatarMap = avatars.valueOrNull ?? const <String, String>{};
     final reactionMap = <String, List<ChatReaction>>{};
@@ -772,7 +773,11 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                 if (chatContext != null &&
                     (chatContext.profileName.trim().isNotEmpty ||
                         chatContext.selectionTitle.trim().isNotEmpty)) ...[
-                  _ChatContextCard(summary: chatContext),
+                  _ChatContextCard(
+                    summary: chatContext,
+                    contexts:
+                        contexts.valueOrNull ?? const <ChatContextEntry>[],
+                  ),
                   const SizedBox(height: 12),
                 ],
                 Expanded(
@@ -1047,9 +1052,10 @@ class _ChatHeaderAvatar extends StatelessWidget {
 }
 
 class _ChatContextCard extends StatelessWidget {
-  const _ChatContextCard({required this.summary});
+  const _ChatContextCard({required this.summary, required this.contexts});
 
   final ChatSummary summary;
+  final List<ChatContextEntry> contexts;
 
   @override
   Widget build(BuildContext context) {
@@ -1057,6 +1063,14 @@ class _ChatContextCard extends StatelessWidget {
     final selectionTitle = summary.selectionTitle.trim();
     final hasProfile = summary.profileId.trim().isNotEmpty;
     final hasSelection = summary.selectionId.trim().isNotEmpty;
+    final history = contexts
+        .where(
+          (entry) =>
+              entry.profileId != summary.profileId ||
+              entry.selectionId != summary.selectionId,
+        )
+        .take(4)
+        .toList(growable: false);
 
     return Container(
       width: double.infinity,
@@ -1073,66 +1087,220 @@ class _ChatContextCard extends StatelessWidget {
           ),
         ],
       ),
-      child: Row(
+      child: Column(
         children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: pillDecoration(isDark: true, radius: 15),
-            child: const Icon(
-              Icons.account_tree_rounded,
-              color: Colors.white,
-              size: 20,
-            ),
+          Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: pillDecoration(isDark: true, radius: 15),
+                child: const Icon(
+                  Icons.account_tree_rounded,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'КОНТЕКСТ ДИАЛОГА',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: kTextMuted,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    if (profileName.isNotEmpty)
+                      _ContextLine(label: 'Анкета', value: profileName),
+                    if (selectionTitle.isNotEmpty)
+                      _ContextLine(label: 'Кастинг', value: selectionTitle),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (hasProfile)
+                    _ContextIconButton(
+                      icon: Icons.badge_rounded,
+                      tooltip: 'Открыть анкету',
+                      onTap: () => context.push(
+                        '${Routes.modelPrefix}${summary.profileId}',
+                      ),
+                    ),
+                  if (hasProfile && hasSelection) const SizedBox(width: 6),
+                  if (hasSelection)
+                    _ContextIconButton(
+                      icon: Icons.video_camera_front_rounded,
+                      tooltip: 'Открыть кастинг',
+                      onTap: () => context.push(
+                        '${Routes.publicSelectionPrefix}${summary.selectionId}',
+                      ),
+                    ),
+                ],
+              ),
+            ],
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
+          if (history.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Container(height: 1, color: kBorderColor),
+            const SizedBox(height: 10),
+            const Row(
               children: [
-                const Text(
-                  'КОНТЕКСТ ДИАЛОГА',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                Icon(Icons.history_rounded, size: 15, color: kTextMuted),
+                SizedBox(width: 6),
+                Text(
+                  'ИСТОРИЯ КОНТЕКСТОВ',
                   style: TextStyle(
                     color: kTextMuted,
                     fontSize: 10,
                     fontWeight: FontWeight.w900,
-                    letterSpacing: 1.2,
+                    letterSpacing: 1.1,
                   ),
                 ),
-                const SizedBox(height: 5),
-                if (profileName.isNotEmpty)
-                  _ContextLine(label: 'Анкета', value: profileName),
-                if (selectionTitle.isNotEmpty)
-                  _ContextLine(label: 'Кастинг', value: selectionTitle),
               ],
             ),
+            const SizedBox(height: 8),
+            for (final entry in history) ...[
+              _ContextHistoryRow(entry: entry),
+              if (entry != history.last) const SizedBox(height: 7),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ContextHistoryRow extends StatelessWidget {
+  const _ContextHistoryRow({required this.entry});
+
+  final ChatContextEntry entry;
+
+  @override
+  Widget build(BuildContext context) {
+    final profileName = entry.profileName.trim();
+    final selectionTitle = entry.selectionTitle.trim();
+    final date = _shortDate(entry.createdAt);
+    return Row(
+      children: [
+        Container(
+          width: 6,
+          height: 6,
+          decoration: const BoxDecoration(
+            color: BrandTheme.redTop,
+            shape: BoxShape.circle,
           ),
-          const SizedBox(width: 10),
-          Row(
+        ),
+        const SizedBox(width: 9),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (hasProfile)
-                _ContextIconButton(
-                  icon: Icons.badge_rounded,
-                  tooltip: 'Открыть анкету',
-                  onTap: () =>
-                      context.push('${Routes.modelPrefix}${summary.profileId}'),
+              Text(
+                [
+                  if (profileName.isNotEmpty) profileName,
+                  if (selectionTitle.isNotEmpty) selectionTitle,
+                ].join(' • '),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: kTextDark,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0,
                 ),
-              if (hasProfile && hasSelection) const SizedBox(width: 6),
-              if (hasSelection)
-                _ContextIconButton(
-                  icon: Icons.video_camera_front_rounded,
-                  tooltip: 'Открыть кастинг',
-                  onTap: () => context.push(
-                    '${Routes.publicSelectionPrefix}${summary.selectionId}',
+              ),
+              if (date.isNotEmpty)
+                Text(
+                  date,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: kTextMuted,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0,
                   ),
                 ),
             ],
           ),
-        ],
+        ),
+        const SizedBox(width: 8),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (entry.profileId.trim().isNotEmpty)
+              _ContextMiniButton(
+                icon: Icons.badge_rounded,
+                tooltip: 'Открыть анкету',
+                onTap: () =>
+                    context.push('${Routes.modelPrefix}${entry.profileId}'),
+              ),
+            if (entry.profileId.trim().isNotEmpty &&
+                entry.selectionId.trim().isNotEmpty)
+              const SizedBox(width: 5),
+            if (entry.selectionId.trim().isNotEmpty)
+              _ContextMiniButton(
+                icon: Icons.video_camera_front_rounded,
+                tooltip: 'Открыть кастинг',
+                onTap: () => context.push(
+                  '${Routes.publicSelectionPrefix}${entry.selectionId}',
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  String _shortDate(DateTime? value) {
+    if (value == null) return '';
+    final local = value.toLocal();
+    String two(int number) => number.toString().padLeft(2, '0');
+    return '${two(local.day)}.${two(local.month)}.${local.year}';
+  }
+}
+
+class _ContextMiniButton extends StatelessWidget {
+  const _ContextMiniButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(11),
+          onTap: onTap,
+          child: Container(
+            width: 28,
+            height: 28,
+            alignment: Alignment.center,
+            decoration: catalogSearchDecoration(radius: 11),
+            child: Icon(icon, color: kTextDark, size: 16),
+          ),
+        ),
       ),
     );
   }
