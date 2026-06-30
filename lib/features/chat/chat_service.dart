@@ -236,7 +236,10 @@ class ChatService {
     }
   }
 
-  Future<ChatSummary?> fetchChat(String chatId) async {
+  Future<ChatSummary?> fetchChat({
+    required String chatId,
+    required String currentUserId,
+  }) async {
     final row = await _sb
         .from('selection_chats')
         .select('''
@@ -246,13 +249,45 @@ class ChatService {
           model_user_id,
           agent_user_id,
           selection:selections(title),
-          profile:profiles(full_name)
+          profile:profiles(full_name,photo_urls,cover_photo_url)
         ''')
         .eq('id', chatId)
         .maybeSingle();
 
     if (row == null) return null;
-    return ChatSummary.fromMap(Map<String, dynamic>.from(row));
+    final map = Map<String, dynamic>.from(row);
+    final modelUserId = (map['model_user_id'] ?? '').toString();
+    final agentUserId = (map['agent_user_id'] ?? '').toString();
+    final otherUserId = currentUserId == modelUserId
+        ? agentUserId
+        : modelUserId;
+    final accountPreviews = await _fetchAccountPreviews([map], currentUserId);
+    final accountPreview = accountPreviews[otherUserId];
+    final selection = Map<String, dynamic>.from(
+      (map['selection'] as Map?) ?? {},
+    );
+    final profile = Map<String, dynamic>.from((map['profile'] as Map?) ?? {});
+    final photoUrlsRaw = profile['photo_urls'];
+    final photoUrls = photoUrlsRaw is List
+        ? photoUrlsRaw
+              .map((e) => e.toString().trim())
+              .where((e) => e.isNotEmpty)
+              .toList(growable: false)
+        : const <String>[];
+    final modelProfileName = (profile['full_name'] ?? '').toString().trim();
+    final selectionTitle = (selection['title'] ?? '').toString().trim();
+
+    return ChatSummary.fromMap(
+      map,
+      accountTitle: accountPreview?.displayName ?? modelProfileName,
+      accountAvatarUrl:
+          accountPreview?.avatarUrl ??
+          _chatCoverPhoto(profile['cover_photo_url'], photoUrls),
+      contextLabel: _chatContextLabel(
+        profileName: modelProfileName,
+        selectionTitle: selectionTitle,
+      ),
+    );
   }
 
   Future<List<ChatListItem>> fetchMyChats({

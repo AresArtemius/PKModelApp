@@ -731,15 +731,16 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     for (final reaction in reactions.valueOrNull ?? const <ChatReaction>[]) {
       reactionMap.putIfAbsent(reaction.messageId, () => []).add(reaction);
     }
-    final title = summary.maybeWhen(
+    final headerData = summary.maybeWhen(
       data: (value) {
-        final parts = [
-          value?.selectionTitle ?? '',
-          value?.profileName ?? '',
-        ].where((e) => e.trim().isNotEmpty).toList(growable: false);
-        return parts.isEmpty ? t.chatUpper : parts.join(' • ');
+        final title = (value?.accountTitle ?? '').trim();
+        return _ChatHeaderData(
+          title: title.isEmpty ? t.chatUpper : title,
+          subtitle: value?.contextLabel ?? '',
+          avatarUrl: value?.accountAvatarUrl ?? '',
+        );
       },
-      orElse: () => t.chatUpper,
+      orElse: () => _ChatHeaderData(title: t.chatUpper),
     );
 
     final content = Stack(
@@ -758,7 +759,9 @@ class _ChatPageState extends ConsumerState<ChatPage> {
             child: Column(
               children: [
                 _ChatHeader(
-                  title: title,
+                  title: headerData.title,
+                  subtitle: headerData.subtitle,
+                  avatarUrl: headerData.avatarUrl,
                   onBack: widget.embedded
                       ? widget.onClose
                       : () => context.pop(),
@@ -923,14 +926,30 @@ class _LoadOlderMessagesButton extends StatelessWidget {
   }
 }
 
+class _ChatHeaderData {
+  const _ChatHeaderData({
+    required this.title,
+    this.subtitle = '',
+    this.avatarUrl = '',
+  });
+
+  final String title;
+  final String subtitle;
+  final String avatarUrl;
+}
+
 class _ChatHeader extends StatelessWidget {
   const _ChatHeader({
     required this.title,
+    required this.subtitle,
+    required this.avatarUrl,
     required this.onBack,
     required this.onDeleteChat,
   });
 
   final String title;
+  final String subtitle;
+  final String avatarUrl;
   final VoidCallback? onBack;
   final VoidCallback onDeleteChat;
 
@@ -943,19 +962,79 @@ class _ChatHeader extends StatelessWidget {
         else
           _IconPill(icon: Icons.arrow_back_ios_new_rounded, onTap: onBack!),
         Expanded(
-          child: Text(
-            title,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: kTextDark,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 1.8,
-              fontSize: 20,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _ChatHeaderAvatar(url: avatarUrl),
+                const SizedBox(width: 10),
+                Flexible(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: kTextDark,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1.2,
+                          fontSize: 18,
+                        ),
+                      ),
+                      if (subtitle.trim().isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: kTextMuted,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
         ),
         _IconPill(icon: Icons.delete_outline_rounded, onTap: onDeleteChat),
       ],
+    );
+  }
+}
+
+class _ChatHeaderAvatar extends StatelessWidget {
+  const _ChatHeaderAvatar({required this.url});
+
+  final String url;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        width: 34,
+        height: 34,
+        color: kTextDark,
+        child: url.trim().isEmpty
+            ? const Icon(Icons.person_rounded, color: Colors.white, size: 21)
+            : CachedNetworkImage(
+                imageUrl: url,
+                fit: BoxFit.cover,
+                errorWidget: (_, _, _) =>
+                    const Icon(Icons.person_rounded, color: Colors.white),
+              ),
+      ),
     );
   }
 }

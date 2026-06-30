@@ -51,7 +51,11 @@ final chatTypingStatesProvider = StreamProvider.autoDispose
 
 final chatSummaryProvider = FutureProvider.autoDispose
     .family<ChatSummary?, String>((ref, chatId) {
-      return ref.watch(chatServiceProvider).fetchChat(chatId);
+      final userId = ref.watch(currentUserIdProvider);
+      if (userId == null) return Future.value(null);
+      return ref
+          .watch(chatServiceProvider)
+          .fetchChat(chatId: chatId, currentUserId: userId);
     });
 
 final chatParticipantAvatarsProvider = FutureProvider.autoDispose

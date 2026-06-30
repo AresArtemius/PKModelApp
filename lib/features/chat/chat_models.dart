@@ -157,6 +157,9 @@ class ChatSummary {
     required this.agentUserId,
     required this.selectionTitle,
     required this.profileName,
+    required this.accountTitle,
+    required this.accountAvatarUrl,
+    required this.contextLabel,
   });
 
   final String id;
@@ -166,20 +169,35 @@ class ChatSummary {
   final String agentUserId;
   final String selectionTitle;
   final String profileName;
+  final String accountTitle;
+  final String accountAvatarUrl;
+  final String contextLabel;
 
-  factory ChatSummary.fromMap(Map<String, dynamic> map) {
+  factory ChatSummary.fromMap(
+    Map<String, dynamic> map, {
+    String accountTitle = '',
+    String accountAvatarUrl = '',
+    String contextLabel = '',
+  }) {
     final selection = Map<String, dynamic>.from(
       (map['selection'] as Map?) ?? {},
     );
     final profile = Map<String, dynamic>.from((map['profile'] as Map?) ?? {});
+    final selectionTitle = (selection['title'] ?? '').toString().trim();
+    final profileName = (profile['full_name'] ?? '').toString().trim();
     return ChatSummary(
       id: (map['id'] ?? '').toString(),
       selectionId: (map['selection_id'] ?? '').toString(),
       profileId: (map['profile_id'] ?? '').toString(),
       modelUserId: (map['model_user_id'] ?? '').toString(),
       agentUserId: (map['agent_user_id'] ?? '').toString(),
-      selectionTitle: (selection['title'] ?? '').toString().trim(),
-      profileName: (profile['full_name'] ?? '').toString().trim(),
+      selectionTitle: selectionTitle,
+      profileName: profileName,
+      accountTitle: accountTitle.trim().isNotEmpty
+          ? accountTitle.trim()
+          : profileName,
+      accountAvatarUrl: accountAvatarUrl.trim(),
+      contextLabel: contextLabel.trim(),
     );
   }
 }
