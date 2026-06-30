@@ -1574,6 +1574,7 @@ class _ProfileMediaStorage {
       final ct = _contentType(isVideo: true, ext: ext, mimeType: xf.mimeType);
       final name = '${stamp}_$i.${ext.isEmpty ? 'mp4' : ext}';
       final storagePath = '$uid/videos/$name';
+      final previewBytesFuture = _videoPreviewBytes(xf);
 
       final videoBytes = await xf.readAsBytes();
       final videoUrl = await uploadBinary(
@@ -1585,13 +1586,7 @@ class _ProfileMediaStorage {
       uploadedVideos.add(videoUrl);
 
       try {
-        final previewBytes = await VideoThumbnail.thumbnailData(
-          video: xf.path,
-          imageFormat: ImageFormat.JPEG,
-          maxWidth: 512,
-          quality: 80,
-        );
-
+        final previewBytes = await previewBytesFuture;
         if (previewBytes != null && previewBytes.isNotEmpty) {
           final previewPath = '$uid/video_previews/${stamp}_$i.jpg';
           final previewUrl = await uploadBinary(
@@ -1613,6 +1608,18 @@ class _ProfileMediaStorage {
       photoUrls: List<String>.from(uploadedPhotos),
       videoUrls: List<String>.from(uploadedVideos),
       videoPreviewUrls: List<String>.from(uploadedVideoPreviews),
+    );
+  }
+
+  Future<Uint8List?> _videoPreviewBytes(XFile xf) async {
+    if (kIsWeb) return null;
+    final path = xf.path.trim();
+    if (path.isEmpty) return null;
+    return VideoThumbnail.thumbnailData(
+      video: path,
+      imageFormat: ImageFormat.JPEG,
+      maxWidth: 512,
+      quality: 72,
     );
   }
 }

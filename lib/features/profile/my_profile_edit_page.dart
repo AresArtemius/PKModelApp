@@ -32,7 +32,6 @@ typedef _NameParts = ({String surname, String name});
 const String _kProfileMediaBucket = 'profile-media';
 const String _kSkipMediaDeleteConfirmKey = 'skip_media_delete_confirm';
 const double _kMediaRemoveInset = 4;
-const double _kDialogPrimaryGap = 18;
 const double _kProfileEditDesktopBreakpoint = 900.0;
 const double _kProfileEditDesktopMaxWidth = 1360.0;
 const double _kProfileEditDesktopSideWidth = 380.0;
@@ -101,10 +100,6 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
   bool get _isBusy => _actionBusy || _uploading || _saving;
   SupabaseClient get _sb => ref.read(supabaseProvider);
   static const _skipMediaDeleteConfirmKey = _kSkipMediaDeleteConfirmKey;
-  bool get _hasPendingNewMedia =>
-      _pickedPhotos.isNotEmpty ||
-      _pickedVideos.isNotEmpty ||
-      (_currentProfile?.hasPendingMedia ?? false);
 
   final _surnameC = TextEditingController();
   final _nameC = TextEditingController();
@@ -643,17 +638,8 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
 
       try {
         final picked = <XFile>[];
-        if (kIsWeb) {
-          final list = await _picker.pickMultipleMedia(limit: 6);
-          picked.addAll(list.where(_isPickedVideo));
-          if (picked.isEmpty) {
-            final v = await _picker.pickVideo(source: ImageSource.gallery);
-            if (v != null && _isPickedVideo(v)) picked.add(v);
-          }
-        } else {
-          final v = await _picker.pickVideo(source: ImageSource.gallery);
-          if (v != null) picked.add(v);
-        }
+        final v = await _picker.pickVideo(source: ImageSource.gallery);
+        if (v != null && _isPickedVideo(v)) picked.add(v);
 
         if (picked.isEmpty || !mounted) return;
 
@@ -722,51 +708,8 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
     }
   }
 
-  Future<void> _showSubmitRequiredForNewMediaDialog() async {
-    if (!mounted) return;
-
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: true,
-      builder: (context) {
-        return _BrandedDialog(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                _t.profileSubmitRequiredTitle,
-                style: kProfileDialogTitleStyle,
-              ),
-              const SizedBox(height: kGap12),
-              Text(
-                _t.profileSubmitRequiredMessage,
-                style: kProfileDialogBodyStyle,
-              ),
-              const SizedBox(height: _kDialogPrimaryGap),
-              SizedBox(
-                width: double.infinity,
-                height: BrandTheme.pillHeight,
-                child: BrandPillButton(
-                  label: _t.okUpper,
-                  style: BrandPillStyle.dark,
-                  onTap: () => Navigator.of(context).pop(),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
   Future<void> _saveExistingProfile(MyProfileState base) async {
     await _runIfIdle(() async {
-      if (_hasPendingNewMedia) {
-        await _showSubmitRequiredForNewMediaDialog();
-        return;
-      }
-
       await _saveAndMaybeSubmit(base, submitForReview: false);
     });
   }

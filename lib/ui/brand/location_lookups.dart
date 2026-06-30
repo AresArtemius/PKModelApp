@@ -159,10 +159,25 @@ List<String> countryOptions(AppLocalizations t) {
 
 List<String> cityOptionsForCountry(AppLocalizations t, String country) {
   final countryId = _resolveCountryId(t, country);
-  if (countryId == null) return const <String>[];
+  if (countryId == null) {
+    if (country.trim().isEmpty) return const <String>[];
+    return _allCityOptions(t);
+  }
 
   final cityIds = _citiesByCountry[countryId] ?? const <String>[];
   return cityIds.map((id) => _cityLabel(t, id)).toList(growable: false);
+}
+
+List<String> _allCityOptions(AppLocalizations t) {
+  final seen = <String>{};
+  final result = <String>[];
+  for (final cityIds in _citiesByCountry.values) {
+    for (final id in cityIds) {
+      final label = _cityLabel(t, id);
+      if (seen.add(label)) result.add(label);
+    }
+  }
+  return result;
 }
 
 String? _resolveCountryId(AppLocalizations t, String raw) {
