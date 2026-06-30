@@ -293,6 +293,7 @@ class ChatService {
       rows = await run(includeListState: false);
     }
 
+    final accountPreviews = await _fetchAccountPreviews(rows, userId);
     final byParticipant = <String, ChatListItem>{};
     final unreadByParticipant = <String, int>{};
     for (final raw in rows) {
@@ -330,6 +331,9 @@ class ChatService {
                 .where((e) => e.isNotEmpty)
                 .toList(growable: false)
           : const <String>[];
+      final modelProfileName = (profile['full_name'] ?? '').toString().trim();
+      final selectionTitle = (selection['title'] ?? '').toString().trim();
+      final accountPreview = accountPreviews[otherUserId];
       final latest = await _fetchLatestMessage(chatId);
       final fallbackTime = DateTime.tryParse(
         (map['updated_at'] ?? map['created_at'] ?? '').toString(),
@@ -337,9 +341,15 @@ class ChatService {
       final unreadCount = await _fetchUnreadCount(chatId, userId);
       final nextItem = ChatListItem(
         id: chatId,
-        selectionTitle: (selection['title'] ?? '').toString().trim(),
-        profileName: (profile['full_name'] ?? '').toString().trim(),
-        photoUrl: _chatCoverPhoto(profile['cover_photo_url'], photoUrls),
+        selectionTitle: accountPreview?.displayName ?? modelProfileName,
+        profileName: '',
+        photoUrl:
+            accountPreview?.avatarUrl ??
+            _chatCoverPhoto(profile['cover_photo_url'], photoUrls),
+        contextLabel: _chatContextLabel(
+          profileName: modelProfileName,
+          selectionTitle: selectionTitle,
+        ),
         lastMessage: latest == null ? '' : _chatPreview(latest),
         lastMessageAt: latest?.createdAt ?? fallbackTime,
         unreadCount: unreadCount,
@@ -376,6 +386,60 @@ class ChatService {
       return bTime.compareTo(aTime);
     });
     return items;
+  }
+
+  Future<Map<String, _ChatAccountPreview>> _fetchAccountPreviews(
+    List<dynamic> chatRows,
+    String currentUserId,
+  ) async {
+    final ids = <String>{};
+    for (final raw in chatRows) {
+      final map = Map<String, dynamic>.from(raw as Map);
+      final modelUserId = (map['model_user_id'] ?? '').toString();
+      final agentUserId = (map['agent_user_id'] ?? '').toString();
+      final otherUserId = currentUserId == modelUserId
+          ? agentUserId
+          : modelUserId;
+      if (otherUserId.isNotEmpty) ids.add(otherUserId);
+    }
+    if (ids.isEmpty) return const <String, _ChatAccountPreview>{};
+
+    try {
+      final rows = await _sb
+          .from('user_profiles')
+          .select('user_id,avatar_url,full_name,company_name,position')
+          .inFilter('user_id', ids.toList(growable: false));
+      final result = <String, _ChatAccountPreview>{};
+      for (final raw in rows as List) {
+        final map = Map<String, dynamic>.from(raw as Map);
+        final userId = (map['user_id'] ?? '').toString();
+        if (userId.isEmpty) continue;
+        result[userId] = _ChatAccountPreview.fromMap(map);
+      }
+      return result;
+    } on PostgrestException catch (e) {
+      final missingProfileColumns = SupabaseCompat.isMissingAnyColumn(e, const [
+        'avatar_url',
+        'full_name',
+        'company_name',
+        'position',
+      ]);
+      if (!missingProfileColumns && !_isRlsRecursion(e)) {
+        return const <String, _ChatAccountPreview>{};
+      }
+      return const <String, _ChatAccountPreview>{};
+    }
+  }
+
+  String _chatContextLabel({
+    required String profileName,
+    required String selectionTitle,
+  }) {
+    final parts = <String>[
+      if (profileName.trim().isNotEmpty) 'Анкета: ${profileName.trim()}',
+      if (selectionTitle.trim().isNotEmpty) 'Кастинг: ${selectionTitle.trim()}',
+    ];
+    return parts.join(' • ');
   }
 
   bool _chatListItemIsNewer(ChatListItem a, ChatListItem b) {
@@ -845,5 +909,33 @@ class ChatService {
         .update({'model_hidden_at': DateTime.now().toUtc().toIso8601String()})
         .eq('selection_id', selectionId)
         .eq('profile_id', profileId);
+  }
+}
+
+class _ChatAccountPreview {
+  const _ChatAccountPreview({
+    required this.displayName,
+    required this.avatarUrl,
+  });
+
+  final String displayName;
+  final String avatarUrl;
+
+  factory _ChatAccountPreview.fromMap(Map<String, dynamic> map) {
+    final companyName = (map['company_name'] ?? '').toString().trim();
+    final fullName = (map['full_name'] ?? '').toString().trim();
+    final position = (map['position'] ?? '').toString().trim();
+    final title = companyName.isNotEmpty
+        ? companyName
+        : fullName.isNotEmpty
+        ? fullName
+        : position.isNotEmpty
+        ? position
+        : 'Аккаунт';
+
+    return _ChatAccountPreview(
+      displayName: title,
+      avatarUrl: (map['avatar_url'] ?? '').toString().trim(),
+    );
   }
 }

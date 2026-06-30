@@ -86,6 +86,7 @@ class ChatListItem {
     required this.selectionTitle,
     required this.profileName,
     required this.photoUrl,
+    required this.contextLabel,
     required this.lastMessage,
     required this.lastMessageAt,
     required this.unreadCount,
@@ -97,6 +98,7 @@ class ChatListItem {
   final String selectionTitle;
   final String profileName;
   final String photoUrl;
+  final String contextLabel;
   final String lastMessage;
   final DateTime? lastMessageAt;
   final int unreadCount;
@@ -108,6 +110,7 @@ class ChatListItem {
     String? selectionTitle,
     String? profileName,
     String? photoUrl,
+    String? contextLabel,
     String? lastMessage,
     DateTime? lastMessageAt,
     int? unreadCount,
@@ -119,6 +122,7 @@ class ChatListItem {
       selectionTitle: selectionTitle ?? this.selectionTitle,
       profileName: profileName ?? this.profileName,
       photoUrl: photoUrl ?? this.photoUrl,
+      contextLabel: contextLabel ?? this.contextLabel,
       lastMessage: lastMessage ?? this.lastMessage,
       lastMessageAt: lastMessageAt ?? this.lastMessageAt,
       unreadCount: unreadCount ?? this.unreadCount,
@@ -139,6 +143,7 @@ class ChatListItem {
     final q = query.trim().toLowerCase();
     if (q.isEmpty) return true;
     return title.toLowerCase().contains(q) ||
+        contextLabel.toLowerCase().contains(q) ||
         lastMessage.toLowerCase().contains(q);
   }
 }

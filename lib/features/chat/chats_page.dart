@@ -416,6 +416,20 @@ class _ChatListTile extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 6),
+                    if (item.contextLabel.trim().isNotEmpty) ...[
+                      Text(
+                        item.contextLabel,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: kTextMuted,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0,
+                        ),
+                      ),
+                      const SizedBox(height: 5),
+                    ],
                     Row(
                       children: [
                         Expanded(
