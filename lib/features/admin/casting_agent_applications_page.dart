@@ -199,15 +199,8 @@ class CastingAgentApplicationsPage extends ConsumerWidget {
       );
     } catch (error) {
       if (!context.mounted) return;
-      final message = AppErrorMapper.message(error, t);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            message.contains('updated_at') && message.contains('user_roles')
-                ? 'Не удалось обработать заявку. Примените SQL fix_user_roles_updated_at.sql в Supabase.'
-                : message,
-          ),
-        ),
+        SnackBar(content: Text(_adminDecisionErrorMessage(error, t))),
       );
       return;
     }
@@ -294,6 +287,36 @@ class CastingAgentApplicationsPage extends ConsumerWidget {
       ),
     );
   }
+}
+
+String _adminDecisionErrorMessage(Object error, AppLocalizations t) {
+  if (error is PostgrestException) {
+    final parts = [
+      error.message,
+      if ((error.details ?? '').toString().trim().isNotEmpty) error.details,
+      if ((error.hint ?? '').toString().trim().isNotEmpty) error.hint,
+      if ((error.code ?? '').toString().trim().isNotEmpty)
+        'code: ${error.code}',
+    ].map((e) => e.toString().trim()).where((e) => e.isNotEmpty).toList();
+    final technical = parts.join('\n');
+    final lower = technical.toLowerCase();
+
+    if (lower.contains('updated_at') ||
+        lower.contains('decided_at') ||
+        lower.contains('decided_by') ||
+        lower.contains('requested_account_type') ||
+        lower.contains('admin_decide_casting_agent_application')) {
+      return 'Не удалось обработать заявку.\n'
+          'Примените SQL: supabase/sql/fix_user_roles_updated_at.sql\n\n'
+          '$technical';
+    }
+
+    if (technical.isNotEmpty) {
+      return 'Ошибка Supabase:\n$technical';
+    }
+  }
+
+  return AppErrorMapper.message(error, t);
 }
 
 class _ApplicationCard extends StatelessWidget {
