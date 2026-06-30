@@ -632,16 +632,14 @@ class _InvitationListTile extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(14, 14, 12, 14),
           child: Row(
             children: [
-              _InvitationThumb(url: item.photoUrl, size: 58),
+              _InvitationThumb(url: item.accountAvatarUrl, size: 58),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      item.selectionTitle.isEmpty
-                          ? message
-                          : item.selectionTitle,
+                      item.accountName.isEmpty ? message : item.accountName,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: _invitationCommandStyle(
@@ -651,10 +649,10 @@ class _InvitationListTile extends StatelessWidget {
                         weight: FontWeight.w700,
                       ),
                     ),
-                    if (item.profileName.isNotEmpty) ...[
+                    if (item.contextLabel.isNotEmpty) ...[
                       const SizedBox(height: 4),
                       Text(
-                        item.profileName,
+                        item.contextLabel,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: _invitationBodyStyle(
@@ -748,7 +746,11 @@ class _InvitationDesktopDetails extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _InvitationThumb(url: item.photoUrl, size: 112, radius: 24),
+              _InvitationThumb(
+                url: item.accountAvatarUrl,
+                size: 112,
+                radius: 24,
+              ),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
@@ -765,7 +767,7 @@ class _InvitationDesktopDetails extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      item.selectionTitle.isEmpty ? '—' : item.selectionTitle,
+                      item.accountName.isEmpty ? '—' : item.accountName,
                       style: _invitationCommandStyle(
                         color: kTextDark,
                         size: 28,
@@ -773,10 +775,10 @@ class _InvitationDesktopDetails extends StatelessWidget {
                         weight: FontWeight.w800,
                       ),
                     ),
-                    if (item.profileName.isNotEmpty) ...[
+                    if (item.contextLabel.isNotEmpty) ...[
                       const SizedBox(height: 8),
                       Text(
-                        item.profileName,
+                        item.contextLabel,
                         style: _invitationBodyStyle(
                           color: kTextMuted,
                           size: 17,
@@ -926,8 +928,8 @@ class _InvitationCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
-    final title = item.selectionTitle.isEmpty ? '—' : item.selectionTitle;
-    final subtitle = item.profileName.isEmpty ? '' : item.profileName;
+    final title = item.accountName.isEmpty ? '—' : item.accountName;
+    final subtitle = item.contextLabel;
 
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 16, 14, 16),
@@ -941,7 +943,7 @@ class _InvitationCard extends StatelessWidget {
           ),
           Row(
             children: [
-              _InvitationThumb(url: item.photoUrl),
+              _InvitationThumb(url: item.accountAvatarUrl),
               const SizedBox(width: 14),
               Expanded(
                 child: Padding(

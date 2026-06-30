@@ -28,12 +28,13 @@ class ChatService {
   Future<List<CastingInvitation>> fetchMyInvitations(String userId) async {
     try {
       final rows = await _sb.rpc('get_my_selection_invitations');
-      return (rows as List<dynamic>)
+      final invitations = (rows as List<dynamic>)
           .map(
             (e) => CastingInvitation.fromRpcMap(Map<String, dynamic>.from(e)),
           )
           .where((e) => e.selectionId.isNotEmpty && e.profileId.isNotEmpty)
           .toList(growable: false);
+      return _enrichInvitationsWithAccounts(invitations);
     } on PostgrestException catch (e) {
       if (_isRlsRecursion(e)) {
         return const <CastingInvitation>[];
@@ -53,7 +54,8 @@ class ChatService {
           selection:selections!inner(
             id,
             title,
-            created_at
+            created_at,
+            created_by
             ${includeVideoRequest ? ',request_video_intro,video_intro_requirements' : ''}
           ),
           profile:profiles!inner(id,user_id,full_name,photo_urls,cover_photo_url)
@@ -92,10 +94,11 @@ class ChatService {
       }
     }
 
-    return rows
+    final invitations = rows
         .map((e) => CastingInvitation.fromMap(Map<String, dynamic>.from(e)))
         .where((e) => e.selectionId.isNotEmpty && e.profileId.isNotEmpty)
         .toList(growable: false);
+    return _enrichInvitationsWithAccounts(invitations);
   }
 
   Future<List<dynamic>> _fetchMyInvitationsWithoutHiddenFilter(
@@ -111,7 +114,8 @@ class ChatService {
           selection:selections!inner(
             id,
             title,
-            created_at
+            created_at,
+            created_by
             ${includeVideoRequest ? ',request_video_intro,video_intro_requirements' : ''}
           ),
           profile:profiles!inner(id,user_id,full_name,photo_urls,cover_photo_url)
@@ -119,6 +123,104 @@ class ChatService {
         .eq('profile.user_id', userId)
         .order('created_at', ascending: false)
         .limit(_invitationListLimit);
+  }
+
+  Future<List<CastingInvitation>> _enrichInvitationsWithAccounts(
+    List<CastingInvitation> invitations,
+  ) async {
+    var enriched = invitations;
+    final missingOwnerSelectionIds = enriched
+        .where((e) => e.accountUserId.trim().isEmpty)
+        .map((e) => e.selectionId.trim())
+        .where((e) => e.isNotEmpty)
+        .toSet();
+    if (missingOwnerSelectionIds.isNotEmpty) {
+      try {
+        final rows = await _sb
+            .from('selections')
+            .select('id,created_by')
+            .inFilter('id', missingOwnerSelectionIds.toList(growable: false));
+        final owners = <String, String>{};
+        for (final raw in rows as List) {
+          final map = Map<String, dynamic>.from(raw as Map);
+          final id = (map['id'] ?? '').toString();
+          final createdBy = (map['created_by'] ?? '').toString();
+          if (id.isNotEmpty && createdBy.isNotEmpty) owners[id] = createdBy;
+        }
+        enriched = enriched
+            .map(
+              (item) => item.accountUserId.trim().isNotEmpty
+                  ? item
+                  : item.copyWith(accountUserId: owners[item.selectionId]),
+            )
+            .toList(growable: false);
+      } on PostgrestException catch (e) {
+        if (!_isRlsRecursion(e)) {
+          enriched = invitations;
+        }
+      }
+    }
+
+    final missingIds = enriched
+        .where((e) => e.accountName.trim().isEmpty)
+        .map((e) => e.accountUserId.trim())
+        .where((e) => e.isNotEmpty)
+        .toSet();
+    if (missingIds.isEmpty) {
+      return enriched
+          .map((e) => _normalizeInvitationAccount(e))
+          .toList(growable: false);
+    }
+
+    Map<String, _ChatAccountPreview> previews = const {};
+    try {
+      final rows = await _sb
+          .from('user_profiles')
+          .select('user_id,avatar_url,full_name,company_name,position')
+          .inFilter('user_id', missingIds.toList(growable: false));
+      final result = <String, _ChatAccountPreview>{};
+      for (final raw in rows as List) {
+        final map = Map<String, dynamic>.from(raw as Map);
+        final userId = (map['user_id'] ?? '').toString();
+        if (userId.isEmpty) continue;
+        result[userId] = _ChatAccountPreview.fromMap(map);
+      }
+      previews = result;
+    } on PostgrestException catch (e) {
+      if (!_isRlsRecursion(e)) {
+        previews = const {};
+      }
+    }
+
+    return enriched
+        .map((item) {
+          final preview = previews[item.accountUserId.trim()];
+          return _normalizeInvitationAccount(
+            item.copyWith(
+              accountName: item.accountName.trim().isNotEmpty
+                  ? item.accountName
+                  : preview?.displayName,
+              accountAvatarUrl: item.accountAvatarUrl.trim().isNotEmpty
+                  ? item.accountAvatarUrl
+                  : preview?.avatarUrl,
+            ),
+          );
+        })
+        .toList(growable: false);
+  }
+
+  CastingInvitation _normalizeInvitationAccount(CastingInvitation item) {
+    final fallbackName = item.selectionTitle.trim().isNotEmpty
+        ? item.selectionTitle
+        : item.profileName;
+    return item.copyWith(
+      accountName: item.accountName.trim().isNotEmpty
+          ? item.accountName.trim()
+          : fallbackName,
+      accountAvatarUrl: item.accountAvatarUrl.trim().isNotEmpty
+          ? item.accountAvatarUrl.trim()
+          : item.photoUrl,
+    );
   }
 
   bool _isRlsRecursion(PostgrestException e) {

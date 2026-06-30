@@ -8,6 +8,10 @@ class CastingInvitation {
     required this.videoIntroRequirements,
     required this.profileName,
     required this.photoUrl,
+    required this.accountUserId,
+    required this.accountName,
+    required this.accountAvatarUrl,
+    required this.contextLabel,
     required this.createdAt,
   });
 
@@ -19,7 +23,34 @@ class CastingInvitation {
   final String videoIntroRequirements;
   final String profileName;
   final String photoUrl;
+  final String accountUserId;
+  final String accountName;
+  final String accountAvatarUrl;
+  final String contextLabel;
   final DateTime? createdAt;
+
+  CastingInvitation copyWith({
+    String? accountUserId,
+    String? accountName,
+    String? accountAvatarUrl,
+    String? contextLabel,
+  }) {
+    return CastingInvitation(
+      selectionId: selectionId,
+      profileId: profileId,
+      modelUserId: modelUserId,
+      selectionTitle: selectionTitle,
+      requestVideoIntro: requestVideoIntro,
+      videoIntroRequirements: videoIntroRequirements,
+      profileName: profileName,
+      photoUrl: photoUrl,
+      accountUserId: accountUserId ?? this.accountUserId,
+      accountName: accountName ?? this.accountName,
+      accountAvatarUrl: accountAvatarUrl ?? this.accountAvatarUrl,
+      contextLabel: contextLabel ?? this.contextLabel,
+      createdAt: createdAt,
+    );
+  }
 
   factory CastingInvitation.fromMap(Map<String, dynamic> map) {
     final selection = Map<String, dynamic>.from(
@@ -45,6 +76,13 @@ class CastingInvitation {
           .trim(),
       profileName: (profile['full_name'] ?? '').toString().trim(),
       photoUrl: _coverPhoto(profile['cover_photo_url'], photoUrls),
+      accountUserId: (selection['created_by'] ?? '').toString(),
+      accountName: '',
+      accountAvatarUrl: '',
+      contextLabel: _invitationContextLabel(
+        profileName: (profile['full_name'] ?? '').toString().trim(),
+        selectionTitle: (selection['title'] ?? '').toString().trim(),
+      ),
       createdAt: DateTime.tryParse((map['created_at'] ?? '').toString()),
     );
   }
@@ -69,9 +107,41 @@ class CastingInvitation {
           .trim(),
       profileName: (map['profile_name'] ?? '').toString().trim(),
       photoUrl: _coverPhoto(map['cover_photo_url'], photoUrls),
+      accountUserId:
+          (map['account_user_id'] ??
+                  map['selection_created_by'] ??
+                  map['created_by'] ??
+                  map['agent_user_id'] ??
+                  '')
+              .toString(),
+      accountName:
+          (map['account_name'] ??
+                  map['account_full_name'] ??
+                  map['company_name'] ??
+                  '')
+              .toString()
+              .trim(),
+      accountAvatarUrl: (map['account_avatar_url'] ?? map['avatar_url'] ?? '')
+          .toString()
+          .trim(),
+      contextLabel: _invitationContextLabel(
+        profileName: (map['profile_name'] ?? '').toString().trim(),
+        selectionTitle: (map['selection_title'] ?? '').toString().trim(),
+      ),
       createdAt: DateTime.tryParse((map['created_at'] ?? '').toString()),
     );
   }
+}
+
+String _invitationContextLabel({
+  required String profileName,
+  required String selectionTitle,
+}) {
+  final parts = <String>[
+    if (profileName.trim().isNotEmpty) 'Анкета: ${profileName.trim()}',
+    if (selectionTitle.trim().isNotEmpty) 'Кастинг: ${selectionTitle.trim()}',
+  ];
+  return parts.join(' • ');
 }
 
 String _coverPhoto(dynamic rawCover, List<String> photoUrls) {
