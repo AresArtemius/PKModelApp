@@ -82,17 +82,11 @@ class ProfileMediaStorage {
     final stamp = DateTime.now().millisecondsSinceEpoch;
 
     Future<String> uploadPhoto(int i, XFile xf) async {
-      final ext = _ext(xf);
-      final ct = _contentType(isVideo: false, ext: ext, mimeType: xf.mimeType);
-      final name = '${stamp}_$i.${ext.isEmpty ? 'jpg' : ext}';
-      final storagePath = '$uid/photos/$name';
-
-      final bytes = await xf.readAsBytes();
-      return uploadBinary(
+      return this.uploadPhoto(
         bucket: bucket,
-        path: storagePath,
-        bytes: bytes,
-        contentType: ct,
+        uid: uid,
+        file: xf,
+        pathSeed: '${stamp}_$i',
       );
     }
 
@@ -100,36 +94,12 @@ class ProfileMediaStorage {
       int i,
       XFile xf,
     ) async {
-      final ext = _ext(xf);
-      final ct = _contentType(isVideo: true, ext: ext, mimeType: xf.mimeType);
-      final name = '${stamp}_$i.${ext.isEmpty ? 'mp4' : ext}';
-      final storagePath = '$uid/videos/$name';
-      final previewBytesFuture = _videoPreviewBytes(xf);
-
-      final videoBytes = await xf.readAsBytes();
-      final videoUrl = await uploadBinary(
+      return this.uploadVideo(
         bucket: bucket,
-        path: storagePath,
-        bytes: videoBytes,
-        contentType: ct,
+        uid: uid,
+        file: xf,
+        pathSeed: '${stamp}_$i',
       );
-
-      var previewUrl = '';
-      try {
-        final previewBytes = await previewBytesFuture;
-        if (previewBytes != null && previewBytes.isNotEmpty) {
-          final previewPath = '$uid/video_previews/${stamp}_$i.jpg';
-          previewUrl = await uploadBinary(
-            bucket: bucket,
-            path: previewPath,
-            bytes: previewBytes,
-            contentType: 'image/jpeg',
-          );
-        }
-      } catch (_) {
-        previewUrl = '';
-      }
-      return (videoUrl: videoUrl, previewUrl: previewUrl);
     }
 
     final uploadedPhotos = await Future.wait([
@@ -146,6 +116,64 @@ class ProfileMediaStorage {
       videoUrls: uploadedVideoItems.map((e) => e.videoUrl).toList(),
       videoPreviewUrls: uploadedVideoItems.map((e) => e.previewUrl).toList(),
     );
+  }
+
+  Future<String> uploadPhoto({
+    required String bucket,
+    required String uid,
+    required XFile file,
+    required String pathSeed,
+  }) async {
+    final ext = _ext(file);
+    final ct = _contentType(isVideo: false, ext: ext, mimeType: file.mimeType);
+    final name = '$pathSeed.${ext.isEmpty ? 'jpg' : ext}';
+    final storagePath = '$uid/photos/$name';
+
+    final bytes = await file.readAsBytes();
+    return uploadBinary(
+      bucket: bucket,
+      path: storagePath,
+      bytes: bytes,
+      contentType: ct,
+    );
+  }
+
+  Future<({String videoUrl, String previewUrl})> uploadVideo({
+    required String bucket,
+    required String uid,
+    required XFile file,
+    required String pathSeed,
+  }) async {
+    final ext = _ext(file);
+    final ct = _contentType(isVideo: true, ext: ext, mimeType: file.mimeType);
+    final name = '$pathSeed.${ext.isEmpty ? 'mp4' : ext}';
+    final storagePath = '$uid/videos/$name';
+    final previewBytesFuture = _videoPreviewBytes(file);
+
+    final videoBytes = await file.readAsBytes();
+    final videoUrl = await uploadBinary(
+      bucket: bucket,
+      path: storagePath,
+      bytes: videoBytes,
+      contentType: ct,
+    );
+
+    var previewUrl = '';
+    try {
+      final previewBytes = await previewBytesFuture;
+      if (previewBytes != null && previewBytes.isNotEmpty) {
+        final previewPath = '$uid/video_previews/$pathSeed.jpg';
+        previewUrl = await uploadBinary(
+          bucket: bucket,
+          path: previewPath,
+          bytes: previewBytes,
+          contentType: 'image/jpeg',
+        );
+      }
+    } catch (_) {
+      previewUrl = '';
+    }
+    return (videoUrl: videoUrl, previewUrl: previewUrl);
   }
 
   Future<Uint8List?> _videoPreviewBytes(XFile xf) async {

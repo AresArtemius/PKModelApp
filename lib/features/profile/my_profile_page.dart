@@ -186,6 +186,12 @@ class MyProfilePage extends ConsumerWidget {
             onRetryUpload: (task) => ref
                 .read(profileMediaUploadQueueProvider.notifier)
                 .retry(task.id),
+            onPauseUpload: (task) => ref
+                .read(profileMediaUploadQueueProvider.notifier)
+                .pause(task.id),
+            onResumeUpload: (task) => ref
+                .read(profileMediaUploadQueueProvider.notifier)
+                .resume(task.id),
             onDismissUpload: (task) => ref
                 .read(profileMediaUploadQueueProvider.notifier)
                 .dismiss(task.id),
@@ -1164,6 +1170,8 @@ class _ProfileSummaryCard extends StatelessWidget {
     required this.photoUrl,
     required this.uploadTask,
     required this.onRetryUpload,
+    required this.onPauseUpload,
+    required this.onResumeUpload,
     required this.onDismissUpload,
   });
 
@@ -1172,6 +1180,8 @@ class _ProfileSummaryCard extends StatelessWidget {
   final String? photoUrl;
   final ProfileMediaUploadTask? uploadTask;
   final ValueChanged<ProfileMediaUploadTask> onRetryUpload;
+  final ValueChanged<ProfileMediaUploadTask> onPauseUpload;
+  final ValueChanged<ProfileMediaUploadTask> onResumeUpload;
   final ValueChanged<ProfileMediaUploadTask> onDismissUpload;
   final VoidCallback onTap;
 
@@ -1248,6 +1258,8 @@ class _ProfileSummaryCard extends StatelessWidget {
                     _ProfileUploadStatusLine(
                       task: uploadTask!,
                       onRetry: () => onRetryUpload(uploadTask!),
+                      onPause: () => onPauseUpload(uploadTask!),
+                      onResume: () => onResumeUpload(uploadTask!),
                       onDismiss: () => onDismissUpload(uploadTask!),
                     ),
                   ],
@@ -1270,11 +1282,15 @@ class _ProfileUploadStatusLine extends StatelessWidget {
   const _ProfileUploadStatusLine({
     required this.task,
     required this.onRetry,
+    required this.onPause,
+    required this.onResume,
     required this.onDismiss,
   });
 
   final ProfileMediaUploadTask task;
   final VoidCallback onRetry;
+  final VoidCallback onPause;
+  final VoidCallback onResume;
   final VoidCallback onDismiss;
 
   String _mediaLabel(BuildContext context) {
@@ -1293,19 +1309,20 @@ class _ProfileUploadStatusLine extends StatelessWidget {
     final ru = Localizations.localeOf(context).languageCode == 'ru';
     final isFailed = task.status == ProfileMediaUploadStatus.failed;
     final isDone = task.status == ProfileMediaUploadStatus.completed;
+    final isPaused = task.status == ProfileMediaUploadStatus.paused;
     final label = switch (task.status) {
       ProfileMediaUploadStatus.uploading =>
         ru ? 'Медиа загружаются' : 'Media uploading',
+      ProfileMediaUploadStatus.paused =>
+        ru ? 'Загрузка на паузе' : 'Media upload paused',
       ProfileMediaUploadStatus.failed =>
         ru ? 'Ошибка загрузки медиа' : 'Media upload failed',
       ProfileMediaUploadStatus.completed =>
         ru ? 'Медиа загружены' : 'Media uploaded',
     };
 
-    return Wrap(
-      spacing: 8,
-      runSpacing: 6,
-      crossAxisAlignment: WrapCrossAlignment.center,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
@@ -1328,7 +1345,7 @@ class _ProfileUploadStatusLine extends StatelessWidget {
                 const SizedBox(width: 7),
               ],
               Text(
-                '$label: ${_mediaLabel(context)}',
+                '$label ${task.progressPercent}%: ${_mediaLabel(context)}',
                 style: _accountBodyStyle(
                   color: isFailed ? Colors.white : kTextMuted,
                   size: 11,
@@ -1338,11 +1355,143 @@ class _ProfileUploadStatusLine extends StatelessWidget {
             ],
           ),
         ),
-        if (isFailed)
-          _MiniUploadAction(label: ru ? 'ПОВТОРИТЬ' : 'RETRY', onTap: onRetry),
-        if (isFailed || isDone)
-          _MiniUploadAction(label: ru ? 'СКРЫТЬ' : 'HIDE', onTap: onDismiss),
+        const SizedBox(height: 7),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(999),
+          child: LinearProgressIndicator(
+            value: task.progress,
+            minHeight: 5,
+            backgroundColor: kBorderColor.withValues(alpha: 0.35),
+            color: isFailed ? BrandTheme.redTop : kTextDark,
+          ),
+        ),
+        const SizedBox(height: 7),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            for (final item in task.items.take(4))
+              _UploadItemChip(item: item, compact: task.items.length > 2),
+            if (task.items.length > 4)
+              _UploadMoreChip(count: task.items.length - 4),
+          ],
+        ),
+        const SizedBox(height: 7),
+        Wrap(
+          spacing: 8,
+          runSpacing: 6,
+          children: [
+            if (task.canPause)
+              _MiniUploadAction(label: ru ? 'ПАУЗА' : 'PAUSE', onTap: onPause),
+            if (isPaused)
+              _MiniUploadAction(
+                label: ru ? 'ПРОДОЛЖИТЬ' : 'RESUME',
+                onTap: onResume,
+              ),
+            if (isFailed)
+              _MiniUploadAction(
+                label: ru ? 'ПОВТОРИТЬ' : 'RETRY',
+                onTap: onRetry,
+              ),
+            if (isFailed || isDone)
+              _MiniUploadAction(
+                label: ru ? 'СКРЫТЬ' : 'HIDE',
+                onTap: onDismiss,
+              ),
+          ],
+        ),
       ],
+    );
+  }
+}
+
+class _UploadItemChip extends StatelessWidget {
+  const _UploadItemChip({required this.item, required this.compact});
+
+  final ProfileMediaUploadItem item;
+  final bool compact;
+
+  String _label(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final type = item.isVideo
+        ? (ru ? 'Видео' : 'Video')
+        : (ru ? 'Фото' : 'Photo');
+    final state = switch (item.status) {
+      ProfileMediaUploadItemStatus.queued => ru ? 'в очереди' : 'queued',
+      ProfileMediaUploadItemStatus.preparing => ru ? 'подготовка' : 'preparing',
+      ProfileMediaUploadItemStatus.uploading => ru ? 'загрузка' : 'uploading',
+      ProfileMediaUploadItemStatus.uploaded => ru ? 'готово' : 'done',
+      ProfileMediaUploadItemStatus.paused => ru ? 'пауза' : 'paused',
+      ProfileMediaUploadItemStatus.failed => ru ? 'ошибка' : 'failed',
+    };
+    return compact ? '$type: $state' : '$type ${item.name}: $state';
+  }
+
+  IconData get _icon {
+    if (item.status == ProfileMediaUploadItemStatus.failed) {
+      return Icons.error_rounded;
+    }
+    if (item.status == ProfileMediaUploadItemStatus.uploaded) {
+      return Icons.check_circle_rounded;
+    }
+    if (item.status == ProfileMediaUploadItemStatus.uploading ||
+        item.status == ProfileMediaUploadItemStatus.preparing) {
+      return Icons.sync_rounded;
+    }
+    if (item.status == ProfileMediaUploadItemStatus.paused) {
+      return Icons.pause_circle_filled_rounded;
+    }
+    return item.isVideo ? Icons.play_circle_fill_rounded : Icons.image_rounded;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final failed = item.status == ProfileMediaUploadItemStatus.failed;
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 240),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: pillDecoration(isDark: failed, radius: 999),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(_icon, size: 13, color: failed ? Colors.white : kTextMuted),
+          const SizedBox(width: 5),
+          Flexible(
+            child: Text(
+              _label(context),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: _accountBodyStyle(
+                color: failed ? Colors.white : kTextMuted,
+                size: 10,
+                weight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _UploadMoreChip extends StatelessWidget {
+  const _UploadMoreChip({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: pillDecoration(isDark: false, radius: 999),
+      child: Text(
+        '+$count',
+        style: _accountBodyStyle(
+          color: kTextMuted,
+          size: 10,
+          weight: FontWeight.w800,
+        ),
+      ),
     );
   }
 }
