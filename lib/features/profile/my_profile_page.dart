@@ -19,6 +19,7 @@ import '../../ui/brand/ui_constants.dart';
 import 'account_profile_edit_page.dart';
 import 'my_profile_controller.dart';
 import 'my_profile_edit_page.dart';
+import 'profile_media_upload_queue.dart';
 import 'profile_model.dart';
 import 'profile_type_selection_page.dart';
 
@@ -161,7 +162,16 @@ class MyProfilePage extends ConsumerWidget {
   List<Widget> _profileCards(
     BuildContext context,
     List<MyProfileState> profiles,
+    List<ProfileMediaUploadTask> uploads,
+    WidgetRef ref,
   ) {
+    ProfileMediaUploadTask? latestUpload(String profileId) {
+      for (final task in uploads.reversed) {
+        if (task.profileId == profileId) return task;
+      }
+      return null;
+    }
+
     return [
       for (final p in profiles)
         Padding(
@@ -172,6 +182,13 @@ class MyProfilePage extends ConsumerWidget {
             photoUrl: p.effectiveCoverPhotoUrl.isEmpty
                 ? null
                 : p.effectiveCoverPhotoUrl,
+            uploadTask: latestUpload(p.id),
+            onRetryUpload: (task) => ref
+                .read(profileMediaUploadQueueProvider.notifier)
+                .retry(task.id),
+            onDismissUpload: (task) => ref
+                .read(profileMediaUploadQueueProvider.notifier)
+                .dismiss(task.id),
             onTap: () => _openEditor(context, startBlank: false, initial: p),
           ),
         ),
@@ -183,7 +200,9 @@ class MyProfilePage extends ConsumerWidget {
     List<MyProfileState> profiles,
     Future<void> Function() logout,
     AppLocalizations t,
+    WidgetRef ref,
   ) {
+    final uploads = ref.watch(profileMediaUploadQueueProvider);
     return ListView(
       padding: kMyProfilePagePad,
       children: [
@@ -194,7 +213,7 @@ class MyProfilePage extends ConsumerWidget {
           logoutLabel: t.logoutUpper,
         ),
         const SizedBox(height: kGap14),
-        ..._profileCards(context, profiles),
+        ..._profileCards(context, profiles, uploads, ref),
         if (profiles.isNotEmpty) const SizedBox(height: kGap14),
         ..._accountTools(context),
       ],
@@ -206,7 +225,9 @@ class MyProfilePage extends ConsumerWidget {
     List<MyProfileState> profiles,
     Future<void> Function() logout,
     AppLocalizations t,
+    WidgetRef ref,
   ) {
+    final uploads = ref.watch(profileMediaUploadQueueProvider);
     return Align(
       alignment: Alignment.topCenter,
       child: ConstrainedBox(
@@ -248,7 +269,7 @@ class MyProfilePage extends ConsumerWidget {
                           onTap: () => _openTypeSelector(context),
                         )
                       else
-                        ..._profileCards(context, profiles),
+                        ..._profileCards(context, profiles, uploads, ref),
                     ],
                   ),
                 ),
@@ -305,8 +326,8 @@ class MyProfilePage extends ConsumerWidget {
                     MediaQuery.sizeOf(context).width >=
                     _kAccountDesktopBreakpoint;
                 return isDesktop
-                    ? _desktopLayout(context, profiles, logout, t)
-                    : _mobileLayout(context, profiles, logout, t);
+                    ? _desktopLayout(context, profiles, logout, t, ref)
+                    : _mobileLayout(context, profiles, logout, t, ref);
               },
             ),
           ),
@@ -1141,11 +1162,17 @@ class _ProfileSummaryCard extends StatelessWidget {
     required this.status,
     required this.onTap,
     required this.photoUrl,
+    required this.uploadTask,
+    required this.onRetryUpload,
+    required this.onDismissUpload,
   });
 
   final String fullName;
   final ProfileStatus status;
   final String? photoUrl;
+  final ProfileMediaUploadTask? uploadTask;
+  final ValueChanged<ProfileMediaUploadTask> onRetryUpload;
+  final ValueChanged<ProfileMediaUploadTask> onDismissUpload;
   final VoidCallback onTap;
 
   String _statusLabel(AppLocalizations t) {
@@ -1216,6 +1243,14 @@ class _ProfileSummaryCard extends StatelessWidget {
                       weight: FontWeight.w700,
                     ),
                   ),
+                  if (uploadTask != null) ...[
+                    const SizedBox(height: 8),
+                    _ProfileUploadStatusLine(
+                      task: uploadTask!,
+                      onRetry: () => onRetryUpload(uploadTask!),
+                      onDismiss: () => onDismissUpload(uploadTask!),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -1225,6 +1260,114 @@ class _ProfileSummaryCard extends StatelessWidget {
               color: kTextMuted,
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileUploadStatusLine extends StatelessWidget {
+  const _ProfileUploadStatusLine({
+    required this.task,
+    required this.onRetry,
+    required this.onDismiss,
+  });
+
+  final ProfileMediaUploadTask task;
+  final VoidCallback onRetry;
+  final VoidCallback onDismiss;
+
+  String _mediaLabel(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final parts = <String>[
+      if (task.photoCount > 0)
+        ru ? '${task.photoCount} фото' : '${task.photoCount} photo',
+      if (task.videoCount > 0)
+        ru ? '${task.videoCount} видео' : '${task.videoCount} video',
+    ];
+    return parts.join(' • ');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final isFailed = task.status == ProfileMediaUploadStatus.failed;
+    final isDone = task.status == ProfileMediaUploadStatus.completed;
+    final label = switch (task.status) {
+      ProfileMediaUploadStatus.uploading =>
+        ru ? 'Медиа загружаются' : 'Media uploading',
+      ProfileMediaUploadStatus.failed =>
+        ru ? 'Ошибка загрузки медиа' : 'Media upload failed',
+      ProfileMediaUploadStatus.completed =>
+        ru ? 'Медиа загружены' : 'Media uploaded',
+    };
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 6,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+          decoration: pillDecoration(isDark: isFailed, radius: 999).copyWith(
+            border: Border.all(
+              color: isDone
+                  ? BrandTheme.redTop.withValues(alpha: 0.35)
+                  : Colors.transparent,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (task.status == ProfileMediaUploadStatus.uploading) ...[
+                const SizedBox(
+                  width: 12,
+                  height: 12,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                const SizedBox(width: 7),
+              ],
+              Text(
+                '$label: ${_mediaLabel(context)}',
+                style: _accountBodyStyle(
+                  color: isFailed ? Colors.white : kTextMuted,
+                  size: 11,
+                  weight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (isFailed)
+          _MiniUploadAction(label: ru ? 'ПОВТОРИТЬ' : 'RETRY', onTap: onRetry),
+        if (isFailed || isDone)
+          _MiniUploadAction(label: ru ? 'СКРЫТЬ' : 'HIDE', onTap: onDismiss),
+      ],
+    );
+  }
+}
+
+class _MiniUploadAction extends StatelessWidget {
+  const _MiniUploadAction({required this.label, required this.onTap});
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+        decoration: pillDecoration(isDark: false, radius: 999),
+        child: Text(
+          label,
+          style: _accountCommandStyle(
+            color: kTextDark,
+            size: 10,
+            spacing: 0.8,
+            weight: FontWeight.w800,
+          ),
         ),
       ),
     );

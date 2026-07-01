@@ -523,48 +523,7 @@ class _ChatListTile extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 6),
-                    if (item.contextLabel.trim().isNotEmpty) ...[
-                      Text(
-                        item.contextLabel,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: kTextMuted,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0,
-                        ),
-                      ),
-                      const SizedBox(height: 5),
-                    ],
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: pillDecoration(
-                          isDark:
-                              item.participantRole ==
-                              ChatParticipantRole.client,
-                          radius: 999,
-                        ),
-                        child: Text(
-                          item.participantRole.label,
-                          style: _chatTitleStyle(
-                            color:
-                                item.participantRole ==
-                                    ChatParticipantRole.client
-                                ? Colors.white
-                                : kTextMuted,
-                            size: 9,
-                            spacing: 0.8,
-                            weight: FontWeight.w900,
-                          ),
-                        ),
-                      ),
-                    ),
+                    _ChatContextSummary(item: item),
                     const SizedBox(height: 5),
                     Row(
                       children: [
@@ -635,6 +594,145 @@ class _ChatListTile extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _ChatContextSummary extends StatelessWidget {
+  const _ChatContextSummary({required this.item});
+
+  final ChatListItem item;
+
+  List<({String label, IconData icon})> _contextParts() {
+    final chunks = item.contextLabel
+        .split('•')
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty);
+    final parts = <({String label, IconData icon})>[];
+    for (final chunk in chunks) {
+      final lower = chunk.toLowerCase();
+      if (lower.startsWith('анкета:')) {
+        parts.add((
+          label: chunk.replaceFirst(RegExp('Анкета:\\s*'), '').trim(),
+          icon: Icons.badge_rounded,
+        ));
+      } else if (lower.startsWith('кастинг:')) {
+        parts.add((
+          label: chunk.replaceFirst(RegExp('Кастинг:\\s*'), '').trim(),
+          icon: Icons.videocam_rounded,
+        ));
+      } else {
+        parts.add((label: chunk, icon: Icons.link_rounded));
+      }
+    }
+    return parts;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isClient = item.participantRole == ChatParticipantRole.client;
+    final intent = isClient
+        ? 'Ваш запрос по анкете / кастингу'
+        : 'Пишут по вашей анкете';
+    final parts = _contextParts();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 7,
+          runSpacing: 6,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            _ChatRoleBadge(role: item.participantRole),
+            Text(
+              intent,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: kTextMuted,
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0,
+              ),
+            ),
+          ],
+        ),
+        if (parts.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final part in parts)
+                _ChatContextChip(icon: part.icon, label: part.label),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _ChatRoleBadge extends StatelessWidget {
+  const _ChatRoleBadge({required this.role});
+
+  final ChatParticipantRole role;
+
+  @override
+  Widget build(BuildContext context) {
+    final isClient = role == ChatParticipantRole.client;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: pillDecoration(isDark: isClient, radius: 999),
+      child: Text(
+        role.label,
+        style: _chatTitleStyle(
+          color: isClient ? Colors.white : kTextMuted,
+          size: 9,
+          spacing: 0.8,
+          weight: FontWeight.w900,
+        ),
+      ),
+    );
+  }
+}
+
+class _ChatContextChip extends StatelessWidget {
+  const _ChatContextChip({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final clean = label.trim();
+    if (clean.isEmpty) return const SizedBox.shrink();
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 230),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: catalogSearchDecoration(radius: 999),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: kTextMuted),
+          const SizedBox(width: 5),
+          Flexible(
+            child: Text(
+              clean,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: kTextMuted,
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

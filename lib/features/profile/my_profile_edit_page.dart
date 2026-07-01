@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
@@ -10,7 +9,6 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:video_player/video_player.dart';
-import 'package:video_thumbnail/video_thumbnail.dart';
 
 import '../../core/app_logger.dart';
 import '../../core/roles_provider.dart';
@@ -24,13 +22,13 @@ import '../../ui/brand/location_lookups.dart';
 import '../../ui/brand/searchable_choice_field.dart';
 import '../../ui/brand/ui_constants.dart';
 import 'my_profile_controller.dart';
+import 'profile_media_upload_queue.dart';
 import 'profile_model.dart';
 
 part 'my_profile_edit_parts.dart';
 
 typedef _NameParts = ({String surname, String name});
 
-const String _kProfileMediaBucket = 'profile-media';
 const String _kSkipMediaDeleteConfirmKey = 'skip_media_delete_confirm';
 const double _kMediaRemoveInset = 4;
 const double _kProfileEditDesktopBreakpoint = 900.0;
@@ -97,7 +95,6 @@ class MyProfileEditPage extends ConsumerStatefulWidget {
 }
 
 class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
-  _ProfileMediaStorage get _mediaStorage => _ProfileMediaStorage(_sb);
   bool get _isBusy => _actionBusy || _saving;
   SupabaseClient get _sb => ref.read(supabaseProvider);
   static const _skipMediaDeleteConfirmKey = _kSkipMediaDeleteConfirmKey;
@@ -145,9 +142,6 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
   String _pendingCoverPhotoUrl = '';
   List<String> _pendingVideoUrls = [];
   List<String> _pendingVideoPreviewUrls = [];
-  final bool _uploading = false;
-
-  static const String _bucket = _kProfileMediaBucket;
 
   final Set<DateTime> _unavailableDays = <DateTime>{};
   AppLocalizations get _t => AppLocalizations.of(context)!;
@@ -764,14 +758,16 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
 
       if (hasPickedMedia) {
         _showMediaUploadQueuedSnack();
-        _uploadPickedMediaAfterSave(
-          uid: uid,
-          profile: visibleSaved,
-          pickedPhotos: pickedPhotos,
-          pickedVideos: pickedVideos,
-          pickedCoverPhotoIndex: pickedCoverPhotoIndex,
-          approveImmediately: approveImmediately,
-        );
+        ref
+            .read(profileMediaUploadQueueProvider.notifier)
+            .enqueue(
+              uid: uid,
+              profile: visibleSaved,
+              pickedPhotos: pickedPhotos,
+              pickedVideos: pickedVideos,
+              pickedCoverPhotoIndex: pickedCoverPhotoIndex,
+              approveImmediately: approveImmediately,
+            );
       }
 
       if (closeAfter) Navigator.of(context).pop();
@@ -804,58 +800,6 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
         ),
       ),
     );
-  }
-
-  void _uploadPickedMediaAfterSave({
-    required String uid,
-    required MyProfileState profile,
-    required List<XFile> pickedPhotos,
-    required List<XFile> pickedVideos,
-    required int? pickedCoverPhotoIndex,
-    required bool approveImmediately,
-  }) {
-    final storage = _mediaStorage;
-    final notifier = ref.read(myProfileProvider.notifier);
-
-    unawaited(() async {
-      try {
-        final result = await storage.uploadPickedMedia(
-          bucket: _bucket,
-          uid: uid,
-          pickedPhotos: pickedPhotos,
-          pickedVideos: pickedVideos,
-        );
-        final selectedCoverPhotoUrl = _uploadedCoverPhotoUrlFrom(
-          result.photoUrls,
-          pickedCoverPhotoIndex,
-        );
-        final profileForMedia = profile.copyWith(
-          pendingCoverPhotoUrl:
-              !approveImmediately && selectedCoverPhotoUrl.isNotEmpty
-              ? selectedCoverPhotoUrl
-              : profile.pendingCoverPhotoUrl,
-          coverPhotoUrl: approveImmediately && selectedCoverPhotoUrl.isNotEmpty
-              ? selectedCoverPhotoUrl
-              : profile.coverPhotoUrl,
-        );
-
-        final saved = await notifier.saveProfileWithPendingMedia(
-          profile: profileForMedia,
-          newPhotoUrls: result.photoUrls,
-          newVideoUrls: result.videoUrls,
-          newVideoPreviewUrls: result.videoPreviewUrls,
-        );
-        if (approveImmediately) {
-          await notifier.publishAdminProfile(saved.id);
-        }
-      } catch (e, st) {
-        AppLogger.error(
-          'Failed to upload profile media in background',
-          error: e,
-          stackTrace: st,
-        );
-      }
-    }());
   }
 
   Future<void> _submitNew(MyProfileState base) async {
@@ -1058,17 +1002,6 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
     });
   }
 
-  String _uploadedCoverPhotoUrlFrom(
-    List<String> uploadedPhotoUrls,
-    int? selectedIndex,
-  ) {
-    final index = selectedIndex;
-    if (index == null || index < 0 || index >= uploadedPhotoUrls.length) {
-      return '';
-    }
-    return uploadedPhotoUrls[index].trim();
-  }
-
   String _birthDateFieldLabel(BuildContext context) =>
       Localizations.localeOf(context).languageCode.toLowerCase() == 'ru'
       ? 'Дата рождения'
@@ -1268,7 +1201,7 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
         const SizedBox(height: kGap10),
         _MediaBlock(
           desktop: desktop,
-          uploading: _uploading,
+          uploading: false,
           onAddPhoto: _pickPhotos,
           onAddVideo: _pickVideo,
           photoUrls: _photoUrls,
@@ -1757,7 +1690,7 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
                                 _SectionTitle(t.profileMediaUpper),
                                 const SizedBox(height: kGap10),
                                 _MediaBlock(
-                                  uploading: _uploading,
+                                  uploading: false,
                                   onAddPhoto: _pickPhotos,
                                   onAddVideo: _pickVideo,
                                   photoUrls: _photoUrls,
