@@ -1,6 +1,9 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -57,7 +60,19 @@ class ProfileMediaStorage {
     required String path,
     required Uint8List bytes,
     required String contentType,
+    ValueChanged<double>? onProgress,
   }) async {
+    if (onProgress != null) {
+      await _uploadBinaryWithProgress(
+        bucket: bucket,
+        path: path,
+        bytes: bytes,
+        contentType: contentType,
+        onProgress: onProgress,
+      );
+      return _sb.storage.from(bucket).getPublicUrl(path);
+    }
+
     await _sb.storage
         .from(bucket)
         .uploadBinary(
@@ -127,6 +142,7 @@ class ProfileMediaStorage {
     required String uid,
     required XFile file,
     required String pathSeed,
+    ValueChanged<double>? onProgress,
   }) async {
     final ext = _ext(file);
     final ct = _contentType(isVideo: false, ext: ext, mimeType: file.mimeType);
@@ -144,6 +160,7 @@ class ProfileMediaStorage {
       path: storagePath,
       bytes: prepared.bytes,
       contentType: prepared.contentType,
+      onProgress: onProgress,
     );
   }
 
@@ -209,6 +226,7 @@ class ProfileMediaStorage {
     required String uid,
     required XFile file,
     required String pathSeed,
+    ValueChanged<double>? onProgress,
   }) async {
     final ext = _ext(file);
     final ct = _contentType(isVideo: true, ext: ext, mimeType: file.mimeType);
@@ -222,6 +240,7 @@ class ProfileMediaStorage {
       path: storagePath,
       bytes: videoBytes,
       contentType: ct,
+      onProgress: onProgress,
     );
 
     var previewUrl = '';
@@ -240,6 +259,75 @@ class ProfileMediaStorage {
       previewUrl = '';
     }
     return (videoUrl: videoUrl, previewUrl: previewUrl);
+  }
+
+  Future<void> _uploadBinaryWithProgress({
+    required String bucket,
+    required String path,
+    required Uint8List bytes,
+    required String contentType,
+    required ValueChanged<double> onProgress,
+  }) async {
+    final storage = _sb.storage.from(bucket);
+    final encodedPath = Uri.encodeFull(path);
+    final uri = Uri.parse('${storage.url}/object/$bucket/$encodedPath');
+    final multipartRequest = http.MultipartRequest('POST', uri)
+      ..headers.addAll(storage.headers)
+      ..headers['x-upsert'] = 'false'
+      ..fields['cacheControl'] = '3600'
+      ..files.add(
+        http.MultipartFile.fromBytes(
+          '',
+          bytes,
+          filename: '',
+          contentType: MediaType.parse(contentType),
+        ),
+      );
+
+    final total = multipartRequest.contentLength;
+    final bodyStream = multipartRequest.finalize();
+    final request = http.StreamedRequest('POST', uri)
+      ..headers.addAll(multipartRequest.headers)
+      ..contentLength = total;
+
+    onProgress(0);
+    final responseFuture = request.send();
+    var sent = 0;
+    await for (final chunk in bodyStream) {
+      sent += chunk.length;
+      request.sink.add(chunk);
+      if (total > 0) {
+        onProgress((sent / total).clamp(0.0, 1.0));
+      }
+    }
+    await request.sink.close();
+
+    final response = await http.Response.fromStream(await responseFuture);
+    if (response.statusCode < 200 || response.statusCode > 299) {
+      throw StorageException(
+        _storageErrorMessage(response),
+        statusCode: '${response.statusCode}',
+      );
+    }
+    onProgress(1);
+  }
+
+  String _storageErrorMessage(http.Response response) {
+    if (response.body.trim().isEmpty) {
+      return response.reasonPhrase ?? 'Storage upload failed';
+    }
+    try {
+      final decoded = jsonDecode(response.body);
+      if (decoded is Map) {
+        final message = decoded['message'] ?? decoded['error'];
+        if (message != null && message.toString().trim().isNotEmpty) {
+          return message.toString();
+        }
+      }
+    } catch (_) {
+      // Keep the raw body below.
+    }
+    return response.body;
   }
 
   Future<Uint8List?> _videoPreviewBytes(XFile xf) async {

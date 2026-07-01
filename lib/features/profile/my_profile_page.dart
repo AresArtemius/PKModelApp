@@ -1420,7 +1420,8 @@ class _UploadItemChip extends StatelessWidget {
       ProfileMediaUploadItemStatus.queued => ru ? 'в очереди' : 'queued',
       ProfileMediaUploadItemStatus.preparing => ru ? 'подготовка' : 'preparing',
       ProfileMediaUploadItemStatus.compressing => ru ? 'сжатие' : 'compressing',
-      ProfileMediaUploadItemStatus.uploading => ru ? 'загрузка' : 'uploading',
+      ProfileMediaUploadItemStatus.uploading =>
+        '${ru ? 'загрузка' : 'uploading'} ${item.progressPercent}%',
       ProfileMediaUploadItemStatus.uploaded => ru ? 'готово' : 'done',
       ProfileMediaUploadItemStatus.paused => ru ? 'пауза' : 'paused',
       ProfileMediaUploadItemStatus.failed => ru ? 'ошибка' : 'failed',

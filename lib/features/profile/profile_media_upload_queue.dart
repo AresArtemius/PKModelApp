@@ -49,6 +49,7 @@ class ProfileMediaUploadItem {
     required this.previewUrl,
     required this.error,
     required this.isCover,
+    required this.progress,
     this.source,
   });
 
@@ -62,6 +63,7 @@ class ProfileMediaUploadItem {
   final String previewUrl;
   final String error;
   final bool isCover;
+  final double progress;
   final XFile? source;
 
   bool get isPhoto => kind == ProfileMediaUploadItemKind.photo;
@@ -69,6 +71,8 @@ class ProfileMediaUploadItem {
   bool get isVideo => kind == ProfileMediaUploadItemKind.video;
 
   bool get isDone => status == ProfileMediaUploadItemStatus.uploaded;
+
+  int get progressPercent => (progress * 100).round().clamp(0, 100);
 
   bool get canUpload =>
       status == ProfileMediaUploadItemStatus.queued ||
@@ -91,6 +95,7 @@ class ProfileMediaUploadItem {
     String? url,
     String? previewUrl,
     String? error,
+    double? progress,
     XFile? source,
   }) {
     return ProfileMediaUploadItem(
@@ -104,6 +109,7 @@ class ProfileMediaUploadItem {
       previewUrl: previewUrl ?? this.previewUrl,
       error: error ?? this.error,
       isCover: isCover,
+      progress: progress ?? this.progress,
       source: source ?? this.source,
     );
   }
@@ -119,6 +125,7 @@ class ProfileMediaUploadItem {
     'previewUrl': previewUrl,
     'error': error,
     'isCover': isCover,
+    'progress': progress,
   };
 
   static ProfileMediaUploadItem fromJson(Map<String, dynamic> json) {
@@ -141,6 +148,7 @@ class ProfileMediaUploadItem {
       previewUrl: (json['previewUrl'] ?? '').toString(),
       error: (json['error'] ?? '').toString(),
       isCover: json['isCover'] == true,
+      progress: (json['progress'] as num?)?.toDouble().clamp(0.0, 1.0) ?? 0,
     );
   }
 }
@@ -196,14 +204,12 @@ class ProfileMediaUploadTask {
 
   double get progress {
     if (totalCount == 0) return 1;
-    final active = items.any(
-      (e) =>
-          e.status == ProfileMediaUploadItemStatus.preparing ||
-          e.status == ProfileMediaUploadItemStatus.compressing ||
-          e.status == ProfileMediaUploadItemStatus.uploading,
+    final sum = items.fold<double>(
+      0,
+      (total, item) =>
+          total + (item.isDone ? 1 : item.progress.clamp(0.0, 1.0)),
     );
-    final activeBonus = active ? 0.45 : 0.0;
-    return ((completedCount + activeBonus) / totalCount).clamp(0.0, 1.0);
+    return (sum / totalCount).clamp(0.0, 1.0);
   }
 
   int get progressPercent => (progress * 100).round().clamp(0, 100);
@@ -420,6 +426,7 @@ class ProfileMediaUploadQueue
       previewUrl: '',
       error: '',
       isCover: isCover,
+      progress: 0,
       source: file,
     );
   }
@@ -641,6 +648,7 @@ class ProfileMediaUploadQueue
         var item = current.copyWith(
           status: ProfileMediaUploadItemStatus.preparing,
           error: '',
+          progress: 0,
         );
         _replaceItem(taskId, item);
         await _persistQueue();
@@ -650,12 +658,14 @@ class ProfileMediaUploadQueue
           if (item.isPhoto) {
             item = item.copyWith(
               status: ProfileMediaUploadItemStatus.compressing,
+              progress: 0,
             );
             _replaceItem(taskId, item);
             await _persistQueue();
           } else if (item.isVideo) {
             item = item.copyWith(
               status: ProfileMediaUploadItemStatus.compressing,
+              progress: 0,
             );
             _replaceItem(taskId, item);
             await _persistQueue();
@@ -677,9 +687,22 @@ class ProfileMediaUploadQueue
               await _persistQueue();
             }
           }
-          item = item.copyWith(status: ProfileMediaUploadItemStatus.uploading);
+          item = item.copyWith(
+            status: ProfileMediaUploadItemStatus.uploading,
+            progress: 0,
+          );
           _replaceItem(taskId, item);
           await _persistQueue();
+
+          var lastProgressPercent = -1;
+          void updateUploadProgress(double value) {
+            final normalized = value.clamp(0.0, 1.0);
+            final percent = (normalized * 100).floor();
+            if (percent == lastProgressPercent && percent < 100) return;
+            lastProgressPercent = percent;
+            item = item.copyWith(progress: normalized);
+            _replaceItem(taskId, item);
+          }
 
           if (item.isPhoto) {
             final url = await storage.uploadPhoto(
@@ -687,11 +710,13 @@ class ProfileMediaUploadQueue
               uid: task.uid,
               file: item.toXFile(),
               pathSeed: item.id,
+              onProgress: updateUploadProgress,
             );
             item = item.copyWith(
               status: ProfileMediaUploadItemStatus.uploaded,
               url: url,
               error: '',
+              progress: 1,
             );
             uploadedPhotoUrls = [...uploadedPhotoUrls, url];
           } else {
@@ -700,12 +725,14 @@ class ProfileMediaUploadQueue
               uid: task.uid,
               file: item.toXFile(),
               pathSeed: item.id,
+              onProgress: updateUploadProgress,
             );
             item = item.copyWith(
               status: ProfileMediaUploadItemStatus.uploaded,
               url: result.videoUrl,
               previewUrl: result.previewUrl,
               error: '',
+              progress: 1,
             );
             uploadedVideoUrls = [...uploadedVideoUrls, result.videoUrl];
             uploadedVideoPreviewUrls = [
