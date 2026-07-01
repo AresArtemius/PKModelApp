@@ -1419,6 +1419,7 @@ class _UploadItemChip extends StatelessWidget {
     final state = switch (item.status) {
       ProfileMediaUploadItemStatus.queued => ru ? 'в очереди' : 'queued',
       ProfileMediaUploadItemStatus.preparing => ru ? 'подготовка' : 'preparing',
+      ProfileMediaUploadItemStatus.compressing => ru ? 'сжатие' : 'compressing',
       ProfileMediaUploadItemStatus.uploading => ru ? 'загрузка' : 'uploading',
       ProfileMediaUploadItemStatus.uploaded => ru ? 'готово' : 'done',
       ProfileMediaUploadItemStatus.paused => ru ? 'пауза' : 'paused',
@@ -1435,6 +1436,7 @@ class _UploadItemChip extends StatelessWidget {
       return Icons.check_circle_rounded;
     }
     if (item.status == ProfileMediaUploadItemStatus.uploading ||
+        item.status == ProfileMediaUploadItemStatus.compressing ||
         item.status == ProfileMediaUploadItemStatus.preparing) {
       return Icons.sync_rounded;
     }

@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/app_logger.dart';
+import '../../core/media_tools.dart';
 import '../../core/supabase_provider.dart';
 import 'my_profile_controller.dart';
 import 'profile_media_storage.dart';
@@ -29,6 +30,7 @@ enum ProfileMediaUploadItemKind { photo, video }
 enum ProfileMediaUploadItemStatus {
   queued,
   preparing,
+  compressing,
   uploading,
   uploaded,
   paused,
@@ -197,6 +199,7 @@ class ProfileMediaUploadTask {
     final active = items.any(
       (e) =>
           e.status == ProfileMediaUploadItemStatus.preparing ||
+          e.status == ProfileMediaUploadItemStatus.compressing ||
           e.status == ProfileMediaUploadItemStatus.uploading,
     );
     final activeBonus = active ? 0.45 : 0.0;
@@ -575,6 +578,11 @@ class ProfileMediaUploadQueue
     return dir;
   }
 
+  Future<String> _compressedVideoPath(String uid, String itemId) async {
+    final dir = await _uploadCacheDirectory(uid);
+    return '${dir.path}/${itemId}_compressed.mp4';
+  }
+
   String _extensionFromName(String name, {required String fallback}) {
     final clean = name.trim().toLowerCase();
     final index = clean.lastIndexOf('.');
@@ -639,6 +647,30 @@ class ProfileMediaUploadQueue
 
         try {
           item = await _ensurePersistentSource(task, item);
+          if (item.isVideo) {
+            item = item.copyWith(
+              status: ProfileMediaUploadItemStatus.compressing,
+            );
+            _replaceItem(taskId, item);
+            await _persistQueue();
+
+            final prepared = await MediaTools.prepareVideo(
+              inputPath: item.path,
+              outputPath: await _compressedVideoPath(task.uid, item.id),
+            );
+            if (prepared.compressed) {
+              item = item.copyWith(
+                path: prepared.path,
+                source: XFile(
+                  prepared.path,
+                  name: '${item.id}.mp4',
+                  mimeType: 'video/mp4',
+                ),
+              );
+              _replaceItem(taskId, item);
+              await _persistQueue();
+            }
+          }
           item = item.copyWith(status: ProfileMediaUploadItemStatus.uploading);
           _replaceItem(taskId, item);
           await _persistQueue();
