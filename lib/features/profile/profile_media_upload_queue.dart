@@ -647,7 +647,13 @@ class ProfileMediaUploadQueue
 
         try {
           item = await _ensurePersistentSource(task, item);
-          if (item.isVideo) {
+          if (item.isPhoto) {
+            item = item.copyWith(
+              status: ProfileMediaUploadItemStatus.compressing,
+            );
+            _replaceItem(taskId, item);
+            await _persistQueue();
+          } else if (item.isVideo) {
             item = item.copyWith(
               status: ProfileMediaUploadItemStatus.compressing,
             );

@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:video_thumbnail/video_thumbnail.dart';
@@ -19,6 +20,9 @@ class ProfileMediaUploadResult {
 
 class ProfileMediaStorage {
   const ProfileMediaStorage(this._sb);
+
+  static const _maxPhotoSide = 2048;
+  static const _photoJpegQuality = 86;
 
   final SupabaseClient _sb;
 
@@ -126,16 +130,78 @@ class ProfileMediaStorage {
   }) async {
     final ext = _ext(file);
     final ct = _contentType(isVideo: false, ext: ext, mimeType: file.mimeType);
-    final name = '$pathSeed.${ext.isEmpty ? 'jpg' : ext}';
+    final originalBytes = await file.readAsBytes();
+    final prepared = _preparePhotoBytes(
+      originalBytes,
+      originalExtension: ext,
+      originalContentType: ct,
+    );
+    final name = '$pathSeed.${prepared.extension}';
     final storagePath = '$uid/photos/$name';
 
-    final bytes = await file.readAsBytes();
     return uploadBinary(
       bucket: bucket,
       path: storagePath,
-      bytes: bytes,
-      contentType: ct,
+      bytes: prepared.bytes,
+      contentType: prepared.contentType,
     );
+  }
+
+  ({Uint8List bytes, String extension, String contentType}) _preparePhotoBytes(
+    Uint8List originalBytes, {
+    required String originalExtension,
+    required String originalContentType,
+  }) {
+    final fallbackExtension = originalExtension.trim().isEmpty
+        ? 'jpg'
+        : originalExtension.trim().toLowerCase();
+
+    final decoded = img.decodeImage(originalBytes);
+    if (decoded == null) {
+      return (
+        bytes: originalBytes,
+        extension: fallbackExtension,
+        contentType: originalContentType,
+      );
+    }
+
+    var output = img.bakeOrientation(decoded);
+    if (output.width > _maxPhotoSide || output.height > _maxPhotoSide) {
+      output = output.width >= output.height
+          ? img.copyResize(
+              output,
+              width: _maxPhotoSide,
+              interpolation: img.Interpolation.average,
+            )
+          : img.copyResize(
+              output,
+              height: _maxPhotoSide,
+              interpolation: img.Interpolation.average,
+            );
+    }
+
+    final encoded = Uint8List.fromList(
+      img.encodeJpg(output, quality: _photoJpegQuality),
+    );
+    if (encoded.isEmpty) {
+      return (
+        bytes: originalBytes,
+        extension: fallbackExtension,
+        contentType: originalContentType,
+      );
+    }
+
+    final originalFits =
+        decoded.width <= _maxPhotoSide && decoded.height <= _maxPhotoSide;
+    if (originalFits && encoded.length >= originalBytes.length) {
+      return (
+        bytes: originalBytes,
+        extension: fallbackExtension,
+        contentType: originalContentType,
+      );
+    }
+
+    return (bytes: encoded, extension: 'jpg', contentType: 'image/jpeg');
   }
 
   Future<({String videoUrl, String previewUrl})> uploadVideo({
