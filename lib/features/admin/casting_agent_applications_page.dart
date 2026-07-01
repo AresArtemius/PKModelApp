@@ -305,6 +305,7 @@ String _adminDecisionErrorMessage(Object error, AppLocalizations t) {
         lower.contains('decided_at') ||
         lower.contains('decided_by') ||
         lower.contains('requested_account_type') ||
+        lower.contains('user_roles_role_check') ||
         lower.contains('admin_decide_casting_agent_application')) {
       return 'Не удалось обработать заявку.\n'
           'Примените SQL: supabase/sql/fix_user_roles_updated_at.sql\n\n'

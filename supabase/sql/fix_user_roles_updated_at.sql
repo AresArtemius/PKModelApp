@@ -6,6 +6,16 @@ alter table public.user_roles
   add column if not exists created_at timestamptz not null default now(),
   add column if not exists updated_at timestamptz not null default now();
 
+-- Older projects can still have a legacy CHECK constraint on user_roles.role
+-- that allows only old role values and rejects casting_agent approvals.
+alter table public.user_roles
+  drop constraint if exists user_roles_role_check;
+
+alter table public.user_roles
+  add constraint user_roles_role_check
+  check (lower(role) in ('user', 'admin', 'casting_agent'))
+  not valid;
+
 alter table public.casting_agent_applications
   add column if not exists updated_at timestamptz not null default now(),
   add column if not exists requested_account_type text not null default 'casting_agent',
