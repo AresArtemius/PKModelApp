@@ -50,6 +50,7 @@ class ProfileMediaUploadItem {
     required this.error,
     required this.isCover,
     required this.progress,
+    required this.uploadAttempt,
     this.source,
   });
 
@@ -64,6 +65,7 @@ class ProfileMediaUploadItem {
   final String error;
   final bool isCover;
   final double progress;
+  final int uploadAttempt;
   final XFile? source;
 
   bool get isPhoto => kind == ProfileMediaUploadItemKind.photo;
@@ -96,6 +98,7 @@ class ProfileMediaUploadItem {
     String? previewUrl,
     String? error,
     double? progress,
+    int? uploadAttempt,
     XFile? source,
   }) {
     return ProfileMediaUploadItem(
@@ -110,6 +113,7 @@ class ProfileMediaUploadItem {
       error: error ?? this.error,
       isCover: isCover,
       progress: progress ?? this.progress,
+      uploadAttempt: uploadAttempt ?? this.uploadAttempt,
       source: source ?? this.source,
     );
   }
@@ -126,6 +130,7 @@ class ProfileMediaUploadItem {
     'error': error,
     'isCover': isCover,
     'progress': progress,
+    'uploadAttempt': uploadAttempt,
   };
 
   static ProfileMediaUploadItem fromJson(Map<String, dynamic> json) {
@@ -149,6 +154,7 @@ class ProfileMediaUploadItem {
       error: (json['error'] ?? '').toString(),
       isCover: json['isCover'] == true,
       progress: (json['progress'] as num?)?.toDouble().clamp(0.0, 1.0) ?? 0,
+      uploadAttempt: (json['uploadAttempt'] as num?)?.toInt() ?? 0,
     );
   }
 }
@@ -287,6 +293,8 @@ class ProfileMediaUploadQueue
 
   final Ref ref;
   final Set<String> _activeTasks = <String>{};
+  final Map<String, ProfileMediaUploadCancelToken> _cancelTokens =
+      <String, ProfileMediaUploadCancelToken>{};
 
   void enqueue({
     required String uid,
@@ -344,9 +352,13 @@ class ProfileMediaUploadQueue
   void pause(String taskId) {
     final task = _taskById(taskId);
     if (task == null || !task.canPause) return;
+    _cancelTokens[taskId]?.cancel();
     final nextItems = [
       for (final item in task.items)
-        item.status == ProfileMediaUploadItemStatus.queued
+        item.status == ProfileMediaUploadItemStatus.queued ||
+                item.status == ProfileMediaUploadItemStatus.preparing ||
+                item.status == ProfileMediaUploadItemStatus.compressing ||
+                item.status == ProfileMediaUploadItemStatus.uploading
             ? item.copyWith(status: ProfileMediaUploadItemStatus.paused)
             : item,
     ];
@@ -371,6 +383,10 @@ class ProfileMediaUploadQueue
             ? item.copyWith(
                 status: ProfileMediaUploadItemStatus.queued,
                 error: '',
+                progress: 0,
+                uploadAttempt: item.url.trim().isEmpty
+                    ? item.uploadAttempt + 1
+                    : item.uploadAttempt,
               )
             : item,
     ];
@@ -427,6 +443,7 @@ class ProfileMediaUploadQueue
       error: '',
       isCover: isCover,
       progress: 0,
+      uploadAttempt: 0,
       source: file,
     );
   }
@@ -655,6 +672,10 @@ class ProfileMediaUploadQueue
 
         try {
           item = await _ensurePersistentSource(task, item);
+          if (_isPausedOrCancelled(taskId)) {
+            await _pauseCurrentItem(taskId, item);
+            return;
+          }
           if (item.isPhoto) {
             item = item.copyWith(
               status: ProfileMediaUploadItemStatus.compressing,
@@ -674,6 +695,10 @@ class ProfileMediaUploadQueue
               inputPath: item.path,
               outputPath: await _compressedVideoPath(task.uid, item.id),
             );
+            if (_isPausedOrCancelled(taskId)) {
+              await _pauseCurrentItem(taskId, item);
+              return;
+            }
             if (prepared.compressed) {
               item = item.copyWith(
                 path: prepared.path,
@@ -694,8 +719,11 @@ class ProfileMediaUploadQueue
           _replaceItem(taskId, item);
           await _persistQueue();
 
+          final cancelToken = ProfileMediaUploadCancelToken();
+          _cancelTokens[taskId] = cancelToken;
           var lastProgressPercent = -1;
           void updateUploadProgress(double value) {
+            if (cancelToken.isCancelled) return;
             final normalized = value.clamp(0.0, 1.0);
             final percent = (normalized * 100).floor();
             if (percent == lastProgressPercent && percent < 100) return;
@@ -709,8 +737,9 @@ class ProfileMediaUploadQueue
               bucket: kProfileMediaBucket,
               uid: task.uid,
               file: item.toXFile(),
-              pathSeed: item.id,
+              pathSeed: _pathSeedForItem(item),
               onProgress: updateUploadProgress,
+              cancelToken: cancelToken,
             );
             item = item.copyWith(
               status: ProfileMediaUploadItemStatus.uploaded,
@@ -724,8 +753,9 @@ class ProfileMediaUploadQueue
               bucket: kProfileMediaBucket,
               uid: task.uid,
               file: item.toXFile(),
-              pathSeed: item.id,
+              pathSeed: _pathSeedForItem(item),
               onProgress: updateUploadProgress,
+              cancelToken: cancelToken,
             );
             item = item.copyWith(
               status: ProfileMediaUploadItemStatus.uploaded,
@@ -742,6 +772,9 @@ class ProfileMediaUploadQueue
           }
           _replaceItem(taskId, item);
           await _persistQueue();
+        } on ProfileMediaUploadCancelled {
+          await _handleCancelledItem(taskId, item);
+          return;
         } catch (e) {
           item = item.copyWith(
             status: ProfileMediaUploadItemStatus.failed,
@@ -806,8 +839,74 @@ class ProfileMediaUploadQueue
         await _persistQueue();
       }
     } finally {
+      _cancelTokens.remove(taskId);
       _activeTasks.remove(taskId);
     }
+  }
+
+  bool _isPausedOrCancelled(String taskId) {
+    final task = _taskById(taskId);
+    return task == null ||
+        task.paused ||
+        _cancelTokens[taskId]?.isCancelled == true;
+  }
+
+  String _pathSeedForItem(ProfileMediaUploadItem item) {
+    if (item.uploadAttempt <= 0) return item.id;
+    return '${item.id}_retry_${item.uploadAttempt}';
+  }
+
+  Future<void> _pauseCurrentItem(
+    String taskId,
+    ProfileMediaUploadItem item,
+  ) async {
+    final task = _taskById(taskId);
+    if (task == null) return;
+    _replaceItem(
+      taskId,
+      item.copyWith(status: ProfileMediaUploadItemStatus.paused, error: ''),
+    );
+    final pausedTask = _taskById(taskId);
+    if (pausedTask != null) {
+      _replace(
+        pausedTask.copyWith(
+          status: ProfileMediaUploadStatus.paused,
+          paused: true,
+          error: '',
+        ),
+      );
+    }
+    await _persistQueue();
+  }
+
+  Future<void> _handleCancelledItem(
+    String taskId,
+    ProfileMediaUploadItem item,
+  ) async {
+    final task = _taskById(taskId);
+    if (task == null) return;
+    if (task.paused) {
+      await _pauseCurrentItem(taskId, item);
+      return;
+    }
+
+    final latestItem = task.items.firstWhere(
+      (e) => e.id == item.id,
+      orElse: () => item,
+    );
+    _replaceItem(
+      taskId,
+      latestItem.copyWith(
+        status: ProfileMediaUploadItemStatus.queued,
+        error: '',
+        progress: 0,
+        uploadAttempt: latestItem.uploadAttempt + 1,
+      ),
+    );
+    await _persistQueue();
+    Future<void>.delayed(const Duration(milliseconds: 120), () {
+      if (mounted) unawaited(_process(taskId));
+    });
   }
 
   Future<void> _finishUploadedTask(

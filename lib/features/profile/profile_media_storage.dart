@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -19,6 +20,33 @@ class ProfileMediaUploadResult {
   final List<String> photoUrls;
   final List<String> videoUrls;
   final List<String> videoPreviewUrls;
+}
+
+class ProfileMediaUploadCancelled implements Exception {
+  const ProfileMediaUploadCancelled();
+
+  @override
+  String toString() => 'Загрузка остановлена';
+}
+
+class ProfileMediaUploadCancelToken {
+  bool _cancelled = false;
+  final Completer<void> _cancelledCompleter = Completer<void>();
+
+  bool get isCancelled => _cancelled;
+
+  Future<void> get cancelled => _cancelledCompleter.future;
+
+  void cancel() {
+    _cancelled = true;
+    if (!_cancelledCompleter.isCompleted) {
+      _cancelledCompleter.complete();
+    }
+  }
+
+  void throwIfCancelled() {
+    if (_cancelled) throw const ProfileMediaUploadCancelled();
+  }
 }
 
 class ProfileMediaStorage {
@@ -61,6 +89,7 @@ class ProfileMediaStorage {
     required Uint8List bytes,
     required String contentType,
     ValueChanged<double>? onProgress,
+    ProfileMediaUploadCancelToken? cancelToken,
   }) async {
     if (onProgress != null) {
       await _uploadBinaryWithProgress(
@@ -69,6 +98,7 @@ class ProfileMediaStorage {
         bytes: bytes,
         contentType: contentType,
         onProgress: onProgress,
+        cancelToken: cancelToken,
       );
       return _sb.storage.from(bucket).getPublicUrl(path);
     }
@@ -143,10 +173,13 @@ class ProfileMediaStorage {
     required XFile file,
     required String pathSeed,
     ValueChanged<double>? onProgress,
+    ProfileMediaUploadCancelToken? cancelToken,
   }) async {
+    cancelToken?.throwIfCancelled();
     final ext = _ext(file);
     final ct = _contentType(isVideo: false, ext: ext, mimeType: file.mimeType);
     final originalBytes = await file.readAsBytes();
+    cancelToken?.throwIfCancelled();
     final prepared = _preparePhotoBytes(
       originalBytes,
       originalExtension: ext,
@@ -161,6 +194,7 @@ class ProfileMediaStorage {
       bytes: prepared.bytes,
       contentType: prepared.contentType,
       onProgress: onProgress,
+      cancelToken: cancelToken,
     );
   }
 
@@ -227,7 +261,9 @@ class ProfileMediaStorage {
     required XFile file,
     required String pathSeed,
     ValueChanged<double>? onProgress,
+    ProfileMediaUploadCancelToken? cancelToken,
   }) async {
+    cancelToken?.throwIfCancelled();
     final ext = _ext(file);
     final ct = _contentType(isVideo: true, ext: ext, mimeType: file.mimeType);
     final name = '$pathSeed.${ext.isEmpty ? 'mp4' : ext}';
@@ -235,12 +271,14 @@ class ProfileMediaStorage {
     final previewBytesFuture = _videoPreviewBytes(file);
 
     final videoBytes = await file.readAsBytes();
+    cancelToken?.throwIfCancelled();
     final videoUrl = await uploadBinary(
       bucket: bucket,
       path: storagePath,
       bytes: videoBytes,
       contentType: ct,
       onProgress: onProgress,
+      cancelToken: cancelToken,
     );
 
     var previewUrl = '';
@@ -267,7 +305,9 @@ class ProfileMediaStorage {
     required Uint8List bytes,
     required String contentType,
     required ValueChanged<double> onProgress,
+    ProfileMediaUploadCancelToken? cancelToken,
   }) async {
+    cancelToken?.throwIfCancelled();
     final storage = _sb.storage.from(bucket);
     final encodedPath = Uri.encodeFull(path);
     final uri = Uri.parse('${storage.url}/object/$bucket/$encodedPath');
@@ -293,16 +333,37 @@ class ProfileMediaStorage {
     onProgress(0);
     final responseFuture = request.send();
     var sent = 0;
-    await for (final chunk in bodyStream) {
-      sent += chunk.length;
-      request.sink.add(chunk);
-      if (total > 0) {
-        onProgress((sent / total).clamp(0.0, 1.0));
+    try {
+      await for (final chunk in bodyStream) {
+        cancelToken?.throwIfCancelled();
+        sent += chunk.length;
+        request.sink.add(chunk);
+        if (total > 0) {
+          onProgress((sent / total).clamp(0.0, 1.0));
+        }
       }
+      cancelToken?.throwIfCancelled();
+      await request.sink.close();
+    } on ProfileMediaUploadCancelled {
+      try {
+        await request.sink.close();
+      } catch (_) {
+        // The socket can already be closed after cancellation.
+      }
+      unawaited(
+        responseFuture.catchError(
+          (_) => http.StreamedResponse(const Stream<List<int>>.empty(), 499),
+        ),
+      );
+      rethrow;
     }
-    await request.sink.close();
 
-    final response = await http.Response.fromStream(await responseFuture);
+    final streamedResponse = await _waitForUploadResponse(
+      responseFuture,
+      cancelToken,
+    );
+    final response = await http.Response.fromStream(streamedResponse);
+    cancelToken?.throwIfCancelled();
     if (response.statusCode < 200 || response.statusCode > 299) {
       throw StorageException(
         _storageErrorMessage(response),
@@ -310,6 +371,20 @@ class ProfileMediaStorage {
       );
     }
     onProgress(1);
+  }
+
+  Future<http.StreamedResponse> _waitForUploadResponse(
+    Future<http.StreamedResponse> responseFuture,
+    ProfileMediaUploadCancelToken? cancelToken,
+  ) async {
+    if (cancelToken == null) return responseFuture;
+    final result = await Future.any<Object>([
+      responseFuture,
+      cancelToken.cancelled.then<Object>(
+        (_) => throw const ProfileMediaUploadCancelled(),
+      ),
+    ]);
+    return result as http.StreamedResponse;
   }
 
   String _storageErrorMessage(http.Response response) {
