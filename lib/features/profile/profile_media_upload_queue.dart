@@ -14,6 +14,8 @@ import '../../core/supabase_provider.dart';
 import 'my_profile_controller.dart';
 import 'profile_media_storage.dart';
 import 'profile_model.dart';
+import 'profile_media_web_upload_cache_stub.dart'
+    if (dart.library.html) 'profile_media_web_upload_cache_web.dart';
 
 const String kProfileMediaBucket = 'profile-media';
 
@@ -346,6 +348,7 @@ class ProfileMediaUploadQueue
 
     state = [...state, task];
     _persistQueue();
+    unawaited(_persistWebSources(task));
     unawaited(_process(task.id));
   }
 
@@ -410,6 +413,7 @@ class ProfileMediaUploadQueue
         if (item.id != taskId) item,
     ];
     _persistQueue();
+    unawaited(ProfileMediaWebUploadCache.deleteTask(taskId));
   }
 
   ProfileMediaUploadTask? latestForProfile(String profileId) {
@@ -479,12 +483,12 @@ class ProfileMediaUploadQueue
       if (raw == null || raw.trim().isEmpty) return;
       final decoded = jsonDecode(raw);
       if (decoded is! List) return;
-      final restored = decoded
-          .whereType<Map>()
-          .map((e) => ProfileMediaUploadTask.fromJson(Map.from(e)))
-          .where((e) => e.id.isNotEmpty && e.items.isNotEmpty)
-          .map(_normalizeRestoredTask)
-          .toList();
+      final restored = <ProfileMediaUploadTask>[];
+      for (final item in decoded.whereType<Map>()) {
+        final task = ProfileMediaUploadTask.fromJson(Map.from(item));
+        if (task.id.isEmpty || task.items.isEmpty) continue;
+        restored.add(await _normalizeRestoredTask(task));
+      }
       if (restored.isEmpty) return;
       state = [...state, ...restored];
       for (final task in restored.where(
@@ -501,23 +505,11 @@ class ProfileMediaUploadQueue
     }
   }
 
-  ProfileMediaUploadTask _normalizeRestoredTask(ProfileMediaUploadTask task) {
+  Future<ProfileMediaUploadTask> _normalizeRestoredTask(
+    ProfileMediaUploadTask task,
+  ) async {
     if (kIsWeb) {
-      return task.copyWith(
-        status: ProfileMediaUploadStatus.failed,
-        paused: false,
-        error:
-            'После перезапуска браузер не может восстановить выбранные файлы. Выберите медиа заново.',
-        items: [
-          for (final item in task.items)
-            item.isDone
-                ? item
-                : item.copyWith(
-                    status: ProfileMediaUploadItemStatus.failed,
-                    error: 'Файл недоступен после перезапуска браузера',
-                  ),
-        ],
-      );
+      return _restoreWebTaskSources(task);
     }
 
     final items = [
@@ -546,6 +538,78 @@ class ProfileMediaUploadQueue
           ? 'Часть файлов не удалось восстановить после перезапуска'
           : '',
     );
+  }
+
+  Future<ProfileMediaUploadTask> _restoreWebTaskSources(
+    ProfileMediaUploadTask task,
+  ) async {
+    final items = <ProfileMediaUploadItem>[];
+    for (final item in task.items) {
+      if (item.isDone) {
+        items.add(item);
+        continue;
+      }
+
+      final source = await ProfileMediaWebUploadCache.restoreItem(
+        taskId: task.id,
+        itemId: item.id,
+        name: item.name,
+        mimeType: item.mimeType,
+      );
+      if (source == null) {
+        items.add(
+          item.copyWith(
+            status: ProfileMediaUploadItemStatus.failed,
+            error:
+                'Файл недоступен после перезапуска браузера. Выберите медиа заново.',
+          ),
+        );
+      } else {
+        items.add(
+          item.copyWith(
+            status: ProfileMediaUploadItemStatus.queued,
+            error: '',
+            progress: 0,
+            source: source,
+          ),
+        );
+      }
+    }
+
+    final hasFailed = items.any(
+      (e) => e.status == ProfileMediaUploadItemStatus.failed,
+    );
+    return task.copyWith(
+      status: hasFailed
+          ? ProfileMediaUploadStatus.failed
+          : ProfileMediaUploadStatus.uploading,
+      items: items,
+      paused: false,
+      error: hasFailed
+          ? 'Часть файлов не удалось восстановить после перезапуска браузера'
+          : '',
+    );
+  }
+
+  Future<void> _persistWebSources(ProfileMediaUploadTask task) async {
+    if (!kIsWeb || !ProfileMediaWebUploadCache.isSupported) return;
+    try {
+      for (final item in task.items) {
+        final source = item.source;
+        if (source == null || item.isDone) continue;
+        await ProfileMediaWebUploadCache.saveItem(
+          taskId: task.id,
+          itemId: item.id,
+          source: source,
+        );
+      }
+    } catch (e, st) {
+      AppLogger.error(
+        'Failed to persist web profile media upload sources',
+        error: e,
+        stackTrace: st,
+      );
+    }
   }
 
   Future<void> _persistQueue() async {
@@ -949,6 +1013,7 @@ class ProfileMediaUploadQueue
     }
     _replace(task.copyWith(status: ProfileMediaUploadStatus.completed));
     await _persistQueue();
+    unawaited(ProfileMediaWebUploadCache.deleteTask(task.id));
     Future<void>.delayed(const Duration(seconds: 8), () {
       if (mounted) dismiss(task.id);
     });
