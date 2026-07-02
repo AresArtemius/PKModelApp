@@ -11,6 +11,9 @@ class ProfileMediaWebUploadCache {
 
   static const _dbName = 'pk_modelapp_profile_media_uploads';
   static const _storeName = 'files';
+  static const _opfsDirectoryName = 'profile_media_upload_files';
+  static const _storageIndexedDb = 'indexeddb';
+  static const _storageOpfs = 'opfs';
   static const _version = 1;
 
   static bool get isSupported {
@@ -29,16 +32,24 @@ class ProfileMediaWebUploadCache {
   }) async {
     if (!isSupported) return;
     final bytes = await source.readAsBytes();
+    final opfsFileName = _opfsFileName(taskId, itemId);
     final db = await _openDb();
     try {
+      JSObject record;
+      try {
+        await _saveBytesToOpfs(fileName: opfsFileName, bytes: bytes);
+        record = _recordForOpfs(
+          source: source,
+          bytes: bytes,
+          opfsFileName: opfsFileName,
+        );
+      } catch (_) {
+        record = _recordForIndexedDb(source: source, bytes: bytes);
+      }
+
       final transaction = db.transaction(_storeName.toJS, 'readwrite');
       final store = transaction.objectStore(_storeName);
-      await _waitRequest(
-        store.put(
-          _recordFor(source: source, bytes: bytes),
-          _key(taskId, itemId).toJS,
-        ),
-      );
+      await _waitRequest(store.put(record, _key(taskId, itemId).toJS));
       await _waitTransaction(transaction);
     } finally {
       db.close();
@@ -61,7 +72,10 @@ class ProfileMediaWebUploadCache {
       if (raw == null || raw.isUndefinedOrNull) return null;
 
       final record = raw as JSObject;
-      final bytes = _readBytes(record['bytes']);
+      final storage = _readString(record['storage']);
+      final bytes = storage == _storageOpfs
+          ? await _restoreBytesFromOpfs(_readString(record['opfsFileName']))
+          : _readBytes(record['bytes']);
       if (bytes == null || bytes.isEmpty) return null;
 
       final restoredName = _readString(record['name']);
@@ -76,7 +90,9 @@ class ProfileMediaWebUploadCache {
         name: finalName,
         mimeType: finalMimeType.isEmpty ? null : finalMimeType,
         length: bytes.length,
-        path: 'indexeddb://profile-media/$taskId/$itemId',
+        path: storage == _storageOpfs
+            ? 'opfs://profile-media/$taskId/$itemId'
+            : 'indexeddb://profile-media/$taskId/$itemId',
       );
     } finally {
       db.close();
@@ -93,6 +109,15 @@ class ProfileMediaWebUploadCache {
       final keys = _readStringList(rawKeys);
       for (final key in keys) {
         if (key.startsWith('$taskId/')) {
+          final raw = await _waitRequest(store.get(key.toJS));
+          if (raw != null && !raw.isUndefinedOrNull) {
+            final record = raw as JSObject;
+            final storage = _readString(record['storage']);
+            final opfsFileName = _readString(record['opfsFileName']);
+            if (storage == _storageOpfs && opfsFileName.isNotEmpty) {
+              await _deleteOpfsFile(opfsFileName);
+            }
+          }
           await _waitRequest(store.delete(key.toJS));
         }
       }
@@ -116,13 +141,73 @@ class ProfileMediaWebUploadCache {
     return raw as web.IDBDatabase;
   }
 
-  static JSObject _recordFor({
+  static Future<void> _saveBytesToOpfs({
+    required String fileName,
+    required Uint8List bytes,
+  }) async {
+    final directory = await _openOpfsDirectory();
+    final fileHandle = await directory
+        .getFileHandle(fileName, web.FileSystemGetFileOptions(create: true))
+        .toDart;
+    final writable = await fileHandle.createWritable().toDart;
+    await writable.write(bytes.toJS).toDart;
+    await writable.close().toDart;
+  }
+
+  static Future<Uint8List?> _restoreBytesFromOpfs(String fileName) async {
+    if (fileName.isEmpty) return null;
+    try {
+      final directory = await _openOpfsDirectory();
+      final fileHandle = await directory.getFileHandle(fileName).toDart;
+      final file = await fileHandle.getFile().toDart;
+      final buffer = await file.arrayBuffer().toDart;
+      return Uint8List.view(buffer.toDart);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<void> _deleteOpfsFile(String fileName) async {
+    if (fileName.isEmpty) return;
+    try {
+      final directory = await _openOpfsDirectory();
+      await directory.removeEntry(fileName).toDart;
+    } catch (_) {}
+  }
+
+  static Future<web.FileSystemDirectoryHandle> _openOpfsDirectory() async {
+    final root = await web.window.navigator.storage.getDirectory().toDart;
+    return root
+        .getDirectoryHandle(
+          _opfsDirectoryName,
+          web.FileSystemGetDirectoryOptions(create: true),
+        )
+        .toDart;
+  }
+
+  static JSObject _recordForOpfs({
+    required XFile source,
+    required Uint8List bytes,
+    required String opfsFileName,
+  }) {
+    final record = JSObject();
+    record['name'] = source.name.toJS;
+    record['mimeType'] = (source.mimeType ?? '').toJS;
+    record['storage'] = _storageOpfs.toJS;
+    record['opfsFileName'] = opfsFileName.toJS;
+    record['length'] = bytes.length.toJS;
+    record['savedAt'] = DateTime.now().toIso8601String().toJS;
+    return record;
+  }
+
+  static JSObject _recordForIndexedDb({
     required XFile source,
     required Uint8List bytes,
   }) {
     final record = JSObject();
     record['name'] = source.name.toJS;
     record['mimeType'] = (source.mimeType ?? '').toJS;
+    record['storage'] = _storageIndexedDb.toJS;
     record['bytes'] = bytes.toJS;
     record['length'] = bytes.length.toJS;
     record['savedAt'] = DateTime.now().toIso8601String().toJS;
@@ -201,6 +286,14 @@ class ProfileMediaWebUploadCache {
   }
 
   static String _key(String taskId, String itemId) => '$taskId/$itemId';
+
+  static String _opfsFileName(String taskId, String itemId) {
+    final safe = _key(
+      taskId,
+      itemId,
+    ).replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
+    return '$safe.bin';
+  }
 
   static Uint8List? _readBytes(JSAny? raw) {
     if (raw == null || raw.isUndefinedOrNull) return null;
