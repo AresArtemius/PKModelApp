@@ -437,7 +437,7 @@ class _CoverFramePreviewImage extends StatelessWidget {
           return Transform.translate(
             offset: Offset(
               alignment.x * width * 0.35,
-              alignment.y * height * 0.35,
+              -alignment.y * height * 0.35,
             ),
             child: Transform.scale(scale: zoom, child: child),
           );

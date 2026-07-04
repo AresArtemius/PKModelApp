@@ -1326,7 +1326,7 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
                           if (size.width <= 0 || size.height <= 0) return;
                           update(
                             x: draftX + (delta.dx / size.width) * 2.9,
-                            y: draftY + (delta.dy / size.height) * 2.9,
+                            y: draftY - (delta.dy / size.height) * 2.9,
                           );
                         },
                       ),
