@@ -52,11 +52,25 @@ class ProfileMediaUploadCancelToken {
   }
 }
 
+class ProfileMediaResumableProgress {
+  const ProfileMediaResumableProgress({
+    required this.progress,
+    required this.uploadUrl,
+    required this.uploadedBytes,
+  });
+
+  final double progress;
+  final String uploadUrl;
+  final int uploadedBytes;
+}
+
 class ProfileMediaStorage {
   const ProfileMediaStorage(this._sb);
 
   static const _maxPhotoSide = 2048;
   static const _photoJpegQuality = 86;
+  static const _tusVersion = '1.0.0';
+  static const _tusChunkSize = 6 * 1024 * 1024;
 
   final SupabaseClient _sb;
 
@@ -264,7 +278,10 @@ class ProfileMediaStorage {
     required XFile file,
     required String pathSeed,
     ValueChanged<double>? onProgress,
+    ValueChanged<ProfileMediaResumableProgress>? onResumableProgress,
     ProfileMediaUploadCancelToken? cancelToken,
+    String resumableUploadUrl = '',
+    int resumableUploadedBytes = 0,
   }) async {
     cancelToken?.throwIfCancelled();
     final ext = _ext(file);
@@ -275,12 +292,15 @@ class ProfileMediaStorage {
 
     final videoBytes = await file.readAsBytes();
     cancelToken?.throwIfCancelled();
-    final videoUrl = await uploadBinary(
+    final videoUrl = await _uploadBinaryResumable(
       bucket: bucket,
       path: storagePath,
       bytes: videoBytes,
       contentType: ct,
+      initialUploadUrl: resumableUploadUrl,
+      initialUploadedBytes: resumableUploadedBytes,
       onProgress: onProgress,
+      onResumableProgress: onResumableProgress,
       cancelToken: cancelToken,
     );
 
@@ -300,6 +320,201 @@ class ProfileMediaStorage {
       previewUrl = '';
     }
     return (videoUrl: videoUrl, previewUrl: previewUrl);
+  }
+
+  Future<String> _uploadBinaryResumable({
+    required String bucket,
+    required String path,
+    required Uint8List bytes,
+    required String contentType,
+    required String initialUploadUrl,
+    required int initialUploadedBytes,
+    ValueChanged<double>? onProgress,
+    ValueChanged<ProfileMediaResumableProgress>? onResumableProgress,
+    ProfileMediaUploadCancelToken? cancelToken,
+  }) async {
+    cancelToken?.throwIfCancelled();
+    if (bytes.length <= _tusChunkSize && initialUploadUrl.trim().isEmpty) {
+      return uploadBinary(
+        bucket: bucket,
+        path: path,
+        bytes: bytes,
+        contentType: contentType,
+        onProgress: onProgress,
+        cancelToken: cancelToken,
+      );
+    }
+
+    var uploadUrl = initialUploadUrl.trim();
+    var offset = initialUploadedBytes.clamp(0, bytes.length);
+    if (uploadUrl.isNotEmpty) {
+      final remoteOffset = await _tusRemoteOffset(
+        bucket: bucket,
+        uploadUrl: uploadUrl,
+      );
+      if (remoteOffset == null) {
+        uploadUrl = '';
+        offset = 0;
+      } else {
+        offset = remoteOffset.clamp(0, bytes.length);
+      }
+    }
+
+    if (uploadUrl.isEmpty) {
+      uploadUrl = await _createTusUpload(
+        bucket: bucket,
+        path: path,
+        bytesLength: bytes.length,
+        contentType: contentType,
+      );
+      offset = 0;
+    }
+
+    void publishProgress() {
+      final progress = bytes.isEmpty ? 1.0 : (offset / bytes.length);
+      onProgress?.call(progress.clamp(0.0, 1.0));
+      onResumableProgress?.call(
+        ProfileMediaResumableProgress(
+          progress: progress.clamp(0.0, 1.0),
+          uploadUrl: uploadUrl,
+          uploadedBytes: offset,
+        ),
+      );
+    }
+
+    publishProgress();
+    while (offset < bytes.length) {
+      cancelToken?.throwIfCancelled();
+      final end = (offset + _tusChunkSize).clamp(0, bytes.length);
+      final chunk = bytes.sublist(offset, end);
+      offset = await _patchTusChunk(
+        uploadUrl: uploadUrl,
+        chunk: chunk,
+        offset: offset,
+        bucket: bucket,
+        cancelToken: cancelToken,
+      );
+      publishProgress();
+    }
+
+    return _sb.storage.from(bucket).getPublicUrl(path);
+  }
+
+  Future<String> _createTusUpload({
+    required String bucket,
+    required String path,
+    required int bytesLength,
+    required String contentType,
+  }) async {
+    final storage = _sb.storage.from(bucket);
+    final uri = Uri.parse('${storage.url}/upload/resumable');
+    final response = await http.post(
+      uri,
+      headers: {
+        ...storage.headers,
+        'Tus-Resumable': _tusVersion,
+        'Upload-Length': '$bytesLength',
+        'Upload-Metadata': _tusMetadata({
+          'bucketName': bucket,
+          'objectName': path,
+          'contentType': contentType,
+          'cacheControl': '3600',
+        }),
+        'x-upsert': 'false',
+      },
+    );
+    if (response.statusCode < 200 || response.statusCode > 299) {
+      throw StorageException(
+        _storageErrorMessage(response),
+        statusCode: '${response.statusCode}',
+      );
+    }
+    final location = response.headers['location'];
+    if (location == null || location.trim().isEmpty) {
+      throw StorageException('Resumable upload URL was not returned');
+    }
+    return _absoluteTusUrl(uri, location.trim());
+  }
+
+  Future<int?> _tusRemoteOffset({
+    required String bucket,
+    required String uploadUrl,
+  }) async {
+    try {
+      final storage = _sb.storage.from(bucket);
+      final request = http.Request('HEAD', Uri.parse(uploadUrl))
+        ..headers.addAll(storage.headers)
+        ..headers['Tus-Resumable'] = _tusVersion;
+      final response = await request.send();
+      if (response.statusCode == 404 || response.statusCode == 410) {
+        return null;
+      }
+      if (response.statusCode < 200 || response.statusCode > 299) {
+        return null;
+      }
+      return int.tryParse(response.headers['upload-offset'] ?? '') ?? 0;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<int> _patchTusChunk({
+    required String uploadUrl,
+    required Uint8List chunk,
+    required int offset,
+    required String bucket,
+    ProfileMediaUploadCancelToken? cancelToken,
+  }) async {
+    cancelToken?.throwIfCancelled();
+    final storage = _sb.storage.from(bucket);
+    final request = http.StreamedRequest('PATCH', Uri.parse(uploadUrl))
+      ..headers.addAll(storage.headers)
+      ..headers['Tus-Resumable'] = _tusVersion
+      ..headers['Content-Type'] = 'application/offset+octet-stream'
+      ..headers['Upload-Offset'] = '$offset'
+      ..contentLength = chunk.length;
+    final responseFuture = request.send();
+    try {
+      request.sink.add(chunk);
+      cancelToken?.throwIfCancelled();
+      await request.sink.close();
+    } on ProfileMediaUploadCancelled {
+      try {
+        await request.sink.close();
+      } catch (_) {}
+      unawaited(
+        responseFuture.catchError(
+          (_) => http.StreamedResponse(const Stream<List<int>>.empty(), 499),
+        ),
+      );
+      rethrow;
+    }
+    final streamed = await _waitForUploadResponse(responseFuture, cancelToken);
+    final response = await http.Response.fromStream(streamed);
+    cancelToken?.throwIfCancelled();
+    if (response.statusCode < 200 || response.statusCode > 299) {
+      throw StorageException(
+        _storageErrorMessage(response),
+        statusCode: '${response.statusCode}',
+      );
+    }
+    return int.tryParse(response.headers['upload-offset'] ?? '') ??
+        offset + chunk.length;
+  }
+
+  String _tusMetadata(Map<String, String> values) {
+    return values.entries
+        .map((entry) {
+          final encoded = base64Encode(utf8.encode(entry.value));
+          return '${entry.key} $encoded';
+        })
+        .join(',');
+  }
+
+  String _absoluteTusUrl(Uri endpoint, String location) {
+    final parsed = Uri.tryParse(location);
+    if (parsed != null && parsed.hasScheme) return location;
+    return endpoint.resolve(location).toString();
   }
 
   Future<void> _uploadBinaryWithProgress({

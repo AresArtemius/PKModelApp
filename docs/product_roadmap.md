@@ -19,9 +19,10 @@
 - UI-диагностика очереди: источник хранения, восстановление, ошибки и retry-состояния по файлам.
 - Thumbnail pipeline для видео: Web/iOS/desktop генерируют и сохраняют JPEG-обложку перед публикацией видео.
 - Нативное восстановление исходного Web-файла через File System Access handle там, где браузер дает постоянное разрешение, с fallback на OPFS/IndexedDB.
+- Настоящий resumable upload для больших видео через Supabase Storage TUS: upload URL и offset сохраняются в очереди, после паузы/перезапуска загрузка продолжается чанками.
 
 Не хватает:
-- Настоящий resume с середины файла требует отдельного chunk/resumable upload backend или Storage API с compose/append; текущий Supabase Storage REST upload такого режима не дает.
+- Chunk/resumable upload для остальных типов больших файлов, если появится такая продуктовая необходимость.
 
 ## 2. Профиль модели
 

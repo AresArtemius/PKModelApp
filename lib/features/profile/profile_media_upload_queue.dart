@@ -56,6 +56,8 @@ class ProfileMediaUploadItem {
     required this.webStorage,
     required this.webRestored,
     required this.webDiagnostic,
+    required this.resumableUploadUrl,
+    required this.resumableUploadedBytes,
     this.source,
   });
 
@@ -74,6 +76,8 @@ class ProfileMediaUploadItem {
   final String webStorage;
   final bool webRestored;
   final String webDiagnostic;
+  final String resumableUploadUrl;
+  final int resumableUploadedBytes;
   final XFile? source;
 
   bool get isPhoto => kind == ProfileMediaUploadItemKind.photo;
@@ -110,6 +114,8 @@ class ProfileMediaUploadItem {
     String? webStorage,
     bool? webRestored,
     String? webDiagnostic,
+    String? resumableUploadUrl,
+    int? resumableUploadedBytes,
     XFile? source,
   }) {
     return ProfileMediaUploadItem(
@@ -128,6 +134,9 @@ class ProfileMediaUploadItem {
       webStorage: webStorage ?? this.webStorage,
       webRestored: webRestored ?? this.webRestored,
       webDiagnostic: webDiagnostic ?? this.webDiagnostic,
+      resumableUploadUrl: resumableUploadUrl ?? this.resumableUploadUrl,
+      resumableUploadedBytes:
+          resumableUploadedBytes ?? this.resumableUploadedBytes,
       source: source ?? this.source,
     );
   }
@@ -148,6 +157,8 @@ class ProfileMediaUploadItem {
     'webStorage': webStorage,
     'webRestored': webRestored,
     'webDiagnostic': webDiagnostic,
+    'resumableUploadUrl': resumableUploadUrl,
+    'resumableUploadedBytes': resumableUploadedBytes,
   };
 
   static ProfileMediaUploadItem fromJson(Map<String, dynamic> json) {
@@ -175,6 +186,9 @@ class ProfileMediaUploadItem {
       webStorage: (json['webStorage'] ?? '').toString(),
       webRestored: json['webRestored'] == true,
       webDiagnostic: (json['webDiagnostic'] ?? '').toString(),
+      resumableUploadUrl: (json['resumableUploadUrl'] ?? '').toString(),
+      resumableUploadedBytes:
+          (json['resumableUploadedBytes'] as num?)?.toInt() ?? 0,
     );
   }
 }
@@ -405,7 +419,9 @@ class ProfileMediaUploadQueue
                 status: ProfileMediaUploadItemStatus.queued,
                 error: '',
                 progress: 0,
-                uploadAttempt: item.url.trim().isEmpty
+                uploadAttempt:
+                    item.url.trim().isEmpty &&
+                        item.resumableUploadUrl.trim().isEmpty
                     ? item.uploadAttempt + 1
                     : item.uploadAttempt,
               )
@@ -469,6 +485,8 @@ class ProfileMediaUploadQueue
       webStorage: '',
       webRestored: false,
       webDiagnostic: kIsWeb ? 'ожидает сохранения в браузере' : '',
+      resumableUploadUrl: '',
+      resumableUploadedBytes: 0,
       source: file,
     );
   }
@@ -837,6 +855,17 @@ class ProfileMediaUploadQueue
             _replaceItem(taskId, item);
           }
 
+          void updateResumableProgress(ProfileMediaResumableProgress value) {
+            if (cancelToken.isCancelled) return;
+            updateUploadProgress(value.progress);
+            item = item.copyWith(
+              resumableUploadUrl: value.uploadUrl,
+              resumableUploadedBytes: value.uploadedBytes,
+            );
+            _replaceItem(taskId, item);
+            unawaited(_persistQueue());
+          }
+
           if (item.isPhoto) {
             final url = await storage.uploadPhoto(
               bucket: kProfileMediaBucket,
@@ -860,7 +889,10 @@ class ProfileMediaUploadQueue
               file: item.toXFile(),
               pathSeed: _pathSeedForItem(item),
               onProgress: updateUploadProgress,
+              onResumableProgress: updateResumableProgress,
               cancelToken: cancelToken,
+              resumableUploadUrl: item.resumableUploadUrl,
+              resumableUploadedBytes: item.resumableUploadedBytes,
             );
             item = item.copyWith(
               status: ProfileMediaUploadItemStatus.uploaded,
@@ -868,6 +900,8 @@ class ProfileMediaUploadQueue
               previewUrl: result.previewUrl,
               error: '',
               progress: 1,
+              resumableUploadUrl: '',
+              resumableUploadedBytes: 0,
             );
             uploadedVideoUrls = [...uploadedVideoUrls, result.videoUrl];
             uploadedVideoPreviewUrls = [
@@ -1005,7 +1039,9 @@ class ProfileMediaUploadQueue
         status: ProfileMediaUploadItemStatus.queued,
         error: '',
         progress: 0,
-        uploadAttempt: latestItem.uploadAttempt + 1,
+        uploadAttempt: latestItem.resumableUploadUrl.trim().isEmpty
+            ? latestItem.uploadAttempt + 1
+            : latestItem.uploadAttempt,
       ),
     );
     await _persistQueue();
