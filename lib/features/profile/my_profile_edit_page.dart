@@ -40,12 +40,16 @@ const EdgeInsets _kProfileEditDesktopPad = EdgeInsets.fromLTRB(32, 22, 32, 32);
 const List<String> _kProfileMediaCategories = [
   'Портфолио',
   'Портрет',
-  'Full length',
+  'Снэп-шоты',
   'Polaroid',
   'Backstage',
   'Работы',
   'Showreel',
 ];
+
+Alignment _coverFocalAlignment(double x, double y) {
+  return Alignment(x.clamp(-1.0, 1.0), y.clamp(-1.0, 1.0));
+}
 
 String _profileErrorText(Object e, AppLocalizations t) {
   if (e is MyProfileException) {
@@ -153,9 +157,13 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
   List<String> _videoCategoryLabels = [];
   String _showreelUrl = '';
   String _showreelPreviewUrl = '';
+  double _coverPhotoFocalX = 0;
+  double _coverPhotoFocalY = -0.72;
   List<String> _pendingPhotoUrls = [];
   List<String> _pendingPhotoCategoryLabels = [];
   String _pendingCoverPhotoUrl = '';
+  double _pendingCoverPhotoFocalX = 0;
+  double _pendingCoverPhotoFocalY = -0.72;
   List<String> _pendingVideoUrls = [];
   List<String> _pendingVideoPreviewUrls = [];
   List<String> _pendingVideoCategoryLabels = [];
@@ -327,9 +335,13 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
     _videoCategoryLabels = [];
     _showreelUrl = '';
     _showreelPreviewUrl = '';
+    _coverPhotoFocalX = 0;
+    _coverPhotoFocalY = -0.72;
     _pendingPhotoUrls = [];
     _pendingPhotoCategoryLabels = [];
     _pendingCoverPhotoUrl = '';
+    _pendingCoverPhotoFocalX = 0;
+    _pendingCoverPhotoFocalY = -0.72;
     _pendingVideoUrls = [];
     _pendingVideoPreviewUrls = [];
     _pendingVideoCategoryLabels = [];
@@ -409,6 +421,8 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
     );
     _showreelUrl = s.showreelUrl.trim();
     _showreelPreviewUrl = s.showreelPreviewUrl.trim();
+    _coverPhotoFocalX = s.coverPhotoFocalX;
+    _coverPhotoFocalY = s.coverPhotoFocalY;
     _pendingPhotoUrls = List<String>.from(s.pendingPhotoUrls);
     _pendingPhotoCategoryLabels = _categoryLabelsFor(
       s.pendingPhotoCategoryLabels,
@@ -416,6 +430,8 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
       fallback: 'Портфолио',
     );
     _pendingCoverPhotoUrl = s.pendingCoverPhotoUrl.trim();
+    _pendingCoverPhotoFocalX = s.pendingCoverPhotoFocalX;
+    _pendingCoverPhotoFocalY = s.pendingCoverPhotoFocalY;
     _pendingVideoUrls = List<String>.from(s.pendingVideoUrls);
     _pendingVideoPreviewUrls = List<String>.from(s.pendingVideoPreviewUrls);
     _pendingVideoCategoryLabels = _categoryLabelsFor(
@@ -432,10 +448,16 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
     int length, {
     required String fallback,
   }) {
+    String normalize(String label) {
+      final clean = label.trim();
+      if (clean.toLowerCase() == 'full length') return 'Снэп-шоты';
+      return clean;
+    }
+
     return [
       for (var i = 0; i < length; i++)
         if (i < labels.length && labels[i].trim().isNotEmpty)
-          labels[i].trim()
+          normalize(labels[i])
         else
           fallback,
     ];
@@ -541,6 +563,12 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
         ? ProfileStatus.pending
         : base.status;
     final uploadedCover = selectedUploadedCoverPhotoUrl.trim();
+    final selectedFocalX = _pickedCoverPhotoIndex != null
+        ? _pendingCoverPhotoFocalX
+        : _coverPhotoFocalX;
+    final selectedFocalY = _pickedCoverPhotoIndex != null
+        ? _pendingCoverPhotoFocalY
+        : _coverPhotoFocalY;
     final nextCoverPhotoUrl = approveImmediately || base.id.trim().isEmpty
         ? (uploadedCover.isNotEmpty ? uploadedCover : _coverPhotoUrl.trim())
         : _coverPhotoUrl.trim();
@@ -584,6 +612,12 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
         fallback: 'Портфолио',
       ),
       coverPhotoUrl: nextCoverPhotoUrl,
+      coverPhotoFocalX: approveImmediately || base.id.trim().isEmpty
+          ? selectedFocalX
+          : _coverPhotoFocalX,
+      coverPhotoFocalY: approveImmediately || base.id.trim().isEmpty
+          ? selectedFocalY
+          : _coverPhotoFocalY,
       videoUrls: List<String>.from(_videoUrls),
       videoPreviewUrls: List<String>.from(_videoPreviewUrls),
       videoCategoryLabels: _categoryLabelsFor(
@@ -600,6 +634,12 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
         fallback: 'Портфолио',
       ),
       pendingCoverPhotoUrl: nextPendingCoverPhotoUrl,
+      pendingCoverPhotoFocalX: nextPendingCoverPhotoUrl.isNotEmpty
+          ? selectedFocalX
+          : _pendingCoverPhotoFocalX,
+      pendingCoverPhotoFocalY: nextPendingCoverPhotoUrl.isNotEmpty
+          ? selectedFocalY
+          : _pendingCoverPhotoFocalY,
       pendingVideoUrls: List<String>.from(_pendingVideoUrls),
       pendingVideoPreviewUrls: List<String>.from(_pendingVideoPreviewUrls),
       pendingVideoCategoryLabels: _categoryLabelsFor(
@@ -622,6 +662,7 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
     final photoCount = _photoUrls.length + _pickedPhotos.length;
     final videoCount = _videoUrls.length + _pickedVideos.length;
     final isModel = _profileType.isModel;
+    final usesModelMeasurements = _profileType.usesModelMeasurements;
     final usesPhysicalBasics = _profileType.usesPhysicalBasics;
     final hasBirthDate = _parseIsoDate(_birthDateIso) != null;
     final hasProfessionalInfo =
@@ -635,12 +676,12 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
       _nameC.text.trim().isNotEmpty,
       if (usesPhysicalBasics) hasBirthDate,
       if (usesPhysicalBasics) _intOrZero(_heightC.text) > 0,
-      if (isModel) _intOrZero(_bustC.text) > 0,
-      if (isModel) _intOrZero(_waistC.text) > 0,
-      if (isModel) _intOrZero(_hipsC.text) > 0,
-      if (isModel) _intOrZero(_shoeSizeC.text) > 0,
-      if (isModel) _eyeColorC.text.trim().isNotEmpty,
-      if (isModel) _hairColorC.text.trim().isNotEmpty,
+      if (usesModelMeasurements) _intOrZero(_bustC.text) > 0,
+      if (usesModelMeasurements) _intOrZero(_waistC.text) > 0,
+      if (usesModelMeasurements) _intOrZero(_hipsC.text) > 0,
+      if (usesModelMeasurements) _intOrZero(_shoeSizeC.text) > 0,
+      if (usesModelMeasurements) _eyeColorC.text.trim().isNotEmpty,
+      if (usesModelMeasurements) _hairColorC.text.trim().isNotEmpty,
       _countryC.text.trim().isNotEmpty,
       _cityC.text.trim().isNotEmpty,
       if (!isModel) hasProfessionalInfo,
@@ -1154,12 +1195,129 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
       if (isPicked) {
         if (index < 0 || index >= _pickedPhotos.length) return;
         _pickedCoverPhotoIndex = index;
+        _pendingCoverPhotoFocalX = 0;
+        _pendingCoverPhotoFocalY = -0.72;
       } else {
         if (index < 0 || index >= _photoUrls.length) return;
         _coverPhotoUrl = _photoUrls[index].trim();
         _pickedCoverPhotoIndex = null;
+        _coverPhotoFocalX = 0;
+        _coverPhotoFocalY = -0.72;
       }
     });
+  }
+
+  Future<void> _editCoverFrame({required bool pending}) async {
+    var draftX = pending ? _pendingCoverPhotoFocalX : _coverPhotoFocalX;
+    var draftY = pending ? _pendingCoverPhotoFocalY : _coverPhotoFocalY;
+    final isRussian =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ru';
+
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (sheetContext, setSheetState) {
+            void update({double? x, double? y}) {
+              setSheetState(() {
+                draftX = (x ?? draftX).clamp(-1.0, 1.0);
+                draftY = (y ?? draftY).clamp(-1.0, 1.0);
+              });
+              if (!mounted) return;
+              setState(() {
+                if (pending) {
+                  _pendingCoverPhotoFocalX = draftX;
+                  _pendingCoverPhotoFocalY = draftY;
+                } else {
+                  _coverPhotoFocalX = draftX;
+                  _coverPhotoFocalY = draftY;
+                }
+              });
+            }
+
+            return SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+                  decoration: profileCardDecoration(),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        isRussian ? 'КАДР ОБЛОЖКИ' : 'COVER FRAME',
+                        textAlign: TextAlign.center,
+                        style: BrandTheme.pillText.copyWith(
+                          color: kTextDark,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 2,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Text(
+                        isRussian ? 'Лицо выше / ниже' : 'Face up / down',
+                        style: const TextStyle(
+                          color: kTextMuted,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      Slider(
+                        value: draftY,
+                        min: -1,
+                        max: 1,
+                        activeColor: BrandTheme.redTop,
+                        inactiveColor: kBorderColor,
+                        onChanged: (value) => update(y: value),
+                      ),
+                      Text(
+                        isRussian ? 'Сдвиг влево / вправо' : 'Left / right',
+                        style: const TextStyle(
+                          color: kTextMuted,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      Slider(
+                        value: draftX,
+                        min: -1,
+                        max: 1,
+                        activeColor: BrandTheme.redTop,
+                        inactiveColor: kBorderColor,
+                        onChanged: (value) => update(x: value),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: BrandPillButton(
+                              label: isRussian ? 'СБРОСИТЬ' : 'RESET',
+                              style: BrandPillStyle.light,
+                              onTap: () => update(x: 0, y: -0.72),
+                            ),
+                          ),
+                          const SizedBox(width: kGap10),
+                          Expanded(
+                            child: BrandPillButton(
+                              label: isRussian ? 'ГОТОВО' : 'DONE',
+                              style: BrandPillStyle.dark,
+                              onTap: () => Navigator.of(sheetContext).pop(),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   void _changePhotoCategory(
@@ -1423,6 +1581,8 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
           photoUrls: _photoUrls,
           photoCategoryLabels: _photoCategoryLabels,
           coverPhotoUrl: _coverPhotoUrl,
+          coverPhotoFocalX: _coverPhotoFocalX,
+          coverPhotoFocalY: _coverPhotoFocalY,
           videoUrls: _videoUrls,
           videoPreviewUrls: _videoPreviewUrls,
           videoCategoryLabels: _videoCategoryLabels,
@@ -1430,6 +1590,8 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
           pendingPhotoUrls: _pendingPhotoUrls,
           pendingPhotoCategoryLabels: _pendingPhotoCategoryLabels,
           pendingCoverPhotoUrl: _pendingCoverPhotoUrl,
+          pendingCoverPhotoFocalX: _pendingCoverPhotoFocalX,
+          pendingCoverPhotoFocalY: _pendingCoverPhotoFocalY,
           pendingVideoUrls: _pendingVideoUrls,
           pendingVideoPreviewUrls: _pendingVideoPreviewUrls,
           pendingVideoCategoryLabels: _pendingVideoCategoryLabels,
@@ -1443,6 +1605,7 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
           onRemovePhoto: _removePhotoAt,
           onRemoveVideo: _removeVideoAt,
           onMakeCoverPhoto: _makeCoverPhotoAt,
+          onEditCoverFrame: _editCoverFrame,
           onMakeShowreelVideo: _makeShowreelVideoAt,
           onChangePhotoCategory: _changePhotoCategory,
           onChangeVideoCategory: _changeVideoCategory,
@@ -1924,6 +2087,8 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
                                   photoUrls: _photoUrls,
                                   photoCategoryLabels: _photoCategoryLabels,
                                   coverPhotoUrl: _coverPhotoUrl,
+                                  coverPhotoFocalX: _coverPhotoFocalX,
+                                  coverPhotoFocalY: _coverPhotoFocalY,
                                   videoUrls: _videoUrls,
                                   videoPreviewUrls: _videoPreviewUrls,
                                   videoCategoryLabels: _videoCategoryLabels,
@@ -1932,6 +2097,10 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
                                   pendingPhotoCategoryLabels:
                                       _pendingPhotoCategoryLabels,
                                   pendingCoverPhotoUrl: _pendingCoverPhotoUrl,
+                                  pendingCoverPhotoFocalX:
+                                      _pendingCoverPhotoFocalX,
+                                  pendingCoverPhotoFocalY:
+                                      _pendingCoverPhotoFocalY,
                                   pendingVideoUrls: _pendingVideoUrls,
                                   pendingVideoPreviewUrls:
                                       _pendingVideoPreviewUrls,
@@ -1950,6 +2119,7 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
                                   onRemovePhoto: _removePhotoAt,
                                   onRemoveVideo: _removeVideoAt,
                                   onMakeCoverPhoto: _makeCoverPhotoAt,
+                                  onEditCoverFrame: _editCoverFrame,
                                   onMakeShowreelVideo: _makeShowreelVideoAt,
                                   onChangePhotoCategory: _changePhotoCategory,
                                   onChangeVideoCategory: _changeVideoCategory,

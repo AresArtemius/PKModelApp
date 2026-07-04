@@ -669,7 +669,7 @@ class _CatalogDesktopPreview extends StatelessWidget {
                           memCacheWidth: _catalogOverlayPhotoCacheWidth,
                           maxWidthDiskCache: _catalogOverlayPhotoCacheWidth,
                           fit: BoxFit.cover,
-                          alignment: _catalogCoverImageAlignment,
+                          alignment: _catalogCoverAlignmentFor(m),
                           placeholder: (_, _) =>
                               const _CatalogPhotoPlaceholder(),
                           errorWidget: (_, _, _) =>
@@ -954,6 +954,7 @@ class _CatalogGrid extends StatelessWidget {
                 ageText: '${m.age}',
                 heightText: '${m.height} $cmLabel',
                 photoUrl: photo,
+                coverAlignment: _catalogCoverAlignmentFor(m),
                 heroTag: heroTag,
                 isPro: m.isProActive,
               );
@@ -1063,6 +1064,7 @@ class _GridProfileCard extends StatelessWidget {
     required this.ageText,
     required this.heightText,
     required this.photoUrl,
+    required this.coverAlignment,
     required this.heroTag,
     required this.isPro,
     this.onLongPressStart,
@@ -1078,6 +1080,7 @@ class _GridProfileCard extends StatelessWidget {
   final String ageText;
   final String heightText;
   final String? photoUrl;
+  final Alignment coverAlignment;
   final String heroTag;
   final bool isPro;
 
@@ -1127,8 +1130,7 @@ class _GridProfileCard extends StatelessWidget {
                                           maxWidthDiskCache:
                                               _catalogCardPhotoCacheWidth,
                                           fit: BoxFit.cover,
-                                          alignment:
-                                              _catalogCoverImageAlignment,
+                                          alignment: coverAlignment,
                                           fadeInDuration: const Duration(
                                             milliseconds: 220,
                                           ),

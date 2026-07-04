@@ -230,6 +230,8 @@ class MyProfileController
       fallback: 'Портфолио',
     ),
     'cover_photo_url': _normalizedCoverPhotoUrl(s.coverPhotoUrl, s.photoUrls),
+    'cover_photo_focal_x': s.coverPhotoFocalX.clamp(-1.0, 1.0),
+    'cover_photo_focal_y': s.coverPhotoFocalY.clamp(-1.0, 1.0),
     'video_urls': s.videoUrls,
     'video_preview_urls': s.videoPreviewUrls,
     'video_category_labels': _normalizedCategoryLabels(
@@ -252,6 +254,8 @@ class MyProfileController
       s.pendingCoverPhotoUrl,
       s.pendingPhotoUrls,
     ),
+    'pending_cover_photo_focal_x': s.pendingCoverPhotoFocalX.clamp(-1.0, 1.0),
+    'pending_cover_photo_focal_y': s.pendingCoverPhotoFocalY.clamp(-1.0, 1.0),
     'pending_video_urls': s.pendingVideoUrls,
     'pending_video_preview_urls': s.pendingVideoPreviewUrls,
     'pending_video_category_labels': _normalizedCategoryLabels(

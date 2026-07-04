@@ -42,7 +42,6 @@ const double _iconPillHeight = 52;
 const double _heroMediaRadius = 18;
 const double _mediaGridGap = 12;
 const double _mediaThumbRadius = 16;
-const Alignment _profileCoverImageAlignment = Alignment(0, -0.72);
 
 const double _galleryCloseOffset = 8;
 const double _videoControlsBottom = 24;
@@ -89,6 +88,13 @@ TextStyle _bodyStyle({
 
 final Map<String, Future<String?>> _videoThumbnailFutures =
     <String, Future<String?>>{};
+
+Alignment _profileCoverAlignmentFor(ModelVm m) {
+  return Alignment(
+    m.coverPhotoFocalX.clamp(-1.0, 1.0),
+    m.coverPhotoFocalY.clamp(-1.0, 1.0),
+  );
+}
 
 String _displayText(String value) => value.trim().isEmpty ? '—' : value.trim();
 String _displayInt(int value) => value > 0 ? '$value' : '—';
@@ -401,6 +407,7 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
                                 photoUrls: displayPhotoUrls,
                                 videoUrls: m.videoUrls,
                                 videoPreviewUrls: m.videoPreviewUrls,
+                                coverAlignment: _profileCoverAlignmentFor(m),
                                 heroTag: 'model-photo-${m.id}',
                                 onOpenPhotos: (index) => _openPhotos(
                                   context,

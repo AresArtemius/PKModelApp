@@ -29,6 +29,8 @@ class ProfileSupabaseSchema {
     'pro_until',
     'is_verified',
     'cover_photo_url',
+    'cover_photo_focal_x',
+    'cover_photo_focal_y',
     'showreel_url',
     'showreel_preview_url',
     'photo_category_labels',
@@ -39,6 +41,10 @@ class ProfileSupabaseSchema {
   static const coverPhotoColumns = <String>[
     'cover_photo_url',
     'pending_cover_photo_url',
+    'cover_photo_focal_x',
+    'cover_photo_focal_y',
+    'pending_cover_photo_focal_x',
+    'pending_cover_photo_focal_y',
   ];
   static const showreelColumns = <String>[
     'showreel_url',
@@ -128,6 +134,8 @@ class ProfileSupabaseSchema {
       if (includePro) 'pro_until',
       if (includeVerification) 'is_verified',
       if (includeCoverPhoto) 'cover_photo_url',
+      if (includeCoverPhoto) 'cover_photo_focal_x',
+      if (includeCoverPhoto) 'cover_photo_focal_y',
       if (includeCoverPhoto) 'showreel_url',
       if (includeCoverPhoto) 'showreel_preview_url',
       if (includeCoverPhoto) 'photo_category_labels',
@@ -158,6 +166,8 @@ class ProfileSupabaseSchema {
       if (includePro) 'pro_until',
       if (includeVerification) 'is_verified',
       if (includeCoverPhoto) 'cover_photo_url',
+      if (includeCoverPhoto) 'cover_photo_focal_x',
+      if (includeCoverPhoto) 'cover_photo_focal_y',
       if (includeCoverPhoto) ...showreelColumns.take(2),
       if (includeCoverPhoto) ..._mediaCategoryColumns.take(2),
     ]);

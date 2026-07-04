@@ -117,6 +117,7 @@ class _HeroMedia extends StatelessWidget {
     required this.photoUrls,
     required this.videoUrls,
     required this.videoPreviewUrls,
+    required this.coverAlignment,
     required this.heroTag,
     required this.onOpenPhotos,
     required this.onOpenVideo,
@@ -125,6 +126,7 @@ class _HeroMedia extends StatelessWidget {
   final List<String> photoUrls;
   final List<String> videoUrls;
   final List<String> videoPreviewUrls;
+  final Alignment coverAlignment;
   final String heroTag;
   final void Function(int index) onOpenPhotos;
   final VoidCallback onOpenVideo;
@@ -154,7 +156,7 @@ class _HeroMedia extends StatelessWidget {
                     memCacheWidth: _profileHeroCacheWidth,
                     maxWidthDiskCache: _profileHeroCacheWidth,
                     fit: BoxFit.cover,
-                    alignment: _profileCoverImageAlignment,
+                    alignment: coverAlignment,
                     placeholder: (_, _) => DecoratedBox(
                       decoration: catalogPhotoPlaceholderDecoration(),
                     ),

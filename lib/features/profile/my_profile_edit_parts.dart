@@ -238,6 +238,8 @@ class _MediaBlock extends StatelessWidget {
     required this.photoUrls,
     required this.photoCategoryLabels,
     required this.coverPhotoUrl,
+    required this.coverPhotoFocalX,
+    required this.coverPhotoFocalY,
     required this.videoUrls,
     required this.videoPreviewUrls,
     required this.videoCategoryLabels,
@@ -245,6 +247,8 @@ class _MediaBlock extends StatelessWidget {
     required this.pendingPhotoUrls,
     required this.pendingPhotoCategoryLabels,
     required this.pendingCoverPhotoUrl,
+    required this.pendingCoverPhotoFocalX,
+    required this.pendingCoverPhotoFocalY,
     required this.pendingVideoUrls,
     required this.pendingVideoPreviewUrls,
     required this.pendingVideoCategoryLabels,
@@ -258,6 +262,7 @@ class _MediaBlock extends StatelessWidget {
     required this.onRemovePhoto,
     required this.onRemoveVideo,
     required this.onMakeCoverPhoto,
+    required this.onEditCoverFrame,
     required this.onMakeShowreelVideo,
     required this.onChangePhotoCategory,
     required this.onChangeVideoCategory,
@@ -271,6 +276,8 @@ class _MediaBlock extends StatelessWidget {
   final List<String> photoUrls;
   final List<String> photoCategoryLabels;
   final String coverPhotoUrl;
+  final double coverPhotoFocalX;
+  final double coverPhotoFocalY;
   final List<String> videoUrls;
   final List<String> videoPreviewUrls;
   final List<String> videoCategoryLabels;
@@ -278,6 +285,8 @@ class _MediaBlock extends StatelessWidget {
   final List<String> pendingPhotoUrls;
   final List<String> pendingPhotoCategoryLabels;
   final String pendingCoverPhotoUrl;
+  final double pendingCoverPhotoFocalX;
+  final double pendingCoverPhotoFocalY;
   final List<String> pendingVideoUrls;
   final List<String> pendingVideoPreviewUrls;
   final List<String> pendingVideoCategoryLabels;
@@ -294,6 +303,7 @@ class _MediaBlock extends StatelessWidget {
   final Future<void> Function(int index, {required bool isPicked})
   onRemoveVideo;
   final void Function(int index, {required bool isPicked}) onMakeCoverPhoto;
+  final void Function({required bool pending}) onEditCoverFrame;
   final void Function(int index, {required bool isPicked}) onMakeShowreelVideo;
   final void Function(
     int index, {
@@ -382,14 +392,23 @@ class _MediaBlock extends StatelessWidget {
                         urls: photoUrls,
                         categoryLabels: photoCategoryLabels,
                         coverUrl: coverPhotoUrl,
+                        coverAlignment: _coverFocalAlignment(
+                          coverPhotoFocalX,
+                          coverPhotoFocalY,
+                        ),
                         pendingUrls: pendingPhotoUrls,
                         pendingCategoryLabels: pendingPhotoCategoryLabels,
                         pendingCoverUrl: pendingCoverPhotoUrl,
+                        pendingCoverAlignment: _coverFocalAlignment(
+                          pendingCoverPhotoFocalX,
+                          pendingCoverPhotoFocalY,
+                        ),
                         files: pickedPhotos,
                         fileCategoryLabels: pickedPhotoCategoryLabels,
                         pickedCoverIndex: pickedCoverPhotoIndex,
                         onRemove: onRemovePhoto,
                         onMakeCover: onMakeCoverPhoto,
+                        onEditCoverFrame: onEditCoverFrame,
                         onChangeCategory: onChangePhotoCategory,
                       ),
                     if (hasVideo) ...[
@@ -682,10 +701,15 @@ class _VideoThumb extends StatelessWidget {
 }
 
 class _PickedXFileImage extends StatelessWidget {
-  const _PickedXFileImage({required this.file, this.fit = BoxFit.cover});
+  const _PickedXFileImage({
+    required this.file,
+    this.fit = BoxFit.cover,
+    this.alignment = Alignment.center,
+  });
 
   final XFile file;
   final BoxFit fit;
+  final Alignment alignment;
 
   @override
   Widget build(BuildContext context) {
@@ -700,6 +724,7 @@ class _PickedXFileImage extends StatelessWidget {
         return Image.memory(
           bytes,
           fit: fit,
+          alignment: alignment,
           errorBuilder: (_, _, _) => const _EmptyProfileImagePlaceholder(),
         );
       },
@@ -1084,6 +1109,45 @@ class _MediaCoverButton extends StatelessWidget {
   }
 }
 
+class _MediaFrameButton extends StatelessWidget {
+  const _MediaFrameButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final isRussian =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ru';
+    final label = isRussian ? 'Настроить кадр лица' : 'Adjust face framing';
+    return Tooltip(
+      message: label,
+      waitDuration: const Duration(milliseconds: 350),
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Semantics(
+          button: true,
+          label: label,
+          child: Container(
+            width: kProfileRemoveButtonSize,
+            height: kProfileRemoveButtonSize,
+            decoration: BoxDecoration(
+              color: kOverlayStrong,
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white.withValues(alpha: 0.86)),
+            ),
+            child: const Icon(
+              Icons.control_camera_rounded,
+              size: 15,
+              color: Colors.white,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _CoverMediaBadge extends StatelessWidget {
   const _CoverMediaBadge();
 
@@ -1300,14 +1364,17 @@ class _ThumbRow extends StatelessWidget {
     required this.urls,
     required this.categoryLabels,
     required this.coverUrl,
+    required this.coverAlignment,
     required this.pendingUrls,
     required this.pendingCategoryLabels,
     required this.pendingCoverUrl,
+    required this.pendingCoverAlignment,
     required this.files,
     required this.fileCategoryLabels,
     required this.pickedCoverIndex,
     required this.onRemove,
     required this.onMakeCover,
+    required this.onEditCoverFrame,
     required this.onChangeCategory,
   });
 
@@ -1316,14 +1383,17 @@ class _ThumbRow extends StatelessWidget {
   final List<String> urls;
   final List<String> categoryLabels;
   final String coverUrl;
+  final Alignment coverAlignment;
   final List<String> pendingUrls;
   final List<String> pendingCategoryLabels;
   final String pendingCoverUrl;
+  final Alignment pendingCoverAlignment;
   final List<XFile> files;
   final List<String> fileCategoryLabels;
   final int? pickedCoverIndex;
   final Future<void> Function(int index, {required bool isPicked}) onRemove;
   final void Function(int index, {required bool isPicked}) onMakeCover;
+  final void Function({required bool pending}) onEditCoverFrame;
   final void Function(
     int index, {
     required bool isPicked,
@@ -1343,20 +1413,36 @@ class _ThumbRow extends StatelessWidget {
       for (int i = 0; i < urls.length; i++)
         _Thumb(
           size: size,
-          image: _NetworkThumbImage(url: urls[i], fit: BoxFit.cover),
+          image: _NetworkThumbImage(
+            url: urls[i],
+            fit: BoxFit.cover,
+            alignment: urls[i].trim() == fallbackCoverUrl
+                ? coverAlignment
+                : Alignment.center,
+          ),
           category: i < categoryLabels.length ? categoryLabels[i] : 'Портфолио',
           isCover: !hasPickedCover && urls[i].trim() == fallbackCoverUrl,
           onMakeCover: !hasPickedCover && urls[i].trim() == fallbackCoverUrl
               ? null
               : () => onMakeCover(i, isPicked: false),
           onRemove: () => onRemove(i, isPicked: false),
+          onEditCoverFrame:
+              !hasPickedCover && urls[i].trim() == fallbackCoverUrl
+              ? () => onEditCoverFrame(pending: false)
+              : null,
           onChangeCategory: (category) =>
               onChangeCategory(i, isPicked: false, category: category),
         ),
       for (int i = 0; i < pendingUrls.length; i++)
         _Thumb(
           size: size,
-          image: _NetworkThumbImage(url: pendingUrls[i], fit: BoxFit.cover),
+          image: _NetworkThumbImage(
+            url: pendingUrls[i],
+            fit: BoxFit.cover,
+            alignment: pendingUrls[i].trim() == selectedPendingCoverUrl
+                ? pendingCoverAlignment
+                : Alignment.center,
+          ),
           category: i < pendingCategoryLabels.length
               ? pendingCategoryLabels[i]
               : 'Портфолио',
@@ -1365,11 +1451,26 @@ class _ThumbRow extends StatelessWidget {
               selectedPendingCoverUrl.isNotEmpty &&
               pendingUrls[i].trim() == selectedPendingCoverUrl,
           pending: true,
+          onEditCoverFrame:
+              !hasPickedCover &&
+                  selectedPendingCoverUrl.isNotEmpty &&
+                  pendingUrls[i].trim() == selectedPendingCoverUrl
+              ? () => onEditCoverFrame(pending: true)
+              : null,
         ),
       for (int i = 0; i < files.length; i++)
         _Thumb(
           size: size,
-          image: _PickedXFileImage(file: files[i], fit: BoxFit.cover),
+          image: _PickedXFileImage(
+            file: files[i],
+            fit: BoxFit.cover,
+            alignment:
+                (hasPickedCover
+                    ? pickedCoverIndex == i
+                    : urls.isEmpty && pendingUrls.isEmpty && i == 0)
+                ? pendingCoverAlignment
+                : Alignment.center,
+          ),
           category: i < fileCategoryLabels.length
               ? fileCategoryLabels[i]
               : 'Портфолио',
@@ -1383,6 +1484,12 @@ class _ThumbRow extends StatelessWidget {
               ? null
               : () => onMakeCover(i, isPicked: true),
           onRemove: () => onRemove(i, isPicked: true),
+          onEditCoverFrame:
+              (hasPickedCover
+                  ? pickedCoverIndex == i
+                  : urls.isEmpty && pendingUrls.isEmpty && i == 0)
+              ? () => onEditCoverFrame(pending: true)
+              : null,
           onChangeCategory: (category) =>
               onChangeCategory(i, isPicked: true, category: category),
         ),
@@ -1411,6 +1518,7 @@ class _Thumb extends StatelessWidget {
     required this.category,
     this.isCover = false,
     this.onMakeCover,
+    this.onEditCoverFrame,
     this.onChangeCategory,
     this.onRemove,
     this.pending = false,
@@ -1421,6 +1529,7 @@ class _Thumb extends StatelessWidget {
   final String category;
   final bool isCover;
   final VoidCallback? onMakeCover;
+  final VoidCallback? onEditCoverFrame;
   final ValueChanged<String>? onChangeCategory;
   final VoidCallback? onRemove;
   final bool pending;
@@ -1465,6 +1574,12 @@ class _Thumb extends StatelessWidget {
                         selected: isCover,
                         onTap: onMakeCover,
                       ),
+                    ),
+                  if (onEditCoverFrame != null)
+                    Positioned(
+                      left: _kMediaRemoveInset,
+                      bottom: _kMediaRemoveInset,
+                      child: _MediaFrameButton(onTap: onEditCoverFrame!),
                     ),
                   if (pending) const _PendingMediaBadge(),
                   if (onRemove != null)
@@ -1739,10 +1854,15 @@ class _BrandedDialog extends StatelessWidget {
 }
 
 class _NetworkThumbImage extends StatelessWidget {
-  const _NetworkThumbImage({required this.url, this.fit = BoxFit.cover});
+  const _NetworkThumbImage({
+    required this.url,
+    this.fit = BoxFit.cover,
+    this.alignment = Alignment.center,
+  });
 
   final String url;
   final BoxFit fit;
+  final Alignment alignment;
 
   @override
   Widget build(BuildContext context) {
@@ -1754,6 +1874,7 @@ class _NetworkThumbImage extends StatelessWidget {
     return CachedNetworkImage(
       imageUrl: trimmedUrl,
       fit: fit,
+      alignment: alignment,
       memCacheWidth: 360,
       maxWidthDiskCache: 720,
       fadeInDuration: const Duration(milliseconds: 180),

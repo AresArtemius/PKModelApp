@@ -20,6 +20,8 @@ class ModelVm {
   final List<String> videoCategoryLabels;
   final String showreelUrl;
   final String showreelPreviewUrl;
+  final double coverPhotoFocalX;
+  final double coverPhotoFocalY;
   final String resume;
   final String experience;
   final String skills;
@@ -57,6 +59,8 @@ class ModelVm {
     this.videoCategoryLabels = const [],
     this.showreelUrl = '',
     this.showreelPreviewUrl = '',
+    this.coverPhotoFocalX = 0,
+    this.coverPhotoFocalY = -0.72,
     this.resume = '',
     this.experience = '',
     this.skills = '',
@@ -113,6 +117,12 @@ class ModelVm {
   }
 
   static String _string(dynamic v) => (v ?? '').toString().trim();
+
+  static double _double(dynamic v, {double fallback = 0}) {
+    if (v == null) return fallback;
+    if (v is num) return v.toDouble();
+    return double.tryParse(v.toString()) ?? fallback;
+  }
 
   static bool _bool(dynamic v) {
     if (v == null) return false;
@@ -199,6 +209,8 @@ class ModelVm {
       videoCategoryLabels: _stringList(m['video_category_labels']),
       showreelUrl: _string(m['showreel_url']),
       showreelPreviewUrl: _string(m['showreel_preview_url']),
+      coverPhotoFocalX: _double(m['cover_photo_focal_x']),
+      coverPhotoFocalY: _double(m['cover_photo_focal_y'], fallback: -0.72),
       resume: _string(m['resume']),
       experience: _string(m['experience']),
       skills: _string(m['skills']),

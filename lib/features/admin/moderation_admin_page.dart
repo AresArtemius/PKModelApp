@@ -222,6 +222,12 @@ class _ModerationAdminPageState extends ConsumerState<ModerationAdminPage> {
     final preferredCover = profile.pendingCoverPhotoUrl.trim().isNotEmpty
         ? profile.pendingCoverPhotoUrl
         : profile.coverPhotoUrl;
+    final preferredCoverFocalX = profile.pendingCoverPhotoUrl.trim().isNotEmpty
+        ? profile.pendingCoverPhotoFocalX
+        : profile.coverPhotoFocalX;
+    final preferredCoverFocalY = profile.pendingCoverPhotoUrl.trim().isNotEmpty
+        ? profile.pendingCoverPhotoFocalY
+        : profile.coverPhotoFocalY;
     final preferredShowreel = profile.pendingShowreelUrl.trim().isNotEmpty
         ? profile.pendingShowreelUrl
         : profile.showreelUrl;
@@ -235,6 +241,8 @@ class _ModerationAdminPageState extends ConsumerState<ModerationAdminPage> {
             'photo_urls': photoUrls,
             'photo_category_labels': photoCategoryLabels,
             'cover_photo_url': _coverPhotoFrom(preferredCover, photoUrls),
+            'cover_photo_focal_x': preferredCoverFocalX.clamp(-1.0, 1.0),
+            'cover_photo_focal_y': preferredCoverFocalY.clamp(-1.0, 1.0),
             'video_urls': videoUrls,
             'video_preview_urls': _mergeUniqueMedia(
               profile.videoPreviewUrls,
@@ -251,6 +259,8 @@ class _ModerationAdminPageState extends ConsumerState<ModerationAdminPage> {
                 : '',
             'pending_photo_urls': const <String>[],
             'pending_cover_photo_url': '',
+            'pending_cover_photo_focal_x': 0,
+            'pending_cover_photo_focal_y': -0.72,
             'pending_video_urls': const <String>[],
             'pending_video_preview_urls': const <String>[],
             'pending_photo_category_labels': const <String>[],

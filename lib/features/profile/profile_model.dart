@@ -19,7 +19,7 @@ enum ProfessionalProfileType {
 
   bool get isActor => this == ProfessionalProfileType.actor;
 
-  bool get usesModelMeasurements => isModel;
+  bool get usesModelMeasurements => isModel || isActor;
 
   bool get usesPhysicalBasics => isModel || isActor;
 }
@@ -120,6 +120,17 @@ bool _boolFromMap(Map<String, dynamic> m, String key, {bool fallback = false}) {
   return fallback;
 }
 
+double _doubleFromMap(
+  Map<String, dynamic> m,
+  String key, {
+  double fallback = 0,
+}) {
+  final v = m[key];
+  if (v == null) return fallback;
+  if (v is num) return v.toDouble();
+  return double.tryParse(v.toString()) ?? fallback;
+}
+
 String _stringFromMap(
   Map<String, dynamic> m,
   String key, {
@@ -181,6 +192,8 @@ class MyProfileState {
   final List<String> photoCategoryLabels;
   final List<String> videoCategoryLabels;
   final String coverPhotoUrl;
+  final double coverPhotoFocalX;
+  final double coverPhotoFocalY;
   final String showreelUrl;
   final String showreelPreviewUrl;
   final List<String> pendingPhotoUrls;
@@ -189,6 +202,8 @@ class MyProfileState {
   final List<String> pendingPhotoCategoryLabels;
   final List<String> pendingVideoCategoryLabels;
   final String pendingCoverPhotoUrl;
+  final double pendingCoverPhotoFocalX;
+  final double pendingCoverPhotoFocalY;
   final String pendingShowreelUrl;
   final String pendingShowreelPreviewUrl;
   final bool hasPendingMedia;
@@ -229,6 +244,8 @@ class MyProfileState {
     this.photoCategoryLabels = const [],
     this.videoCategoryLabels = const [],
     this.coverPhotoUrl = '',
+    this.coverPhotoFocalX = 0,
+    this.coverPhotoFocalY = -0.72,
     this.showreelUrl = '',
     this.showreelPreviewUrl = '',
     this.pendingPhotoUrls = const [],
@@ -237,6 +254,8 @@ class MyProfileState {
     this.pendingPhotoCategoryLabels = const [],
     this.pendingVideoCategoryLabels = const [],
     this.pendingCoverPhotoUrl = '',
+    this.pendingCoverPhotoFocalX = 0,
+    this.pendingCoverPhotoFocalY = -0.72,
     this.pendingShowreelUrl = '',
     this.pendingShowreelPreviewUrl = '',
     this.hasPendingMedia = false,
@@ -350,6 +369,8 @@ class MyProfileState {
     List<String>? photoCategoryLabels,
     List<String>? videoCategoryLabels,
     String? coverPhotoUrl,
+    double? coverPhotoFocalX,
+    double? coverPhotoFocalY,
     String? showreelUrl,
     String? showreelPreviewUrl,
     List<String>? pendingPhotoUrls,
@@ -358,6 +379,8 @@ class MyProfileState {
     List<String>? pendingPhotoCategoryLabels,
     List<String>? pendingVideoCategoryLabels,
     String? pendingCoverPhotoUrl,
+    double? pendingCoverPhotoFocalX,
+    double? pendingCoverPhotoFocalY,
     String? pendingShowreelUrl,
     String? pendingShowreelPreviewUrl,
     bool? hasPendingMedia,
@@ -400,6 +423,8 @@ class MyProfileState {
       photoCategoryLabels: photoCategoryLabels ?? this.photoCategoryLabels,
       videoCategoryLabels: videoCategoryLabels ?? this.videoCategoryLabels,
       coverPhotoUrl: coverPhotoUrl ?? this.coverPhotoUrl,
+      coverPhotoFocalX: coverPhotoFocalX ?? this.coverPhotoFocalX,
+      coverPhotoFocalY: coverPhotoFocalY ?? this.coverPhotoFocalY,
       showreelUrl: showreelUrl ?? this.showreelUrl,
       showreelPreviewUrl: showreelPreviewUrl ?? this.showreelPreviewUrl,
       pendingPhotoUrls: pendingPhotoUrls ?? this.pendingPhotoUrls,
@@ -411,6 +436,10 @@ class MyProfileState {
       pendingVideoCategoryLabels:
           pendingVideoCategoryLabels ?? this.pendingVideoCategoryLabels,
       pendingCoverPhotoUrl: pendingCoverPhotoUrl ?? this.pendingCoverPhotoUrl,
+      pendingCoverPhotoFocalX:
+          pendingCoverPhotoFocalX ?? this.pendingCoverPhotoFocalX,
+      pendingCoverPhotoFocalY:
+          pendingCoverPhotoFocalY ?? this.pendingCoverPhotoFocalY,
       pendingShowreelUrl: pendingShowreelUrl ?? this.pendingShowreelUrl,
       pendingShowreelPreviewUrl:
           pendingShowreelPreviewUrl ?? this.pendingShowreelPreviewUrl,
@@ -457,6 +486,12 @@ class MyProfileState {
       photoCategoryLabels: _stringListFromMap(m, 'photo_category_labels'),
       videoCategoryLabels: _stringListFromMap(m, 'video_category_labels'),
       coverPhotoUrl: _stringFromMap(m, 'cover_photo_url').trim(),
+      coverPhotoFocalX: _doubleFromMap(m, 'cover_photo_focal_x'),
+      coverPhotoFocalY: _doubleFromMap(
+        m,
+        'cover_photo_focal_y',
+        fallback: -0.72,
+      ),
       showreelUrl: _stringFromMap(m, 'showreel_url').trim(),
       showreelPreviewUrl: _stringFromMap(m, 'showreel_preview_url').trim(),
       pendingPhotoUrls: _stringListFromMap(m, 'pending_photo_urls'),
@@ -474,6 +509,12 @@ class MyProfileState {
         'pending_video_category_labels',
       ),
       pendingCoverPhotoUrl: _stringFromMap(m, 'pending_cover_photo_url').trim(),
+      pendingCoverPhotoFocalX: _doubleFromMap(m, 'pending_cover_photo_focal_x'),
+      pendingCoverPhotoFocalY: _doubleFromMap(
+        m,
+        'pending_cover_photo_focal_y',
+        fallback: -0.72,
+      ),
       pendingShowreelUrl: _stringFromMap(m, 'pending_showreel_url').trim(),
       pendingShowreelPreviewUrl: _stringFromMap(
         m,

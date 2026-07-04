@@ -39,8 +39,14 @@ const double _catalogDesktopBreakpoint = 900;
 const double _catalogDesktopMaxWidth = 1680;
 const double _catalogDesktopSidePanelWidth = 320;
 const double _catalogDesktopDetailWidth = 360;
-const Alignment _catalogCoverImageAlignment = Alignment(0, -0.72);
 const EdgeInsets _catalogDesktopPadding = EdgeInsets.fromLTRB(32, 28, 32, 28);
+
+Alignment _catalogCoverAlignmentFor(ModelVm m) {
+  return Alignment(
+    m.coverPhotoFocalX.clamp(-1.0, 1.0),
+    m.coverPhotoFocalY.clamp(-1.0, 1.0),
+  );
+}
 
 class CatalogPage extends ConsumerStatefulWidget {
   const CatalogPage({super.key, this.leading});
