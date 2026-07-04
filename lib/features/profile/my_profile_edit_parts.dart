@@ -288,203 +288,6 @@ class _ProfileRoleOption extends StatelessWidget {
   }
 }
 
-class _CoverFramePreview extends StatelessWidget {
-  const _CoverFramePreview({
-    required this.imageUrl,
-    required this.imageFile,
-    required this.alignment,
-    required this.zoom,
-    required this.onDrag,
-  });
-
-  final String imageUrl;
-  final XFile? imageFile;
-  final Alignment alignment;
-  final double zoom;
-  final void Function(Offset delta, Size size) onDrag;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final width = constraints.maxWidth.isFinite
-            ? constraints.maxWidth
-            : MediaQuery.sizeOf(context).width - 64;
-        final isWide = width >= 700;
-        final height = (width * (isWide ? 0.48 : 0.72)).clamp(
-          isWide ? 340.0 : 220.0,
-          isWide ? 460.0 : 320.0,
-        );
-        final frameWidth = width;
-        final frameHeight = (frameWidth / 1.85).clamp(150.0, height - 34);
-        final top = (height - frameHeight) / 2;
-
-        return GestureDetector(
-          onPanUpdate: (details) =>
-              onDrag(details.delta, Size(frameWidth, frameHeight)),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(26),
-            child: SizedBox(
-              width: width,
-              height: height,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  _CoverFramePreviewImage(
-                    imageUrl: imageUrl,
-                    imageFile: imageFile,
-                    alignment: alignment,
-                    zoom: zoom,
-                  ),
-                  Positioned(
-                    left: 0,
-                    top: 0,
-                    right: 0,
-                    height: top,
-                    child: const ColoredBox(color: Color(0x99000000)),
-                  ),
-                  Positioned(
-                    left: 0,
-                    top: top + frameHeight,
-                    right: 0,
-                    bottom: 0,
-                    child: const ColoredBox(color: Color(0x99000000)),
-                  ),
-                  Positioned(
-                    left: 0,
-                    top: top,
-                    width: 10,
-                    height: frameHeight,
-                    child: const ColoredBox(color: Color(0x66000000)),
-                  ),
-                  Positioned(
-                    right: 0,
-                    top: top,
-                    width: 10,
-                    height: frameHeight,
-                    child: const ColoredBox(color: Color(0x66000000)),
-                  ),
-                  Positioned(
-                    left: 0,
-                    top: top,
-                    width: frameWidth,
-                    height: frameHeight,
-                    child: IgnorePointer(
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.92),
-                            width: 2,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.20),
-                              blurRadius: 18,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  Center(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.52),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: const Icon(
-                        Icons.open_with_rounded,
-                        color: Colors.white,
-                        size: 18,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _CoverFramePreviewImage extends StatelessWidget {
-  const _CoverFramePreviewImage({
-    required this.imageUrl,
-    required this.imageFile,
-    required this.alignment,
-    required this.zoom,
-  });
-
-  final String imageUrl;
-  final XFile? imageFile;
-  final Alignment alignment;
-  final double zoom;
-
-  @override
-  Widget build(BuildContext context) {
-    Widget positionedImage(Widget child) {
-      return LayoutBuilder(
-        builder: (context, constraints) {
-          final width = constraints.maxWidth.isFinite
-              ? constraints.maxWidth
-              : MediaQuery.sizeOf(context).width;
-          final height = constraints.maxHeight.isFinite
-              ? constraints.maxHeight
-              : width * 0.72;
-          return Transform.translate(
-            offset: Offset(
-              alignment.x * width * 0.35,
-              -alignment.y * height * 0.35,
-            ),
-            child: Transform.scale(scale: zoom, child: child),
-          );
-        },
-      );
-    }
-
-    final file = imageFile;
-    if (file != null) {
-      return FutureBuilder<Uint8List>(
-        future: file.readAsBytes(),
-        builder: (context, snapshot) {
-          final bytes = snapshot.data;
-          if (bytes == null || bytes.isEmpty) {
-            return const _EmptyProfileImagePlaceholder();
-          }
-          return positionedImage(
-            Image.memory(
-              bytes,
-              fit: BoxFit.contain,
-              alignment: Alignment.center,
-              errorBuilder: (_, _, _) => const _EmptyProfileImagePlaceholder(),
-            ),
-          );
-        },
-      );
-    }
-
-    final url = imageUrl.trim();
-    if (url.isEmpty) return const _EmptyProfileImagePlaceholder();
-
-    return positionedImage(
-      CachedNetworkImage(
-        imageUrl: url,
-        fit: BoxFit.contain,
-        alignment: Alignment.center,
-        placeholder: (_, _) => const _EmptyProfileImagePlaceholder(),
-        errorWidget: (_, _, _) => const _EmptyProfileImagePlaceholder(),
-      ),
-    );
-  }
-}
-
 class _ProfileQualityCard extends StatelessWidget {
   const _ProfileQualityCard({required this.quality});
 
@@ -616,7 +419,6 @@ class _MediaBlock extends StatelessWidget {
     required this.onRemovePhoto,
     required this.onRemoveVideo,
     required this.onMakeCoverPhoto,
-    required this.onEditCoverFrame,
     required this.onMakeShowreelVideo,
     required this.onChangePhotoCategory,
     required this.onChangeVideoCategory,
@@ -657,7 +459,6 @@ class _MediaBlock extends StatelessWidget {
   final Future<void> Function(int index, {required bool isPicked})
   onRemoveVideo;
   final void Function(int index, {required bool isPicked}) onMakeCoverPhoto;
-  final void Function({required bool pending}) onEditCoverFrame;
   final void Function(int index, {required bool isPicked}) onMakeShowreelVideo;
   final void Function(
     int index, {
@@ -762,7 +563,6 @@ class _MediaBlock extends StatelessWidget {
                         pickedCoverIndex: pickedCoverPhotoIndex,
                         onRemove: onRemovePhoto,
                         onMakeCover: onMakeCoverPhoto,
-                        onEditCoverFrame: onEditCoverFrame,
                         onChangeCategory: onChangePhotoCategory,
                       ),
                     if (hasVideo) ...[
@@ -1465,45 +1265,6 @@ class _MediaCoverButton extends StatelessWidget {
   }
 }
 
-class _MediaFrameButton extends StatelessWidget {
-  const _MediaFrameButton({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final isRussian =
-        Localizations.localeOf(context).languageCode.toLowerCase() == 'ru';
-    final label = isRussian ? 'Настроить кадр лица' : 'Adjust face framing';
-    return Tooltip(
-      message: label,
-      waitDuration: const Duration(milliseconds: 350),
-      child: GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: Semantics(
-          button: true,
-          label: label,
-          child: Container(
-            width: kProfileRemoveButtonSize,
-            height: kProfileRemoveButtonSize,
-            decoration: BoxDecoration(
-              color: kOverlayStrong,
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.white.withValues(alpha: 0.86)),
-            ),
-            child: const Icon(
-              Icons.control_camera_rounded,
-              size: 15,
-              color: Colors.white,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _CoverMediaBadge extends StatelessWidget {
   const _CoverMediaBadge();
 
@@ -1730,7 +1491,6 @@ class _ThumbRow extends StatelessWidget {
     required this.pickedCoverIndex,
     required this.onRemove,
     required this.onMakeCover,
-    required this.onEditCoverFrame,
     required this.onChangeCategory,
   });
 
@@ -1749,7 +1509,6 @@ class _ThumbRow extends StatelessWidget {
   final int? pickedCoverIndex;
   final Future<void> Function(int index, {required bool isPicked}) onRemove;
   final void Function(int index, {required bool isPicked}) onMakeCover;
-  final void Function({required bool pending}) onEditCoverFrame;
   final void Function(
     int index, {
     required bool isPicked,
@@ -1782,10 +1541,6 @@ class _ThumbRow extends StatelessWidget {
               ? null
               : () => onMakeCover(i, isPicked: false),
           onRemove: () => onRemove(i, isPicked: false),
-          onEditCoverFrame:
-              !hasPickedCover && urls[i].trim() == fallbackCoverUrl
-              ? () => onEditCoverFrame(pending: false)
-              : null,
           onChangeCategory: (category) =>
               onChangeCategory(i, isPicked: false, category: category),
         ),
@@ -1807,12 +1562,6 @@ class _ThumbRow extends StatelessWidget {
               selectedPendingCoverUrl.isNotEmpty &&
               pendingUrls[i].trim() == selectedPendingCoverUrl,
           pending: true,
-          onEditCoverFrame:
-              !hasPickedCover &&
-                  selectedPendingCoverUrl.isNotEmpty &&
-                  pendingUrls[i].trim() == selectedPendingCoverUrl
-              ? () => onEditCoverFrame(pending: true)
-              : null,
         ),
       for (int i = 0; i < files.length; i++)
         _Thumb(
@@ -1840,12 +1589,6 @@ class _ThumbRow extends StatelessWidget {
               ? null
               : () => onMakeCover(i, isPicked: true),
           onRemove: () => onRemove(i, isPicked: true),
-          onEditCoverFrame:
-              (hasPickedCover
-                  ? pickedCoverIndex == i
-                  : urls.isEmpty && pendingUrls.isEmpty && i == 0)
-              ? () => onEditCoverFrame(pending: true)
-              : null,
           onChangeCategory: (category) =>
               onChangeCategory(i, isPicked: true, category: category),
         ),
@@ -1874,7 +1617,6 @@ class _Thumb extends StatelessWidget {
     required this.category,
     this.isCover = false,
     this.onMakeCover,
-    this.onEditCoverFrame,
     this.onChangeCategory,
     this.onRemove,
     this.pending = false,
@@ -1885,7 +1627,6 @@ class _Thumb extends StatelessWidget {
   final String category;
   final bool isCover;
   final VoidCallback? onMakeCover;
-  final VoidCallback? onEditCoverFrame;
   final ValueChanged<String>? onChangeCategory;
   final VoidCallback? onRemove;
   final bool pending;
@@ -1930,12 +1671,6 @@ class _Thumb extends StatelessWidget {
                         selected: isCover,
                         onTap: onMakeCover,
                       ),
-                    ),
-                  if (onEditCoverFrame != null)
-                    Positioned(
-                      left: _kMediaRemoveInset,
-                      bottom: _kMediaRemoveInset,
-                      child: _MediaFrameButton(onTap: onEditCoverFrame!),
                     ),
                   if (pending) const _PendingMediaBadge(),
                   if (onRemove != null)

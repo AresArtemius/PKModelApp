@@ -1247,159 +1247,6 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
     });
   }
 
-  Future<void> _editCoverFrame({required bool pending}) async {
-    var draftX = pending ? _pendingCoverPhotoFocalX : _coverPhotoFocalX;
-    var draftY = pending ? _pendingCoverPhotoFocalY : _coverPhotoFocalY;
-    var draftZoom = 1.0;
-    final imageFile =
-        pending &&
-            _pickedCoverPhotoIndex != null &&
-            _pickedCoverPhotoIndex! >= 0 &&
-            _pickedCoverPhotoIndex! < _pickedPhotos.length
-        ? _pickedPhotos[_pickedCoverPhotoIndex!]
-        : null;
-    final imageUrl = imageFile == null
-        ? (pending ? _pendingCoverPhotoUrl : _coverPhotoUrl).trim()
-        : '';
-    final isRussian =
-        Localizations.localeOf(context).languageCode.toLowerCase() == 'ru';
-
-    await showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      enableDrag: false,
-      builder: (sheetContext) {
-        return StatefulBuilder(
-          builder: (sheetContext, setSheetState) {
-            void update({double? x, double? y}) {
-              setSheetState(() {
-                draftX = (x ?? draftX).clamp(-1.0, 1.0);
-                draftY = (y ?? draftY).clamp(-1.0, 1.0);
-              });
-              if (!mounted) return;
-              setState(() {
-                if (pending) {
-                  _pendingCoverPhotoFocalX = draftX;
-                  _pendingCoverPhotoFocalY = draftY;
-                } else {
-                  _coverPhotoFocalX = draftX;
-                  _coverPhotoFocalY = draftY;
-                }
-              });
-            }
-
-            void updateZoom(double value) {
-              setSheetState(() {
-                draftZoom = value.clamp(1.0, 2.4);
-              });
-            }
-
-            return SafeArea(
-              top: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-                child: Container(
-                  padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
-                  decoration: profileCardDecoration(),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Text(
-                        isRussian ? 'КАДР ОБЛОЖКИ' : 'COVER FRAME',
-                        textAlign: TextAlign.center,
-                        style: BrandTheme.pillText.copyWith(
-                          color: kTextDark,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 2,
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      _CoverFramePreview(
-                        imageUrl: imageUrl,
-                        imageFile: imageFile,
-                        alignment: _coverFocalAlignment(draftX, draftY),
-                        zoom: draftZoom,
-                        onDrag: (delta, size) {
-                          if (size.width <= 0 || size.height <= 0) return;
-                          update(
-                            x: draftX + (delta.dx / size.width) * 2.9,
-                            y: draftY - (delta.dy / size.height) * 2.9,
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.zoom_out_rounded,
-                            color: kTextMuted,
-                            size: 20,
-                          ),
-                          Expanded(
-                            child: Slider(
-                              value: draftZoom,
-                              min: 1,
-                              max: 2.4,
-                              activeColor: BrandTheme.redTop,
-                              inactiveColor: kBorderColor,
-                              onChanged: updateZoom,
-                            ),
-                          ),
-                          const Icon(
-                            Icons.zoom_in_rounded,
-                            color: kTextMuted,
-                            size: 20,
-                          ),
-                        ],
-                      ),
-                      Text(
-                        isRussian
-                            ? 'Передвиньте фото внутри кадра'
-                            : 'Drag the photo inside the frame',
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          color: kTextMuted,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 12,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: BrandPillButton(
-                              label: isRussian ? 'СБРОСИТЬ' : 'RESET',
-                              style: BrandPillStyle.light,
-                              onTap: () {
-                                update(x: 0, y: -0.72);
-                                updateZoom(1);
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: kGap10),
-                          Expanded(
-                            child: BrandPillButton(
-                              label: isRussian ? 'ГОТОВО' : 'DONE',
-                              style: BrandPillStyle.dark,
-                              onTap: () => Navigator.of(sheetContext).pop(),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
   void _changePhotoCategory(
     int index, {
     required bool isPicked,
@@ -1712,7 +1559,6 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
           onRemovePhoto: _removePhotoAt,
           onRemoveVideo: _removeVideoAt,
           onMakeCoverPhoto: _makeCoverPhotoAt,
-          onEditCoverFrame: _editCoverFrame,
           onMakeShowreelVideo: _makeShowreelVideoAt,
           onChangePhotoCategory: _changePhotoCategory,
           onChangeVideoCategory: _changeVideoCategory,
@@ -2225,7 +2071,6 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
                                   onRemovePhoto: _removePhotoAt,
                                   onRemoveVideo: _removeVideoAt,
                                   onMakeCoverPhoto: _makeCoverPhotoAt,
-                                  onEditCoverFrame: _editCoverFrame,
                                   onMakeShowreelVideo: _makeShowreelVideoAt,
                                   onChangePhotoCategory: _changePhotoCategory,
                                   onChangeVideoCategory: _changeVideoCategory,
