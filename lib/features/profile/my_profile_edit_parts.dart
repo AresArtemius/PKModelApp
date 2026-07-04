@@ -310,7 +310,11 @@ class _CoverFramePreview extends StatelessWidget {
         final width = constraints.maxWidth.isFinite
             ? constraints.maxWidth
             : MediaQuery.sizeOf(context).width - 64;
-        final height = (width * 0.72).clamp(220.0, 320.0);
+        final isWide = width >= 700;
+        final height = (width * (isWide ? 0.48 : 0.72)).clamp(
+          isWide ? 340.0 : 220.0,
+          isWide ? 460.0 : 320.0,
+        );
         final frameWidth = width;
         final frameHeight = (frameWidth / 1.85).clamp(150.0, height - 34);
         final top = (height - frameHeight) / 2;
@@ -457,7 +461,7 @@ class _CoverFramePreviewImage extends StatelessWidget {
           return positionedImage(
             Image.memory(
               bytes,
-              fit: BoxFit.cover,
+              fit: BoxFit.contain,
               alignment: Alignment.center,
               errorBuilder: (_, _, _) => const _EmptyProfileImagePlaceholder(),
             ),
@@ -472,7 +476,7 @@ class _CoverFramePreviewImage extends StatelessWidget {
     return positionedImage(
       CachedNetworkImage(
         imageUrl: url,
-        fit: BoxFit.cover,
+        fit: BoxFit.contain,
         alignment: Alignment.center,
         placeholder: (_, _) => const _EmptyProfileImagePlaceholder(),
         errorWidget: (_, _, _) => const _EmptyProfileImagePlaceholder(),
