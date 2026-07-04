@@ -148,9 +148,8 @@ class CatalogRepository {
         e,
         'is_verified',
       );
-      final missingCoverPhoto = SupabaseCompat.isMissingColumn(
+      final missingCoverPhoto = ProfileSupabaseSchema.isMissingCoverPhotoColumn(
         e,
-        'cover_photo_url',
       );
       try {
         return await run(

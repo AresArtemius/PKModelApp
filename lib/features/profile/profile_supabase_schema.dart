@@ -31,6 +31,8 @@ class ProfileSupabaseSchema {
     'cover_photo_url',
     'showreel_url',
     'showreel_preview_url',
+    'photo_category_labels',
+    'video_category_labels',
   ];
 
   static const proColumns = <String>['is_pro', 'pro_until'];
@@ -67,8 +69,6 @@ class ProfileSupabaseSchema {
     'photo_urls',
     'video_urls',
     'video_preview_urls',
-    'photo_category_labels',
-    'video_category_labels',
   ];
   static const _mediaCategoryColumns = <String>[
     'photo_category_labels',
@@ -102,7 +102,9 @@ class ProfileSupabaseSchema {
       if (includeOptional) 'is_verified',
       if (includeOptional) 'verification_status',
       ..._mediaColumns,
+      if (includeOptional) ..._mediaCategoryColumns,
       if (includeOptional) ...coverPhotoColumns,
+      if (includeOptional) ...showreelColumns,
       if (includeOptional) ..._pendingMediaColumns,
     ]);
   }
@@ -128,6 +130,8 @@ class ProfileSupabaseSchema {
       if (includeCoverPhoto) 'cover_photo_url',
       if (includeCoverPhoto) 'showreel_url',
       if (includeCoverPhoto) 'showreel_preview_url',
+      if (includeCoverPhoto) 'photo_category_labels',
+      if (includeCoverPhoto) 'video_category_labels',
       'photo_urls',
     ]);
   }
@@ -155,6 +159,7 @@ class ProfileSupabaseSchema {
       if (includeVerification) 'is_verified',
       if (includeCoverPhoto) 'cover_photo_url',
       if (includeCoverPhoto) ...showreelColumns.take(2),
+      if (includeCoverPhoto) ..._mediaCategoryColumns.take(2),
     ]);
   }
 
@@ -177,6 +182,7 @@ class ProfileSupabaseSchema {
       if (includeVerification) 'is_verified',
       if (includeVerification) 'verification_status',
       ..._mediaColumns,
+      if (includePendingMedia) ..._mediaCategoryColumns,
       if (includePendingMedia) ...coverPhotoColumns,
       if (includePendingMedia) ...showreelColumns,
       if (includePendingMedia) ..._pendingMediaColumns,
@@ -200,7 +206,12 @@ class ProfileSupabaseSchema {
   }
 
   static bool isMissingPendingMediaColumn(PostgrestException error) {
-    return SupabaseCompat.isMissingAnyColumn(error, _pendingMediaColumns);
+    return SupabaseCompat.isMissingAnyColumn(error, [
+      ..._pendingMediaColumns,
+      ..._mediaCategoryColumns,
+      ...coverPhotoColumns,
+      ...showreelColumns,
+    ]);
   }
 
   static bool isMissingMediaCategoryColumn(PostgrestException error) {
@@ -208,7 +219,11 @@ class ProfileSupabaseSchema {
   }
 
   static bool isMissingCoverPhotoColumn(PostgrestException error) {
-    return SupabaseCompat.isMissingAnyColumn(error, coverPhotoColumns);
+    return SupabaseCompat.isMissingAnyColumn(error, [
+      ...coverPhotoColumns,
+      ...showreelColumns,
+      ..._mediaCategoryColumns,
+    ]);
   }
 
   static bool isMissingShowreelColumn(PostgrestException error) {
