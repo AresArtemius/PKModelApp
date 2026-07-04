@@ -88,37 +88,56 @@ class _ProfileRolesSelector extends StatelessWidget {
       final picked = await showModalBottomSheet<ProfessionalProfileType>(
         context: context,
         backgroundColor: Colors.transparent,
+        isScrollControlled: true,
         builder: (sheetContext) {
           return SafeArea(
             top: false,
             child: Padding(
               padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-              child: Container(
-                padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
-                decoration: profileCardDecoration(),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      isRussian ? 'ДОБАВИТЬ РОЛЬ' : 'ADD ROLE',
-                      textAlign: TextAlign.center,
-                      style: BrandTheme.pillText.copyWith(
-                        color: kTextDark,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 2,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.78,
+                ),
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+                  decoration: profileCardDecoration(),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        isRussian ? 'ДОБАВИТЬ РОЛЬ' : 'ADD ROLE',
+                        textAlign: TextAlign.center,
+                        style: BrandTheme.pillText.copyWith(
+                          color: kTextDark,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 2,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: kGap14),
-                    for (final role in availableRoles) ...[
-                      _ProfileRoleOption(
-                        label: _profileTypeLabel(t, role).toUpperCase(),
-                        onTap: () => Navigator.of(sheetContext).pop(role),
+                      const SizedBox(height: kGap14),
+                      Flexible(
+                        child: SingleChildScrollView(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              for (final role in availableRoles) ...[
+                                _ProfileRoleOption(
+                                  label: _profileTypeLabel(
+                                    t,
+                                    role,
+                                  ).toUpperCase(),
+                                  onTap: () =>
+                                      Navigator.of(sheetContext).pop(role),
+                                ),
+                                const SizedBox(height: kGap8),
+                              ],
+                            ],
+                          ),
+                        ),
                       ),
-                      const SizedBox(height: kGap8),
                     ],
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -406,6 +425,26 @@ class _CoverFramePreviewImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Widget positionedImage(Widget child) {
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          final width = constraints.maxWidth.isFinite
+              ? constraints.maxWidth
+              : MediaQuery.sizeOf(context).width;
+          final height = constraints.maxHeight.isFinite
+              ? constraints.maxHeight
+              : width * 0.72;
+          return Transform.translate(
+            offset: Offset(
+              alignment.x * width * 0.35,
+              alignment.y * height * 0.35,
+            ),
+            child: Transform.scale(scale: zoom, child: child),
+          );
+        },
+      );
+    }
+
     final file = imageFile;
     if (file != null) {
       return FutureBuilder<Uint8List>(
@@ -415,12 +454,11 @@ class _CoverFramePreviewImage extends StatelessWidget {
           if (bytes == null || bytes.isEmpty) {
             return const _EmptyProfileImagePlaceholder();
           }
-          return Transform.scale(
-            scale: zoom,
-            child: Image.memory(
+          return positionedImage(
+            Image.memory(
               bytes,
               fit: BoxFit.cover,
-              alignment: alignment,
+              alignment: Alignment.center,
               errorBuilder: (_, _, _) => const _EmptyProfileImagePlaceholder(),
             ),
           );
@@ -431,12 +469,11 @@ class _CoverFramePreviewImage extends StatelessWidget {
     final url = imageUrl.trim();
     if (url.isEmpty) return const _EmptyProfileImagePlaceholder();
 
-    return Transform.scale(
-      scale: zoom,
-      child: CachedNetworkImage(
+    return positionedImage(
+      CachedNetworkImage(
         imageUrl: url,
         fit: BoxFit.cover,
-        alignment: alignment,
+        alignment: Alignment.center,
         placeholder: (_, _) => const _EmptyProfileImagePlaceholder(),
         errorWidget: (_, _, _) => const _EmptyProfileImagePlaceholder(),
       ),

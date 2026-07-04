@@ -1268,6 +1268,7 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
+      enableDrag: false,
       builder: (sheetContext) {
         return StatefulBuilder(
           builder: (sheetContext, setSheetState) {
@@ -1324,8 +1325,8 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
                         onDrag: (delta, size) {
                           if (size.width <= 0 || size.height <= 0) return;
                           update(
-                            x: draftX - (delta.dx / size.width) * 2.2,
-                            y: draftY - (delta.dy / size.height) * 2.2,
+                            x: draftX + (delta.dx / size.width) * 2.9,
+                            y: draftY + (delta.dy / size.height) * 2.9,
                           );
                         },
                       ),
