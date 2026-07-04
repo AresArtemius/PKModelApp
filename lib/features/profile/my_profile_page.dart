@@ -1436,6 +1436,8 @@ class _UploadItemChip extends StatelessWidget {
       parts.add('OPFS');
     } else if (storage == 'indexeddb') {
       parts.add('IndexedDB fallback');
+    } else if (storage == 'nativefs') {
+      parts.add('File handle');
     }
     if (item.webRestored) {
       parts.add(

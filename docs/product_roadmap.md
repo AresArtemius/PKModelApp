@@ -18,10 +18,10 @@
 - OPFS/File System Access хранение больших Web-файлов с fallback на IndexedDB.
 - UI-диагностика очереди: источник хранения, восстановление, ошибки и retry-состояния по файлам.
 - Thumbnail pipeline для видео: Web/iOS/desktop генерируют и сохраняют JPEG-обложку перед публикацией видео.
+- Нативное восстановление исходного Web-файла через File System Access handle там, где браузер дает постоянное разрешение, с fallback на OPFS/IndexedDB.
 
 Не хватает:
-- Resume с середины файла, если Supabase Storage или отдельный upload-сервис позволит chunk/resumable upload.
-- Нативного восстановления исходного файла через пользовательский File System Access handle там, где браузер дает постоянное разрешение.
+- Настоящий resume с середины файла требует отдельного chunk/resumable upload backend или Storage API с compose/append; текущий Supabase Storage REST upload такого режима не дает.
 
 ## 2. Профиль модели
 

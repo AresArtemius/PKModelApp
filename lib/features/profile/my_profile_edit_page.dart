@@ -23,6 +23,8 @@ import '../../ui/brand/searchable_choice_field.dart';
 import '../../ui/brand/ui_constants.dart';
 import 'my_profile_controller.dart';
 import 'profile_media_upload_queue.dart';
+import 'profile_media_web_native_picker_stub.dart'
+    if (dart.library.html) 'profile_media_web_native_picker_web.dart';
 import 'profile_model.dart';
 
 part 'my_profile_edit_parts.dart';
@@ -601,10 +603,9 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
       setState(() => _error = null);
 
       try {
-        final list = await _picker.pickMultiImage(
-          imageQuality: 85,
-          maxWidth: 1800,
-        );
+        final list = kIsWeb && ProfileMediaWebNativePicker.isSupported
+            ? await ProfileMediaWebNativePicker.pickPhotos()
+            : await _picker.pickMultiImage(imageQuality: 85, maxWidth: 1800);
         if (list.isEmpty || !mounted) return;
 
         final hadNoPhotos =
@@ -632,9 +633,13 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
       setState(() => _error = null);
 
       try {
-        final picked = <XFile>[];
-        final v = await _picker.pickVideo(source: ImageSource.gallery);
-        if (v != null && _isPickedVideo(v)) picked.add(v);
+        final picked = kIsWeb && ProfileMediaWebNativePicker.isSupported
+            ? await ProfileMediaWebNativePicker.pickVideos()
+            : <XFile>[
+                if (await _picker.pickVideo(source: ImageSource.gallery)
+                    case final v?)
+                  if (_isPickedVideo(v)) v,
+              ];
 
         if (picked.isEmpty || !mounted) return;
 

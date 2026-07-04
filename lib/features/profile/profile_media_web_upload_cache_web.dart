@@ -24,7 +24,11 @@ class ProfileMediaWebUploadCache {
   static const _opfsDirectoryName = 'profile_media_upload_files';
   static const _storageIndexedDb = 'indexeddb';
   static const _storageOpfs = 'opfs';
+  static const _storageNativeFs = 'nativefs';
+  static const _nativePathPrefix = 'nativefs://profile-media/';
   static const _version = 1;
+  static final Map<String, web.FileSystemFileHandle> _nativeHandles =
+      <String, web.FileSystemFileHandle>{};
 
   static bool get isSupported {
     try {
@@ -33,6 +37,13 @@ class ProfileMediaWebUploadCache {
     } catch (_) {
       return false;
     }
+  }
+
+  static String registerNativeHandle(web.FileSystemFileHandle handle) {
+    final token =
+        '${DateTime.now().microsecondsSinceEpoch}_${_nativeHandles.length}';
+    _nativeHandles[token] = handle;
+    return '$_nativePathPrefix$token';
   }
 
   static Future<String> saveItem({
@@ -47,16 +58,32 @@ class ProfileMediaWebUploadCache {
     var storage = _storageIndexedDb;
     try {
       JSObject record;
+      final nativeHandle = _takeNativeHandle(source.path);
       try {
         await _saveBytesToOpfs(fileName: opfsFileName, bytes: bytes);
-        storage = _storageOpfs;
-        record = _recordForOpfs(
-          source: source,
-          bytes: bytes,
-          opfsFileName: opfsFileName,
-        );
+        storage = nativeHandle == null ? _storageOpfs : _storageNativeFs;
+        record = nativeHandle == null
+            ? _recordForOpfs(
+                source: source,
+                bytes: bytes,
+                opfsFileName: opfsFileName,
+              )
+            : _recordForNativeHandle(
+                source: source,
+                bytes: bytes,
+                opfsFileName: opfsFileName,
+                nativeHandle: nativeHandle,
+              );
       } catch (_) {
-        record = _recordForIndexedDb(source: source, bytes: bytes);
+        storage = nativeHandle == null ? _storageIndexedDb : _storageNativeFs;
+        record = nativeHandle == null
+            ? _recordForIndexedDb(source: source, bytes: bytes)
+            : _recordForNativeHandle(
+                source: source,
+                bytes: bytes,
+                opfsFileName: '',
+                nativeHandle: nativeHandle,
+              );
       }
 
       final transaction = db.transaction(_storeName.toJS, 'readwrite');
@@ -86,9 +113,23 @@ class ProfileMediaWebUploadCache {
 
       final record = raw as JSObject;
       final storage = _readString(record['storage']);
-      final bytes = storage == _storageOpfs
+      var finalStorage = storage;
+      Uint8List? bytes;
+      if (storage == _storageNativeFs) {
+        final native = await _restoreFromNativeHandle(record);
+        bytes = native?.bytes;
+        if (native != null) finalStorage = _storageNativeFs;
+      }
+      bytes ??= storage == _storageOpfs || storage == _storageNativeFs
           ? await _restoreBytesFromOpfs(_readString(record['opfsFileName']))
           : _readBytes(record['bytes']);
+      if (bytes != null &&
+          storage == _storageNativeFs &&
+          finalStorage != _storageNativeFs) {
+        finalStorage = _readString(record['opfsFileName']).isNotEmpty
+            ? _storageOpfs
+            : _storageIndexedDb;
+      }
       if (bytes == null || bytes.isEmpty) return null;
 
       final restoredName = _readString(record['name']);
@@ -99,13 +140,19 @@ class ProfileMediaWebUploadCache {
           : restoredMimeType;
 
       return ProfileMediaWebUploadCacheItem(
-        storage: storage == _storageOpfs ? _storageOpfs : _storageIndexedDb,
+        storage: finalStorage == _storageNativeFs
+            ? _storageNativeFs
+            : finalStorage == _storageOpfs
+            ? _storageOpfs
+            : _storageIndexedDb,
         file: XFile.fromData(
           bytes,
           name: finalName,
           mimeType: finalMimeType.isEmpty ? null : finalMimeType,
           length: bytes.length,
-          path: storage == _storageOpfs
+          path: finalStorage == _storageNativeFs
+              ? 'nativefs://profile-media/$taskId/$itemId'
+              : finalStorage == _storageOpfs
               ? 'opfs://profile-media/$taskId/$itemId'
               : 'indexeddb://profile-media/$taskId/$itemId',
         ),
@@ -130,7 +177,8 @@ class ProfileMediaWebUploadCache {
             final record = raw as JSObject;
             final storage = _readString(record['storage']);
             final opfsFileName = _readString(record['opfsFileName']);
-            if (storage == _storageOpfs && opfsFileName.isNotEmpty) {
+            if ((storage == _storageOpfs || storage == _storageNativeFs) &&
+                opfsFileName.isNotEmpty) {
               await _deleteOpfsFile(opfsFileName);
             }
           }
@@ -211,6 +259,24 @@ class ProfileMediaWebUploadCache {
     record['mimeType'] = (source.mimeType ?? '').toJS;
     record['storage'] = _storageOpfs.toJS;
     record['opfsFileName'] = opfsFileName.toJS;
+    record['length'] = bytes.length.toJS;
+    record['savedAt'] = DateTime.now().toIso8601String().toJS;
+    return record;
+  }
+
+  static JSObject _recordForNativeHandle({
+    required XFile source,
+    required Uint8List bytes,
+    required String opfsFileName,
+    required web.FileSystemFileHandle nativeHandle,
+  }) {
+    final record = JSObject();
+    record['name'] = source.name.toJS;
+    record['mimeType'] = (source.mimeType ?? '').toJS;
+    record['storage'] = _storageNativeFs.toJS;
+    record['nativeHandle'] = nativeHandle;
+    record['opfsFileName'] = opfsFileName.toJS;
+    record['bytes'] = opfsFileName.isEmpty ? bytes.toJS : null;
     record['length'] = bytes.length.toJS;
     record['savedAt'] = DateTime.now().toIso8601String().toJS;
     return record;
@@ -309,6 +375,32 @@ class ProfileMediaWebUploadCache {
       itemId,
     ).replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
     return '$safe.bin';
+  }
+
+  static web.FileSystemFileHandle? _takeNativeHandle(String path) {
+    final clean = path.trim();
+    if (!clean.startsWith(_nativePathPrefix)) return null;
+    final token = clean.substring(_nativePathPrefix.length);
+    if (token.isEmpty) return null;
+    return _nativeHandles.remove(token);
+  }
+
+  static Future<({Uint8List bytes, String name, String mimeType})?>
+  _restoreFromNativeHandle(JSObject record) async {
+    final raw = record['nativeHandle'];
+    if (raw == null || raw.isUndefinedOrNull) return null;
+    try {
+      final handle = raw as web.FileSystemFileHandle;
+      final file = await handle.getFile().toDart;
+      final buffer = await file.arrayBuffer().toDart;
+      return (
+        bytes: Uint8List.view(buffer.toDart),
+        name: file.name,
+        mimeType: file.type,
+      );
+    } catch (_) {
+      return null;
+    }
   }
 
   static Uint8List? _readBytes(JSAny? raw) {

@@ -15,6 +15,8 @@ class ProfileMediaWebUploadCache {
 
   static bool get isSupported => false;
 
+  static String registerNativeHandle(Object handle) => '';
+
   static Future<String> saveItem({
     required String taskId,
     required String itemId,
