@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
@@ -22,6 +23,7 @@ import '../../ui/brand/location_lookups.dart';
 import '../../ui/brand/searchable_choice_field.dart';
 import '../../ui/brand/ui_constants.dart';
 import 'my_profile_controller.dart';
+import 'profile_face_focal_detector.dart';
 import 'profile_media_upload_queue.dart';
 import 'profile_media_web_native_picker_stub.dart'
     if (dart.library.html) 'profile_media_web_native_picker_web.dart';
@@ -146,6 +148,7 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
   String _birthDateIso = '';
 
   final _picker = ImagePicker();
+  final _faceFocalDetector = const ProfileFaceFocalDetector();
   final List<XFile> _pickedPhotos = [];
   final List<XFile> _pickedVideos = [];
   int? _pickedCoverPhotoIndex;
@@ -773,6 +776,34 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
     return uid;
   }
 
+  Future<void> _applyPickedCoverFocal(int index) async {
+    if (index < 0 || index >= _pickedPhotos.length) return;
+    final focal =
+        await _faceFocalDetector.detectFromXFile(_pickedPhotos[index]) ??
+        kDefaultCoverFocal;
+    if (!mounted) return;
+    setState(() {
+      if (_pickedCoverPhotoIndex != index) return;
+      _pendingCoverPhotoFocalX = focal.x;
+      _pendingCoverPhotoFocalY = focal.y;
+    });
+  }
+
+  Future<void> _applyPublishedCoverFocal(String url) async {
+    final cleanUrl = url.trim();
+    if (cleanUrl.isEmpty) return;
+    final focal =
+        await _faceFocalDetector.detectFromUrl(cleanUrl) ?? kDefaultCoverFocal;
+    if (!mounted) return;
+    setState(() {
+      if (_pickedCoverPhotoIndex != null || _coverPhotoUrl.trim() != cleanUrl) {
+        return;
+      }
+      _coverPhotoFocalX = focal.x;
+      _coverPhotoFocalY = focal.y;
+    });
+  }
+
   Future<void> _pickPhotos() async {
     await _runIfIdle(() async {
       setState(() => _error = null);
@@ -789,16 +820,20 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
             _pickedPhotos.isEmpty &&
             _coverPhotoUrl.trim().isEmpty &&
             _pendingCoverPhotoUrl.trim().isEmpty;
+        final firstNewIndex = _pickedPhotos.length;
+        final shouldAutoDetectCover = hadNoPhotos && list.isNotEmpty;
         setState(() {
-          final firstNewIndex = _pickedPhotos.length;
           _pickedPhotos.addAll(list);
           _pickedPhotoCategoryLabels.addAll(
             List<String>.filled(list.length, 'Портфолио'),
           );
-          if (hadNoPhotos && list.isNotEmpty) {
+          if (shouldAutoDetectCover) {
             _pickedCoverPhotoIndex = firstNewIndex;
           }
         });
+        if (shouldAutoDetectCover) {
+          unawaited(_applyPickedCoverFocal(firstNewIndex));
+        }
       } catch (_) {
         if (!mounted) return;
         setState(() => _error = _t.profileErrorSaveFailed);
@@ -1235,14 +1270,17 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
       if (isPicked) {
         if (index < 0 || index >= _pickedPhotos.length) return;
         _pickedCoverPhotoIndex = index;
-        _pendingCoverPhotoFocalX = 0;
-        _pendingCoverPhotoFocalY = -0.72;
+        _pendingCoverPhotoFocalX = kDefaultCoverFocal.x;
+        _pendingCoverPhotoFocalY = kDefaultCoverFocal.y;
+        unawaited(_applyPickedCoverFocal(index));
       } else {
         if (index < 0 || index >= _photoUrls.length) return;
-        _coverPhotoUrl = _photoUrls[index].trim();
+        final coverUrl = _photoUrls[index].trim();
+        _coverPhotoUrl = coverUrl;
         _pickedCoverPhotoIndex = null;
-        _coverPhotoFocalX = 0;
-        _coverPhotoFocalY = -0.72;
+        _coverPhotoFocalX = kDefaultCoverFocal.x;
+        _coverPhotoFocalY = kDefaultCoverFocal.y;
+        unawaited(_applyPublishedCoverFocal(coverUrl));
       }
     });
   }
