@@ -64,8 +64,10 @@ void main() {
       );
 
       expect(ownFull, contains('profile_type'));
+      expect(ownFull, contains('profile_roles'));
       expect(ownFull, contains('verification_status'));
       expect(ownBasic, isNot(contains('profile_type')));
+      expect(ownBasic, isNot(contains('profile_roles')));
       expect(ownBasic, isNot(contains('verification_status')));
       expect(catalog, contains('is_pro'));
       expect(catalog, contains('pro_until'));
@@ -78,6 +80,7 @@ void main() {
       final payload = ProfileSupabaseSchema.withoutProfessionalPayload({
         'user_id': 'u1',
         'profile_type': 'photographer',
+        'profile_roles': ['photographer', 'videographer'],
         'experience': '5 years',
         'skills': 'fashion',
         'full_name': 'Anna',
@@ -86,6 +89,7 @@ void main() {
       expect(payload, containsPair('user_id', 'u1'));
       expect(payload, containsPair('full_name', 'Anna'));
       expect(payload.containsKey('profile_type'), isFalse);
+      expect(payload.containsKey('profile_roles'), isFalse);
       expect(payload.containsKey('experience'), isFalse);
       expect(payload.containsKey('skills'), isFalse);
     });

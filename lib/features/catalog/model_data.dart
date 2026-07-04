@@ -4,6 +4,7 @@ class ModelVm {
   final String id;
   final String userId;
   final ProfessionalProfileType profileType;
+  final List<ProfessionalProfileType> profileRoles;
   final String fullName;
   final String birthDate;
   final int age;
@@ -43,6 +44,7 @@ class ModelVm {
     required this.id,
     this.userId = '',
     this.profileType = ProfessionalProfileType.model,
+    this.profileRoles = const [ProfessionalProfileType.model],
     required this.fullName,
     this.birthDate = '',
     required this.age,
@@ -83,6 +85,30 @@ class ModelVm {
   bool get hasVideos => videoUrls.isNotEmpty;
   bool get hasVideoPreviews => videoPreviewUrls.isNotEmpty;
   bool get hasShowreel => showreelUrl.trim().isNotEmpty;
+  List<ProfessionalProfileType> get effectiveProfileRoles {
+    return normalizeProfileRoles(profileRoles, fallback: profileType);
+  }
+
+  bool hasProfileRole(ProfessionalProfileType role) {
+    return effectiveProfileRoles.contains(role);
+  }
+
+  bool get usesPhysicalBasics {
+    return profileRolesUsePhysicalBasics(effectiveProfileRoles);
+  }
+
+  bool get usesModelMeasurements {
+    return profileRolesUseModelMeasurements(effectiveProfileRoles);
+  }
+
+  bool get hasProfessionalInfoRole {
+    return profileRolesHaveProfessionalInfo(effectiveProfileRoles);
+  }
+
+  ProfessionalProfileType get professionalInfoType {
+    return profileRolesProfessionalType(effectiveProfileRoles);
+  }
+
   String? get primaryPhotoUrl {
     final cover = coverPhotoUrl.trim();
     if (cover.isNotEmpty) return cover;
@@ -189,10 +215,15 @@ class ModelVm {
   }
 
   factory ModelVm.fromMap(Map<String, dynamic> m) {
+    final profileType = profileTypeFromString(_string(m['profile_type']));
     return ModelVm(
       id: _string(m['id']),
       userId: _string(m['user_id']),
-      profileType: profileTypeFromString(_string(m['profile_type'])),
+      profileType: profileType,
+      profileRoles: profileRolesFromValue(
+        m['profile_roles'],
+        fallback: profileType,
+      ),
       fullName: _string(m['full_name']),
       birthDate: _string(m['birth_date']),
       age: displayAgeFromMap(m),

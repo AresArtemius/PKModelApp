@@ -142,6 +142,7 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
   String? _error;
   MyProfileState? _currentProfile;
   ProfessionalProfileType _profileType = ProfessionalProfileType.model;
+  Set<ProfessionalProfileType> _profileRoles = {ProfessionalProfileType.model};
   String _birthDateIso = '';
 
   final _picker = ImagePicker();
@@ -203,6 +204,40 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
   List<String> get _cityOptions {
     final selectedCountry = _countryC.text.trim();
     return cityOptionsForCountry(_t, selectedCountry);
+  }
+
+  List<ProfessionalProfileType> get _effectiveProfileRoles {
+    return normalizeProfileRoles(_profileRoles, fallback: _profileType);
+  }
+
+  bool _hasProfileRole(ProfessionalProfileType role) {
+    return _effectiveProfileRoles.contains(role);
+  }
+
+  bool get _usesPhysicalBasics {
+    return profileRolesUsePhysicalBasics(_effectiveProfileRoles);
+  }
+
+  bool get _usesModelMeasurements {
+    return profileRolesUseModelMeasurements(_effectiveProfileRoles);
+  }
+
+  bool get _hasProfessionalInfoRole {
+    return profileRolesHaveProfessionalInfo(_effectiveProfileRoles);
+  }
+
+  ProfessionalProfileType get _professionalFieldsType {
+    return profileRolesProfessionalType(_effectiveProfileRoles);
+  }
+
+  void _setProfileRoles(Set<ProfessionalProfileType> roles) {
+    final normalized = normalizeProfileRoles(roles, fallback: _profileType);
+    setState(() {
+      _profileRoles = normalized.toSet();
+      if (!_profileRoles.contains(_profileType)) {
+        _profileType = normalized.first;
+      }
+    });
   }
 
   _NameParts _splitFullName(String fullName) {
@@ -325,6 +360,7 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
     _equipmentC.clear();
 
     _profileType = widget.initialProfileType ?? ProfessionalProfileType.model;
+    _profileRoles = {_profileType};
     _birthDateIso = '';
     _unavailableDays.clear();
     _photoUrls = [];
@@ -362,6 +398,7 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
     _inited = true;
     _currentProfile = s;
     _profileType = s.profileType;
+    _profileRoles = s.effectiveProfileRoles.toSet();
 
     if (widget.startBlank) {
       _clearForm();
@@ -580,6 +617,7 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
         : _pendingCoverPhotoUrl.trim();
     return base.copyWith(
       profileType: _profileType,
+      profileRoles: _effectiveProfileRoles,
       fullName: _ProfileNameHelper.buildFullName(nn),
       birthDate: birthDate,
       status: nextStatus,
@@ -661,9 +699,10 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
     final t = AppLocalizations.of(context)!;
     final photoCount = _photoUrls.length + _pickedPhotos.length;
     final videoCount = _videoUrls.length + _pickedVideos.length;
-    final isModel = _profileType.isModel;
-    final usesModelMeasurements = _profileType.usesModelMeasurements;
-    final usesPhysicalBasics = _profileType.usesPhysicalBasics;
+    final isModel = _hasProfileRole(ProfessionalProfileType.model);
+    final usesModelMeasurements = _usesModelMeasurements;
+    final usesPhysicalBasics = _usesPhysicalBasics;
+    final hasProfessionalRole = _hasProfessionalInfoRole;
     final hasBirthDate = _parseIsoDate(_birthDateIso) != null;
     final hasProfessionalInfo =
         _experienceC.text.trim().isNotEmpty ||
@@ -684,7 +723,7 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
       if (usesModelMeasurements) _hairColorC.text.trim().isNotEmpty,
       _countryC.text.trim().isNotEmpty,
       _cityC.text.trim().isNotEmpty,
-      if (!isModel) hasProfessionalInfo,
+      if (hasProfessionalRole) hasProfessionalInfo,
     ];
 
     var score = 0;
@@ -705,7 +744,8 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
         if (requiredChecks.any((ok) => !ok)) t.profileQualityRequiredFields,
         if (photoCount < 1) t.profileQualityPortraitPhoto,
         if (isModel && photoCount < 2) t.profileQualityFullBodyPhoto,
-        if (!isModel && !hasProfessionalInfo) t.profileQualityProfessionalInfo,
+        if (hasProfessionalRole && !hasProfessionalInfo)
+          t.profileQualityProfessionalInfo,
         if (_resumeC.text.trim().length < 30) t.profileQualityAbout,
         if (videoCount < 1) t.profileQualityVideo,
       ],
@@ -1394,7 +1434,7 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
   }
 
   Widget _buildDesktopPhysicalSection(AppLocalizations t) {
-    if (!_profileType.usesPhysicalBasics) return const SizedBox.shrink();
+    if (!_usesPhysicalBasics) return const SizedBox.shrink();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1421,7 +1461,7 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
   }
 
   Widget _buildDesktopModelMeasurementsSection(AppLocalizations t) {
-    if (!_profileType.usesModelMeasurements) return const SizedBox.shrink();
+    if (!_usesModelMeasurements) return const SizedBox.shrink();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1497,7 +1537,8 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
   }
 
   Widget _buildDesktopProfessionalSection(AppLocalizations t) {
-    if (_profileType.isModel) return const SizedBox.shrink();
+    if (!_hasProfessionalInfoRole) return const SizedBox.shrink();
+    final professionalType = _professionalFieldsType;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1506,19 +1547,19 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
         _SectionTitle(t.profileProfessionalInfoUpper),
         const SizedBox(height: kGap10),
         _Field(
-          label: _professionalExperienceLabel(t, _profileType),
+          label: _professionalExperienceLabel(t, professionalType),
           controller: _experienceC,
           maxLines: 4,
         ),
         const SizedBox(height: kGap12),
         _Row2(
           left: _Field(
-            label: _professionalSkillsLabel(t, _profileType),
+            label: _professionalSkillsLabel(t, professionalType),
             controller: _skillsC,
             maxLines: 3,
           ),
           right: _Field(
-            label: _professionalServicesLabel(t, _profileType),
+            label: _professionalServicesLabel(t, professionalType),
             controller: _servicesC,
             maxLines: 3,
           ),
@@ -1526,13 +1567,13 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
         const SizedBox(height: kGap12),
         _Row2(
           left: _Field(
-            label: _professionalGenresLabel(t, _profileType),
+            label: _professionalGenresLabel(t, professionalType),
             controller: _genresC,
             maxLines: 3,
           ),
           right:
-              _profileType == ProfessionalProfileType.photographer ||
-                  _profileType == ProfessionalProfileType.videographer
+              _hasProfileRole(ProfessionalProfileType.photographer) ||
+                  _hasProfileRole(ProfessionalProfileType.videographer)
               ? _Field(
                   label: t.profileEquipment,
                   controller: _equipmentC,
@@ -1766,9 +1807,9 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
                   children: [
                     _ProfileQualityCard(quality: _profileQuality()),
                     const SizedBox(height: kGap16),
-                    _ProfileTypeSelector(
-                      selected: _profileType,
-                      onChanged: (type) => setState(() => _profileType = type),
+                    _ProfileRolesSelector(
+                      selected: _profileRoles,
+                      onChanged: _setProfileRoles,
                     ),
                   ],
                 ),
@@ -1873,10 +1914,9 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
                                 _ProfileQualityCard(quality: _profileQuality()),
                                 const SizedBox(height: kGap16),
 
-                                _ProfileTypeSelector(
-                                  selected: _profileType,
-                                  onChanged: (type) =>
-                                      setState(() => _profileType = type),
+                                _ProfileRolesSelector(
+                                  selected: _profileRoles,
+                                  onChanged: _setProfileRoles,
                                 ),
                                 const SizedBox(height: kGap16),
 
@@ -1901,7 +1941,7 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
                                 ),
                                 const SizedBox(height: kGap12),
 
-                                if (_profileType.usesPhysicalBasics) ...[
+                                if (_usesPhysicalBasics) ...[
                                   _SectionTitle(t.profilePhysicalDetailsUpper),
                                   const SizedBox(height: kGap10),
                                   _Row2(
@@ -1929,7 +1969,7 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
                                   const SizedBox(height: kGap12),
                                 ],
 
-                                if (_profileType.usesModelMeasurements) ...[
+                                if (_usesModelMeasurements) ...[
                                   _Row2(
                                     left: _Field(
                                       label: t.profileBustCm,
@@ -2002,14 +2042,14 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
                                 ),
                                 const SizedBox(height: kGap12),
 
-                                if (!_profileType.isModel) ...[
+                                if (_hasProfessionalInfoRole) ...[
                                   const SizedBox(height: kGap4),
                                   _SectionTitle(t.profileProfessionalInfoUpper),
                                   const SizedBox(height: kGap10),
                                   _Field(
                                     label: _professionalExperienceLabel(
                                       t,
-                                      _profileType,
+                                      _professionalFieldsType,
                                     ),
                                     controller: _experienceC,
                                     maxLines: 4,
@@ -2018,7 +2058,7 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
                                   _Field(
                                     label: _professionalSkillsLabel(
                                       t,
-                                      _profileType,
+                                      _professionalFieldsType,
                                     ),
                                     controller: _skillsC,
                                     maxLines: 3,
@@ -2027,7 +2067,7 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
                                   _Field(
                                     label: _professionalServicesLabel(
                                       t,
-                                      _profileType,
+                                      _professionalFieldsType,
                                     ),
                                     controller: _servicesC,
                                     maxLines: 3,
@@ -2036,17 +2076,17 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
                                   _Field(
                                     label: _professionalGenresLabel(
                                       t,
-                                      _profileType,
+                                      _professionalFieldsType,
                                     ),
                                     controller: _genresC,
                                     maxLines: 3,
                                   ),
-                                  if (_profileType ==
-                                          ProfessionalProfileType
-                                              .photographer ||
-                                      _profileType ==
-                                          ProfessionalProfileType
-                                              .videographer) ...[
+                                  if (_hasProfileRole(
+                                        ProfessionalProfileType.photographer,
+                                      ) ||
+                                      _hasProfileRole(
+                                        ProfessionalProfileType.videographer,
+                                      )) ...[
                                     const SizedBox(height: kGap12),
                                     _Field(
                                       label: t.profileEquipment,

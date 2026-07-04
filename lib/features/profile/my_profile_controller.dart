@@ -71,6 +71,9 @@ class MyProfileController
   Map<String, dynamic> _basePayloadFor(MyProfileState s, String uid) => {
     'user_id': uid,
     'profile_type': s.profileType.storageValue,
+    'profile_roles': s.effectiveProfileRoles
+        .map((role) => role.storageValue)
+        .toList(growable: false),
     'full_name': s.fullName,
     'birth_date': s.birthDate.trim().isEmpty ? null : s.birthDate.trim(),
     'age': s.age,
@@ -316,22 +319,22 @@ class MyProfileController
     final birthDate = p.birthDate.trim();
     final hasBirthDate =
         birthDate.isNotEmpty && DateTime.tryParse(birthDate) != null;
-    if (p.profileType.usesPhysicalBasics && !hasBirthDate) {
+    if (p.usesPhysicalBasics && !hasBirthDate) {
       throw MyProfileException(MyProfileError.ageRequired);
     }
     final displayAge = p.displayAge;
-    if (p.profileType.usesPhysicalBasics &&
+    if (p.usesPhysicalBasics &&
         (displayAge < _ageMin || displayAge > _ageMax)) {
       throw MyProfileException(MyProfileError.ageOutOfRange);
     }
-    if (p.profileType.usesPhysicalBasics && p.height <= 0) {
+    if (p.usesPhysicalBasics && p.height <= 0) {
       throw MyProfileException(MyProfileError.heightRequired);
     }
-    if (p.profileType.usesPhysicalBasics &&
+    if (p.usesPhysicalBasics &&
         (p.height < _heightMin || p.height > _heightMax)) {
       throw MyProfileException(MyProfileError.heightOutOfRange);
     }
-    if (!p.profileType.usesModelMeasurements) return;
+    if (!p.usesModelMeasurements) return;
 
     if (p.bust <= 0) {
       throw MyProfileException(MyProfileError.bustRequired);

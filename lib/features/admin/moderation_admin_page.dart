@@ -105,6 +105,7 @@ final pendingProfilesProvider =
 
       Future<List<dynamic>> load({
         required bool includeBirthDate,
+        required bool includeProfessional,
         required bool includeVerification,
         required bool includePendingMedia,
       }) async {
@@ -113,6 +114,7 @@ final pendingProfilesProvider =
             .select(
               ProfileSupabaseSchema.selectModeration(
                 includeBirthDate: includeBirthDate,
+                includeProfessional: includeProfessional,
                 includeVerification: includeVerification,
                 includePendingMedia: includePendingMedia,
               ),
@@ -125,6 +127,7 @@ final pendingProfilesProvider =
       var includeVerification = true;
       var includePendingMedia = true;
       var includeBirthDate = true;
+      var includeProfessional = true;
       while (true) {
         try {
           try {
@@ -138,6 +141,7 @@ final pendingProfilesProvider =
             }
             rows = await load(
               includeBirthDate: includeBirthDate,
+              includeProfessional: includeProfessional,
               includeVerification: includeVerification,
               includePendingMedia: includePendingMedia,
             );
@@ -152,16 +156,21 @@ final pendingProfilesProvider =
               ProfileSupabaseSchema.isMissingPendingMediaColumn(e);
           final missingBirthDate =
               ProfileSupabaseSchema.isMissingBirthDateColumn(e);
+          final missingProfessional =
+              includeProfessional &&
+              ProfileSupabaseSchema.isMissingProfessionalColumn(e);
 
           if (!missingVerification &&
               !missingPendingMedia &&
-              !missingBirthDate) {
+              !missingBirthDate &&
+              !missingProfessional) {
             rethrow;
           }
 
           if (missingVerification) includeVerification = false;
           if (missingPendingMedia) includePendingMedia = false;
           if (missingBirthDate) includeBirthDate = false;
+          if (missingProfessional) includeProfessional = false;
         }
       }
 

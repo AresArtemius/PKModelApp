@@ -20,11 +20,26 @@ void main() {
     expect(profileTypeFromString('unknown'), ProfessionalProfileType.model);
   });
 
+  test('profile roles parsing keeps unique roles with fallback', () {
+    expect(profileRolesFromValue(['model', 'actor', 'actor', 'bad']), [
+      ProfessionalProfileType.model,
+      ProfessionalProfileType.actor,
+    ]);
+    expect(
+      profileRolesFromValue(
+        null,
+        fallback: ProfessionalProfileType.photographer,
+      ),
+      [ProfessionalProfileType.photographer],
+    );
+  });
+
   test('MyProfileState.fromMap parses database values defensively', () {
     final profile = MyProfileState.fromMap({
       'id': 'profile-1',
       'user_id': 'user-1',
       'profile_type': 'makeup_artist',
+      'profile_roles': ['makeup_artist', 'stylist'],
       'full_name': '  Anna Pro  ',
       'age': '28',
       'height': 172.9,
@@ -72,6 +87,10 @@ void main() {
     expect(profile.id, 'profile-1');
     expect(profile.userId, 'user-1');
     expect(profile.profileType, ProfessionalProfileType.makeupArtist);
+    expect(profile.effectiveProfileRoles, [
+      ProfessionalProfileType.makeupArtist,
+      ProfessionalProfileType.stylist,
+    ]);
     expect(profile.fullName, 'Anna Pro');
     expect(profile.age, 28);
     expect(profile.height, 172);

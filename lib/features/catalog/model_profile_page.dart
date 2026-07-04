@@ -114,6 +114,15 @@ String _profileTypeLabel(AppLocalizations t, ProfessionalProfileType type) {
   };
 }
 
+String _profileRolesLabel(
+  AppLocalizations t,
+  Iterable<ProfessionalProfileType> roles,
+) {
+  return normalizeProfileRoles(
+    roles,
+  ).map((role) => _profileTypeLabel(t, role)).join(' • ');
+}
+
 Future<String?> _videoThumbnailForUrl(String rawUrl) {
   final url = rawUrl.trim();
   if (url.isEmpty) return Future<String?>.value(null);
@@ -475,21 +484,24 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
                                 rows: <MapEntry<String, String>>[
                                   MapEntry(
                                     t.profileTypeUpper,
-                                    _profileTypeLabel(t, m.profileType),
+                                    _profileRolesLabel(
+                                      t,
+                                      m.effectiveProfileRoles,
+                                    ),
                                   ),
                                   MapEntry(
                                     t.profileCountry,
                                     _displayText(m.country),
                                   ),
                                   MapEntry(t.profileCity, _displayText(m.city)),
-                                  if (m.profileType.usesPhysicalBasics) ...[
+                                  if (m.usesPhysicalBasics) ...[
                                     MapEntry(t.profileAge, _displayInt(m.age)),
                                     MapEntry(
                                       t.profileHeightCm,
                                       _displayCm(m.height, t.cm),
                                     ),
                                   ],
-                                  if (m.profileType.usesModelMeasurements) ...[
+                                  if (m.usesModelMeasurements) ...[
                                     MapEntry(
                                       t.profileBustCm,
                                       _displayCm(m.bust, t.cm),
@@ -531,7 +543,7 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
                       ),
                       const SizedBox(height: _sectionGap),
 
-                      if (!m.profileType.isModel &&
+                      if (m.hasProfessionalInfoRole &&
                           [
                             m.experience,
                             m.skills,

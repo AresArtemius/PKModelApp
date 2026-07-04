@@ -703,7 +703,10 @@ class _CatalogDesktopPreview extends StatelessWidget {
                       const SizedBox(height: 12),
                       _PreviewInfoLine(
                         icon: Icons.badge_rounded,
-                        text: _catalogProfileTypeLabel(t, m.profileType),
+                        text: _catalogProfileRolesLabel(
+                          t,
+                          m.effectiveProfileRoles,
+                        ),
                       ),
                       _PreviewInfoLine(
                         icon: Icons.straighten_rounded,
@@ -860,6 +863,15 @@ String _catalogProfileTypeLabel(
     ProfessionalProfileType.makeupArtist => t.profileTypeMakeupArtist,
     ProfessionalProfileType.hairStylist => t.profileTypeHairStylist,
   };
+}
+
+String _catalogProfileRolesLabel(
+  AppLocalizations t,
+  Iterable<ProfessionalProfileType> roles,
+) {
+  return normalizeProfileRoles(
+    roles,
+  ).map((role) => _catalogProfileTypeLabel(t, role)).join(' • ');
 }
 
 class _CatalogGrid extends StatelessWidget {

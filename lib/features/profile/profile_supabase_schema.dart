@@ -9,6 +9,7 @@ class ProfileSupabaseSchema {
 
   static const professionalColumns = <String>[
     'profile_type',
+    'profile_roles',
     'experience',
     'skills',
     'services',
@@ -23,6 +24,7 @@ class ProfileSupabaseSchema {
   ];
 
   static const catalogOptionalColumns = <String>[
+    'profile_roles',
     'birth_date',
     'unavailable_days',
     'is_pro',
@@ -130,6 +132,7 @@ class ProfileSupabaseSchema {
       'status',
       ..._rateColumns,
       if (includeUnavailableDays) 'unavailable_days',
+      if (includeCoverPhoto) 'profile_roles',
       if (includePro) 'is_pro',
       if (includePro) 'pro_until',
       if (includeVerification) 'is_verified',
@@ -175,11 +178,13 @@ class ProfileSupabaseSchema {
 
   static String selectModeration({
     required bool includeBirthDate,
+    required bool includeProfessional,
     required bool includeVerification,
     required bool includePendingMedia,
   }) {
     return _join([
       'id',
+      if (includeProfessional) ...professionalColumns,
       'full_name',
       if (includeBirthDate) ..._birthDateColumns,
       ..._measurementColumns,

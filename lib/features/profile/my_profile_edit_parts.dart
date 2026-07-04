@@ -63,11 +63,14 @@ String _professionalGenresLabel(
   };
 }
 
-class _ProfileTypeSelector extends StatelessWidget {
-  const _ProfileTypeSelector({required this.selected, required this.onChanged});
+class _ProfileRolesSelector extends StatelessWidget {
+  const _ProfileRolesSelector({
+    required this.selected,
+    required this.onChanged,
+  });
 
-  final ProfessionalProfileType selected;
-  final ValueChanged<ProfessionalProfileType> onChanged;
+  final Set<ProfessionalProfileType> selected;
+  final ValueChanged<Set<ProfessionalProfileType>> onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -76,7 +79,11 @@ class _ProfileTypeSelector extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _SectionTitle(t.profileTypeUpper),
+        _SectionTitle(
+          Localizations.localeOf(context).languageCode.toLowerCase() == 'ru'
+              ? 'РОЛИ АНКЕТЫ'
+              : 'PROFILE ROLES',
+        ),
         const SizedBox(height: kGap10),
         Wrap(
           spacing: kGap8,
@@ -85,10 +92,34 @@ class _ProfileTypeSelector extends StatelessWidget {
             for (final type in ProfessionalProfileType.values)
               _ProfileTypeChip(
                 label: _profileTypeLabel(t, type),
-                selected: type == selected,
-                onTap: () => onChanged(type),
+                selected: selected.contains(type),
+                onTap: () {
+                  final next = Set<ProfessionalProfileType>.from(selected);
+                  if (next.contains(type)) {
+                    if (next.length == 1) return;
+                    next.remove(type);
+                  } else {
+                    next.add(type);
+                  }
+                  onChanged(next);
+                },
               ),
           ],
+        ),
+        const SizedBox(height: kGap8),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            Localizations.localeOf(context).languageCode.toLowerCase() == 'ru'
+                ? 'ДОБАВИТЬ РОЛЬ'
+                : 'ADD ROLE',
+            style: const TextStyle(
+              color: BrandTheme.redTop,
+              fontWeight: FontWeight.w900,
+              fontSize: 11,
+              letterSpacing: 1.2,
+            ),
+          ),
         ),
       ],
     );

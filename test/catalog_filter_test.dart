@@ -114,6 +114,7 @@ void main() {
     final vm = ModelVm.fromMap({
       'id': 'p1',
       'profile_type': 'photographer',
+      'profile_roles': ['photographer', 'videographer'],
       'full_name': ' Alice ',
       'age': '31',
       'height': 170.8,
@@ -127,6 +128,10 @@ void main() {
     });
 
     expect(vm.profileType, ProfessionalProfileType.photographer);
+    expect(vm.effectiveProfileRoles, [
+      ProfessionalProfileType.photographer,
+      ProfessionalProfileType.videographer,
+    ]);
     expect(vm.fullName, 'Alice');
     expect(vm.age, 31);
     expect(vm.height, 170);

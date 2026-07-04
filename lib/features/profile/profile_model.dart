@@ -45,6 +45,67 @@ ProfessionalProfileType profileTypeFromString(String? s) {
   }
 }
 
+List<ProfessionalProfileType> profileRolesFromValue(
+  dynamic value, {
+  ProfessionalProfileType fallback = ProfessionalProfileType.model,
+}) {
+  final raw = value is List
+      ? value
+      : value == null
+      ? const []
+      : [value];
+  final roles = <ProfessionalProfileType>[];
+
+  for (final item in raw) {
+    final text = item?.toString().trim() ?? '';
+    if (text.isEmpty) continue;
+    final normalized = text.toLowerCase();
+    final isKnown = ProfessionalProfileType.values.any(
+      (role) => role.storageValue == normalized,
+    );
+    if (!isKnown) continue;
+
+    final role = profileTypeFromString(text);
+    if (!roles.contains(role)) roles.add(role);
+  }
+
+  if (roles.isEmpty) roles.add(fallback);
+  return List<ProfessionalProfileType>.unmodifiable(roles);
+}
+
+List<ProfessionalProfileType> normalizeProfileRoles(
+  Iterable<ProfessionalProfileType> roles, {
+  ProfessionalProfileType fallback = ProfessionalProfileType.model,
+}) {
+  final normalized = <ProfessionalProfileType>[];
+  for (final role in roles) {
+    if (!normalized.contains(role)) normalized.add(role);
+  }
+  if (normalized.isEmpty) normalized.add(fallback);
+  return List<ProfessionalProfileType>.unmodifiable(normalized);
+}
+
+bool profileRolesUsePhysicalBasics(Iterable<ProfessionalProfileType> roles) {
+  return roles.any((role) => role.usesPhysicalBasics);
+}
+
+bool profileRolesUseModelMeasurements(Iterable<ProfessionalProfileType> roles) {
+  return roles.any((role) => role.usesModelMeasurements);
+}
+
+bool profileRolesHaveProfessionalInfo(Iterable<ProfessionalProfileType> roles) {
+  return roles.any((role) => !role.isModel);
+}
+
+ProfessionalProfileType profileRolesProfessionalType(
+  Iterable<ProfessionalProfileType> roles,
+) {
+  return roles.firstWhere(
+    (role) => !role.isModel,
+    orElse: () => roles.isEmpty ? ProfessionalProfileType.model : roles.first,
+  );
+}
+
 ProfileVerificationStatus verificationStatusFromString(String? s) {
   final v = (s ?? '').toLowerCase().trim();
   switch (v) {
@@ -159,6 +220,7 @@ class MyProfileState {
   final String id;
   final String userId;
   final ProfessionalProfileType profileType;
+  final List<ProfessionalProfileType> profileRoles;
   final String fullName;
   final String birthDate;
   final int age;
@@ -212,6 +274,7 @@ class MyProfileState {
     required this.id,
     required this.userId,
     this.profileType = ProfessionalProfileType.model,
+    this.profileRoles = const [ProfessionalProfileType.model],
     required this.fullName,
     this.birthDate = '',
     required this.age,
@@ -280,11 +343,36 @@ class MyProfileState {
     return calculated.clamp(0, 120);
   }
 
+  List<ProfessionalProfileType> get effectiveProfileRoles {
+    return normalizeProfileRoles(profileRoles, fallback: profileType);
+  }
+
+  bool hasProfileRole(ProfessionalProfileType role) {
+    return effectiveProfileRoles.contains(role);
+  }
+
+  bool get usesPhysicalBasics {
+    return profileRolesUsePhysicalBasics(effectiveProfileRoles);
+  }
+
+  bool get usesModelMeasurements {
+    return profileRolesUseModelMeasurements(effectiveProfileRoles);
+  }
+
+  bool get hasProfessionalInfoRole {
+    return profileRolesHaveProfessionalInfo(effectiveProfileRoles);
+  }
+
+  ProfessionalProfileType get professionalInfoType {
+    return profileRolesProfessionalType(effectiveProfileRoles);
+  }
+
   factory MyProfileState.blank({required String userId}) {
     return MyProfileState(
       id: '',
       userId: userId,
       profileType: ProfessionalProfileType.model,
+      profileRoles: const [ProfessionalProfileType.model],
       fullName: '',
       birthDate: '',
       age: 0,
@@ -337,6 +425,7 @@ class MyProfileState {
     String? id,
     String? userId,
     ProfessionalProfileType? profileType,
+    List<ProfessionalProfileType>? profileRoles,
     String? fullName,
     String? birthDate,
     int? age,
@@ -389,6 +478,7 @@ class MyProfileState {
       id: id ?? this.id,
       userId: userId ?? this.userId,
       profileType: profileType ?? this.profileType,
+      profileRoles: profileRoles ?? this.profileRoles,
       fullName: fullName ?? this.fullName,
       birthDate: birthDate ?? this.birthDate,
       age: age ?? this.age,
@@ -448,10 +538,17 @@ class MyProfileState {
   }
 
   static MyProfileState fromMap(Map<String, dynamic> m) {
+    final profileType = profileTypeFromString(
+      _stringFromMap(m, 'profile_type'),
+    );
     return MyProfileState(
       id: _stringFromMap(m, 'id'),
       userId: _stringFromMap(m, 'user_id'),
-      profileType: profileTypeFromString(_stringFromMap(m, 'profile_type')),
+      profileType: profileType,
+      profileRoles: profileRolesFromValue(
+        m['profile_roles'],
+        fallback: profileType,
+      ),
       fullName: _stringFromMap(m, 'full_name').trim(),
       birthDate: _stringFromMap(m, 'birth_date').trim(),
       age: _intFromMap(m, 'age'),
