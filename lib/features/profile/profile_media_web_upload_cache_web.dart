@@ -6,6 +6,16 @@ import 'dart:typed_data';
 import 'package:image_picker/image_picker.dart';
 import 'package:web/web.dart' as web;
 
+class ProfileMediaWebUploadCacheItem {
+  const ProfileMediaWebUploadCacheItem({
+    required this.file,
+    required this.storage,
+  });
+
+  final XFile file;
+  final String storage;
+}
+
 class ProfileMediaWebUploadCache {
   const ProfileMediaWebUploadCache._();
 
@@ -25,19 +35,21 @@ class ProfileMediaWebUploadCache {
     }
   }
 
-  static Future<void> saveItem({
+  static Future<String> saveItem({
     required String taskId,
     required String itemId,
     required XFile source,
   }) async {
-    if (!isSupported) return;
+    if (!isSupported) return '';
     final bytes = await source.readAsBytes();
     final opfsFileName = _opfsFileName(taskId, itemId);
     final db = await _openDb();
+    var storage = _storageIndexedDb;
     try {
       JSObject record;
       try {
         await _saveBytesToOpfs(fileName: opfsFileName, bytes: bytes);
+        storage = _storageOpfs;
         record = _recordForOpfs(
           source: source,
           bytes: bytes,
@@ -51,12 +63,13 @@ class ProfileMediaWebUploadCache {
       final store = transaction.objectStore(_storeName);
       await _waitRequest(store.put(record, _key(taskId, itemId).toJS));
       await _waitTransaction(transaction);
+      return storage;
     } finally {
       db.close();
     }
   }
 
-  static Future<XFile?> restoreItem({
+  static Future<ProfileMediaWebUploadCacheItem?> restoreItem({
     required String taskId,
     required String itemId,
     required String name,
@@ -85,14 +98,17 @@ class ProfileMediaWebUploadCache {
           ? mimeType
           : restoredMimeType;
 
-      return XFile.fromData(
-        bytes,
-        name: finalName,
-        mimeType: finalMimeType.isEmpty ? null : finalMimeType,
-        length: bytes.length,
-        path: storage == _storageOpfs
-            ? 'opfs://profile-media/$taskId/$itemId'
-            : 'indexeddb://profile-media/$taskId/$itemId',
+      return ProfileMediaWebUploadCacheItem(
+        storage: storage == _storageOpfs ? _storageOpfs : _storageIndexedDb,
+        file: XFile.fromData(
+          bytes,
+          name: finalName,
+          mimeType: finalMimeType.isEmpty ? null : finalMimeType,
+          length: bytes.length,
+          path: storage == _storageOpfs
+              ? 'opfs://profile-media/$taskId/$itemId'
+              : 'indexeddb://profile-media/$taskId/$itemId',
+        ),
       );
     } finally {
       db.close();

@@ -53,6 +53,9 @@ class ProfileMediaUploadItem {
     required this.isCover,
     required this.progress,
     required this.uploadAttempt,
+    required this.webStorage,
+    required this.webRestored,
+    required this.webDiagnostic,
     this.source,
   });
 
@@ -68,6 +71,9 @@ class ProfileMediaUploadItem {
   final bool isCover;
   final double progress;
   final int uploadAttempt;
+  final String webStorage;
+  final bool webRestored;
+  final String webDiagnostic;
   final XFile? source;
 
   bool get isPhoto => kind == ProfileMediaUploadItemKind.photo;
@@ -101,6 +107,9 @@ class ProfileMediaUploadItem {
     String? error,
     double? progress,
     int? uploadAttempt,
+    String? webStorage,
+    bool? webRestored,
+    String? webDiagnostic,
     XFile? source,
   }) {
     return ProfileMediaUploadItem(
@@ -116,6 +125,9 @@ class ProfileMediaUploadItem {
       isCover: isCover,
       progress: progress ?? this.progress,
       uploadAttempt: uploadAttempt ?? this.uploadAttempt,
+      webStorage: webStorage ?? this.webStorage,
+      webRestored: webRestored ?? this.webRestored,
+      webDiagnostic: webDiagnostic ?? this.webDiagnostic,
       source: source ?? this.source,
     );
   }
@@ -133,6 +145,9 @@ class ProfileMediaUploadItem {
     'isCover': isCover,
     'progress': progress,
     'uploadAttempt': uploadAttempt,
+    'webStorage': webStorage,
+    'webRestored': webRestored,
+    'webDiagnostic': webDiagnostic,
   };
 
   static ProfileMediaUploadItem fromJson(Map<String, dynamic> json) {
@@ -157,6 +172,9 @@ class ProfileMediaUploadItem {
       isCover: json['isCover'] == true,
       progress: (json['progress'] as num?)?.toDouble().clamp(0.0, 1.0) ?? 0,
       uploadAttempt: (json['uploadAttempt'] as num?)?.toInt() ?? 0,
+      webStorage: (json['webStorage'] ?? '').toString(),
+      webRestored: json['webRestored'] == true,
+      webDiagnostic: (json['webDiagnostic'] ?? '').toString(),
     );
   }
 }
@@ -448,6 +466,9 @@ class ProfileMediaUploadQueue
       isCover: isCover,
       progress: 0,
       uploadAttempt: 0,
+      webStorage: '',
+      webRestored: false,
+      webDiagnostic: kIsWeb ? 'ожидает сохранения в браузере' : '',
       source: file,
     );
   }
@@ -550,18 +571,19 @@ class ProfileMediaUploadQueue
         continue;
       }
 
-      final source = await ProfileMediaWebUploadCache.restoreItem(
+      final restored = await ProfileMediaWebUploadCache.restoreItem(
         taskId: task.id,
         itemId: item.id,
         name: item.name,
         mimeType: item.mimeType,
       );
-      if (source == null) {
+      if (restored == null) {
         items.add(
           item.copyWith(
             status: ProfileMediaUploadItemStatus.failed,
             error:
                 'Файл недоступен после перезапуска браузера. Выберите медиа заново.',
+            webDiagnostic: 'ошибка восстановления',
           ),
         );
       } else {
@@ -570,7 +592,10 @@ class ProfileMediaUploadQueue
             status: ProfileMediaUploadItemStatus.queued,
             error: '',
             progress: 0,
-            source: source,
+            source: restored.file,
+            webStorage: restored.storage,
+            webRestored: true,
+            webDiagnostic: 'восстановлено после перезапуска',
           ),
         );
       }
@@ -597,11 +622,27 @@ class ProfileMediaUploadQueue
       for (final item in task.items) {
         final source = item.source;
         if (source == null || item.isDone) continue;
-        await ProfileMediaWebUploadCache.saveItem(
+        final storage = await ProfileMediaWebUploadCache.saveItem(
           taskId: task.id,
           itemId: item.id,
           source: source,
         );
+        final latestTask = _taskById(task.id);
+        if (latestTask == null) continue;
+        final latestItem = latestTask.items.firstWhere(
+          (e) => e.id == item.id,
+          orElse: () => item,
+        );
+        if (storage.trim().isNotEmpty && !latestItem.isDone) {
+          _replaceItem(
+            task.id,
+            latestItem.copyWith(
+              webStorage: storage,
+              webDiagnostic: 'сохранено в браузере',
+            ),
+          );
+          await _persistQueue();
+        }
       }
     } catch (e, st) {
       AppLogger.error(

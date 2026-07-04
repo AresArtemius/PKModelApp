@@ -1429,6 +1429,27 @@ class _UploadItemChip extends StatelessWidget {
     return compact ? '$type: $state' : '$type ${item.name}: $state';
   }
 
+  String _diagnosticLabel(BuildContext context) {
+    final parts = <String>[];
+    final storage = item.webStorage.trim().toLowerCase();
+    if (storage == 'opfs') {
+      parts.add('OPFS');
+    } else if (storage == 'indexeddb') {
+      parts.add('IndexedDB fallback');
+    }
+    if (item.webRestored) {
+      parts.add(
+        Localizations.localeOf(context).languageCode == 'ru'
+            ? 'восстановлено'
+            : 'restored',
+      );
+    } else {
+      final diagnostic = item.webDiagnostic.trim();
+      if (diagnostic.isNotEmpty) parts.add(diagnostic);
+    }
+    return parts.join(' • ');
+  }
+
   IconData get _icon {
     if (item.status == ProfileMediaUploadItemStatus.failed) {
       return Icons.error_rounded;
@@ -1450,25 +1471,50 @@ class _UploadItemChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final failed = item.status == ProfileMediaUploadItemStatus.failed;
+    final diagnostic = _diagnosticLabel(context);
     return Container(
       constraints: const BoxConstraints(maxWidth: 240),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: pillDecoration(isDark: failed, radius: 999),
       child: Row(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: diagnostic.isEmpty
+            ? CrossAxisAlignment.center
+            : CrossAxisAlignment.start,
         children: [
           Icon(_icon, size: 13, color: failed ? Colors.white : kTextMuted),
           const SizedBox(width: 5),
           Flexible(
-            child: Text(
-              _label(context),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: _accountBodyStyle(
-                color: failed ? Colors.white : kTextMuted,
-                size: 10,
-                weight: FontWeight.w800,
-              ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _label(context),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _accountBodyStyle(
+                    color: failed ? Colors.white : kTextMuted,
+                    size: 10,
+                    weight: FontWeight.w800,
+                  ),
+                ),
+                if (diagnostic.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    diagnostic,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: _accountBodyStyle(
+                      color: failed
+                          ? Colors.white.withValues(alpha: 0.78)
+                          : kTextMuted.withValues(alpha: 0.74),
+                      size: 9,
+                      weight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
         ],
