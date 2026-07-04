@@ -669,6 +669,7 @@ class _CatalogDesktopPreview extends StatelessWidget {
                           memCacheWidth: _catalogOverlayPhotoCacheWidth,
                           maxWidthDiskCache: _catalogOverlayPhotoCacheWidth,
                           fit: BoxFit.cover,
+                          alignment: _catalogCoverImageAlignment,
                           placeholder: (_, _) =>
                               const _CatalogPhotoPlaceholder(),
                           errorWidget: (_, _, _) =>
@@ -1126,6 +1127,8 @@ class _GridProfileCard extends StatelessWidget {
                                           maxWidthDiskCache:
                                               _catalogCardPhotoCacheWidth,
                                           fit: BoxFit.cover,
+                                          alignment:
+                                              _catalogCoverImageAlignment,
                                           fadeInDuration: const Duration(
                                             milliseconds: 220,
                                           ),

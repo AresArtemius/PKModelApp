@@ -154,6 +154,7 @@ class _HeroMedia extends StatelessWidget {
                     memCacheWidth: _profileHeroCacheWidth,
                     maxWidthDiskCache: _profileHeroCacheWidth,
                     fit: BoxFit.cover,
+                    alignment: _profileCoverImageAlignment,
                     placeholder: (_, _) => DecoratedBox(
                       decoration: catalogPhotoPlaceholderDecoration(),
                     ),

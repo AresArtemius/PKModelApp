@@ -42,6 +42,7 @@ const double _iconPillHeight = 52;
 const double _heroMediaRadius = 18;
 const double _mediaGridGap = 12;
 const double _mediaThumbRadius = 16;
+const Alignment _profileCoverImageAlignment = Alignment(0, -0.72);
 
 const double _galleryCloseOffset = 8;
 const double _videoControlsBottom = 24;
