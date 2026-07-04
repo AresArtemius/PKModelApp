@@ -1250,6 +1250,17 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
   Future<void> _editCoverFrame({required bool pending}) async {
     var draftX = pending ? _pendingCoverPhotoFocalX : _coverPhotoFocalX;
     var draftY = pending ? _pendingCoverPhotoFocalY : _coverPhotoFocalY;
+    var draftZoom = 1.0;
+    final imageFile =
+        pending &&
+            _pickedCoverPhotoIndex != null &&
+            _pickedCoverPhotoIndex! >= 0 &&
+            _pickedCoverPhotoIndex! < _pickedPhotos.length
+        ? _pickedPhotos[_pickedCoverPhotoIndex!]
+        : null;
+    final imageUrl = imageFile == null
+        ? (pending ? _pendingCoverPhotoUrl : _coverPhotoUrl).trim()
+        : '';
     final isRussian =
         Localizations.localeOf(context).languageCode.toLowerCase() == 'ru';
 
@@ -1277,6 +1288,12 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
               });
             }
 
+            void updateZoom(double value) {
+              setSheetState(() {
+                draftZoom = value.clamp(1.0, 2.4);
+              });
+            }
+
             return SafeArea(
               top: false,
               child: Padding(
@@ -1299,35 +1316,54 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
                         ),
                       ),
                       const SizedBox(height: 14),
+                      _CoverFramePreview(
+                        imageUrl: imageUrl,
+                        imageFile: imageFile,
+                        alignment: _coverFocalAlignment(draftX, draftY),
+                        zoom: draftZoom,
+                        onDrag: (delta, size) {
+                          if (size.width <= 0 || size.height <= 0) return;
+                          update(
+                            x: draftX - (delta.dx / size.width) * 2.2,
+                            y: draftY - (delta.dy / size.height) * 2.2,
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.zoom_out_rounded,
+                            color: kTextMuted,
+                            size: 20,
+                          ),
+                          Expanded(
+                            child: Slider(
+                              value: draftZoom,
+                              min: 1,
+                              max: 2.4,
+                              activeColor: BrandTheme.redTop,
+                              inactiveColor: kBorderColor,
+                              onChanged: updateZoom,
+                            ),
+                          ),
+                          const Icon(
+                            Icons.zoom_in_rounded,
+                            color: kTextMuted,
+                            size: 20,
+                          ),
+                        ],
+                      ),
                       Text(
-                        isRussian ? 'Лицо выше / ниже' : 'Face up / down',
+                        isRussian
+                            ? 'Передвиньте фото внутри кадра'
+                            : 'Drag the photo inside the frame',
+                        textAlign: TextAlign.center,
                         style: const TextStyle(
                           color: kTextMuted,
                           fontWeight: FontWeight.w800,
+                          fontSize: 12,
                         ),
-                      ),
-                      Slider(
-                        value: draftY,
-                        min: -1,
-                        max: 1,
-                        activeColor: BrandTheme.redTop,
-                        inactiveColor: kBorderColor,
-                        onChanged: (value) => update(y: value),
-                      ),
-                      Text(
-                        isRussian ? 'Сдвиг влево / вправо' : 'Left / right',
-                        style: const TextStyle(
-                          color: kTextMuted,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      Slider(
-                        value: draftX,
-                        min: -1,
-                        max: 1,
-                        activeColor: BrandTheme.redTop,
-                        inactiveColor: kBorderColor,
-                        onChanged: (value) => update(x: value),
                       ),
                       const SizedBox(height: 8),
                       Row(
@@ -1336,7 +1372,10 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
                             child: BrandPillButton(
                               label: isRussian ? 'СБРОСИТЬ' : 'RESET',
                               style: BrandPillStyle.light,
-                              onTap: () => update(x: 0, y: -0.72),
+                              onTap: () {
+                                update(x: 0, y: -0.72);
+                                updateZoom(1);
+                              },
                             ),
                           ),
                           const SizedBox(width: kGap10),
@@ -1396,12 +1435,38 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
     setState(() {
       if (isPicked) {
         if (index < 0 || index >= _pickedVideos.length) return;
+        if (_pickedShowreelVideoIndex == index) {
+          _pickedShowreelVideoIndex = null;
+          if (index < _pickedVideoCategoryLabels.length) {
+            _pickedVideoCategoryLabels[index] = 'Видео';
+          }
+          return;
+        }
+        if (_pickedShowreelVideoIndex != null &&
+            _pickedShowreelVideoIndex! >= 0 &&
+            _pickedShowreelVideoIndex! < _pickedVideoCategoryLabels.length) {
+          _pickedVideoCategoryLabels[_pickedShowreelVideoIndex!] = 'Видео';
+        }
         _pickedShowreelVideoIndex = index;
         if (index < _pickedVideoCategoryLabels.length) {
           _pickedVideoCategoryLabels[index] = 'Showreel';
         }
       } else {
         if (index < 0 || index >= _videoUrls.length) return;
+        final selectedUrl = _videoUrls[index].trim();
+        if (_showreelUrl.trim() == selectedUrl) {
+          _showreelUrl = '';
+          _showreelPreviewUrl = '';
+          if (index < _videoCategoryLabels.length) {
+            _videoCategoryLabels[index] = 'Видео';
+          }
+          return;
+        }
+        for (var i = 0; i < _videoCategoryLabels.length; i++) {
+          if (_videoCategoryLabels[i].trim() == 'Showreel') {
+            _videoCategoryLabels[i] = 'Видео';
+          }
+        }
         _showreelUrl = _videoUrls[index].trim();
         _showreelPreviewUrl = index < _videoPreviewUrls.length
             ? _videoPreviewUrls[index].trim()

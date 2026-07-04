@@ -75,49 +75,105 @@ class _ProfileRolesSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
+    final isRussian =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ru';
+    final selectedRoles = normalizeProfileRoles(selected);
+    final availableRoles = ProfessionalProfileType.values
+        .where((role) => !selectedRoles.contains(role))
+        .toList(growable: false);
+
+    Future<void> addRole() async {
+      if (availableRoles.isEmpty) return;
+
+      final picked = await showModalBottomSheet<ProfessionalProfileType>(
+        context: context,
+        backgroundColor: Colors.transparent,
+        builder: (sheetContext) {
+          return SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+                decoration: profileCardDecoration(),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      isRussian ? 'ДОБАВИТЬ РОЛЬ' : 'ADD ROLE',
+                      textAlign: TextAlign.center,
+                      style: BrandTheme.pillText.copyWith(
+                        color: kTextDark,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 2,
+                      ),
+                    ),
+                    const SizedBox(height: kGap14),
+                    for (final role in availableRoles) ...[
+                      _ProfileRoleOption(
+                        label: _profileTypeLabel(t, role).toUpperCase(),
+                        onTap: () => Navigator.of(sheetContext).pop(role),
+                      ),
+                      const SizedBox(height: kGap8),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      );
+      if (picked == null) return;
+
+      onChanged({...selectedRoles, picked});
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _SectionTitle(
-          Localizations.localeOf(context).languageCode.toLowerCase() == 'ru'
-              ? 'РОЛИ АНКЕТЫ'
-              : 'PROFILE ROLES',
-        ),
+        _SectionTitle(isRussian ? 'РОЛИ АНКЕТЫ' : 'PROFILE ROLES'),
         const SizedBox(height: kGap10),
         Wrap(
           spacing: kGap8,
           runSpacing: kGap8,
           children: [
-            for (final type in ProfessionalProfileType.values)
-              _ProfileTypeChip(
-                label: _profileTypeLabel(t, type),
-                selected: selected.contains(type),
-                onTap: () {
-                  final next = Set<ProfessionalProfileType>.from(selected);
-                  if (next.contains(type)) {
-                    if (next.length == 1) return;
-                    next.remove(type);
-                  } else {
-                    next.add(type);
-                  }
+            for (final role in selectedRoles)
+              _SelectedProfileRoleChip(
+                label: _profileTypeLabel(t, role).toUpperCase(),
+                canRemove: selectedRoles.length > 1,
+                onRemove: () {
+                  if (selectedRoles.length == 1) return;
+                  final next = Set<ProfessionalProfileType>.from(selectedRoles)
+                    ..remove(role);
                   onChanged(next);
                 },
               ),
           ],
         ),
-        const SizedBox(height: kGap8),
+        const SizedBox(height: kGap10),
         Align(
           alignment: Alignment.centerLeft,
-          child: Text(
-            Localizations.localeOf(context).languageCode.toLowerCase() == 'ru'
-                ? 'ДОБАВИТЬ РОЛЬ'
-                : 'ADD ROLE',
-            style: const TextStyle(
-              color: BrandTheme.redTop,
-              fontWeight: FontWeight.w900,
-              fontSize: 11,
-              letterSpacing: 1.2,
+          child: GestureDetector(
+            onTap: availableRoles.isEmpty ? null : addRole,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: pillDecoration(
+                isDark: false,
+                radius: 999,
+              ).copyWith(border: Border.all(color: kBorderColor)),
+              child: Text(
+                isRussian ? 'ДОБАВИТЬ РОЛЬ' : 'ADD ROLE',
+                style: TextStyle(
+                  color: availableRoles.isEmpty
+                      ? kTextMuted.withValues(alpha: 0.45)
+                      : BrandTheme.redTop,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 11,
+                  letterSpacing: 1.2,
+                ),
+              ),
             ),
           ),
         ),
@@ -126,37 +182,263 @@ class _ProfileRolesSelector extends StatelessWidget {
   }
 }
 
-class _ProfileTypeChip extends StatelessWidget {
-  const _ProfileTypeChip({
+class _SelectedProfileRoleChip extends StatelessWidget {
+  const _SelectedProfileRoleChip({
     required this.label,
-    required this.selected,
-    required this.onTap,
+    required this.canRemove,
+    required this.onRemove,
   });
 
   final String label;
-  final bool selected;
+  final bool canRemove;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+          decoration: pillDecoration(isDark: true, radius: 999),
+          child: Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w900,
+              fontSize: 12,
+              letterSpacing: 0.8,
+            ),
+          ),
+        ),
+        if (canRemove)
+          Positioned(
+            right: -6,
+            top: -6,
+            child: GestureDetector(
+              onTap: onRemove,
+              child: Container(
+                width: 22,
+                height: 22,
+                decoration: const BoxDecoration(
+                  color: kTextDark,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.close, color: Colors.white, size: 14),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _ProfileRoleOption extends StatelessWidget {
+  const _ProfileRoleOption({required this.label, required this.onTap});
+
+  final String label;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: AnimatedContainer(
-        duration: kAnim160,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-        decoration: pillDecoration(isDark: selected, radius: 999).copyWith(
-          border: Border.all(
-            color: selected ? Colors.transparent : kBorderColor,
-          ),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: pillDecoration(
+          isDark: false,
+          radius: 18,
+        ).copyWith(border: Border.all(color: kBorderColor)),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(
+                  color: kTextDark,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.2,
+                ),
+              ),
+            ),
+            const Icon(Icons.add_rounded, color: BrandTheme.redTop),
+          ],
         ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: selected ? Colors.white : kTextDark,
-            fontWeight: FontWeight.w800,
-            fontSize: 12,
+      ),
+    );
+  }
+}
+
+class _CoverFramePreview extends StatelessWidget {
+  const _CoverFramePreview({
+    required this.imageUrl,
+    required this.imageFile,
+    required this.alignment,
+    required this.zoom,
+    required this.onDrag,
+  });
+
+  final String imageUrl;
+  final XFile? imageFile;
+  final Alignment alignment;
+  final double zoom;
+  final void Function(Offset delta, Size size) onDrag;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : MediaQuery.sizeOf(context).width - 64;
+        final height = (width * 0.72).clamp(220.0, 320.0);
+        final frameWidth = width;
+        final frameHeight = (frameWidth / 1.85).clamp(150.0, height - 34);
+        final top = (height - frameHeight) / 2;
+
+        return GestureDetector(
+          onPanUpdate: (details) =>
+              onDrag(details.delta, Size(frameWidth, frameHeight)),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(26),
+            child: SizedBox(
+              width: width,
+              height: height,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  _CoverFramePreviewImage(
+                    imageUrl: imageUrl,
+                    imageFile: imageFile,
+                    alignment: alignment,
+                    zoom: zoom,
+                  ),
+                  Positioned(
+                    left: 0,
+                    top: 0,
+                    right: 0,
+                    height: top,
+                    child: const ColoredBox(color: Color(0x99000000)),
+                  ),
+                  Positioned(
+                    left: 0,
+                    top: top + frameHeight,
+                    right: 0,
+                    bottom: 0,
+                    child: const ColoredBox(color: Color(0x99000000)),
+                  ),
+                  Positioned(
+                    left: 0,
+                    top: top,
+                    width: 10,
+                    height: frameHeight,
+                    child: const ColoredBox(color: Color(0x66000000)),
+                  ),
+                  Positioned(
+                    right: 0,
+                    top: top,
+                    width: 10,
+                    height: frameHeight,
+                    child: const ColoredBox(color: Color(0x66000000)),
+                  ),
+                  Positioned(
+                    left: 0,
+                    top: top,
+                    width: frameWidth,
+                    height: frameHeight,
+                    child: IgnorePointer(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.92),
+                            width: 2,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.20),
+                              blurRadius: 18,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.52),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: const Icon(
+                        Icons.open_with_rounded,
+                        color: Colors.white,
+                        size: 18,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
-        ),
+        );
+      },
+    );
+  }
+}
+
+class _CoverFramePreviewImage extends StatelessWidget {
+  const _CoverFramePreviewImage({
+    required this.imageUrl,
+    required this.imageFile,
+    required this.alignment,
+    required this.zoom,
+  });
+
+  final String imageUrl;
+  final XFile? imageFile;
+  final Alignment alignment;
+  final double zoom;
+
+  @override
+  Widget build(BuildContext context) {
+    final file = imageFile;
+    if (file != null) {
+      return FutureBuilder<Uint8List>(
+        future: file.readAsBytes(),
+        builder: (context, snapshot) {
+          final bytes = snapshot.data;
+          if (bytes == null || bytes.isEmpty) {
+            return const _EmptyProfileImagePlaceholder();
+          }
+          return Transform.scale(
+            scale: zoom,
+            child: Image.memory(
+              bytes,
+              fit: BoxFit.cover,
+              alignment: alignment,
+              errorBuilder: (_, _, _) => const _EmptyProfileImagePlaceholder(),
+            ),
+          );
+        },
+      );
+    }
+
+    final url = imageUrl.trim();
+    if (url.isEmpty) return const _EmptyProfileImagePlaceholder();
+
+    return Transform.scale(
+      scale: zoom,
+      child: CachedNetworkImage(
+        imageUrl: url,
+        fit: BoxFit.cover,
+        alignment: alignment,
+        placeholder: (_, _) => const _EmptyProfileImagePlaceholder(),
+        errorWidget: (_, _, _) => const _EmptyProfileImagePlaceholder(),
       ),
     );
   }
@@ -572,11 +854,7 @@ class _VideoThumbRow extends StatelessWidget {
           isShowreel:
               showreelUrl.trim().isNotEmpty &&
               urls[i].trim() == showreelUrl.trim(),
-          onMakeShowreel:
-              showreelUrl.trim().isNotEmpty &&
-                  urls[i].trim() == showreelUrl.trim()
-              ? null
-              : () => onMakeShowreel(i, isPicked: false),
+          onMakeShowreel: () => onMakeShowreel(i, isPicked: false),
           onChangeCategory: (category) =>
               onChangeCategory(i, isPicked: false, category: category),
           onRemove: () => onRemove(i, isPicked: false),
@@ -604,9 +882,7 @@ class _VideoThumbRow extends StatelessWidget {
               ? fileCategoryLabels[i]
               : 'Видео',
           isShowreel: pickedShowreelIndex == i,
-          onMakeShowreel: pickedShowreelIndex == i
-              ? null
-              : () => onMakeShowreel(i, isPicked: true),
+          onMakeShowreel: () => onMakeShowreel(i, isPicked: true),
           onChangeCategory: (category) =>
               onChangeCategory(i, isPicked: true, category: category),
           onRemove: () => onRemove(i, isPicked: true),
@@ -998,7 +1274,7 @@ class _MediaShowreelButton extends StatelessWidget {
     final isRussian =
         Localizations.localeOf(context).languageCode.toLowerCase() == 'ru';
     final message = selected
-        ? (isRussian ? 'Showreel профиля' : 'Profile showreel')
+        ? (isRussian ? 'Снять showreel' : 'Remove showreel')
         : (isRussian ? 'Сделать showreel' : 'Make showreel');
     return Tooltip(
       message: message,
@@ -1083,6 +1359,14 @@ class _MediaCategoryChip extends StatelessWidget {
       tooltip: '',
       onSelected: onChanged,
       itemBuilder: (_) => [
+        if (!_kProfileMediaCategories.contains(label))
+          PopupMenuItem<String>(
+            value: label,
+            child: Text(
+              label,
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+          ),
         for (final category in _kProfileMediaCategories)
           PopupMenuItem<String>(
             value: category,
