@@ -37,6 +37,20 @@ List<String> _mergeUniqueMedia(List<String> published, List<String> pending) {
   return result;
 }
 
+List<String> _alignedLabels(
+  List<String> labels,
+  int length, {
+  required String fallback,
+}) {
+  return [
+    for (var i = 0; i < length; i++)
+      if (i < labels.length && labels[i].trim().isNotEmpty)
+        labels[i].trim()
+      else
+        fallback,
+  ];
+}
+
 String _coverPhotoFrom(String preferred, List<String> photoUrls) {
   final cover = preferred.trim();
   final photos = photoUrls.map((e) => e.trim()).where((e) => e.isNotEmpty);
@@ -177,9 +191,40 @@ class _ModerationAdminPageState extends ConsumerState<ModerationAdminPage> {
       profile.photoUrls,
       profile.pendingPhotoUrls,
     );
+    final photoCategoryLabels = [
+      ..._alignedLabels(
+        profile.photoCategoryLabels,
+        profile.photoUrls.length,
+        fallback: 'Портфолио',
+      ),
+      ..._alignedLabels(
+        profile.pendingPhotoCategoryLabels,
+        profile.pendingPhotoUrls.length,
+        fallback: 'Портфолио',
+      ),
+    ];
+    final videoUrls = _mergeUniqueMedia(
+      profile.videoUrls,
+      profile.pendingVideoUrls,
+    );
+    final videoCategoryLabels = [
+      ..._alignedLabels(
+        profile.videoCategoryLabels,
+        profile.videoUrls.length,
+        fallback: 'Видео',
+      ),
+      ..._alignedLabels(
+        profile.pendingVideoCategoryLabels,
+        profile.pendingVideoUrls.length,
+        fallback: 'Видео',
+      ),
+    ];
     final preferredCover = profile.pendingCoverPhotoUrl.trim().isNotEmpty
         ? profile.pendingCoverPhotoUrl
         : profile.coverPhotoUrl;
+    final preferredShowreel = profile.pendingShowreelUrl.trim().isNotEmpty
+        ? profile.pendingShowreelUrl
+        : profile.showreelUrl;
 
     try {
       await sb
@@ -188,19 +233,30 @@ class _ModerationAdminPageState extends ConsumerState<ModerationAdminPage> {
             'status': 'approved',
             'moderation_comment': null,
             'photo_urls': photoUrls,
+            'photo_category_labels': photoCategoryLabels,
             'cover_photo_url': _coverPhotoFrom(preferredCover, photoUrls),
-            'video_urls': _mergeUniqueMedia(
-              profile.videoUrls,
-              profile.pendingVideoUrls,
-            ),
+            'video_urls': videoUrls,
             'video_preview_urls': _mergeUniqueMedia(
               profile.videoPreviewUrls,
               profile.pendingVideoPreviewUrls,
             ),
+            'video_category_labels': videoCategoryLabels,
+            'showreel_url': videoUrls.contains(preferredShowreel.trim())
+                ? preferredShowreel.trim()
+                : '',
+            'showreel_preview_url': videoUrls.contains(preferredShowreel.trim())
+                ? (profile.pendingShowreelPreviewUrl.trim().isNotEmpty
+                      ? profile.pendingShowreelPreviewUrl.trim()
+                      : profile.showreelPreviewUrl.trim())
+                : '',
             'pending_photo_urls': const <String>[],
             'pending_cover_photo_url': '',
             'pending_video_urls': const <String>[],
             'pending_video_preview_urls': const <String>[],
+            'pending_photo_category_labels': const <String>[],
+            'pending_video_category_labels': const <String>[],
+            'pending_showreel_url': '',
+            'pending_showreel_preview_url': '',
             'has_pending_media': false,
           })
           .eq('id', profileId);

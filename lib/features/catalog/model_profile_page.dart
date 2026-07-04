@@ -415,6 +415,24 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
                           ? const SizedBox(height: 14)
                           : const SizedBox.shrink(),
 
+                      if (m.hasShowreel) ...[
+                        _Card(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Text('SHOWREEL', style: _commandStyle()),
+                              const SizedBox(height: 14),
+                              _ShowreelCard(
+                                videoUrl: m.showreelUrl,
+                                previewUrl: m.showreelPreviewUrl,
+                                onTap: () => _openVideo(context, m.showreelUrl),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: _sectionGap),
+                      ],
+
                       if (canUseAgentTools) ...[
                         ModelAgentToolsCard(
                           folders: ref.watch(
@@ -568,8 +586,11 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
                             else
                               _MediaGrid(
                                 photoUrls: displayPhotoUrls,
+                                photoCategoryLabels: m.photoCategoryLabels,
                                 videoUrls: m.videoUrls,
                                 videoPreviewUrls: m.videoPreviewUrls,
+                                videoCategoryLabels: m.videoCategoryLabels,
+                                showreelUrl: m.showreelUrl,
                                 onOpenPhotos: (index) => _openPhotos(
                                   context,
                                   displayPhotoUrls,

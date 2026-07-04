@@ -106,6 +106,29 @@ class MyProfileController
     return cleanPhotos.isEmpty ? '' : cleanPhotos.first;
   }
 
+  String _normalizedShowreelUrl(String showreel, List<String> videos) {
+    final cleanShowreel = showreel.trim();
+    final cleanVideos = videos.map((e) => e.trim()).where((e) => e.isNotEmpty);
+    if (cleanShowreel.isNotEmpty && cleanVideos.contains(cleanShowreel)) {
+      return cleanShowreel;
+    }
+    return '';
+  }
+
+  List<String> _normalizedCategoryLabels(
+    List<String> labels,
+    int targetLength, {
+    required String fallback,
+  }) {
+    return [
+      for (var i = 0; i < targetLength; i++)
+        if (i < labels.length && labels[i].trim().isNotEmpty)
+          labels[i].trim()
+        else
+          fallback,
+    ];
+  }
+
   bool _isMissingOptionalProfileColumn(PostgrestException e) {
     return ProfileSupabaseSchema.isMissingOwnOptionalColumn(e);
   }
@@ -201,16 +224,49 @@ class MyProfileController
   Map<String, dynamic> _payloadFor(MyProfileState s, String uid) => {
     ..._basePayloadFor(s, uid),
     'photo_urls': s.photoUrls,
+    'photo_category_labels': _normalizedCategoryLabels(
+      s.photoCategoryLabels,
+      s.photoUrls.length,
+      fallback: 'Портфолио',
+    ),
     'cover_photo_url': _normalizedCoverPhotoUrl(s.coverPhotoUrl, s.photoUrls),
     'video_urls': s.videoUrls,
     'video_preview_urls': s.videoPreviewUrls,
+    'video_category_labels': _normalizedCategoryLabels(
+      s.videoCategoryLabels,
+      s.videoUrls.length,
+      fallback: 'Видео',
+    ),
+    'showreel_url': _normalizedShowreelUrl(s.showreelUrl, s.videoUrls),
+    'showreel_preview_url':
+        _normalizedShowreelUrl(s.showreelUrl, s.videoUrls).isEmpty
+        ? ''
+        : s.showreelPreviewUrl,
     'pending_photo_urls': s.pendingPhotoUrls,
+    'pending_photo_category_labels': _normalizedCategoryLabels(
+      s.pendingPhotoCategoryLabels,
+      s.pendingPhotoUrls.length,
+      fallback: 'Портфолио',
+    ),
     'pending_cover_photo_url': _normalizedCoverPhotoUrl(
       s.pendingCoverPhotoUrl,
       s.pendingPhotoUrls,
     ),
     'pending_video_urls': s.pendingVideoUrls,
     'pending_video_preview_urls': s.pendingVideoPreviewUrls,
+    'pending_video_category_labels': _normalizedCategoryLabels(
+      s.pendingVideoCategoryLabels,
+      s.pendingVideoUrls.length,
+      fallback: 'Видео',
+    ),
+    'pending_showreel_url': _normalizedShowreelUrl(
+      s.pendingShowreelUrl,
+      s.pendingVideoUrls,
+    ),
+    'pending_showreel_preview_url':
+        _normalizedShowreelUrl(s.pendingShowreelUrl, s.pendingVideoUrls).isEmpty
+        ? ''
+        : s.pendingShowreelPreviewUrl,
     'has_pending_media': s.hasPendingMedia,
   };
 
@@ -343,6 +399,10 @@ class MyProfileController
     required List<String> newPhotoUrls,
     required List<String> newVideoUrls,
     required List<String> newVideoPreviewUrls,
+    List<String> newPhotoCategoryLabels = const [],
+    List<String> newVideoCategoryLabels = const [],
+    String newShowreelUrl = '',
+    String newShowreelPreviewUrl = '',
   }) async {
     final uid = _requireUid();
     final profileId = profile.id.trim();
@@ -352,22 +412,60 @@ class MyProfileController
     if (profileId.isEmpty) {
       await _ensureCanCreateProfile(uid);
       final photoUrls = [...profile.photoUrls, ...newPhotoUrls];
+      final videoUrls = [...profile.videoUrls, ...newVideoUrls];
       final payload = {
         ...basePayload,
         'photo_urls': photoUrls,
+        'photo_category_labels': [
+          ..._normalizedCategoryLabels(
+            profile.photoCategoryLabels,
+            profile.photoUrls.length,
+            fallback: 'Портфолио',
+          ),
+          ..._normalizedCategoryLabels(
+            newPhotoCategoryLabels,
+            newPhotoUrls.length,
+            fallback: 'Портфолио',
+          ),
+        ],
         'cover_photo_url': _normalizedCoverPhotoUrl(
           profile.coverPhotoUrl,
           photoUrls,
         ),
-        'video_urls': [...profile.videoUrls, ...newVideoUrls],
+        'video_urls': videoUrls,
         'video_preview_urls': [
           ...profile.videoPreviewUrls,
           ...newVideoPreviewUrls,
         ],
+        'video_category_labels': [
+          ..._normalizedCategoryLabels(
+            profile.videoCategoryLabels,
+            profile.videoUrls.length,
+            fallback: 'Видео',
+          ),
+          ..._normalizedCategoryLabels(
+            newVideoCategoryLabels,
+            newVideoUrls.length,
+            fallback: 'Видео',
+          ),
+        ],
+        'showreel_url': _normalizedShowreelUrl(
+          newShowreelUrl.trim().isNotEmpty
+              ? newShowreelUrl
+              : profile.showreelUrl,
+          videoUrls,
+        ),
+        'showreel_preview_url': newShowreelUrl.trim().isNotEmpty
+            ? newShowreelPreviewUrl
+            : profile.showreelPreviewUrl,
         'pending_photo_urls': const <String>[],
         'pending_cover_photo_url': '',
         'pending_video_urls': const <String>[],
         'pending_video_preview_urls': const <String>[],
+        'pending_photo_category_labels': const <String>[],
+        'pending_video_category_labels': const <String>[],
+        'pending_showreel_url': '',
+        'pending_showreel_preview_url': '',
         'has_pending_media': false,
       };
 
@@ -380,9 +478,15 @@ class MyProfileController
     final publishedPhotoUrls = publishImmediately
         ? [...profile.photoUrls, ...profile.pendingPhotoUrls, ...newPhotoUrls]
         : profile.photoUrls;
+    final publishedVideoUrls = publishImmediately
+        ? [...profile.videoUrls, ...profile.pendingVideoUrls, ...newVideoUrls]
+        : profile.videoUrls;
     final pendingPhotoUrls = publishImmediately
         ? const <String>[]
         : [...profile.pendingPhotoUrls, ...newPhotoUrls];
+    final pendingVideoUrls = publishImmediately
+        ? const <String>[]
+        : [...profile.pendingVideoUrls, ...newVideoUrls];
     final nextCoverPhotoUrl = publishImmediately
         ? _normalizedCoverPhotoUrl(
             profile.pendingCoverPhotoUrl.trim().isNotEmpty
@@ -401,10 +505,31 @@ class MyProfileController
     final payload = {
       ...basePayload,
       'photo_urls': publishedPhotoUrls,
+      'photo_category_labels': publishImmediately
+          ? [
+              ..._normalizedCategoryLabels(
+                profile.photoCategoryLabels,
+                profile.photoUrls.length,
+                fallback: 'Портфолио',
+              ),
+              ..._normalizedCategoryLabels(
+                profile.pendingPhotoCategoryLabels,
+                profile.pendingPhotoUrls.length,
+                fallback: 'Портфолио',
+              ),
+              ..._normalizedCategoryLabels(
+                newPhotoCategoryLabels,
+                newPhotoUrls.length,
+                fallback: 'Портфолио',
+              ),
+            ]
+          : _normalizedCategoryLabels(
+              profile.photoCategoryLabels,
+              profile.photoUrls.length,
+              fallback: 'Портфолио',
+            ),
       'cover_photo_url': nextCoverPhotoUrl,
-      'video_urls': publishImmediately
-          ? [...profile.videoUrls, ...profile.pendingVideoUrls, ...newVideoUrls]
-          : profile.videoUrls,
+      'video_urls': publishedVideoUrls,
       'video_preview_urls': publishImmediately
           ? [
               ...profile.videoPreviewUrls,
@@ -412,19 +537,99 @@ class MyProfileController
               ...newVideoPreviewUrls,
             ]
           : profile.videoPreviewUrls,
+      'video_category_labels': publishImmediately
+          ? [
+              ..._normalizedCategoryLabels(
+                profile.videoCategoryLabels,
+                profile.videoUrls.length,
+                fallback: 'Видео',
+              ),
+              ..._normalizedCategoryLabels(
+                profile.pendingVideoCategoryLabels,
+                profile.pendingVideoUrls.length,
+                fallback: 'Видео',
+              ),
+              ..._normalizedCategoryLabels(
+                newVideoCategoryLabels,
+                newVideoUrls.length,
+                fallback: 'Видео',
+              ),
+            ]
+          : _normalizedCategoryLabels(
+              profile.videoCategoryLabels,
+              profile.videoUrls.length,
+              fallback: 'Видео',
+            ),
+      'showreel_url': publishImmediately
+          ? _normalizedShowreelUrl(
+              newShowreelUrl.trim().isNotEmpty
+                  ? newShowreelUrl
+                  : (profile.pendingShowreelUrl.trim().isNotEmpty
+                        ? profile.pendingShowreelUrl
+                        : profile.showreelUrl),
+              publishedVideoUrls,
+            )
+          : _normalizedShowreelUrl(profile.showreelUrl, publishedVideoUrls),
+      'showreel_preview_url': publishImmediately
+          ? (newShowreelPreviewUrl.trim().isNotEmpty
+                ? newShowreelPreviewUrl
+                : (profile.pendingShowreelPreviewUrl.trim().isNotEmpty
+                      ? profile.pendingShowreelPreviewUrl
+                      : profile.showreelPreviewUrl))
+          : profile.showreelPreviewUrl,
       'pending_photo_urls': pendingPhotoUrls,
-      'pending_cover_photo_url': nextPendingCoverPhotoUrl,
-      'pending_video_urls': publishImmediately
+      'pending_photo_category_labels': publishImmediately
           ? const <String>[]
-          : [...profile.pendingVideoUrls, ...newVideoUrls],
+          : [
+              ..._normalizedCategoryLabels(
+                profile.pendingPhotoCategoryLabels,
+                profile.pendingPhotoUrls.length,
+                fallback: 'Портфолио',
+              ),
+              ..._normalizedCategoryLabels(
+                newPhotoCategoryLabels,
+                newPhotoUrls.length,
+                fallback: 'Портфолио',
+              ),
+            ],
+      'pending_cover_photo_url': nextPendingCoverPhotoUrl,
+      'pending_video_urls': pendingVideoUrls,
       'pending_video_preview_urls': publishImmediately
           ? const <String>[]
           : [...profile.pendingVideoPreviewUrls, ...newVideoPreviewUrls],
+      'pending_video_category_labels': publishImmediately
+          ? const <String>[]
+          : [
+              ..._normalizedCategoryLabels(
+                profile.pendingVideoCategoryLabels,
+                profile.pendingVideoUrls.length,
+                fallback: 'Видео',
+              ),
+              ..._normalizedCategoryLabels(
+                newVideoCategoryLabels,
+                newVideoUrls.length,
+                fallback: 'Видео',
+              ),
+            ],
+      'pending_showreel_url': publishImmediately
+          ? ''
+          : _normalizedShowreelUrl(
+              newShowreelUrl.trim().isNotEmpty
+                  ? newShowreelUrl
+                  : profile.pendingShowreelUrl,
+              pendingVideoUrls,
+            ),
+      'pending_showreel_preview_url': publishImmediately
+          ? ''
+          : (newShowreelPreviewUrl.trim().isNotEmpty
+                ? newShowreelPreviewUrl
+                : profile.pendingShowreelPreviewUrl),
       'has_pending_media': publishImmediately
           ? false
           : (profile.pendingPhotoUrls.isNotEmpty ||
                 profile.pendingVideoUrls.isNotEmpty ||
                 profile.pendingVideoPreviewUrls.isNotEmpty ||
+                profile.pendingShowreelUrl.trim().isNotEmpty ||
                 newPhotoUrls.isNotEmpty ||
                 newVideoUrls.isNotEmpty ||
                 newVideoPreviewUrls.isNotEmpty),
@@ -468,22 +673,61 @@ class MyProfileController
       ...?current?.videoPreviewUrls,
       ...?current?.pendingVideoPreviewUrls,
     ];
+    final photoCategoryLabels = [
+      ..._normalizedCategoryLabels(
+        current?.photoCategoryLabels ?? const <String>[],
+        current?.photoUrls.length ?? 0,
+        fallback: 'Портфолио',
+      ),
+      ..._normalizedCategoryLabels(
+        current?.pendingPhotoCategoryLabels ?? const <String>[],
+        current?.pendingPhotoUrls.length ?? 0,
+        fallback: 'Портфолио',
+      ),
+    ];
+    final videoCategoryLabels = [
+      ..._normalizedCategoryLabels(
+        current?.videoCategoryLabels ?? const <String>[],
+        current?.videoUrls.length ?? 0,
+        fallback: 'Видео',
+      ),
+      ..._normalizedCategoryLabels(
+        current?.pendingVideoCategoryLabels ?? const <String>[],
+        current?.pendingVideoUrls.length ?? 0,
+        fallback: 'Видео',
+      ),
+    ];
     final preferredCover =
         current?.pendingCoverPhotoUrl.trim().isNotEmpty == true
         ? current!.pendingCoverPhotoUrl
         : current?.coverPhotoUrl ?? '';
+    final preferredShowreel =
+        current?.pendingShowreelUrl.trim().isNotEmpty == true
+        ? current!.pendingShowreelUrl
+        : current?.showreelUrl ?? '';
 
     final data = await _updateProfileAndSelect(id, uid, {
       'status': 'approved',
       'moderation_comment': null,
       'photo_urls': photoUrls,
+      'photo_category_labels': photoCategoryLabels,
       'cover_photo_url': _normalizedCoverPhotoUrl(preferredCover, photoUrls),
       'video_urls': videoUrls,
       'video_preview_urls': videoPreviewUrls,
+      'video_category_labels': videoCategoryLabels,
+      'showreel_url': _normalizedShowreelUrl(preferredShowreel, videoUrls),
+      'showreel_preview_url':
+          current?.pendingShowreelPreviewUrl.trim().isNotEmpty == true
+          ? current!.pendingShowreelPreviewUrl
+          : current?.showreelPreviewUrl ?? '',
       'pending_photo_urls': const <String>[],
       'pending_cover_photo_url': '',
       'pending_video_urls': const <String>[],
       'pending_video_preview_urls': const <String>[],
+      'pending_photo_category_labels': const <String>[],
+      'pending_video_category_labels': const <String>[],
+      'pending_showreel_url': '',
+      'pending_showreel_preview_url': '',
       'has_pending_media': false,
     });
     final published = MyProfileState.fromMap(data);

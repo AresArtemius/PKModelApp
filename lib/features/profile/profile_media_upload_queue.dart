@@ -51,6 +51,8 @@ class ProfileMediaUploadItem {
     required this.previewUrl,
     required this.error,
     required this.isCover,
+    required this.isShowreel,
+    required this.categoryLabel,
     required this.progress,
     required this.uploadAttempt,
     required this.webStorage,
@@ -71,6 +73,8 @@ class ProfileMediaUploadItem {
   final String previewUrl;
   final String error;
   final bool isCover;
+  final bool isShowreel;
+  final String categoryLabel;
   final double progress;
   final int uploadAttempt;
   final String webStorage;
@@ -109,6 +113,8 @@ class ProfileMediaUploadItem {
     String? url,
     String? previewUrl,
     String? error,
+    bool? isShowreel,
+    String? categoryLabel,
     double? progress,
     int? uploadAttempt,
     String? webStorage,
@@ -129,6 +135,8 @@ class ProfileMediaUploadItem {
       previewUrl: previewUrl ?? this.previewUrl,
       error: error ?? this.error,
       isCover: isCover,
+      isShowreel: isShowreel ?? this.isShowreel,
+      categoryLabel: categoryLabel ?? this.categoryLabel,
       progress: progress ?? this.progress,
       uploadAttempt: uploadAttempt ?? this.uploadAttempt,
       webStorage: webStorage ?? this.webStorage,
@@ -152,6 +160,8 @@ class ProfileMediaUploadItem {
     'previewUrl': previewUrl,
     'error': error,
     'isCover': isCover,
+    'isShowreel': isShowreel,
+    'categoryLabel': categoryLabel,
     'progress': progress,
     'uploadAttempt': uploadAttempt,
     'webStorage': webStorage,
@@ -181,6 +191,8 @@ class ProfileMediaUploadItem {
       previewUrl: (json['previewUrl'] ?? '').toString(),
       error: (json['error'] ?? '').toString(),
       isCover: json['isCover'] == true,
+      isShowreel: json['isShowreel'] == true,
+      categoryLabel: (json['categoryLabel'] ?? '').toString(),
       progress: (json['progress'] as num?)?.toDouble().clamp(0.0, 1.0) ?? 0,
       uploadAttempt: (json['uploadAttempt'] as num?)?.toInt() ?? 0,
       webStorage: (json['webStorage'] ?? '').toString(),
@@ -336,6 +348,9 @@ class ProfileMediaUploadQueue
     required List<XFile> pickedPhotos,
     required List<XFile> pickedVideos,
     required int? pickedCoverPhotoIndex,
+    required List<String> pickedPhotoCategoryLabels,
+    required List<String> pickedVideoCategoryLabels,
+    required int? pickedShowreelVideoIndex,
     required bool approveImmediately,
   }) {
     if (pickedPhotos.isEmpty && pickedVideos.isEmpty) return;
@@ -353,6 +368,10 @@ class ProfileMediaUploadQueue
           kind: ProfileMediaUploadItemKind.photo,
           file: pickedPhotos[i],
           isCover: pickedCoverPhotoIndex == i,
+          isShowreel: false,
+          categoryLabel: i < pickedPhotoCategoryLabels.length
+              ? pickedPhotoCategoryLabels[i]
+              : 'Портфолио',
         ),
       for (int i = 0; i < pickedVideos.length; i++)
         _itemFromXFile(
@@ -361,6 +380,10 @@ class ProfileMediaUploadQueue
           kind: ProfileMediaUploadItemKind.video,
           file: pickedVideos[i],
           isCover: false,
+          isShowreel: pickedShowreelVideoIndex == i,
+          categoryLabel: i < pickedVideoCategoryLabels.length
+              ? pickedVideoCategoryLabels[i]
+              : 'Видео',
         ),
     ];
 
@@ -465,6 +488,8 @@ class ProfileMediaUploadQueue
     required ProfileMediaUploadItemKind kind,
     required XFile file,
     required bool isCover,
+    required bool isShowreel,
+    required String categoryLabel,
   }) {
     final name = file.name.trim().isNotEmpty
         ? file.name.trim()
@@ -480,6 +505,8 @@ class ProfileMediaUploadQueue
       previewUrl: '',
       error: '',
       isCover: isCover,
+      isShowreel: isShowreel,
+      categoryLabel: categoryLabel.trim(),
       progress: 0,
       uploadAttempt: 0,
       webStorage: '',
@@ -773,6 +800,30 @@ class ProfileMediaUploadQueue
         for (final item in task.items)
           if (item.isVideo) item.previewUrl.trim(),
       ];
+      var uploadedPhotoCategoryLabels = <String>[
+        for (final item in task.items)
+          if (item.isPhoto && item.url.trim().isNotEmpty)
+            item.categoryLabel.trim().isEmpty
+                ? 'Портфолио'
+                : item.categoryLabel.trim(),
+      ];
+      var uploadedVideoCategoryLabels = <String>[
+        for (final item in task.items)
+          if (item.isVideo && item.url.trim().isNotEmpty)
+            item.categoryLabel.trim().isEmpty
+                ? (item.isShowreel ? 'Showreel' : 'Видео')
+                : item.categoryLabel.trim(),
+      ];
+      var uploadedShowreelUrl = task.items
+          .where((e) => e.isVideo && e.isShowreel && e.url.trim().isNotEmpty)
+          .map((e) => e.url.trim())
+          .cast<String?>()
+          .firstWhere((e) => e != null, orElse: () => null);
+      var uploadedShowreelPreviewUrl = task.items
+          .where((e) => e.isVideo && e.isShowreel && e.url.trim().isNotEmpty)
+          .map((e) => e.previewUrl.trim())
+          .cast<String?>()
+          .firstWhere((e) => e != null, orElse: () => null);
 
       for (final originalItem in task.items) {
         task = _taskById(taskId);
@@ -882,6 +933,12 @@ class ProfileMediaUploadQueue
               progress: 1,
             );
             uploadedPhotoUrls = [...uploadedPhotoUrls, url];
+            uploadedPhotoCategoryLabels = [
+              ...uploadedPhotoCategoryLabels,
+              item.categoryLabel.trim().isEmpty
+                  ? 'Портфолио'
+                  : item.categoryLabel.trim(),
+            ];
           } else {
             final result = await storage.uploadVideo(
               bucket: kProfileMediaBucket,
@@ -908,6 +965,16 @@ class ProfileMediaUploadQueue
               ...uploadedVideoPreviewUrls,
               result.previewUrl,
             ];
+            uploadedVideoCategoryLabels = [
+              ...uploadedVideoCategoryLabels,
+              item.categoryLabel.trim().isEmpty
+                  ? (item.isShowreel ? 'Showreel' : 'Видео')
+                  : item.categoryLabel.trim(),
+            ];
+            if (item.isShowreel) {
+              uploadedShowreelUrl = result.videoUrl;
+              uploadedShowreelPreviewUrl = result.previewUrl;
+            }
           }
           _replaceItem(taskId, item);
           await _persistQueue();
@@ -959,6 +1026,10 @@ class ProfileMediaUploadQueue
         uploadedPhotoUrls: uploadedPhotoUrls,
         uploadedVideoUrls: uploadedVideoUrls,
         uploadedVideoPreviewUrls: uploadedVideoPreviewUrls,
+        uploadedPhotoCategoryLabels: uploadedPhotoCategoryLabels,
+        uploadedVideoCategoryLabels: uploadedVideoCategoryLabels,
+        uploadedShowreelUrl: uploadedShowreelUrl ?? '',
+        uploadedShowreelPreviewUrl: uploadedShowreelPreviewUrl ?? '',
       );
     } catch (e, st) {
       AppLogger.error(
@@ -1055,6 +1126,10 @@ class ProfileMediaUploadQueue
     required List<String> uploadedPhotoUrls,
     required List<String> uploadedVideoUrls,
     required List<String> uploadedVideoPreviewUrls,
+    required List<String> uploadedPhotoCategoryLabels,
+    required List<String> uploadedVideoCategoryLabels,
+    required String uploadedShowreelUrl,
+    required String uploadedShowreelPreviewUrl,
   }) async {
     final selectedCoverPhotoUrl = task.items
         .where((e) => e.isPhoto && e.isCover && e.url.trim().isNotEmpty)
@@ -1084,6 +1159,10 @@ class ProfileMediaUploadQueue
       newPhotoUrls: uploadedPhotoUrls,
       newVideoUrls: uploadedVideoUrls,
       newVideoPreviewUrls: uploadedVideoPreviewUrls,
+      newPhotoCategoryLabels: uploadedPhotoCategoryLabels,
+      newVideoCategoryLabels: uploadedVideoCategoryLabels,
+      newShowreelUrl: uploadedShowreelUrl,
+      newShowreelPreviewUrl: uploadedShowreelPreviewUrl,
     );
     if (task.approveImmediately) {
       await notifier.publishAdminProfile(saved.id);

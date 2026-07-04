@@ -51,13 +51,21 @@ void main() {
       'is_verified': '1',
       'verification_status': 'verified',
       'photo_urls': ['a.jpg', '', 'b.jpg'],
+      'photo_category_labels': ['Портрет', '', 'Polaroid'],
       'cover_photo_url': 'b.jpg',
       'video_urls': ['v.mp4'],
       'video_preview_urls': ['v.jpg'],
+      'video_category_labels': ['Showreel'],
+      'showreel_url': 'v.mp4',
+      'showreel_preview_url': 'v.jpg',
       'pending_photo_urls': ['pending.jpg'],
+      'pending_photo_category_labels': ['Backstage'],
       'pending_cover_photo_url': 'pending.jpg',
       'pending_video_urls': ['pending.mp4'],
       'pending_video_preview_urls': ['pending-video.jpg'],
+      'pending_video_category_labels': ['Работы'],
+      'pending_showreel_url': 'pending.mp4',
+      'pending_showreel_preview_url': 'pending-video.jpg',
       'has_pending_media': 1,
     });
 
@@ -76,11 +84,19 @@ void main() {
     expect(profile.isVerified, isTrue);
     expect(profile.verificationStatus, ProfileVerificationStatus.verified);
     expect(profile.photoUrls, ['a.jpg', 'b.jpg']);
+    expect(profile.photoCategoryLabels, ['Портрет', 'Polaroid']);
     expect(profile.coverPhotoUrl, 'b.jpg');
     expect(profile.effectiveCoverPhotoUrl, 'b.jpg');
     expect(profile.videoUrls, ['v.mp4']);
+    expect(profile.videoCategoryLabels, ['Showreel']);
+    expect(profile.showreelUrl, 'v.mp4');
+    expect(profile.showreelPreviewUrl, 'v.jpg');
     expect(profile.pendingPhotoUrls, ['pending.jpg']);
+    expect(profile.pendingPhotoCategoryLabels, ['Backstage']);
     expect(profile.pendingCoverPhotoUrl, 'pending.jpg');
+    expect(profile.pendingVideoCategoryLabels, ['Работы']);
+    expect(profile.pendingShowreelUrl, 'pending.mp4');
+    expect(profile.pendingShowreelPreviewUrl, 'pending-video.jpg');
     expect(profile.hasPendingMedia, isTrue);
   });
 

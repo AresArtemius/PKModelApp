@@ -37,6 +37,15 @@ const double _kProfileEditDesktopBreakpoint = 900.0;
 const double _kProfileEditDesktopMaxWidth = 1360.0;
 const double _kProfileEditDesktopSideWidth = 380.0;
 const EdgeInsets _kProfileEditDesktopPad = EdgeInsets.fromLTRB(32, 22, 32, 32);
+const List<String> _kProfileMediaCategories = [
+  'Портфолио',
+  'Портрет',
+  'Full length',
+  'Polaroid',
+  'Backstage',
+  'Работы',
+  'Showreel',
+];
 
 String _profileErrorText(Object e, AppLocalizations t) {
   if (e is MyProfileException) {
@@ -137,13 +146,24 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
   int? _pickedCoverPhotoIndex;
 
   List<String> _photoUrls = [];
+  List<String> _photoCategoryLabels = [];
   String _coverPhotoUrl = '';
   List<String> _videoUrls = [];
   List<String> _videoPreviewUrls = [];
+  List<String> _videoCategoryLabels = [];
+  String _showreelUrl = '';
+  String _showreelPreviewUrl = '';
   List<String> _pendingPhotoUrls = [];
+  List<String> _pendingPhotoCategoryLabels = [];
   String _pendingCoverPhotoUrl = '';
   List<String> _pendingVideoUrls = [];
   List<String> _pendingVideoPreviewUrls = [];
+  List<String> _pendingVideoCategoryLabels = [];
+  String _pendingShowreelUrl = '';
+  String _pendingShowreelPreviewUrl = '';
+  final List<String> _pickedPhotoCategoryLabels = [];
+  final List<String> _pickedVideoCategoryLabels = [];
+  int? _pickedShowreelVideoIndex;
 
   final Set<DateTime> _unavailableDays = <DateTime>{};
   AppLocalizations get _t => AppLocalizations.of(context)!;
@@ -300,16 +320,27 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
     _birthDateIso = '';
     _unavailableDays.clear();
     _photoUrls = [];
+    _photoCategoryLabels = [];
     _coverPhotoUrl = '';
     _videoUrls = [];
     _videoPreviewUrls = [];
+    _videoCategoryLabels = [];
+    _showreelUrl = '';
+    _showreelPreviewUrl = '';
     _pendingPhotoUrls = [];
+    _pendingPhotoCategoryLabels = [];
     _pendingCoverPhotoUrl = '';
     _pendingVideoUrls = [];
     _pendingVideoPreviewUrls = [];
+    _pendingVideoCategoryLabels = [];
+    _pendingShowreelUrl = '';
+    _pendingShowreelPreviewUrl = '';
     _pickedPhotos.clear();
     _pickedVideos.clear();
+    _pickedPhotoCategoryLabels.clear();
+    _pickedVideoCategoryLabels.clear();
     _pickedCoverPhotoIndex = null;
+    _pickedShowreelVideoIndex = null;
     _currentProfile = null;
     _error = null;
   }
@@ -363,13 +394,51 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
       );
 
     _photoUrls = List<String>.from(s.photoUrls);
+    _photoCategoryLabels = _categoryLabelsFor(
+      s.photoCategoryLabels,
+      s.photoUrls.length,
+      fallback: 'Портфолио',
+    );
     _coverPhotoUrl = s.coverPhotoUrl.trim();
     _videoUrls = List<String>.from(s.videoUrls);
     _videoPreviewUrls = List<String>.from(s.videoPreviewUrls);
+    _videoCategoryLabels = _categoryLabelsFor(
+      s.videoCategoryLabels,
+      s.videoUrls.length,
+      fallback: 'Видео',
+    );
+    _showreelUrl = s.showreelUrl.trim();
+    _showreelPreviewUrl = s.showreelPreviewUrl.trim();
     _pendingPhotoUrls = List<String>.from(s.pendingPhotoUrls);
+    _pendingPhotoCategoryLabels = _categoryLabelsFor(
+      s.pendingPhotoCategoryLabels,
+      s.pendingPhotoUrls.length,
+      fallback: 'Портфолио',
+    );
     _pendingCoverPhotoUrl = s.pendingCoverPhotoUrl.trim();
     _pendingVideoUrls = List<String>.from(s.pendingVideoUrls);
     _pendingVideoPreviewUrls = List<String>.from(s.pendingVideoPreviewUrls);
+    _pendingVideoCategoryLabels = _categoryLabelsFor(
+      s.pendingVideoCategoryLabels,
+      s.pendingVideoUrls.length,
+      fallback: 'Видео',
+    );
+    _pendingShowreelUrl = s.pendingShowreelUrl.trim();
+    _pendingShowreelPreviewUrl = s.pendingShowreelPreviewUrl.trim();
+  }
+
+  List<String> _categoryLabelsFor(
+    List<String> labels,
+    int length, {
+    required String fallback,
+  }) {
+    return [
+      for (var i = 0; i < length; i++)
+        if (i < labels.length && labels[i].trim().isNotEmpty)
+          labels[i].trim()
+        else
+          fallback,
+    ];
   }
 
   int _intOrZero(String s) => int.tryParse(s.trim()) ?? 0;
@@ -509,17 +578,42 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
       equipment: _equipmentC.text.trim(),
       unavailableDays: _unavailableDaysAsIsoDates(),
       photoUrls: List<String>.from(_photoUrls),
+      photoCategoryLabels: _categoryLabelsFor(
+        _photoCategoryLabels,
+        _photoUrls.length,
+        fallback: 'Портфолио',
+      ),
       coverPhotoUrl: nextCoverPhotoUrl,
       videoUrls: List<String>.from(_videoUrls),
       videoPreviewUrls: List<String>.from(_videoPreviewUrls),
+      videoCategoryLabels: _categoryLabelsFor(
+        _videoCategoryLabels,
+        _videoUrls.length,
+        fallback: 'Видео',
+      ),
+      showreelUrl: _showreelUrl.trim(),
+      showreelPreviewUrl: _showreelPreviewUrl.trim(),
       pendingPhotoUrls: List<String>.from(_pendingPhotoUrls),
+      pendingPhotoCategoryLabels: _categoryLabelsFor(
+        _pendingPhotoCategoryLabels,
+        _pendingPhotoUrls.length,
+        fallback: 'Портфолио',
+      ),
       pendingCoverPhotoUrl: nextPendingCoverPhotoUrl,
       pendingVideoUrls: List<String>.from(_pendingVideoUrls),
       pendingVideoPreviewUrls: List<String>.from(_pendingVideoPreviewUrls),
+      pendingVideoCategoryLabels: _categoryLabelsFor(
+        _pendingVideoCategoryLabels,
+        _pendingVideoUrls.length,
+        fallback: 'Видео',
+      ),
+      pendingShowreelUrl: _pendingShowreelUrl.trim(),
+      pendingShowreelPreviewUrl: _pendingShowreelPreviewUrl.trim(),
       hasPendingMedia:
           _pendingPhotoUrls.isNotEmpty ||
           _pendingVideoUrls.isNotEmpty ||
-          _pendingVideoPreviewUrls.isNotEmpty,
+          _pendingVideoPreviewUrls.isNotEmpty ||
+          _pendingShowreelUrl.trim().isNotEmpty,
     );
   }
 
@@ -617,6 +711,9 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
         setState(() {
           final firstNewIndex = _pickedPhotos.length;
           _pickedPhotos.addAll(list);
+          _pickedPhotoCategoryLabels.addAll(
+            List<String>.filled(list.length, 'Портфолио'),
+          );
           if (hadNoPhotos && list.isNotEmpty) {
             _pickedCoverPhotoIndex = firstNewIndex;
           }
@@ -645,6 +742,9 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
 
         setState(() {
           _pickedVideos.addAll(picked);
+          _pickedVideoCategoryLabels.addAll(
+            List<String>.filled(picked.length, 'Видео'),
+          );
         });
       } catch (_) {
         if (!mounted) return;
@@ -710,6 +810,13 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
       final pickedPhotos = List<XFile>.from(_pickedPhotos);
       final pickedVideos = List<XFile>.from(_pickedVideos);
       final pickedCoverPhotoIndex = _pickedCoverPhotoIndex;
+      final pickedPhotoCategoryLabels = List<String>.from(
+        _pickedPhotoCategoryLabels,
+      );
+      final pickedVideoCategoryLabels = List<String>.from(
+        _pickedVideoCategoryLabels,
+      );
+      final pickedShowreelVideoIndex = _pickedShowreelVideoIndex;
       final hasPickedMedia = pickedPhotos.isNotEmpty || pickedVideos.isNotEmpty;
 
       final next = _buildNextProfile(
@@ -747,18 +854,46 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
         _currentProfile = visibleSaved;
         _pickedPhotos.clear();
         _pickedVideos.clear();
+        _pickedPhotoCategoryLabels.clear();
+        _pickedVideoCategoryLabels.clear();
         _pickedCoverPhotoIndex = null;
+        _pickedShowreelVideoIndex = null;
 
         _photoUrls = List<String>.from(visibleSaved.photoUrls);
+        _photoCategoryLabels = _categoryLabelsFor(
+          visibleSaved.photoCategoryLabels,
+          visibleSaved.photoUrls.length,
+          fallback: 'Портфолио',
+        );
         _coverPhotoUrl = visibleSaved.coverPhotoUrl.trim();
         _videoUrls = List<String>.from(visibleSaved.videoUrls);
         _videoPreviewUrls = List<String>.from(visibleSaved.videoPreviewUrls);
+        _videoCategoryLabels = _categoryLabelsFor(
+          visibleSaved.videoCategoryLabels,
+          visibleSaved.videoUrls.length,
+          fallback: 'Видео',
+        );
+        _showreelUrl = visibleSaved.showreelUrl.trim();
+        _showreelPreviewUrl = visibleSaved.showreelPreviewUrl.trim();
         _pendingPhotoUrls = List<String>.from(visibleSaved.pendingPhotoUrls);
+        _pendingPhotoCategoryLabels = _categoryLabelsFor(
+          visibleSaved.pendingPhotoCategoryLabels,
+          visibleSaved.pendingPhotoUrls.length,
+          fallback: 'Портфолио',
+        );
         _pendingCoverPhotoUrl = visibleSaved.pendingCoverPhotoUrl.trim();
         _pendingVideoUrls = List<String>.from(visibleSaved.pendingVideoUrls);
         _pendingVideoPreviewUrls = List<String>.from(
           visibleSaved.pendingVideoPreviewUrls,
         );
+        _pendingVideoCategoryLabels = _categoryLabelsFor(
+          visibleSaved.pendingVideoCategoryLabels,
+          visibleSaved.pendingVideoUrls.length,
+          fallback: 'Видео',
+        );
+        _pendingShowreelUrl = visibleSaved.pendingShowreelUrl.trim();
+        _pendingShowreelPreviewUrl = visibleSaved.pendingShowreelPreviewUrl
+            .trim();
       });
 
       if (hasPickedMedia) {
@@ -771,6 +906,9 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
               pickedPhotos: pickedPhotos,
               pickedVideos: pickedVideos,
               pickedCoverPhotoIndex: pickedCoverPhotoIndex,
+              pickedPhotoCategoryLabels: pickedPhotoCategoryLabels,
+              pickedVideoCategoryLabels: pickedVideoCategoryLabels,
+              pickedShowreelVideoIndex: pickedShowreelVideoIndex,
               approveImmediately: approveImmediately,
             );
       }
@@ -962,6 +1100,7 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
     setState(() {
       if (isPicked) {
         _removeAtSafe(_pickedPhotos, index);
+        _removeAtSafe(_pickedPhotoCategoryLabels, index);
         final selected = _pickedCoverPhotoIndex;
         if (selected == index) {
           _pickedCoverPhotoIndex = null;
@@ -973,6 +1112,7 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
             ? _photoUrls[index]
             : '';
         _removeAtSafe(_photoUrls, index);
+        _removeAtSafe(_photoCategoryLabels, index);
         if (_coverPhotoUrl.trim() == removed.trim()) {
           _coverPhotoUrl = _photoUrls.isEmpty ? '' : _photoUrls.first;
         }
@@ -987,9 +1127,24 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
     setState(() {
       if (isPicked) {
         _removeAtSafe(_pickedVideos, index);
+        _removeAtSafe(_pickedVideoCategoryLabels, index);
+        final selected = _pickedShowreelVideoIndex;
+        if (selected == index) {
+          _pickedShowreelVideoIndex = null;
+        } else if (selected != null && selected > index) {
+          _pickedShowreelVideoIndex = selected - 1;
+        }
       } else {
+        final removed = index >= 0 && index < _videoUrls.length
+            ? _videoUrls[index]
+            : '';
         _removeAtSafe(_videoUrls, index);
         _removeAtSafe(_videoPreviewUrls, index);
+        _removeAtSafe(_videoCategoryLabels, index);
+        if (_showreelUrl.trim() == removed.trim()) {
+          _showreelUrl = '';
+          _showreelPreviewUrl = '';
+        }
       }
     });
   }
@@ -1003,6 +1158,62 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
         if (index < 0 || index >= _photoUrls.length) return;
         _coverPhotoUrl = _photoUrls[index].trim();
         _pickedCoverPhotoIndex = null;
+      }
+    });
+  }
+
+  void _changePhotoCategory(
+    int index, {
+    required bool isPicked,
+    required String category,
+  }) {
+    setState(() {
+      if (isPicked) {
+        if (index < 0 || index >= _pickedPhotoCategoryLabels.length) return;
+        _pickedPhotoCategoryLabels[index] = category;
+      } else {
+        if (index < 0 || index >= _photoCategoryLabels.length) return;
+        _photoCategoryLabels[index] = category;
+      }
+    });
+  }
+
+  void _changeVideoCategory(
+    int index, {
+    required bool isPicked,
+    required String category,
+  }) {
+    setState(() {
+      if (isPicked) {
+        if (index < 0 || index >= _pickedVideoCategoryLabels.length) return;
+        _pickedVideoCategoryLabels[index] = category;
+      } else {
+        if (index < 0 || index >= _videoCategoryLabels.length) return;
+        _videoCategoryLabels[index] = category;
+      }
+    });
+  }
+
+  void _makeShowreelVideoAt(int index, {required bool isPicked}) {
+    setState(() {
+      if (isPicked) {
+        if (index < 0 || index >= _pickedVideos.length) return;
+        _pickedShowreelVideoIndex = index;
+        if (index < _pickedVideoCategoryLabels.length) {
+          _pickedVideoCategoryLabels[index] = 'Showreel';
+        }
+      } else {
+        if (index < 0 || index >= _videoUrls.length) return;
+        _showreelUrl = _videoUrls[index].trim();
+        _showreelPreviewUrl = index < _videoPreviewUrls.length
+            ? _videoPreviewUrls[index].trim()
+            : '';
+        _pendingShowreelUrl = '';
+        _pendingShowreelPreviewUrl = '';
+        _pickedShowreelVideoIndex = null;
+        if (index < _videoCategoryLabels.length) {
+          _videoCategoryLabels[index] = 'Showreel';
+        }
       }
     });
   }
@@ -1210,19 +1421,31 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
           onAddPhoto: _pickPhotos,
           onAddVideo: _pickVideo,
           photoUrls: _photoUrls,
+          photoCategoryLabels: _photoCategoryLabels,
           coverPhotoUrl: _coverPhotoUrl,
           videoUrls: _videoUrls,
           videoPreviewUrls: _videoPreviewUrls,
+          videoCategoryLabels: _videoCategoryLabels,
+          showreelUrl: _showreelUrl,
           pendingPhotoUrls: _pendingPhotoUrls,
+          pendingPhotoCategoryLabels: _pendingPhotoCategoryLabels,
           pendingCoverPhotoUrl: _pendingCoverPhotoUrl,
           pendingVideoUrls: _pendingVideoUrls,
           pendingVideoPreviewUrls: _pendingVideoPreviewUrls,
+          pendingVideoCategoryLabels: _pendingVideoCategoryLabels,
+          pendingShowreelUrl: _pendingShowreelUrl,
           pickedPhotos: _pickedPhotos,
+          pickedPhotoCategoryLabels: _pickedPhotoCategoryLabels,
           pickedCoverPhotoIndex: _pickedCoverPhotoIndex,
           pickedVideos: _pickedVideos,
+          pickedVideoCategoryLabels: _pickedVideoCategoryLabels,
+          pickedShowreelVideoIndex: _pickedShowreelVideoIndex,
           onRemovePhoto: _removePhotoAt,
           onRemoveVideo: _removeVideoAt,
           onMakeCoverPhoto: _makeCoverPhotoAt,
+          onMakeShowreelVideo: _makeShowreelVideoAt,
+          onChangePhotoCategory: _changePhotoCategory,
+          onChangeVideoCategory: _changeVideoCategory,
         ),
       ],
     );
@@ -1699,20 +1922,37 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
                                   onAddPhoto: _pickPhotos,
                                   onAddVideo: _pickVideo,
                                   photoUrls: _photoUrls,
+                                  photoCategoryLabels: _photoCategoryLabels,
                                   coverPhotoUrl: _coverPhotoUrl,
                                   videoUrls: _videoUrls,
                                   videoPreviewUrls: _videoPreviewUrls,
+                                  videoCategoryLabels: _videoCategoryLabels,
+                                  showreelUrl: _showreelUrl,
                                   pendingPhotoUrls: _pendingPhotoUrls,
+                                  pendingPhotoCategoryLabels:
+                                      _pendingPhotoCategoryLabels,
                                   pendingCoverPhotoUrl: _pendingCoverPhotoUrl,
                                   pendingVideoUrls: _pendingVideoUrls,
                                   pendingVideoPreviewUrls:
                                       _pendingVideoPreviewUrls,
+                                  pendingVideoCategoryLabels:
+                                      _pendingVideoCategoryLabels,
+                                  pendingShowreelUrl: _pendingShowreelUrl,
                                   pickedPhotos: _pickedPhotos,
+                                  pickedPhotoCategoryLabels:
+                                      _pickedPhotoCategoryLabels,
                                   pickedCoverPhotoIndex: _pickedCoverPhotoIndex,
                                   pickedVideos: _pickedVideos,
+                                  pickedVideoCategoryLabels:
+                                      _pickedVideoCategoryLabels,
+                                  pickedShowreelVideoIndex:
+                                      _pickedShowreelVideoIndex,
                                   onRemovePhoto: _removePhotoAt,
                                   onRemoveVideo: _removeVideoAt,
                                   onMakeCoverPhoto: _makeCoverPhotoAt,
+                                  onMakeShowreelVideo: _makeShowreelVideoAt,
+                                  onChangePhotoCategory: _changePhotoCategory,
+                                  onChangeVideoCategory: _changeVideoCategory,
                                 ),
                                 const SizedBox(height: kGap16),
 

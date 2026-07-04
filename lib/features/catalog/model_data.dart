@@ -16,6 +16,10 @@ class ModelVm {
   final String coverPhotoUrl;
   final List<String> videoUrls;
   final List<String> videoPreviewUrls;
+  final List<String> photoCategoryLabels;
+  final List<String> videoCategoryLabels;
+  final String showreelUrl;
+  final String showreelPreviewUrl;
   final String resume;
   final String experience;
   final String skills;
@@ -49,6 +53,10 @@ class ModelVm {
     this.coverPhotoUrl = '',
     this.videoUrls = const [],
     this.videoPreviewUrls = const [],
+    this.photoCategoryLabels = const [],
+    this.videoCategoryLabels = const [],
+    this.showreelUrl = '',
+    this.showreelPreviewUrl = '',
     this.resume = '',
     this.experience = '',
     this.skills = '',
@@ -70,6 +78,7 @@ class ModelVm {
   bool get hasPhotos => photoUrls.isNotEmpty;
   bool get hasVideos => videoUrls.isNotEmpty;
   bool get hasVideoPreviews => videoPreviewUrls.isNotEmpty;
+  bool get hasShowreel => showreelUrl.trim().isNotEmpty;
   String? get primaryPhotoUrl {
     final cover = coverPhotoUrl.trim();
     if (cover.isNotEmpty) return cover;
@@ -186,6 +195,10 @@ class ModelVm {
       coverPhotoUrl: _string(m['cover_photo_url']),
       videoUrls: _stringList(m['video_urls']),
       videoPreviewUrls: _stringList(m['video_preview_urls']),
+      photoCategoryLabels: _stringList(m['photo_category_labels']),
+      videoCategoryLabels: _stringList(m['video_category_labels']),
+      showreelUrl: _string(m['showreel_url']),
+      showreelPreviewUrl: _string(m['showreel_preview_url']),
       resume: _string(m['resume']),
       experience: _string(m['experience']),
       skills: _string(m['skills']),

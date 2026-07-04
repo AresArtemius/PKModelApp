@@ -178,11 +178,19 @@ class MyProfileState {
   final List<String> photoUrls;
   final List<String> videoUrls;
   final List<String> videoPreviewUrls;
+  final List<String> photoCategoryLabels;
+  final List<String> videoCategoryLabels;
   final String coverPhotoUrl;
+  final String showreelUrl;
+  final String showreelPreviewUrl;
   final List<String> pendingPhotoUrls;
   final List<String> pendingVideoUrls;
   final List<String> pendingVideoPreviewUrls;
+  final List<String> pendingPhotoCategoryLabels;
+  final List<String> pendingVideoCategoryLabels;
   final String pendingCoverPhotoUrl;
+  final String pendingShowreelUrl;
+  final String pendingShowreelPreviewUrl;
   final bool hasPendingMedia;
 
   const MyProfileState({
@@ -218,11 +226,19 @@ class MyProfileState {
     this.photoUrls = const [],
     this.videoUrls = const [],
     this.videoPreviewUrls = const [],
+    this.photoCategoryLabels = const [],
+    this.videoCategoryLabels = const [],
     this.coverPhotoUrl = '',
+    this.showreelUrl = '',
+    this.showreelPreviewUrl = '',
     this.pendingPhotoUrls = const [],
     this.pendingVideoUrls = const [],
     this.pendingVideoPreviewUrls = const [],
+    this.pendingPhotoCategoryLabels = const [],
+    this.pendingVideoCategoryLabels = const [],
     this.pendingCoverPhotoUrl = '',
+    this.pendingShowreelUrl = '',
+    this.pendingShowreelPreviewUrl = '',
     this.hasPendingMedia = false,
   });
 
@@ -279,11 +295,19 @@ class MyProfileState {
       photoUrls: const [],
       videoUrls: const [],
       videoPreviewUrls: const [],
+      photoCategoryLabels: const [],
+      videoCategoryLabels: const [],
       coverPhotoUrl: '',
+      showreelUrl: '',
+      showreelPreviewUrl: '',
       pendingPhotoUrls: const [],
       pendingVideoUrls: const [],
       pendingVideoPreviewUrls: const [],
+      pendingPhotoCategoryLabels: const [],
+      pendingVideoCategoryLabels: const [],
       pendingCoverPhotoUrl: '',
+      pendingShowreelUrl: '',
+      pendingShowreelPreviewUrl: '',
       hasPendingMedia: false,
     );
   }
@@ -323,11 +347,19 @@ class MyProfileState {
     List<String>? photoUrls,
     List<String>? videoUrls,
     List<String>? videoPreviewUrls,
+    List<String>? photoCategoryLabels,
+    List<String>? videoCategoryLabels,
     String? coverPhotoUrl,
+    String? showreelUrl,
+    String? showreelPreviewUrl,
     List<String>? pendingPhotoUrls,
     List<String>? pendingVideoUrls,
     List<String>? pendingVideoPreviewUrls,
+    List<String>? pendingPhotoCategoryLabels,
+    List<String>? pendingVideoCategoryLabels,
     String? pendingCoverPhotoUrl,
+    String? pendingShowreelUrl,
+    String? pendingShowreelPreviewUrl,
     bool? hasPendingMedia,
   }) {
     return MyProfileState(
@@ -365,12 +397,23 @@ class MyProfileState {
       photoUrls: photoUrls ?? this.photoUrls,
       videoUrls: videoUrls ?? this.videoUrls,
       videoPreviewUrls: videoPreviewUrls ?? this.videoPreviewUrls,
+      photoCategoryLabels: photoCategoryLabels ?? this.photoCategoryLabels,
+      videoCategoryLabels: videoCategoryLabels ?? this.videoCategoryLabels,
       coverPhotoUrl: coverPhotoUrl ?? this.coverPhotoUrl,
+      showreelUrl: showreelUrl ?? this.showreelUrl,
+      showreelPreviewUrl: showreelPreviewUrl ?? this.showreelPreviewUrl,
       pendingPhotoUrls: pendingPhotoUrls ?? this.pendingPhotoUrls,
       pendingVideoUrls: pendingVideoUrls ?? this.pendingVideoUrls,
       pendingVideoPreviewUrls:
           pendingVideoPreviewUrls ?? this.pendingVideoPreviewUrls,
+      pendingPhotoCategoryLabels:
+          pendingPhotoCategoryLabels ?? this.pendingPhotoCategoryLabels,
+      pendingVideoCategoryLabels:
+          pendingVideoCategoryLabels ?? this.pendingVideoCategoryLabels,
       pendingCoverPhotoUrl: pendingCoverPhotoUrl ?? this.pendingCoverPhotoUrl,
+      pendingShowreelUrl: pendingShowreelUrl ?? this.pendingShowreelUrl,
+      pendingShowreelPreviewUrl:
+          pendingShowreelPreviewUrl ?? this.pendingShowreelPreviewUrl,
       hasPendingMedia: hasPendingMedia ?? this.hasPendingMedia,
     );
   }
@@ -411,14 +454,31 @@ class MyProfileState {
       photoUrls: _stringListFromMap(m, 'photo_urls'),
       videoUrls: _stringListFromMap(m, 'video_urls'),
       videoPreviewUrls: _stringListFromMap(m, 'video_preview_urls'),
+      photoCategoryLabels: _stringListFromMap(m, 'photo_category_labels'),
+      videoCategoryLabels: _stringListFromMap(m, 'video_category_labels'),
       coverPhotoUrl: _stringFromMap(m, 'cover_photo_url').trim(),
+      showreelUrl: _stringFromMap(m, 'showreel_url').trim(),
+      showreelPreviewUrl: _stringFromMap(m, 'showreel_preview_url').trim(),
       pendingPhotoUrls: _stringListFromMap(m, 'pending_photo_urls'),
       pendingVideoUrls: _stringListFromMap(m, 'pending_video_urls'),
       pendingVideoPreviewUrls: _stringListFromMap(
         m,
         'pending_video_preview_urls',
       ),
+      pendingPhotoCategoryLabels: _stringListFromMap(
+        m,
+        'pending_photo_category_labels',
+      ),
+      pendingVideoCategoryLabels: _stringListFromMap(
+        m,
+        'pending_video_category_labels',
+      ),
       pendingCoverPhotoUrl: _stringFromMap(m, 'pending_cover_photo_url').trim(),
+      pendingShowreelUrl: _stringFromMap(m, 'pending_showreel_url').trim(),
+      pendingShowreelPreviewUrl: _stringFromMap(
+        m,
+        'pending_showreel_preview_url',
+      ).trim(),
       hasPendingMedia: _boolFromMap(m, 'has_pending_media'),
     );
   }

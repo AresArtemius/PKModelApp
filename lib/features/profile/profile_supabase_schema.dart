@@ -29,12 +29,20 @@ class ProfileSupabaseSchema {
     'pro_until',
     'is_verified',
     'cover_photo_url',
+    'showreel_url',
+    'showreel_preview_url',
   ];
 
   static const proColumns = <String>['is_pro', 'pro_until'];
   static const coverPhotoColumns = <String>[
     'cover_photo_url',
     'pending_cover_photo_url',
+  ];
+  static const showreelColumns = <String>[
+    'showreel_url',
+    'showreel_preview_url',
+    'pending_showreel_url',
+    'pending_showreel_preview_url',
   ];
 
   static const _identityColumns = <String>['id', 'user_id'];
@@ -59,11 +67,21 @@ class ProfileSupabaseSchema {
     'photo_urls',
     'video_urls',
     'video_preview_urls',
+    'photo_category_labels',
+    'video_category_labels',
+  ];
+  static const _mediaCategoryColumns = <String>[
+    'photo_category_labels',
+    'video_category_labels',
+    'pending_photo_category_labels',
+    'pending_video_category_labels',
   ];
   static const _pendingMediaColumns = <String>[
     'pending_photo_urls',
     'pending_video_urls',
     'pending_video_preview_urls',
+    'pending_photo_category_labels',
+    'pending_video_category_labels',
     'has_pending_media',
   ];
   static const _moderationColumns = <String>['status', 'moderation_comment'];
@@ -108,6 +126,8 @@ class ProfileSupabaseSchema {
       if (includePro) 'pro_until',
       if (includeVerification) 'is_verified',
       if (includeCoverPhoto) 'cover_photo_url',
+      if (includeCoverPhoto) 'showreel_url',
+      if (includeCoverPhoto) 'showreel_preview_url',
       'photo_urls',
     ]);
   }
@@ -134,6 +154,7 @@ class ProfileSupabaseSchema {
       if (includePro) 'pro_until',
       if (includeVerification) 'is_verified',
       if (includeCoverPhoto) 'cover_photo_url',
+      if (includeCoverPhoto) ...showreelColumns.take(2),
     ]);
   }
 
@@ -157,6 +178,7 @@ class ProfileSupabaseSchema {
       if (includeVerification) 'verification_status',
       ..._mediaColumns,
       if (includePendingMedia) ...coverPhotoColumns,
+      if (includePendingMedia) ...showreelColumns,
       if (includePendingMedia) ..._pendingMediaColumns,
     ]);
   }
@@ -181,8 +203,16 @@ class ProfileSupabaseSchema {
     return SupabaseCompat.isMissingAnyColumn(error, _pendingMediaColumns);
   }
 
+  static bool isMissingMediaCategoryColumn(PostgrestException error) {
+    return SupabaseCompat.isMissingAnyColumn(error, _mediaCategoryColumns);
+  }
+
   static bool isMissingCoverPhotoColumn(PostgrestException error) {
     return SupabaseCompat.isMissingAnyColumn(error, coverPhotoColumns);
+  }
+
+  static bool isMissingShowreelColumn(PostgrestException error) {
+    return SupabaseCompat.isMissingAnyColumn(error, showreelColumns);
   }
 
   static bool isMissingBirthDateColumn(PostgrestException error) {
@@ -194,6 +224,8 @@ class ProfileSupabaseSchema {
         isMissingVerificationColumn(error) ||
         isMissingBirthDateColumn(error) ||
         isMissingCoverPhotoColumn(error) ||
+        isMissingShowreelColumn(error) ||
+        isMissingMediaCategoryColumn(error) ||
         isMissingPendingMediaColumn(error);
   }
 
@@ -207,6 +239,8 @@ class ProfileSupabaseSchema {
       ..._pendingMediaColumns,
       ..._birthDateColumns,
       ...coverPhotoColumns,
+      ...showreelColumns,
+      ..._mediaCategoryColumns,
     ]) {
       next.remove(column);
     }

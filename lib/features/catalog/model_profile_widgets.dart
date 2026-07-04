@@ -754,15 +754,21 @@ class _Card extends StatelessWidget {
 class _MediaGrid extends StatelessWidget {
   const _MediaGrid({
     required this.photoUrls,
+    required this.photoCategoryLabels,
     required this.videoUrls,
     required this.videoPreviewUrls,
+    required this.videoCategoryLabels,
+    required this.showreelUrl,
     required this.onOpenPhotos,
     required this.onOpenVideo,
   });
 
   final List<String> photoUrls;
+  final List<String> photoCategoryLabels;
   final List<String> videoUrls;
   final List<String> videoPreviewUrls;
+  final List<String> videoCategoryLabels;
+  final String showreelUrl;
   final void Function(int index) onOpenPhotos;
   final void Function(int index) onOpenVideo;
 
@@ -781,6 +787,9 @@ class _MediaGrid extends StatelessWidget {
               _MediaTile(
                 width: itemWidth,
                 height: itemHeight,
+                label: i < photoCategoryLabels.length
+                    ? photoCategoryLabels[i]
+                    : '',
                 onTap: () => onOpenPhotos(i),
                 child: CachedNetworkImage(
                   imageUrl: photoUrls[i],
@@ -804,6 +813,11 @@ class _MediaGrid extends StatelessWidget {
               _MediaTile(
                 width: itemWidth,
                 height: itemHeight,
+                label: videoUrls[i].trim() == showreelUrl.trim()
+                    ? 'SHOWREEL'
+                    : (i < videoCategoryLabels.length
+                          ? videoCategoryLabels[i]
+                          : ''),
                 onTap: () => onOpenVideo(i),
                 child: _ModelVideoThumb(
                   videoUrl: videoUrls[i],
@@ -819,18 +833,46 @@ class _MediaGrid extends StatelessWidget {
   }
 }
 
+class _ShowreelCard extends StatelessWidget {
+  const _ShowreelCard({
+    required this.videoUrl,
+    required this.previewUrl,
+    required this.onTap,
+  });
+
+  final String videoUrl;
+  final String previewUrl;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return AspectRatio(
+      aspectRatio: 16 / 9,
+      child: _MediaTile(
+        width: double.infinity,
+        height: double.infinity,
+        label: 'SHOWREEL',
+        onTap: onTap,
+        child: _ModelVideoThumb(videoUrl: videoUrl, previewUrl: previewUrl),
+      ),
+    );
+  }
+}
+
 class _MediaTile extends StatelessWidget {
   const _MediaTile({
     required this.width,
     required this.height,
     required this.child,
     required this.onTap,
+    this.label = '',
   });
 
   final double width;
   final double height;
   final Widget child;
   final VoidCallback onTap;
+  final String label;
 
   @override
   Widget build(BuildContext context) {
@@ -854,7 +896,42 @@ class _MediaTile extends StatelessWidget {
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(_mediaThumbRadius),
-            child: child,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                child,
+                if (label.trim().isNotEmpty)
+                  Positioned(
+                    left: 8,
+                    right: 8,
+                    bottom: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: label.trim().toUpperCase() == 'SHOWREEL'
+                            ? BrandTheme.redTop.withValues(alpha: 0.92)
+                            : Colors.black.withValues(alpha: 0.64),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        label.trim().toUpperCase(),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ),

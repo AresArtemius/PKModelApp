@@ -236,19 +236,31 @@ class _MediaBlock extends StatelessWidget {
     required this.onAddPhoto,
     required this.onAddVideo,
     required this.photoUrls,
+    required this.photoCategoryLabels,
     required this.coverPhotoUrl,
     required this.videoUrls,
     required this.videoPreviewUrls,
+    required this.videoCategoryLabels,
+    required this.showreelUrl,
     required this.pendingPhotoUrls,
+    required this.pendingPhotoCategoryLabels,
     required this.pendingCoverPhotoUrl,
     required this.pendingVideoUrls,
     required this.pendingVideoPreviewUrls,
+    required this.pendingVideoCategoryLabels,
+    required this.pendingShowreelUrl,
     required this.pickedPhotos,
+    required this.pickedPhotoCategoryLabels,
     required this.pickedCoverPhotoIndex,
     required this.pickedVideos,
+    required this.pickedVideoCategoryLabels,
+    required this.pickedShowreelVideoIndex,
     required this.onRemovePhoto,
     required this.onRemoveVideo,
     required this.onMakeCoverPhoto,
+    required this.onMakeShowreelVideo,
+    required this.onChangePhotoCategory,
+    required this.onChangeVideoCategory,
   });
 
   final bool desktop;
@@ -257,22 +269,44 @@ class _MediaBlock extends StatelessWidget {
   final VoidCallback onAddVideo;
 
   final List<String> photoUrls;
+  final List<String> photoCategoryLabels;
   final String coverPhotoUrl;
   final List<String> videoUrls;
   final List<String> videoPreviewUrls;
+  final List<String> videoCategoryLabels;
+  final String showreelUrl;
   final List<String> pendingPhotoUrls;
+  final List<String> pendingPhotoCategoryLabels;
   final String pendingCoverPhotoUrl;
   final List<String> pendingVideoUrls;
   final List<String> pendingVideoPreviewUrls;
+  final List<String> pendingVideoCategoryLabels;
+  final String pendingShowreelUrl;
 
   final List<XFile> pickedPhotos;
+  final List<String> pickedPhotoCategoryLabels;
   final int? pickedCoverPhotoIndex;
   final List<XFile> pickedVideos;
+  final List<String> pickedVideoCategoryLabels;
+  final int? pickedShowreelVideoIndex;
   final Future<void> Function(int index, {required bool isPicked})
   onRemovePhoto;
   final Future<void> Function(int index, {required bool isPicked})
   onRemoveVideo;
   final void Function(int index, {required bool isPicked}) onMakeCoverPhoto;
+  final void Function(int index, {required bool isPicked}) onMakeShowreelVideo;
+  final void Function(
+    int index, {
+    required bool isPicked,
+    required String category,
+  })
+  onChangePhotoCategory;
+  final void Function(
+    int index, {
+    required bool isPicked,
+    required String category,
+  })
+  onChangeVideoCategory;
 
   @override
   Widget build(BuildContext context) {
@@ -346,13 +380,17 @@ class _MediaBlock extends StatelessWidget {
                         wrap: desktop,
                         size: thumbSize,
                         urls: photoUrls,
+                        categoryLabels: photoCategoryLabels,
                         coverUrl: coverPhotoUrl,
                         pendingUrls: pendingPhotoUrls,
+                        pendingCategoryLabels: pendingPhotoCategoryLabels,
                         pendingCoverUrl: pendingCoverPhotoUrl,
                         files: pickedPhotos,
+                        fileCategoryLabels: pickedPhotoCategoryLabels,
                         pickedCoverIndex: pickedCoverPhotoIndex,
                         onRemove: onRemovePhoto,
                         onMakeCover: onMakeCoverPhoto,
+                        onChangeCategory: onChangePhotoCategory,
                       ),
                     if (hasVideo) ...[
                       const SizedBox(height: kGap10),
@@ -361,10 +399,18 @@ class _MediaBlock extends StatelessWidget {
                         size: thumbSize,
                         urls: videoUrls,
                         previewUrls: videoPreviewUrls,
+                        categoryLabels: videoCategoryLabels,
+                        showreelUrl: showreelUrl,
                         pendingUrls: pendingVideoUrls,
                         pendingPreviewUrls: pendingVideoPreviewUrls,
+                        pendingCategoryLabels: pendingVideoCategoryLabels,
+                        pendingShowreelUrl: pendingShowreelUrl,
                         files: pickedVideos,
+                        fileCategoryLabels: pickedVideoCategoryLabels,
+                        pickedShowreelIndex: pickedShowreelVideoIndex,
                         onRemove: onRemoveVideo,
+                        onMakeShowreel: onMakeShowreelVideo,
+                        onChangeCategory: onChangeVideoCategory,
                       ),
                     ],
                   ],
@@ -428,20 +474,41 @@ class _VideoThumbRow extends StatelessWidget {
     required this.size,
     required this.urls,
     required this.previewUrls,
+    required this.categoryLabels,
+    required this.showreelUrl,
     required this.pendingUrls,
     required this.pendingPreviewUrls,
+    required this.pendingCategoryLabels,
+    required this.pendingShowreelUrl,
     required this.files,
+    required this.fileCategoryLabels,
+    required this.pickedShowreelIndex,
     required this.onRemove,
+    required this.onMakeShowreel,
+    required this.onChangeCategory,
   });
 
   final bool wrap;
   final double size;
   final List<String> urls;
   final List<String> previewUrls;
+  final List<String> categoryLabels;
+  final String showreelUrl;
   final List<String> pendingUrls;
   final List<String> pendingPreviewUrls;
+  final List<String> pendingCategoryLabels;
+  final String pendingShowreelUrl;
   final List<XFile> files;
+  final List<String> fileCategoryLabels;
+  final int? pickedShowreelIndex;
   final Future<void> Function(int index, {required bool isPicked}) onRemove;
+  final void Function(int index, {required bool isPicked}) onMakeShowreel;
+  final void Function(
+    int index, {
+    required bool isPicked,
+    required String category,
+  })
+  onChangeCategory;
 
   @override
   Widget build(BuildContext context) {
@@ -451,6 +518,17 @@ class _VideoThumbRow extends StatelessWidget {
           size: size,
           url: urls[i],
           previewUrl: i < previewUrls.length ? previewUrls[i] : null,
+          category: i < categoryLabels.length ? categoryLabels[i] : 'Видео',
+          isShowreel:
+              showreelUrl.trim().isNotEmpty &&
+              urls[i].trim() == showreelUrl.trim(),
+          onMakeShowreel:
+              showreelUrl.trim().isNotEmpty &&
+                  urls[i].trim() == showreelUrl.trim()
+              ? null
+              : () => onMakeShowreel(i, isPicked: false),
+          onChangeCategory: (category) =>
+              onChangeCategory(i, isPicked: false, category: category),
           onRemove: () => onRemove(i, isPicked: false),
         ),
       for (int i = 0; i < pendingUrls.length; i++)
@@ -460,12 +538,27 @@ class _VideoThumbRow extends StatelessWidget {
           previewUrl: i < pendingPreviewUrls.length
               ? pendingPreviewUrls[i]
               : null,
+          category: i < pendingCategoryLabels.length
+              ? pendingCategoryLabels[i]
+              : 'Видео',
+          isShowreel:
+              pendingShowreelUrl.trim().isNotEmpty &&
+              pendingUrls[i].trim() == pendingShowreelUrl.trim(),
           pending: true,
         ),
       for (int i = 0; i < files.length; i++)
         _VideoThumb(
           size: size,
           file: files[i],
+          category: i < fileCategoryLabels.length
+              ? fileCategoryLabels[i]
+              : 'Видео',
+          isShowreel: pickedShowreelIndex == i,
+          onMakeShowreel: pickedShowreelIndex == i
+              ? null
+              : () => onMakeShowreel(i, isPicked: true),
+          onChangeCategory: (category) =>
+              onChangeCategory(i, isPicked: true, category: category),
           onRemove: () => onRemove(i, isPicked: true),
         ),
     ];
@@ -475,7 +568,7 @@ class _VideoThumbRow extends StatelessWidget {
     }
 
     return SizedBox(
-      height: kProfileThumbSize,
+      height: size + 38,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: items.length,
@@ -492,6 +585,10 @@ class _VideoThumb extends StatelessWidget {
     this.url,
     this.previewUrl,
     this.file,
+    required this.category,
+    this.isShowreel = false,
+    this.onMakeShowreel,
+    this.onChangeCategory,
     this.onRemove,
     this.pending = false,
   });
@@ -500,53 +597,85 @@ class _VideoThumb extends StatelessWidget {
   final String? url;
   final String? previewUrl;
   final XFile? file;
+  final String category;
+  final bool isShowreel;
+  final VoidCallback? onMakeShowreel;
+  final ValueChanged<String>? onChangeCategory;
   final VoidCallback? onRemove;
   final bool pending;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => _VideoViewerPage(url: url, file: file),
-          ),
-        );
-      },
-      child: Container(
-        width: size,
-        height: size,
-        clipBehavior: Clip.antiAlias,
-        decoration: profileVideoThumbDecoration(),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            _VideoThumbImage(url: url, previewUrl: previewUrl, file: file),
-            const Center(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: kOverlayStrong,
-                  shape: BoxShape.circle,
+    return SizedBox(
+      width: size,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          GestureDetector(
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => _VideoViewerPage(url: url, file: file),
                 ),
-                child: Padding(
-                  padding: kProfilePlayBadgePad,
-                  child: Icon(
-                    Icons.play_arrow,
-                    color: Colors.white,
-                    size: kProfileVideoPlayIconSize,
+              );
+            },
+            child: Container(
+              width: size,
+              height: size,
+              clipBehavior: Clip.antiAlias,
+              decoration: profileVideoThumbDecoration(),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  _VideoThumbImage(
+                    url: url,
+                    previewUrl: previewUrl,
+                    file: file,
                   ),
-                ),
+                  const Center(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: kOverlayStrong,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Padding(
+                        padding: kProfilePlayBadgePad,
+                        child: Icon(
+                          Icons.play_arrow,
+                          color: Colors.white,
+                          size: kProfileVideoPlayIconSize,
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (isShowreel) const _ShowreelMediaBadge(),
+                  if (!pending)
+                    Positioned(
+                      left: kProfileRemoveButtonInset,
+                      top: kProfileRemoveButtonInset,
+                      child: _MediaShowreelButton(
+                        selected: isShowreel,
+                        onTap: onMakeShowreel,
+                      ),
+                    ),
+                  if (pending) const _PendingMediaBadge(),
+                  if (onRemove != null)
+                    Positioned(
+                      top: kProfileRemoveButtonInset,
+                      right: kProfileRemoveButtonInset,
+                      child: _MediaRemoveButton(onTap: onRemove!),
+                    ),
+                ],
               ),
             ),
-            if (pending) const _PendingMediaBadge(),
-            if (onRemove != null)
-              Positioned(
-                top: kProfileRemoveButtonInset,
-                right: kProfileRemoveButtonInset,
-                child: _MediaRemoveButton(onTap: onRemove!),
-              ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 6),
+          _MediaCategoryChip(
+            value: category,
+            enabled: !pending && onChangeCategory != null,
+            onChanged: onChangeCategory,
+          ),
+        ],
       ),
     );
   }
@@ -802,6 +931,116 @@ class _MediaRemoveButton extends StatelessWidget {
   }
 }
 
+class _MediaShowreelButton extends StatelessWidget {
+  const _MediaShowreelButton({required this.selected, this.onTap});
+
+  final bool selected;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final isRussian =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ru';
+    final message = selected
+        ? (isRussian ? 'Showreel профиля' : 'Profile showreel')
+        : (isRussian ? 'Сделать showreel' : 'Make showreel');
+    return Tooltip(
+      message: message,
+      waitDuration: const Duration(milliseconds: 350),
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Semantics(
+          button: true,
+          selected: selected,
+          label: message,
+          child: Container(
+            width: kProfileRemoveButtonSize,
+            height: kProfileRemoveButtonSize,
+            decoration: BoxDecoration(
+              color: selected ? BrandTheme.redTop : kOverlayStrong,
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white.withValues(alpha: 0.86)),
+            ),
+            child: Icon(
+              selected ? Icons.movie_filter : Icons.movie_filter_outlined,
+              size: 15,
+              color: Colors.white,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MediaCategoryChip extends StatelessWidget {
+  const _MediaCategoryChip({
+    required this.value,
+    required this.enabled,
+    this.onChanged,
+  });
+
+  final String value;
+  final bool enabled;
+  final ValueChanged<String>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = value.trim().isEmpty ? 'Портфолио' : value.trim();
+    final chip = Container(
+      width: double.infinity,
+      height: 28,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      decoration: pillDecoration(
+        isDark: false,
+        radius: 999,
+      ).copyWith(border: Border.all(color: kBorderColor)),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: kTextMuted,
+                fontSize: 10,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 0.6,
+              ),
+            ),
+          ),
+          if (enabled) ...[
+            const SizedBox(width: 3),
+            const Icon(Icons.expand_more_rounded, size: 13, color: kTextMuted),
+          ],
+        ],
+      ),
+    );
+
+    if (!enabled) return chip;
+
+    return PopupMenuButton<String>(
+      padding: EdgeInsets.zero,
+      tooltip: '',
+      onSelected: onChanged,
+      itemBuilder: (_) => [
+        for (final category in _kProfileMediaCategories)
+          PopupMenuItem<String>(
+            value: category,
+            child: Text(
+              category,
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+          ),
+      ],
+      child: chip,
+    );
+  }
+}
+
 class _MediaCoverButton extends StatelessWidget {
   const _MediaCoverButton({required this.selected, this.onTap});
 
@@ -870,6 +1109,42 @@ class _CoverMediaBadge extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
             style: const TextStyle(
+              color: Colors.white,
+              fontSize: 9,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.8,
+              height: 1,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ShowreelMediaBadge extends StatelessWidget {
+  const _ShowreelMediaBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      left: 6,
+      right: 6,
+      bottom: 6,
+      child: IgnorePointer(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+          decoration: BoxDecoration(
+            color: BrandTheme.redTop.withValues(alpha: 0.9),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.72)),
+          ),
+          child: const Text(
+            'SHOWREEL',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: TextStyle(
               color: Colors.white,
               fontSize: 9,
               fontWeight: FontWeight.w900,
@@ -1023,25 +1298,38 @@ class _ThumbRow extends StatelessWidget {
     this.wrap = false,
     required this.size,
     required this.urls,
+    required this.categoryLabels,
     required this.coverUrl,
     required this.pendingUrls,
+    required this.pendingCategoryLabels,
     required this.pendingCoverUrl,
     required this.files,
+    required this.fileCategoryLabels,
     required this.pickedCoverIndex,
     required this.onRemove,
     required this.onMakeCover,
+    required this.onChangeCategory,
   });
 
   final bool wrap;
   final double size;
   final List<String> urls;
+  final List<String> categoryLabels;
   final String coverUrl;
   final List<String> pendingUrls;
+  final List<String> pendingCategoryLabels;
   final String pendingCoverUrl;
   final List<XFile> files;
+  final List<String> fileCategoryLabels;
   final int? pickedCoverIndex;
   final Future<void> Function(int index, {required bool isPicked}) onRemove;
   final void Function(int index, {required bool isPicked}) onMakeCover;
+  final void Function(
+    int index, {
+    required bool isPicked,
+    required String category,
+  })
+  onChangeCategory;
 
   @override
   Widget build(BuildContext context) {
@@ -1056,26 +1344,35 @@ class _ThumbRow extends StatelessWidget {
         _Thumb(
           size: size,
           image: _NetworkThumbImage(url: urls[i], fit: BoxFit.cover),
+          category: i < categoryLabels.length ? categoryLabels[i] : 'Портфолио',
           isCover: !hasPickedCover && urls[i].trim() == fallbackCoverUrl,
           onMakeCover: !hasPickedCover && urls[i].trim() == fallbackCoverUrl
               ? null
               : () => onMakeCover(i, isPicked: false),
           onRemove: () => onRemove(i, isPicked: false),
+          onChangeCategory: (category) =>
+              onChangeCategory(i, isPicked: false, category: category),
         ),
-      for (final url in pendingUrls)
+      for (int i = 0; i < pendingUrls.length; i++)
         _Thumb(
           size: size,
-          image: _NetworkThumbImage(url: url, fit: BoxFit.cover),
+          image: _NetworkThumbImage(url: pendingUrls[i], fit: BoxFit.cover),
+          category: i < pendingCategoryLabels.length
+              ? pendingCategoryLabels[i]
+              : 'Портфолио',
           isCover:
               !hasPickedCover &&
               selectedPendingCoverUrl.isNotEmpty &&
-              url.trim() == selectedPendingCoverUrl,
+              pendingUrls[i].trim() == selectedPendingCoverUrl,
           pending: true,
         ),
       for (int i = 0; i < files.length; i++)
         _Thumb(
           size: size,
           image: _PickedXFileImage(file: files[i], fit: BoxFit.cover),
+          category: i < fileCategoryLabels.length
+              ? fileCategoryLabels[i]
+              : 'Портфолио',
           isCover: hasPickedCover
               ? pickedCoverIndex == i
               : urls.isEmpty && pendingUrls.isEmpty && i == 0,
@@ -1086,6 +1383,8 @@ class _ThumbRow extends StatelessWidget {
               ? null
               : () => onMakeCover(i, isPicked: true),
           onRemove: () => onRemove(i, isPicked: true),
+          onChangeCategory: (category) =>
+              onChangeCategory(i, isPicked: true, category: category),
         ),
     ];
 
@@ -1094,7 +1393,7 @@ class _ThumbRow extends StatelessWidget {
     }
 
     return SizedBox(
-      height: kProfileThumbSize,
+      height: size + 38,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: items.length,
@@ -1109,60 +1408,82 @@ class _Thumb extends StatelessWidget {
   const _Thumb({
     required this.size,
     required this.image,
+    required this.category,
     this.isCover = false,
     this.onMakeCover,
+    this.onChangeCategory,
     this.onRemove,
     this.pending = false,
   });
 
   final double size;
   final Widget image;
+  final String category;
   final bool isCover;
   final VoidCallback? onMakeCover;
+  final ValueChanged<String>? onChangeCategory;
   final VoidCallback? onRemove;
   final bool pending;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        final network = image is _NetworkThumbImage
-            ? (image as _NetworkThumbImage).url
-            : null;
-        final picked = image is _PickedXFileImage
-            ? (image as _PickedXFileImage).file
-            : null;
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => _PickedPhotoViewerPage(url: network, file: picked),
+    return SizedBox(
+      width: size,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          GestureDetector(
+            onTap: () {
+              final network = image is _NetworkThumbImage
+                  ? (image as _NetworkThumbImage).url
+                  : null;
+              final picked = image is _PickedXFileImage
+                  ? (image as _PickedXFileImage).file
+                  : null;
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) =>
+                      _PickedPhotoViewerPage(url: network, file: picked),
+                ),
+              );
+            },
+            child: Container(
+              width: size,
+              height: size,
+              clipBehavior: Clip.antiAlias,
+              decoration: profileThumbDecoration(),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  image,
+                  if (isCover && !pending) const _CoverMediaBadge(),
+                  if (!pending)
+                    Positioned(
+                      left: _kMediaRemoveInset,
+                      top: _kMediaRemoveInset,
+                      child: _MediaCoverButton(
+                        selected: isCover,
+                        onTap: onMakeCover,
+                      ),
+                    ),
+                  if (pending) const _PendingMediaBadge(),
+                  if (onRemove != null)
+                    Positioned(
+                      top: _kMediaRemoveInset,
+                      right: _kMediaRemoveInset,
+                      child: _MediaRemoveButton(onTap: onRemove!),
+                    ),
+                ],
+              ),
+            ),
           ),
-        );
-      },
-      child: Container(
-        width: size,
-        height: size,
-        clipBehavior: Clip.antiAlias,
-        decoration: profileThumbDecoration(),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            image,
-            if (isCover && !pending) const _CoverMediaBadge(),
-            if (!pending)
-              Positioned(
-                left: _kMediaRemoveInset,
-                top: _kMediaRemoveInset,
-                child: _MediaCoverButton(selected: isCover, onTap: onMakeCover),
-              ),
-            if (pending) const _PendingMediaBadge(),
-            if (onRemove != null)
-              Positioned(
-                top: _kMediaRemoveInset,
-                right: _kMediaRemoveInset,
-                child: _MediaRemoveButton(onTap: onRemove!),
-              ),
-          ],
-        ),
+          const SizedBox(height: 6),
+          _MediaCategoryChip(
+            value: category,
+            enabled: !pending && onChangeCategory != null,
+            onChanged: onChangeCategory,
+          ),
+        ],
       ),
     );
   }
