@@ -19,6 +19,7 @@ import '../../ui/brand/ui_constants.dart';
 import 'agent_workspace.dart';
 import 'model_agent_tools.dart';
 import 'model_data.dart';
+import 'profile_composite_pdf_service.dart';
 import '../analytics/profile_analytics.dart';
 import '../profile/profile_model.dart';
 import '../profile/profile_supabase_schema.dart';
@@ -450,6 +451,13 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
                         const SizedBox(height: _sectionGap),
                       ],
 
+                      _Card(
+                        child: _CompositePdfAction(
+                          onTap: () => _openCompositePdf(m),
+                        ),
+                      ),
+                      const SizedBox(height: _sectionGap),
+
                       if (canUseAgentTools) ...[
                         ModelAgentToolsCard(
                           folders: ref.watch(
@@ -656,6 +664,22 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
             _PhotoGalleryPage(urls: urls, initialIndex: initialIndex),
       ),
     );
+  }
+
+  Future<void> _openCompositePdf(ModelVm model) async {
+    final t = AppLocalizations.of(context)!;
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    try {
+      await const ProfileCompositePdfService().previewComposite(
+        t: t,
+        model: model,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(AppErrorMapper.message(e, t))));
+    }
   }
 
   void _openVideo(BuildContext context, String url) {

@@ -217,6 +217,72 @@ class _HeroMedia extends StatelessWidget {
   }
 }
 
+class _CompositePdfAction extends StatelessWidget {
+  const _CompositePdfAction({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final isRu = Localizations.localeOf(
+      context,
+    ).languageCode.toLowerCase().startsWith('ru');
+    final title = isRu ? 'КОМПОЗИТКА PDF' : 'COMPOSITE PDF';
+    final subtitle = isRu
+        ? 'Сформировать PDF-портфолио анкеты'
+        : 'Generate a PDF profile composite';
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(kCardRadius),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: Row(
+            children: [
+              Container(
+                width: 54,
+                height: 54,
+                decoration: BoxDecoration(
+                  gradient: BrandTheme.darkPillGradient,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: BrandTheme.basePillShadow(isDark: true),
+                ),
+                child: const Icon(
+                  Icons.picture_as_pdf_rounded,
+                  color: Colors.white,
+                  size: 26,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: _commandStyle(fontSize: 15)),
+                    const SizedBox(height: 5),
+                    Text(
+                      subtitle,
+                      style: _bodyStyle(fontSize: 13, color: _labelColor),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              const Icon(
+                Icons.arrow_forward_ios_rounded,
+                color: _labelColor,
+                size: 18,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _DetailsTable extends StatelessWidget {
   const _DetailsTable({required this.rows});
   final List<MapEntry<String, String>> rows;
