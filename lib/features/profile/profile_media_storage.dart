@@ -10,6 +10,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:video_thumbnail/video_thumbnail.dart';
 
+import 'profile_video_thumbnail_stub.dart'
+    if (dart.library.html) 'profile_video_thumbnail_web.dart';
+
 class ProfileMediaUploadResult {
   const ProfileMediaUploadResult({
     required this.photoUrls,
@@ -406,7 +409,7 @@ class ProfileMediaStorage {
   }
 
   Future<Uint8List?> _videoPreviewBytes(XFile xf) async {
-    if (kIsWeb) return null;
+    if (kIsWeb) return ProfileVideoThumbnail.webBytes(xf);
     final path = xf.path.trim();
     if (path.isEmpty || !File(path).existsSync()) return null;
     return VideoThumbnail.thumbnailData(
