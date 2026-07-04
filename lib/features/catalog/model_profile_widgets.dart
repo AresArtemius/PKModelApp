@@ -112,6 +112,291 @@ class _ProBadge extends StatelessWidget {
   }
 }
 
+class _PortfolioHeroCard extends StatelessWidget {
+  const _PortfolioHeroCard({
+    required this.model,
+    required this.t,
+    required this.displayPhotoUrls,
+    required this.coverAlignment,
+    required this.onOpenPhotos,
+    required this.onCompositePdf,
+    required this.onCopyLink,
+    this.onOpenVideo,
+    this.onOpenShowreel,
+  });
+
+  final ModelVm model;
+  final AppLocalizations t;
+  final List<String> displayPhotoUrls;
+  final Alignment coverAlignment;
+  final void Function(int index) onOpenPhotos;
+  final VoidCallback? onOpenVideo;
+  final VoidCallback? onOpenShowreel;
+  final VoidCallback onCompositePdf;
+  final VoidCallback onCopyLink;
+
+  @override
+  Widget build(BuildContext context) {
+    final isRu = Localizations.localeOf(
+      context,
+    ).languageCode.toLowerCase().startsWith('ru');
+    final hasMedia = displayPhotoUrls.isNotEmpty || model.videoUrls.isNotEmpty;
+    final title = model.fullName.trim().isEmpty
+        ? t.profileNoName
+        : model.fullName.trim();
+    final location = [
+      model.city.trim(),
+      model.country.trim(),
+    ].where((value) => value.isNotEmpty).join(', ');
+    final roles = _profileRolesLabel(t, model.effectiveProfileRoles);
+    final statChips = <_PortfolioStatData>[
+      if (roles.isNotEmpty) _PortfolioStatData(Icons.badge_rounded, roles),
+      if (model.usesPhysicalBasics && model.age > 0)
+        _PortfolioStatData(Icons.cake_rounded, '${model.age}'),
+      if (model.usesPhysicalBasics && model.height > 0)
+        _PortfolioStatData(Icons.straighten_rounded, '${model.height} ${t.cm}'),
+      if (location.isNotEmpty)
+        _PortfolioStatData(Icons.place_rounded, location),
+      _PortfolioStatData(
+        Icons.photo_library_rounded,
+        isRu
+            ? '${displayPhotoUrls.length} фото • ${model.videoUrls.length} видео'
+            : '${displayPhotoUrls.length} photos • ${model.videoUrls.length} videos',
+      ),
+    ];
+
+    final media = hasMedia
+        ? _HeroMedia(
+            photoUrls: displayPhotoUrls,
+            videoUrls: model.videoUrls,
+            videoPreviewUrls: model.videoPreviewUrls,
+            coverAlignment: coverAlignment,
+            heroTag: 'model-photo-${model.id}',
+            onOpenPhotos: onOpenPhotos,
+            onOpenVideo: onOpenVideo ?? () {},
+          )
+        : AspectRatio(
+            aspectRatio: 16 / 9,
+            child: DecoratedBox(
+              decoration: catalogPhotoPlaceholderDecoration(),
+              child: const Center(
+                child: Icon(Icons.person_rounded, color: kTextMuted, size: 42),
+              ),
+            ),
+          );
+
+    final info = _PortfolioIdentityPanel(
+      title: title,
+      isPro: model.isProActive,
+      statChips: statChips,
+      isRu: isRu,
+      onCompositePdf: onCompositePdf,
+      onCopyLink: onCopyLink,
+      onOpenShowreel: onOpenShowreel,
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isWide = constraints.maxWidth >= 760;
+        if (!isWide) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [media, const SizedBox(height: 16), info],
+          );
+        }
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(flex: 7, child: media),
+            const SizedBox(width: 18),
+            Expanded(flex: 5, child: info),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _PortfolioIdentityPanel extends StatelessWidget {
+  const _PortfolioIdentityPanel({
+    required this.title,
+    required this.isPro,
+    required this.statChips,
+    required this.isRu,
+    required this.onCompositePdf,
+    required this.onCopyLink,
+    this.onOpenShowreel,
+  });
+
+  final String title;
+  final bool isPro;
+  final List<_PortfolioStatData> statChips;
+  final bool isRu;
+  final VoidCallback onCompositePdf;
+  final VoidCallback onCopyLink;
+  final VoidCallback? onOpenShowreel;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text(
+          isRu ? 'ПОРТФОЛИО' : 'PORTFOLIO',
+          style: _commandStyle(
+            fontSize: 12,
+            color: BrandTheme.redTop,
+            weight: FontWeight.w700,
+            letterSpacing: 2.1,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Text(
+                title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: _commandStyle(
+                  fontSize: 28,
+                  weight: FontWeight.w800,
+                  letterSpacing: 0,
+                ),
+              ),
+            ),
+            if (isPro) ...[const SizedBox(width: 8), const _ProBadge()],
+          ],
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [for (final chip in statChips) _PortfolioStatChip(chip)],
+        ),
+        const SizedBox(height: 16),
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            _PortfolioActionButton(
+              label: isRu ? 'КОМПОЗИТКА' : 'PDF',
+              icon: Icons.picture_as_pdf_rounded,
+              isDark: true,
+              onTap: onCompositePdf,
+            ),
+            _PortfolioActionButton(
+              label: isRu ? 'ССЫЛКА' : 'LINK',
+              icon: Icons.link_rounded,
+              isDark: false,
+              onTap: onCopyLink,
+            ),
+            if (onOpenShowreel != null)
+              _PortfolioActionButton(
+                label: 'SHOWREEL',
+                icon: Icons.play_arrow_rounded,
+                isDark: false,
+                onTap: onOpenShowreel!,
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _PortfolioStatData {
+  const _PortfolioStatData(this.icon, this.label);
+
+  final IconData icon;
+  final String label;
+}
+
+class _PortfolioStatChip extends StatelessWidget {
+  const _PortfolioStatChip(this.data);
+
+  final _PortfolioStatData data;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.76),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: const Color(0xFFE0E0E0)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(data.icon, size: 16, color: _labelColor),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              data.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: _bodyStyle(
+                fontSize: 12,
+                color: _titleColor,
+                weight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PortfolioActionButton extends StatelessWidget {
+  const _PortfolioActionButton({
+    required this.label,
+    required this.icon,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: onTap,
+        child: Ink(
+          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
+          decoration: pillDecoration(isDark: isDark, radius: 999),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 18, color: isDark ? Colors.white : _titleColor),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: _commandStyle(
+                  fontSize: 12,
+                  color: isDark ? Colors.white : _titleColor,
+                  weight: FontWeight.w700,
+                  letterSpacing: 1.4,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _HeroMedia extends StatelessWidget {
   const _HeroMedia({
     required this.photoUrls,
@@ -211,72 +496,6 @@ class _HeroMedia extends StatelessWidget {
                     : _ModelVideoPreview(url: videoUrls.first),
               ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _CompositePdfAction extends StatelessWidget {
-  const _CompositePdfAction({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final isRu = Localizations.localeOf(
-      context,
-    ).languageCode.toLowerCase().startsWith('ru');
-    final title = isRu ? 'КОМПОЗИТКА PDF' : 'COMPOSITE PDF';
-    final subtitle = isRu
-        ? 'Сформировать PDF-портфолио анкеты'
-        : 'Generate a PDF profile composite';
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(kCardRadius),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 2),
-          child: Row(
-            children: [
-              Container(
-                width: 54,
-                height: 54,
-                decoration: BoxDecoration(
-                  gradient: BrandTheme.darkPillGradient,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: BrandTheme.basePillShadow(isDark: true),
-                ),
-                child: const Icon(
-                  Icons.picture_as_pdf_rounded,
-                  color: Colors.white,
-                  size: 26,
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title, style: _commandStyle(fontSize: 15)),
-                    const SizedBox(height: 5),
-                    Text(
-                      subtitle,
-                      style: _bodyStyle(fontSize: 13, color: _labelColor),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 10),
-              const Icon(
-                Icons.arrow_forward_ios_rounded,
-                color: _labelColor,
-                size: 18,
-              ),
-            ],
-          ),
         ),
       ),
     );

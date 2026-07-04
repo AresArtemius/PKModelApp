@@ -411,27 +411,25 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
                       ),
                       const SizedBox(height: _sectionGap),
 
-                      (displayPhotoUrls.isNotEmpty || m.videoUrls.isNotEmpty)
-                          ? _Card(
-                              child: _HeroMedia(
-                                photoUrls: displayPhotoUrls,
-                                videoUrls: m.videoUrls,
-                                videoPreviewUrls: m.videoPreviewUrls,
-                                coverAlignment: _profileCoverAlignmentFor(m),
-                                heroTag: 'model-photo-${m.id}',
-                                onOpenPhotos: (index) => _openPhotos(
-                                  context,
-                                  displayPhotoUrls,
-                                  index,
-                                ),
-                                onOpenVideo: () =>
-                                    _openVideo(context, m.videoUrls.first),
-                              ),
-                            )
-                          : const SizedBox.shrink(),
-                      (displayPhotoUrls.isNotEmpty || m.videoUrls.isNotEmpty)
-                          ? const SizedBox(height: 14)
-                          : const SizedBox.shrink(),
+                      _Card(
+                        child: _PortfolioHeroCard(
+                          model: m,
+                          t: t,
+                          displayPhotoUrls: displayPhotoUrls,
+                          coverAlignment: _profileCoverAlignmentFor(m),
+                          onOpenPhotos: (index) =>
+                              _openPhotos(context, displayPhotoUrls, index),
+                          onOpenVideo: m.videoUrls.isEmpty
+                              ? null
+                              : () => _openVideo(context, m.videoUrls.first),
+                          onOpenShowreel: m.hasShowreel
+                              ? () => _openVideo(context, m.showreelUrl)
+                              : null,
+                          onCompositePdf: () => _openCompositePdf(m),
+                          onCopyLink: () => _copyPublicLink(m.id),
+                        ),
+                      ),
+                      const SizedBox(height: _sectionGap),
 
                       if (m.hasShowreel) ...[
                         _Card(
@@ -450,13 +448,6 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
                         ),
                         const SizedBox(height: _sectionGap),
                       ],
-
-                      _Card(
-                        child: _CompositePdfAction(
-                          onTap: () => _openCompositePdf(m),
-                        ),
-                      ),
-                      const SizedBox(height: _sectionGap),
 
                       if (canUseAgentTools) ...[
                         ModelAgentToolsCard(

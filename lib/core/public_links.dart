@@ -1,10 +1,12 @@
 const String _publicBaseUrl = String.fromEnvironment(
   'PUBLIC_BASE_URL',
-  defaultValue: 'modelapp:/',
+  defaultValue: 'https://aresartemius.github.io/PKModelApp/#',
 );
 
 String _joinPublicPath(String path) {
-  final base = _publicBaseUrl.trim().isEmpty ? 'modelapp:/' : _publicBaseUrl;
+  final base = _publicBaseUrl.trim().isEmpty
+      ? 'https://aresartemius.github.io/PKModelApp/#'
+      : _publicBaseUrl;
   final cleanBase = base.endsWith('/')
       ? base.substring(0, base.length - 1)
       : base;

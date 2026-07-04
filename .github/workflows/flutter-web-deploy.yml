@@ -81,6 +81,7 @@ jobs:
           --release
           --pwa-strategy=none
           --base-href=/PKModelApp/
+          --dart-define=PUBLIC_BASE_URL=https://aresartemius.github.io/PKModelApp/#
           --dart-define=SUPABASE_URL=$SUPABASE_URL
           --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY
           --dart-define=FIREBASE_WEB_API_KEY=$FIREBASE_WEB_API_KEY
