@@ -152,7 +152,7 @@ class AdminPage extends ConsumerWidget {
                     label: Localizations.localeOf(context).languageCode == 'ru'
                         ? 'ЖУРНАЛ ДЕЙСТВИЙ'
                         : 'ACTION LOG',
-                    description: ru ? 'Audit и история' : 'Audit and history',
+                    description: ru ? 'История действий' : 'Audit and history',
                     icon: Icons.history_rounded,
                     group: _AdminActionGroup.audit,
                     onTap: () => context.go(Routes.profileActionAuditAdmin),
@@ -244,7 +244,7 @@ class _AdminHome extends StatelessWidget {
             padding: const EdgeInsets.only(bottom: 28),
             children: [
               _AdminDashboardHeader(
-                title: ru ? 'BACK-OFFICE' : 'BACK OFFICE',
+                title: ru ? 'АДМИН-ПАНЕЛЬ' : 'BACK OFFICE',
                 subtitle: ru
                     ? 'Заявки, безопасность, подборки, кастинги и журнал действий'
                     : 'Requests, safety, selections, castings and audit log',
@@ -416,7 +416,7 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
         _AdminWorkspaceRow(
           id: 'merge:${item.id}',
           targetId: item.id,
-          kind: 'Merge',
+          kind: ru ? 'Объединение' : 'Merge',
           title: item.title,
           subtitle: [
             item.requestedPhone,
@@ -432,7 +432,7 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
         _AdminWorkspaceRow(
           id: 'safety:${(row['id'] ?? '').toString()}',
           targetId: (row['id'] ?? '').toString(),
-          kind: 'Safety',
+          kind: ru ? 'Безопасность' : 'Safety',
           title: (row['reason'] ?? '').toString().trim().isEmpty
               ? (ru ? 'Жалоба' : 'Report')
               : (row['reason'] ?? '').toString().trim(),
@@ -712,7 +712,7 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
         await AdminActionLogService(sb).log(
           actionType: 'bulk_safety_closed',
           title: ru
-              ? 'Safety-жалобы закрыты массово'
+              ? 'Жалобы безопасности закрыты массово'
               : 'Safety reports bulk closed',
           description: ids.join(' • '),
           targetTable: 'profile_reports',
@@ -968,7 +968,10 @@ class _AdminWorkspaceFilters extends StatelessWidget {
         value: _AdminWorkspaceFilter.applications,
         label: ru ? 'ЗАЯВКИ' : 'REQUESTS',
       ),
-      (value: _AdminWorkspaceFilter.safety, label: 'SAFETY'),
+      (
+        value: _AdminWorkspaceFilter.safety,
+        label: ru ? 'БЕЗОПАСНОСТЬ' : 'SAFETY',
+      ),
     ];
     return Wrap(
       spacing: 8,
@@ -1414,8 +1417,8 @@ class _AdminStatGrid extends StatelessWidget {
     final stats = [
       (label: ru ? 'МОДЕРАЦИЯ' : 'MODERATION', value: counts.moderation),
       (label: ru ? 'ЗАЯВКИ' : 'REQUESTS', value: counts.agentApplications),
-      (label: ru ? 'MERGE' : 'MERGE', value: counts.accountMerges),
-      (label: ru ? 'SAFETY' : 'SAFETY', value: counts.safety),
+      (label: ru ? 'ОБЪЕДИНЕНИЯ' : 'MERGE', value: counts.accountMerges),
+      (label: ru ? 'БЕЗОПАСНОСТЬ' : 'SAFETY', value: counts.safety),
     ];
     return LayoutBuilder(
       builder: (context, constraints) {
