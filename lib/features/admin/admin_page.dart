@@ -8,6 +8,7 @@ import '../../core/admin_action_log_service.dart';
 import '../../core/admin_dashboard_counts_provider.dart';
 import '../../core/router.dart';
 import '../../core/roles_provider.dart';
+import '../../core/supabase_compat.dart';
 import '../../core/supabase_provider.dart';
 import '../../gen_l10n/app_localizations.dart';
 import '../../ui/brand/brand_pill_button.dart';
@@ -27,6 +28,63 @@ const double _kAdminPagePad = 16;
 const double _kAdminSectionGap = 12;
 const double _kAdminMessagePadV = 18;
 const double _kAdminMaxCardWidth = 460;
+
+final _adminTaskAssignmentsProvider = FutureProvider<List<_AdminTaskAssignment>>((
+  ref,
+) async {
+  final sb = ref.watch(supabaseProvider);
+  try {
+    final rows = await sb
+        .from('admin_task_assignments')
+        .select(
+          'id,target_table,target_id,assigned_to_user_id,assigned_to_name,assigned_at',
+        )
+        .order('assigned_at', ascending: false);
+    return (rows as List)
+        .map(
+          (row) => _AdminTaskAssignment.fromMap(
+            Map<String, dynamic>.from(row as Map),
+          ),
+        )
+        .toList(growable: false);
+  } on PostgrestException catch (e) {
+    if (SupabaseCompat.isMissingRelation(e, const ['admin_task_assignments'])) {
+      return const <_AdminTaskAssignment>[];
+    }
+    rethrow;
+  }
+});
+
+class _AdminTaskAssignment {
+  const _AdminTaskAssignment({
+    required this.id,
+    required this.targetTable,
+    required this.targetId,
+    required this.assignedToUserId,
+    required this.assignedToName,
+    required this.assignedAt,
+  });
+
+  factory _AdminTaskAssignment.fromMap(Map<String, dynamic> map) {
+    return _AdminTaskAssignment(
+      id: (map['id'] ?? '').toString(),
+      targetTable: (map['target_table'] ?? '').toString().trim(),
+      targetId: (map['target_id'] ?? '').toString().trim(),
+      assignedToUserId: (map['assigned_to_user_id'] ?? '').toString().trim(),
+      assignedToName: (map['assigned_to_name'] ?? '').toString().trim(),
+      assignedAt: DateTime.tryParse((map['assigned_at'] ?? '').toString()),
+    );
+  }
+
+  final String id;
+  final String targetTable;
+  final String targetId;
+  final String assignedToUserId;
+  final String assignedToName;
+  final DateTime? assignedAt;
+
+  String get key => '$targetTable:$targetId';
+}
 
 class AdminPage extends ConsumerWidget {
   const AdminPage({super.key});
@@ -353,6 +411,7 @@ class _AdminBulkResult {
 class _AdminWorkspaceRow {
   const _AdminWorkspaceRow({
     required this.id,
+    required this.targetTable,
     required this.targetId,
     required this.kind,
     required this.title,
@@ -361,9 +420,12 @@ class _AdminWorkspaceRow {
     required this.dateText,
     required this.route,
     required this.filter,
+    this.assignedToUserId = '',
+    this.assignedToName = '',
   });
 
   final String id;
+  final String targetTable;
   final String targetId;
   final String kind;
   final String title;
@@ -372,9 +434,16 @@ class _AdminWorkspaceRow {
   final String dateText;
   final String route;
   final _AdminWorkspaceFilter filter;
+  final String assignedToUserId;
+  final String assignedToName;
+
+  String get assignmentKey => '$targetTable:$targetId';
+  String get assignmentLabel => assignedToName.trim().isNotEmpty
+      ? assignedToName.trim()
+      : assignedToUserId.trim();
 
   String get searchable =>
-      '$kind $title $subtitle $status $dateText'.toLowerCase();
+      '$kind $title $subtitle $status $dateText $assignmentLabel'.toLowerCase();
 }
 
 class _AdminWorkspaceTable extends ConsumerStatefulWidget {
@@ -390,6 +459,7 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
   final Set<String> _selected = <String>{};
   _AdminWorkspaceFilter _filter = _AdminWorkspaceFilter.all;
   bool _bulkBusy = false;
+  bool _mineOnly = false;
   _AdminBulkResult? _lastBulkResult;
 
   @override
@@ -405,16 +475,29 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
     final applications = ref.watch(castingAgentApplicationsProvider);
     final merges = ref.watch(accountMergeRequestsProvider);
     final safety = ref.watch(safetyReportsProvider);
+    final assignmentsAsync = ref.watch(_adminTaskAssignmentsProvider);
+    final assignmentsByKey = <String, _AdminTaskAssignment>{
+      for (final assignment
+          in assignmentsAsync.valueOrNull ?? const <_AdminTaskAssignment>[])
+        assignment.key: assignment,
+    };
+    final currentUserId =
+        ref.watch(supabaseProvider).auth.currentUser?.id ?? '';
+
+    _AdminTaskAssignment? assignmentFor(String table, String id) =>
+        assignmentsByKey['$table:$id'];
 
     final loading =
         profiles.isLoading ||
         applications.isLoading ||
         merges.isLoading ||
-        safety.isLoading;
+        safety.isLoading ||
+        assignmentsAsync.isLoading;
     final rows = <_AdminWorkspaceRow>[
       for (final item in profiles.valueOrNull ?? const [])
         _AdminWorkspaceRow(
           id: 'profile:${item.id}',
+          targetTable: 'profiles',
           targetId: item.id,
           kind: ru ? 'Анкета' : 'Profile',
           title: item.fullName.trim().isEmpty ? 'Анкета' : item.fullName.trim(),
@@ -427,10 +510,15 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
           dateText: '',
           route: Routes.moderationAdmin,
           filter: _AdminWorkspaceFilter.profiles,
+          assignedToUserId:
+              assignmentFor('profiles', item.id)?.assignedToUserId ?? '',
+          assignedToName:
+              assignmentFor('profiles', item.id)?.assignedToName ?? '',
         ),
       for (final item in applications.valueOrNull ?? const [])
         _AdminWorkspaceRow(
           id: 'application:${item.id}',
+          targetTable: 'casting_agent_applications',
           targetId: item.id,
           kind: ru ? 'Заявка' : 'Request',
           title: item.owner.displayName.isEmpty
@@ -445,10 +533,23 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
           dateText: _dateText(item.createdAt),
           route: Routes.castingAgentApplicationsAdmin,
           filter: _AdminWorkspaceFilter.applications,
+          assignedToUserId:
+              assignmentFor(
+                'casting_agent_applications',
+                item.id,
+              )?.assignedToUserId ??
+              '',
+          assignedToName:
+              assignmentFor(
+                'casting_agent_applications',
+                item.id,
+              )?.assignedToName ??
+              '',
         ),
       for (final item in merges.valueOrNull ?? const [])
         _AdminWorkspaceRow(
           id: 'merge:${item.id}',
+          targetTable: 'account_merge_requests',
           targetId: item.id,
           kind: ru ? 'Объединение' : 'Merge',
           title: item.title,
@@ -461,10 +562,23 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
           dateText: _dateText(item.createdAt),
           route: Routes.accountMergeRequestsAdmin,
           filter: _AdminWorkspaceFilter.applications,
+          assignedToUserId:
+              assignmentFor(
+                'account_merge_requests',
+                item.id,
+              )?.assignedToUserId ??
+              '',
+          assignedToName:
+              assignmentFor(
+                'account_merge_requests',
+                item.id,
+              )?.assignedToName ??
+              '',
         ),
       for (final row in safety.valueOrNull ?? const <Map<String, dynamic>>[])
         _AdminWorkspaceRow(
           id: 'safety:${(row['id'] ?? '').toString()}',
+          targetTable: 'profile_reports',
           targetId: (row['id'] ?? '').toString(),
           kind: ru ? 'Безопасность' : 'Safety',
           title: (row['reason'] ?? '').toString().trim().isEmpty
@@ -482,6 +596,18 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
           ),
           route: Routes.safetyAdmin,
           filter: _AdminWorkspaceFilter.safety,
+          assignedToUserId:
+              assignmentFor(
+                'profile_reports',
+                (row['id'] ?? '').toString(),
+              )?.assignedToUserId ??
+              '',
+          assignedToName:
+              assignmentFor(
+                'profile_reports',
+                (row['id'] ?? '').toString(),
+              )?.assignedToName ??
+              '',
         ),
     ];
 
@@ -493,7 +619,11 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
           final filterOk =
               _filter == _AdminWorkspaceFilter.all || row.filter == _filter;
           final searchOk = query.isEmpty || row.searchable.contains(query);
-          return filterOk && searchOk;
+          final mineOk =
+              !_mineOnly ||
+              (currentUserId.isNotEmpty &&
+                  row.assignedToUserId == currentUserId);
+          return filterOk && searchOk && mineOk;
         })
         .toList(growable: false);
 
@@ -591,7 +721,9 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
           const SizedBox(height: 14),
           _AdminWorkspaceFilters(
             selected: _filter,
+            mineOnly: _mineOnly,
             onChanged: (value) => setState(() => _filter = value),
+            onMineOnlyChanged: (value) => setState(() => _mineOnly = value),
           ),
           const SizedBox(height: 12),
           if (_selected.isNotEmpty) ...[
@@ -620,6 +752,12 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
               onExport: selectedRows.isEmpty || _bulkBusy
                   ? null
                   : () => _exportRows(selectedRows),
+              onAssignToMe: selectedRows.isEmpty || _bulkBusy
+                  ? null
+                  : () => _assignRowsToMe(selectedRows),
+              onUnassign: selectedRows.isEmpty || _bulkBusy
+                  ? null
+                  : () => _unassignRows(selectedRows),
             ),
             const SizedBox(height: 12),
           ],
@@ -905,6 +1043,7 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
                 .map(
                   (row) => _AdminWorkspaceRow(
                     id: 'safety:${(row['id'] ?? '').toString()}',
+                    targetTable: 'profile_reports',
                     targetId: (row['id'] ?? '').toString(),
                     kind: 'Безопасность',
                     title: (row['reason'] ?? '').toString().trim().isEmpty
@@ -1025,6 +1164,146 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _assignRowsToMe(List<_AdminWorkspaceRow> rows) async {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final sb = ref.read(supabaseProvider);
+    final user = sb.auth.currentUser;
+    if (user == null) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              ru ? 'Нужен вход администратора' : 'Admin sign-in required',
+            ),
+          ),
+        );
+      return;
+    }
+    final confirmed = await _confirmBulkAction(
+      title: ru ? 'ВЗЯТЬ ЗАДАЧИ?' : 'ASSIGN TASKS?',
+      message: ru
+          ? 'Выбранные строки будут назначены на вас: ${rows.length}.'
+          : '${rows.length} selected rows will be assigned to you.',
+      confirmLabel: ru ? 'ВЗЯТЬ' : 'ASSIGN',
+      destructive: false,
+    );
+    if (!confirmed) return;
+    await _runBulkAction(
+      successMessage: ru
+          ? 'Назначено: ${rows.length}'
+          : 'Assigned: ${rows.length}',
+      action: () async {
+        final now = DateTime.now().toUtc().toIso8601String();
+        final assigneeName = await _loadCurrentAdminName(
+          sb,
+          user.id,
+          fallbackName: ru ? 'Оператор' : 'Operator',
+        );
+        await sb.from('admin_task_assignments').upsert(<Map<String, dynamic>>[
+          for (final row in rows)
+            <String, dynamic>{
+              'target_table': row.targetTable,
+              'target_id': row.targetId,
+              'assigned_to_user_id': user.id,
+              'assigned_to_name': assigneeName,
+              'assigned_by_user_id': user.id,
+              'assigned_at': now,
+              'updated_at': now,
+            },
+        ], onConflict: 'target_table,target_id');
+        await AdminActionLogService(sb).log(
+          actionType: 'admin_tasks_assigned_to_me',
+          title: ru
+              ? 'Задачи назначены оператору'
+              : 'Tasks assigned to operator',
+          description: rows.map((row) => row.title).join(' • '),
+          targetTable: 'admin_task_assignments',
+          targetText: '${rows.length}',
+          status: 'assigned',
+          metadata: <String, dynamic>{
+            'assignee_user_id': user.id,
+            'assignee_name': assigneeName,
+            'rows': _assignmentLogRows(rows),
+          },
+        );
+        ref.invalidate(_adminTaskAssignmentsProvider);
+      },
+    );
+  }
+
+  Future<void> _unassignRows(List<_AdminWorkspaceRow> rows) async {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final confirmed = await _confirmBulkAction(
+      title: ru ? 'СНЯТЬ ОТВЕТСТВЕННОГО?' : 'UNASSIGN TASKS?',
+      message: ru
+          ? 'Ответственный будет снят со строк: ${rows.length}.'
+          : 'Assignee will be removed from ${rows.length} rows.',
+      confirmLabel: ru ? 'СНЯТЬ' : 'UNASSIGN',
+      destructive: true,
+    );
+    if (!confirmed) return;
+    await _runBulkAction(
+      successMessage: ru ? 'Ответственный снят' : 'Unassigned',
+      action: () async {
+        final sb = ref.read(supabaseProvider);
+        for (final row in rows) {
+          await sb
+              .from('admin_task_assignments')
+              .delete()
+              .eq('target_table', row.targetTable)
+              .eq('target_id', row.targetId);
+        }
+        await AdminActionLogService(sb).log(
+          actionType: 'admin_tasks_unassigned',
+          title: ru ? 'Ответственный снят с задач' : 'Tasks unassigned',
+          description: rows.map((row) => row.title).join(' • '),
+          targetTable: 'admin_task_assignments',
+          targetText: '${rows.length}',
+          status: 'unassigned',
+          metadata: <String, dynamic>{'rows': _assignmentLogRows(rows)},
+        );
+        ref.invalidate(_adminTaskAssignmentsProvider);
+      },
+    );
+  }
+
+  Future<String> _loadCurrentAdminName(
+    SupabaseClient sb,
+    String userId, {
+    required String fallbackName,
+  }) async {
+    try {
+      final row = await sb
+          .from('user_profiles')
+          .select('full_name,company_name')
+          .eq('user_id', userId)
+          .maybeSingle();
+      final map = row == null
+          ? const <String, dynamic>{}
+          : Map<String, dynamic>.from(row);
+      for (final key in ['full_name', 'company_name']) {
+        final value = (map[key] ?? '').toString().trim();
+        if (value.isNotEmpty) return value;
+      }
+    } catch (_) {}
+    final email = sb.auth.currentUser?.email?.trim() ?? '';
+    if (email.isNotEmpty) return email;
+    return fallbackName;
+  }
+
+  List<Map<String, String>> _assignmentLogRows(List<_AdminWorkspaceRow> rows) {
+    return <Map<String, String>>[
+      for (final row in rows)
+        <String, String>{
+          'id': row.targetId,
+          'table': row.targetTable,
+          'type': row.kind,
+          'title': row.title,
+        },
+    ];
   }
 
   Future<void> _exportRows(List<_AdminWorkspaceRow> rows) async {
@@ -1181,13 +1460,14 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
   }
 
   String _rowsToCsv(List<_AdminWorkspaceRow> rows) {
-    final buffer = StringBuffer('type,title,details,status,date,id\n');
+    final buffer = StringBuffer('type,title,details,assignee,status,date,id\n');
     for (final row in rows) {
       buffer.writeln(
         [
           row.kind,
           row.title,
           row.subtitle,
+          row.assignmentLabel,
           row.status,
           row.dateText,
           row.targetId,
@@ -1204,6 +1484,13 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
 
   String _adminBulkErrorText(PostgrestException error) {
     final ru = Localizations.localeOf(context).languageCode == 'ru';
+    if (SupabaseCompat.isMissingRelation(error, const [
+      'admin_task_assignments',
+    ])) {
+      return ru
+          ? 'Примените SQL supabase/sql/admin_task_assignments.sql'
+          : 'Apply supabase/sql/admin_task_assignments.sql';
+    }
     final message = error.message.trim();
     if (message.isNotEmpty) return ru ? 'Ошибка Supabase: $message' : message;
     return ru ? 'Не удалось выполнить действие' : 'Action failed';
@@ -1255,11 +1542,15 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
 class _AdminWorkspaceFilters extends StatelessWidget {
   const _AdminWorkspaceFilters({
     required this.selected,
+    required this.mineOnly,
     required this.onChanged,
+    required this.onMineOnlyChanged,
   });
 
   final _AdminWorkspaceFilter selected;
+  final bool mineOnly;
   final ValueChanged<_AdminWorkspaceFilter> onChanged;
+  final ValueChanged<bool> onMineOnlyChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -1283,6 +1574,24 @@ class _AdminWorkspaceFilters extends StatelessWidget {
       spacing: 8,
       runSpacing: 8,
       children: [
+        ChoiceChip(
+          selected: mineOnly,
+          label: Text(ru ? 'МОИ' : 'MINE'),
+          onSelected: onMineOnlyChanged,
+          selectedColor: BrandTheme.redTop,
+          backgroundColor: Colors.white.withValues(alpha: 0.72),
+          labelStyle: adminCommandStyle(
+            size: 11,
+            letterSpacing: 0.9,
+            color: mineOnly ? Colors.white : kTextDark,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(999),
+            side: BorderSide(
+              color: mineOnly ? BrandTheme.redTop : kBorderColor,
+            ),
+          ),
+        ),
         for (final item in items)
           ChoiceChip(
             selected: selected == item.value,
@@ -1319,6 +1628,8 @@ class _AdminBulkBar extends StatelessWidget {
     required this.onRejectProfiles,
     required this.onCloseSafety,
     required this.onExport,
+    required this.onAssignToMe,
+    required this.onUnassign,
   });
 
   final int count;
@@ -1331,6 +1642,8 @@ class _AdminBulkBar extends StatelessWidget {
   final VoidCallback? onRejectProfiles;
   final VoidCallback? onCloseSafety;
   final VoidCallback? onExport;
+  final VoidCallback? onAssignToMe;
+  final VoidCallback? onUnassign;
 
   @override
   Widget build(BuildContext context) {
@@ -1370,6 +1683,17 @@ class _AdminBulkBar extends StatelessWidget {
                 label: ru ? 'ЗАКРЫТЬ $safetyCount' : 'CLOSE $safetyCount',
                 icon: Icons.shield_rounded,
                 onTap: onCloseSafety,
+              ),
+              _AdminBulkButton(
+                label: ru ? 'ВЗЯТЬ' : 'ASSIGN ME',
+                icon: Icons.person_add_alt_1_rounded,
+                onTap: onAssignToMe,
+                dark: true,
+              ),
+              _AdminBulkButton(
+                label: ru ? 'СНЯТЬ ОТВ.' : 'UNASSIGN',
+                icon: Icons.person_remove_rounded,
+                onTap: onUnassign,
               ),
               _AdminBulkButton(
                 label: ru ? 'CSV' : 'CSV',
@@ -1636,10 +1960,11 @@ class _AdminRowsTable extends StatelessWidget {
         columnWidths: const {
           0: FixedColumnWidth(44),
           1: FixedColumnWidth(112),
-          2: FlexColumnWidth(1.4),
-          3: FlexColumnWidth(1.2),
-          4: FixedColumnWidth(112),
-          5: FixedColumnWidth(86),
+          2: FlexColumnWidth(1.35),
+          3: FlexColumnWidth(1.15),
+          4: FixedColumnWidth(128),
+          5: FixedColumnWidth(112),
+          6: FixedColumnWidth(86),
         },
         border: TableBorder(
           horizontalInside: BorderSide(
@@ -1650,7 +1975,15 @@ class _AdminRowsTable extends StatelessWidget {
           _tableRow(
             context,
             header: true,
-            cells: const ['', 'ТИП', 'НАЗВАНИЕ', 'ДЕТАЛИ', 'СТАТУС', 'ДАТА'],
+            cells: const [
+              '',
+              'ТИП',
+              'НАЗВАНИЕ',
+              'ДЕТАЛИ',
+              'ОТВЕТСТВ.',
+              'СТАТУС',
+              'ДАТА',
+            ],
           ),
           for (final row in rows)
             TableRow(
@@ -1670,6 +2003,10 @@ class _AdminRowsTable extends StatelessWidget {
                 _TableCellBox(text: row.kind),
                 _TableCellBox(text: row.title, strong: true),
                 _TableCellBox(text: row.subtitle),
+                _TableCellBox(
+                  text: row.assignmentLabel.isEmpty ? '—' : row.assignmentLabel,
+                  accent: row.assignedToUserId.isNotEmpty,
+                ),
                 _TableCellBox(text: row.status, accent: true),
                 _TableCellBox(text: row.dateText),
               ],
@@ -1787,6 +2124,25 @@ class _AdminMobileRowCard extends StatelessWidget {
                     style: adminBodyStyle(size: 12, color: kTextMuted),
                   ),
                 ],
+                const SizedBox(height: 4),
+                Text(
+                  row.assignmentLabel.isEmpty
+                      ? (Localizations.localeOf(context).languageCode == 'ru'
+                            ? 'Без ответственного'
+                            : 'Unassigned')
+                      : (Localizations.localeOf(context).languageCode == 'ru'
+                            ? 'Ответственный: ${row.assignmentLabel}'
+                            : 'Assignee: ${row.assignmentLabel}'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: adminBodyStyle(
+                    size: 11,
+                    color: row.assignmentLabel.isEmpty
+                        ? kTextMuted
+                        : BrandTheme.redTop,
+                    weight: FontWeight.w800,
+                  ),
+                ),
               ],
             ),
           ),
