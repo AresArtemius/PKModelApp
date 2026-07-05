@@ -156,15 +156,19 @@ class ModelProfilePage extends ConsumerStatefulWidget {
   ConsumerState<ModelProfilePage> createState() => _ModelProfilePageState();
 }
 
-class _ProfileInviteHistoryItem {
-  const _ProfileInviteHistoryItem({
-    required this.castingTitle,
-    required this.status,
+enum _ProfileActionKind { invite, selection, folder, message }
+
+class _ProfileActionHistoryItem {
+  const _ProfileActionHistoryItem({
+    required this.kind,
+    required this.title,
+    required this.subtitle,
     required this.createdAt,
   });
 
-  final String castingTitle;
-  final String status;
+  final _ProfileActionKind kind;
+  final String title;
+  final String subtitle;
   final DateTime? createdAt;
 }
 
@@ -447,8 +451,8 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
                           onCompositePdf: () => _openCompositePdf(m),
                           onCopyLink: () => _copyPublicLink(m.id),
                           canUseAgentActions: canUseAgentTools,
-                          inviteHistoryFuture: canUseAgentTools
-                              ? _loadProfileInviteHistory(m.id)
+                          actionHistoryFuture: canUseAgentTools
+                              ? _loadProfileActionHistory(m.id)
                               : null,
                           isBusy: _isPortfolioActionBusy,
                           onInvite: () => _inviteFromProfile(m),
@@ -699,38 +703,166 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
     }
   }
 
-  Future<List<_ProfileInviteHistoryItem>> _loadProfileInviteHistory(
+  Future<List<_ProfileActionHistoryItem>> _loadProfileActionHistory(
     String profileId,
   ) async {
     final id = profileId.trim();
-    if (id.isEmpty) return const <_ProfileInviteHistoryItem>[];
+    if (id.isEmpty) return const <_ProfileActionHistoryItem>[];
+    final items = <_ProfileActionHistoryItem>[];
+    final sb = Supabase.instance.client;
+
+    await _appendInvitationActions(sb, id, items);
+    await _appendSelectionActions(sb, id, items);
+    await _appendFolderActions(sb, id, items);
+    await _appendMessageActions(sb, id, items);
+
+    items.sort((a, b) {
+      final left = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final right = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+      return right.compareTo(left);
+    });
+    return items.take(6).toList(growable: false);
+  }
+
+  Future<void> _appendInvitationActions(
+    SupabaseClient sb,
+    String profileId,
+    List<_ProfileActionHistoryItem> items,
+  ) async {
     try {
-      final rows = await Supabase.instance.client
+      final rows = await sb
           .from('casting_responses')
           .select('created_at,status,casting:castings(title)')
-          .eq('profile_id', id)
+          .eq('profile_id', profileId)
           .eq('status', 'invited')
           .order('created_at', ascending: false)
           .limit(4);
-      return (rows as List)
-          .map((raw) {
-            final row = Map<String, dynamic>.from(raw as Map);
-            final casting = row['casting'] is Map
-                ? Map<String, dynamic>.from(row['casting'] as Map)
-                : const <String, dynamic>{};
-            return _ProfileInviteHistoryItem(
-              castingTitle: (casting['title'] ?? '').toString(),
-              status: (row['status'] ?? '').toString(),
-              createdAt: DateTime.tryParse(
-                (row['created_at'] ?? '').toString(),
-              ),
-            );
-          })
-          .where((item) => item.castingTitle.trim().isNotEmpty)
+      for (final raw in rows as List) {
+        final row = Map<String, dynamic>.from(raw as Map);
+        final casting = row['casting'] is Map
+            ? Map<String, dynamic>.from(row['casting'] as Map)
+            : const <String, dynamic>{};
+        final title = (casting['title'] ?? '').toString().trim();
+        if (title.isEmpty) continue;
+        items.add(
+          _ProfileActionHistoryItem(
+            kind: _ProfileActionKind.invite,
+            title: title,
+            subtitle: 'self',
+            createdAt: DateTime.tryParse((row['created_at'] ?? '').toString()),
+          ),
+        );
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _appendSelectionActions(
+    SupabaseClient sb,
+    String profileId,
+    List<_ProfileActionHistoryItem> items,
+  ) async {
+    try {
+      final rows = await sb
+          .from('selection_items')
+          .select('created_at,selection:selections(title)')
+          .eq('profile_id', profileId)
+          .order('created_at', ascending: false)
+          .limit(4);
+      for (final raw in rows as List) {
+        final row = Map<String, dynamic>.from(raw as Map);
+        final selection = row['selection'] is Map
+            ? Map<String, dynamic>.from(row['selection'] as Map)
+            : const <String, dynamic>{};
+        final title = (selection['title'] ?? '').toString().trim();
+        if (title.isEmpty) continue;
+        items.add(
+          _ProfileActionHistoryItem(
+            kind: _ProfileActionKind.selection,
+            title: title,
+            subtitle: 'self',
+            createdAt: DateTime.tryParse((row['created_at'] ?? '').toString()),
+          ),
+        );
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _appendFolderActions(
+    SupabaseClient sb,
+    String profileId,
+    List<_ProfileActionHistoryItem> items,
+  ) async {
+    try {
+      final rows = await sb
+          .from('casting_agent_folder_items')
+          .select('created_at,folder:casting_agent_folders(title)')
+          .eq('profile_id', profileId)
+          .order('created_at', ascending: false)
+          .limit(4);
+      for (final raw in rows as List) {
+        final row = Map<String, dynamic>.from(raw as Map);
+        final folder = row['folder'] is Map
+            ? Map<String, dynamic>.from(row['folder'] as Map)
+            : const <String, dynamic>{};
+        final title = (folder['title'] ?? '').toString().trim();
+        if (title.isEmpty) continue;
+        items.add(
+          _ProfileActionHistoryItem(
+            kind: _ProfileActionKind.folder,
+            title: title,
+            subtitle: 'self',
+            createdAt: DateTime.tryParse((row['created_at'] ?? '').toString()),
+          ),
+        );
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _appendMessageActions(
+    SupabaseClient sb,
+    String profileId,
+    List<_ProfileActionHistoryItem> items,
+  ) async {
+    try {
+      final chats = await sb
+          .from('selection_chats')
+          .select('id')
+          .eq('profile_id', profileId)
+          .limit(20);
+      final chatIds = (chats as List)
+          .map((row) => ((row as Map)['id'] ?? '').toString().trim())
+          .where((id) => id.isNotEmpty)
           .toList(growable: false);
-    } catch (_) {
-      return const <_ProfileInviteHistoryItem>[];
-    }
+      if (chatIds.isEmpty) return;
+      final rows = await sb
+          .from('selection_chat_messages')
+          .select('created_at,body,media_type,sender_id')
+          .filter('chat_id', 'in', '(${chatIds.join(',')})')
+          .order('created_at', ascending: false)
+          .limit(4);
+      for (final raw in rows as List) {
+        final row = Map<String, dynamic>.from(raw as Map);
+        final body = (row['body'] ?? '').toString().trim();
+        final mediaType = (row['media_type'] ?? '').toString().trim();
+        final title = body.isNotEmpty
+            ? body
+            : mediaType.isNotEmpty
+            ? mediaType
+            : 'message';
+        final senderId = (row['sender_id'] ?? '').toString().trim();
+        final currentUserId = sb.auth.currentUser?.id ?? '';
+        items.add(
+          _ProfileActionHistoryItem(
+            kind: _ProfileActionKind.message,
+            title: title,
+            subtitle: senderId.isNotEmpty && senderId == currentUserId
+                ? 'outgoing'
+                : 'incoming',
+            createdAt: DateTime.tryParse((row['created_at'] ?? '').toString()),
+          ),
+        );
+      }
+    } catch (_) {}
   }
 
   Future<void> _openPortfolioAddSheet(ModelVm model) async {
@@ -775,6 +907,7 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
           );
       ref.invalidate(agentFoldersForProfileProvider(profileId));
       ref.invalidate(agentFoldersProvider);
+      if (mounted) setState(() {});
       _showSnack(t.quickAddFavoriteDone);
     });
   }
@@ -791,6 +924,7 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
           );
       ref.invalidate(agentFoldersForProfileProvider(profileId));
       ref.invalidate(agentFoldersProvider);
+      if (mounted) setState(() {});
       _showSnack(t.quickAddFolderDone(folder.title));
     });
   }
@@ -814,6 +948,7 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
           .addProfileToNamedFolder(title: title, profileId: profileId);
       ref.invalidate(agentFoldersForProfileProvider(profileId));
       ref.invalidate(agentFoldersProvider);
+      if (mounted) setState(() {});
       _showSnack(t.quickAddFolderDone(title.trim()));
     });
   }
@@ -830,6 +965,7 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
     await _runPortfolioAction(() async {
       await _createSelectionWithItems(draft: draft, profileIds: [model.id]);
       ref.invalidate(adminSelectionListProvider);
+      if (mounted) setState(() {});
       _showSnack(t.quickAddSelectionDone(draft.title.trim()));
     });
   }
@@ -884,7 +1020,7 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
       await ref.read(profileAnalyticsServiceProvider).trackInvitation(model.id);
       ref.invalidate(myChatsProvider(false));
       ref.invalidate(myCastingResponseStatusesProvider);
-      setState(() {});
+      if (mounted) setState(() {});
       if (!mounted) return;
       _showSnack(
         t.localeName.toLowerCase().startsWith('ru')

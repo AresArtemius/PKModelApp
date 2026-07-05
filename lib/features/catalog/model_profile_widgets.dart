@@ -122,7 +122,7 @@ class _PortfolioHeroCard extends StatelessWidget {
     required this.onCompositePdf,
     required this.onCopyLink,
     required this.canUseAgentActions,
-    required this.inviteHistoryFuture,
+    required this.actionHistoryFuture,
     required this.isBusy,
     required this.onInvite,
     required this.onAddToSelection,
@@ -141,7 +141,7 @@ class _PortfolioHeroCard extends StatelessWidget {
   final VoidCallback onCompositePdf;
   final VoidCallback onCopyLink;
   final bool canUseAgentActions;
-  final Future<List<_ProfileInviteHistoryItem>>? inviteHistoryFuture;
+  final Future<List<_ProfileActionHistoryItem>>? actionHistoryFuture;
   final bool isBusy;
   final VoidCallback onInvite;
   final VoidCallback onAddToSelection;
@@ -205,7 +205,7 @@ class _PortfolioHeroCard extends StatelessWidget {
       onCompositePdf: onCompositePdf,
       onCopyLink: onCopyLink,
       canUseAgentActions: canUseAgentActions,
-      inviteHistoryFuture: inviteHistoryFuture,
+      actionHistoryFuture: actionHistoryFuture,
       isBusy: isBusy,
       onInvite: onInvite,
       onAddToSelection: onAddToSelection,
@@ -245,7 +245,7 @@ class _PortfolioIdentityPanel extends StatelessWidget {
     required this.onCompositePdf,
     required this.onCopyLink,
     required this.canUseAgentActions,
-    required this.inviteHistoryFuture,
+    required this.actionHistoryFuture,
     required this.isBusy,
     required this.onInvite,
     required this.onAddToSelection,
@@ -260,7 +260,7 @@ class _PortfolioIdentityPanel extends StatelessWidget {
   final VoidCallback onCompositePdf;
   final VoidCallback onCopyLink;
   final bool canUseAgentActions;
-  final Future<List<_ProfileInviteHistoryItem>>? inviteHistoryFuture;
+  final Future<List<_ProfileActionHistoryItem>>? actionHistoryFuture;
   final bool isBusy;
   final VoidCallback onInvite;
   final VoidCallback onAddToSelection;
@@ -337,7 +337,7 @@ class _PortfolioIdentityPanel extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
-          _PortfolioInviteHistoryStrip(future: inviteHistoryFuture, isRu: isRu),
+          _PortfolioActionHistoryStrip(future: actionHistoryFuture, isRu: isRu),
           const SizedBox(height: 10),
         ],
         Wrap(
@@ -417,23 +417,23 @@ class _PortfolioStatChip extends StatelessWidget {
   }
 }
 
-class _PortfolioInviteHistoryStrip extends StatelessWidget {
-  const _PortfolioInviteHistoryStrip({
+class _PortfolioActionHistoryStrip extends StatelessWidget {
+  const _PortfolioActionHistoryStrip({
     required this.future,
     required this.isRu,
   });
 
-  final Future<List<_ProfileInviteHistoryItem>>? future;
+  final Future<List<_ProfileActionHistoryItem>>? future;
   final bool isRu;
 
   @override
   Widget build(BuildContext context) {
     final source = future;
     if (source == null) return const SizedBox.shrink();
-    return FutureBuilder<List<_ProfileInviteHistoryItem>>(
+    return FutureBuilder<List<_ProfileActionHistoryItem>>(
       future: source,
       builder: (context, snapshot) {
-        final items = snapshot.data ?? const <_ProfileInviteHistoryItem>[];
+        final items = snapshot.data ?? const <_ProfileActionHistoryItem>[];
         if (items.isEmpty) return const SizedBox.shrink();
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -446,49 +446,97 @@ class _PortfolioInviteHistoryStrip extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                isRu ? 'История приглашений' : 'Invitation history',
+                isRu ? 'История действий' : 'Action history',
                 style: _commandStyle(fontSize: 11, letterSpacing: 0.8),
               ),
               const SizedBox(height: 8),
               for (final item in items) ...[
                 Row(
                   children: [
-                    const Icon(
-                      Icons.check_circle_rounded,
+                    Icon(
+                      _actionIcon(item.kind),
                       color: BrandTheme.redTop,
                       size: 16,
                     ),
                     const SizedBox(width: 7),
                     Expanded(
-                      child: Text(
-                        item.castingTitle.trim(),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: _bodyStyle(
-                          fontSize: 12,
-                          color: kTextDark,
-                          weight: FontWeight.w800,
-                        ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item.title.trim(),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: _bodyStyle(
+                              fontSize: 12,
+                              color: kTextDark,
+                              weight: FontWeight.w800,
+                            ),
+                          ),
+                          Text(
+                            _actionSubtitle(item),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: _bodyStyle(fontSize: 11, color: kTextMuted),
+                          ),
+                        ],
                       ),
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      isRu ? 'ПРИГЛАШЕНА' : 'INVITED',
+                      _formatActionDate(item.createdAt),
                       style: _commandStyle(
                         fontSize: 10,
-                        color: BrandTheme.redTop,
-                        letterSpacing: 0.7,
+                        color: kTextMuted,
+                        letterSpacing: 0.4,
                       ),
                     ),
                   ],
                 ),
-                if (item != items.last) const SizedBox(height: 6),
+                if (item != items.last) const SizedBox(height: 8),
               ],
             ],
           ),
         );
       },
     );
+  }
+
+  IconData _actionIcon(_ProfileActionKind kind) {
+    switch (kind) {
+      case _ProfileActionKind.invite:
+        return Icons.send_rounded;
+      case _ProfileActionKind.selection:
+        return Icons.dashboard_customize_rounded;
+      case _ProfileActionKind.folder:
+        return Icons.folder_rounded;
+      case _ProfileActionKind.message:
+        return Icons.chat_bubble_rounded;
+    }
+  }
+
+  String _actionSubtitle(_ProfileActionHistoryItem item) {
+    switch (item.kind) {
+      case _ProfileActionKind.invite:
+        return isRu ? 'Вы пригласили в кастинг' : 'You invited to casting';
+      case _ProfileActionKind.selection:
+        return isRu ? 'Вы добавили в подборку' : 'You added to selection';
+      case _ProfileActionKind.folder:
+        return isRu ? 'Вы добавили в папку' : 'You added to folder';
+      case _ProfileActionKind.message:
+        if (item.subtitle == 'outgoing') {
+          return isRu ? 'Вы написали в чат' : 'You sent a chat message';
+        }
+        return isRu ? 'Вам написали в чат' : 'Incoming chat message';
+    }
+  }
+
+  String _formatActionDate(DateTime? value) {
+    if (value == null) return '';
+    final local = value.toLocal();
+    final day = local.day.toString().padLeft(2, '0');
+    final month = local.month.toString().padLeft(2, '0');
+    return '$day.$month';
   }
 }
 
