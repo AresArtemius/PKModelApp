@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'admin_dashboard_counts_provider.dart';
 import 'roles_provider.dart';
 import '../features/admin/account_merge_requests_page.dart';
 import '../features/admin/selection_admin_page.dart';
@@ -170,6 +171,9 @@ class AppDesktopNav extends ConsumerWidget {
     final unreadChats = ref
         .watch(unreadChatCountProvider)
         .maybeWhen(data: (value) => value, orElse: () => 0);
+    final adminBadge = ref
+        .watch(adminDashboardCountsProvider)
+        .maybeWhen(data: (value) => value.total, orElse: () => 0);
     final items = [
       (
         icon: Icons.videocam,
@@ -190,7 +194,7 @@ class AppDesktopNav extends ConsumerWidget {
           icon: Icons.admin_panel_settings_rounded,
           label: t.adminTab,
           route: Routes.admin,
-          badge: 0,
+          badge: adminBadge,
         ),
     ];
 
@@ -380,6 +384,9 @@ class AppBottomNav extends ConsumerWidget {
     final unreadChats = ref
         .watch(unreadChatCountProvider)
         .maybeWhen(data: (value) => value, orElse: () => 0);
+    final adminBadge = ref
+        .watch(adminDashboardCountsProvider)
+        .maybeWhen(data: (value) => value.total, orElse: () => 0);
     final items = [
       (
         icon: Icons.videocam,
@@ -400,7 +407,7 @@ class AppBottomNav extends ConsumerWidget {
           icon: Icons.admin_panel_settings_rounded,
           label: t.adminTab,
           route: Routes.admin,
-          badge: 0,
+          badge: adminBadge,
         ),
     ];
 
