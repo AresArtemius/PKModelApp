@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/app_error_mapper.dart';
+import '../../core/admin_action_log_service.dart';
 import '../../core/app_logger.dart';
 import '../../core/router.dart';
 import '../../core/roles_provider.dart';
@@ -505,6 +506,14 @@ Future<void> _onDeleteCastingTap({
 
   try {
     await ref.read(castingsServiceProvider).deleteCasting(castingId);
+    await AdminActionLogService(Supabase.instance.client).log(
+      actionType: 'casting_deleted',
+      title: 'Кастинг удален',
+      targetTable: 'castings',
+      targetId: castingId,
+      targetText: castingId,
+      status: 'deleted',
+    );
     ref.invalidate(castingsProvider);
     ref.invalidate(myCastingResponseStatusesProvider);
     if (!context.mounted) return;

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/admin_action_log_service.dart';
 import '../../core/profile_action_log_service.dart';
 import '../../core/roles_provider.dart';
 import '../../core/router.dart';
@@ -12,12 +14,138 @@ import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
 import 'admin_style.dart';
 
-final _profileActionAuditProvider = FutureProvider.autoDispose
-    .family<List<ProfileActionLogEntry>?, ProfileActionLogType>((ref, type) {
-      return ProfileActionLogService(
-        Supabase.instance.client,
-      ).fetchAdminLogs(type: type, limit: 120);
+final _profileActionAuditProvider = FutureProvider.autoDispose<AuditLogData>((
+  ref,
+) async {
+  final sb = Supabase.instance.client;
+  final profileLogs = await ProfileActionLogService(
+    sb,
+  ).fetchAdminLogs(limit: 300);
+  final adminLogs = await AdminActionLogService(sb).fetch(limit: 300);
+  return AuditLogData(
+    profileLogs: profileLogs,
+    adminLogs: adminLogs,
+    profileLogAvailable: profileLogs != null,
+    adminLogAvailable: adminLogs != null,
+  );
+});
+
+enum AuditLogScope { all, profile, admin }
+
+class AuditLogData {
+  const AuditLogData({
+    required this.profileLogs,
+    required this.adminLogs,
+    required this.profileLogAvailable,
+    required this.adminLogAvailable,
+  });
+
+  final List<ProfileActionLogEntry>? profileLogs;
+  final List<AdminActionLogEntry>? adminLogs;
+  final bool profileLogAvailable;
+  final bool adminLogAvailable;
+
+  List<AuditLogItem> get items {
+    final result = <AuditLogItem>[
+      for (final item in profileLogs ?? const <ProfileActionLogEntry>[])
+        AuditLogItem.profile(item),
+      for (final item in adminLogs ?? const <AdminActionLogEntry>[])
+        AuditLogItem.admin(item),
+    ];
+    result.sort((a, b) {
+      final left = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final right = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+      return right.compareTo(left);
     });
+    return result;
+  }
+}
+
+class AuditLogItem {
+  const AuditLogItem._({
+    required this.id,
+    required this.scope,
+    required this.actionType,
+    required this.title,
+    required this.description,
+    required this.actorLabel,
+    required this.actorUserId,
+    required this.status,
+    required this.relatedTable,
+    required this.relatedId,
+    required this.relatedText,
+    required this.templateKey,
+    required this.templateBody,
+    required this.profileId,
+    required this.createdAt,
+    required this.deliveredAt,
+    required this.readAt,
+  });
+
+  factory AuditLogItem.profile(ProfileActionLogEntry item) {
+    return AuditLogItem._(
+      id: 'profile:${item.id}',
+      scope: AuditLogScope.profile,
+      actionType: item.actionType,
+      title: item.title,
+      description: item.description,
+      actorLabel: item.actorLabel,
+      actorUserId: item.actorUserId,
+      status: item.status,
+      relatedTable: item.relatedTable,
+      relatedId: item.relatedId,
+      relatedText: item.relatedText,
+      templateKey: item.templateKey,
+      templateBody: item.templateBody,
+      profileId: item.profileId,
+      createdAt: item.createdAt,
+      deliveredAt: item.deliveredAt,
+      readAt: item.readAt,
+    );
+  }
+
+  factory AuditLogItem.admin(AdminActionLogEntry item) {
+    return AuditLogItem._(
+      id: 'admin:${item.id}',
+      scope: AuditLogScope.admin,
+      actionType: item.actionType,
+      title: item.title,
+      description: item.description,
+      actorLabel: item.actorLabel,
+      actorUserId: item.actorUserId,
+      status: item.status,
+      relatedTable: item.targetTable,
+      relatedId: item.targetId,
+      relatedText: item.targetText,
+      templateKey: '',
+      templateBody: '',
+      profileId: '',
+      createdAt: item.createdAt,
+      deliveredAt: null,
+      readAt: null,
+    );
+  }
+
+  final String id;
+  final AuditLogScope scope;
+  final String actionType;
+  final String title;
+  final String description;
+  final String actorLabel;
+  final String actorUserId;
+  final String status;
+  final String relatedTable;
+  final String relatedId;
+  final String relatedText;
+  final String templateKey;
+  final String templateBody;
+  final String profileId;
+  final DateTime? createdAt;
+  final DateTime? deliveredAt;
+  final DateTime? readAt;
+
+  bool get isAdminAction => scope == AuditLogScope.admin;
+}
 
 class ProfileActionAuditPage extends ConsumerStatefulWidget {
   const ProfileActionAuditPage({super.key});
@@ -30,14 +158,20 @@ class ProfileActionAuditPage extends ConsumerStatefulWidget {
 class _ProfileActionAuditPageState
     extends ConsumerState<ProfileActionAuditPage> {
   ProfileActionLogType _filter = ProfileActionLogType.all;
+  AuditLogScope _scope = AuditLogScope.all;
   String _selectedId = '';
+  String _query = '';
+  String _actorQuery = '';
+  String _profileQuery = '';
+  DateTime? _dateFrom;
+  DateTime? _dateTo;
 
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
     final isRu = t.localeName.toLowerCase().startsWith('ru');
     final isAdminAsync = ref.watch(isAdminProvider);
-    final logsAsync = ref.watch(_profileActionAuditProvider(_filter));
+    final logsAsync = ref.watch(_profileActionAuditProvider);
     final width = MediaQuery.sizeOf(context).width;
     final isWide = width >= 980;
 
@@ -78,25 +212,46 @@ class _ProfileActionAuditPageState
                         isError: true,
                         maxWidth: 720,
                       ),
-                      data: (logs) {
-                        if (logs == null) {
+                      data: (data) {
+                        if (!data.profileLogAvailable &&
+                            !data.adminLogAvailable) {
                           return AdminMessageCard(
                             text: isRu
-                                ? 'Примените SQL profile_action_logs.sql, чтобы открыть журнал действий.'
-                                : 'Apply profile_action_logs.sql to enable the audit log.',
+                                ? 'Примените SQL profile_action_logs.sql и admin_action_logs.sql, чтобы открыть журнал действий.'
+                                : 'Apply profile_action_logs.sql and admin_action_logs.sql to enable the audit log.',
                             maxWidth: 760,
                           );
                         }
+                        final logs = _filtered(data.items);
                         final selected = _selected(logs);
                         if (logs.isEmpty) {
                           return _AuditPanel(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                _FilterBar(
+                                _AuditToolbar(
+                                  scope: _scope,
                                   value: _filter,
                                   isRu: isRu,
-                                  onChanged: _setFilter,
+                                  query: _query,
+                                  actorQuery: _actorQuery,
+                                  profileQuery: _profileQuery,
+                                  dateFrom: _dateFrom,
+                                  dateTo: _dateTo,
+                                  onScopeChanged: _setScope,
+                                  onTypeChanged: _setFilter,
+                                  onQueryChanged: (value) =>
+                                      setState(() => _query = value),
+                                  onActorChanged: (value) =>
+                                      setState(() => _actorQuery = value),
+                                  onProfileChanged: (value) =>
+                                      setState(() => _profileQuery = value),
+                                  onPickDateFrom: () => _pickDate(isFrom: true),
+                                  onPickDateTo: () => _pickDate(isFrom: false),
+                                  onClear: _clearFilters,
+                                  onExport: logs.isEmpty
+                                      ? null
+                                      : () => _copyCsv(logs, isRu),
                                 ),
                                 const Spacer(),
                                 AdminMessageCard(
@@ -116,10 +271,30 @@ class _ProfileActionAuditPageState
                                 child: _AuditPanel(
                                   child: Column(
                                     children: [
-                                      _FilterBar(
+                                      _AuditToolbar(
+                                        scope: _scope,
                                         value: _filter,
                                         isRu: isRu,
-                                        onChanged: _setFilter,
+                                        query: _query,
+                                        actorQuery: _actorQuery,
+                                        profileQuery: _profileQuery,
+                                        dateFrom: _dateFrom,
+                                        dateTo: _dateTo,
+                                        onScopeChanged: _setScope,
+                                        onTypeChanged: _setFilter,
+                                        onQueryChanged: (value) =>
+                                            setState(() => _query = value),
+                                        onActorChanged: (value) =>
+                                            setState(() => _actorQuery = value),
+                                        onProfileChanged: (value) => setState(
+                                          () => _profileQuery = value,
+                                        ),
+                                        onPickDateFrom: () =>
+                                            _pickDate(isFrom: true),
+                                        onPickDateTo: () =>
+                                            _pickDate(isFrom: false),
+                                        onClear: _clearFilters,
+                                        onExport: () => _copyCsv(logs, isRu),
                                       ),
                                       const SizedBox(height: 12),
                                       Expanded(
@@ -154,10 +329,27 @@ class _ProfileActionAuditPageState
                         return _AuditPanel(
                           child: Column(
                             children: [
-                              _FilterBar(
+                              _AuditToolbar(
+                                scope: _scope,
                                 value: _filter,
                                 isRu: isRu,
-                                onChanged: _setFilter,
+                                query: _query,
+                                actorQuery: _actorQuery,
+                                profileQuery: _profileQuery,
+                                dateFrom: _dateFrom,
+                                dateTo: _dateTo,
+                                onScopeChanged: _setScope,
+                                onTypeChanged: _setFilter,
+                                onQueryChanged: (value) =>
+                                    setState(() => _query = value),
+                                onActorChanged: (value) =>
+                                    setState(() => _actorQuery = value),
+                                onProfileChanged: (value) =>
+                                    setState(() => _profileQuery = value),
+                                onPickDateFrom: () => _pickDate(isFrom: true),
+                                onPickDateTo: () => _pickDate(isFrom: false),
+                                onClear: _clearFilters,
+                                onExport: () => _copyCsv(logs, isRu),
                               ),
                               const SizedBox(height: 12),
                               Expanded(
@@ -184,7 +376,57 @@ class _ProfileActionAuditPageState
     );
   }
 
-  ProfileActionLogEntry? _selected(List<ProfileActionLogEntry> logs) {
+  List<AuditLogItem> _filtered(List<AuditLogItem> source) {
+    final query = _query.trim().toLowerCase();
+    final actor = _actorQuery.trim().toLowerCase();
+    final profile = _profileQuery.trim().toLowerCase();
+    return source
+        .where((item) {
+          if (_scope != AuditLogScope.all && item.scope != _scope) return false;
+          if (_filter != ProfileActionLogType.all &&
+              item.scope == AuditLogScope.profile) {
+            if (item.actionType != _filter.name) return false;
+          }
+          if (_filter != ProfileActionLogType.all &&
+              item.scope == AuditLogScope.admin) {
+            return false;
+          }
+          final created = item.createdAt;
+          if (_dateFrom != null &&
+              created != null &&
+              created.isBefore(_dateFrom!)) {
+            return false;
+          }
+          if (_dateTo != null && created != null) {
+            final end = DateTime(
+              _dateTo!.year,
+              _dateTo!.month,
+              _dateTo!.day + 1,
+            );
+            if (!created.isBefore(end)) return false;
+          }
+          if (actor.isNotEmpty &&
+              !('${item.actorLabel} ${item.actorUserId}'.toLowerCase())
+                  .contains(actor)) {
+            return false;
+          }
+          if (profile.isNotEmpty &&
+              !('${item.profileId} ${item.relatedId} ${item.relatedText}'
+                      .toLowerCase())
+                  .contains(profile)) {
+            return false;
+          }
+          if (query.isEmpty) return true;
+          final haystack =
+              '${item.title} ${item.description} ${item.actionType} ${item.status} '
+                      '${item.relatedTable} ${item.relatedText} ${item.templateBody}'
+                  .toLowerCase();
+          return haystack.contains(query);
+        })
+        .toList(growable: false);
+  }
+
+  AuditLogItem? _selected(List<AuditLogItem> logs) {
     if (logs.isEmpty) return null;
     for (final log in logs) {
       if (log.id == _selectedId) return log;
@@ -199,7 +441,95 @@ class _ProfileActionAuditPageState
     });
   }
 
-  void _showDetails(ProfileActionLogEntry entry, bool isRu) {
+  void _setScope(AuditLogScope scope) {
+    setState(() {
+      _scope = scope;
+      _selectedId = '';
+      if (scope == AuditLogScope.admin) _filter = ProfileActionLogType.all;
+    });
+  }
+
+  void _clearFilters() {
+    setState(() {
+      _scope = AuditLogScope.all;
+      _filter = ProfileActionLogType.all;
+      _query = '';
+      _actorQuery = '';
+      _profileQuery = '';
+      _dateFrom = null;
+      _dateTo = null;
+      _selectedId = '';
+    });
+  }
+
+  Future<void> _pickDate({required bool isFrom}) async {
+    final initial = (isFrom ? _dateFrom : _dateTo) ?? DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2035),
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      if (isFrom) {
+        _dateFrom = DateTime(picked.year, picked.month, picked.day);
+      } else {
+        _dateTo = DateTime(picked.year, picked.month, picked.day);
+      }
+    });
+  }
+
+  Future<void> _copyCsv(List<AuditLogItem> logs, bool isRu) async {
+    final rows = <List<String>>[
+      [
+        'created_at',
+        'scope',
+        'action_type',
+        'status',
+        'actor',
+        'profile_id',
+        'related_table',
+        'related_id',
+        'related_text',
+        'title',
+        'description',
+      ],
+      for (final item in logs)
+        [
+          item.createdAt?.toIso8601String() ?? '',
+          item.scope.name,
+          item.actionType,
+          item.status,
+          item.actorLabel,
+          item.profileId,
+          item.relatedTable,
+          item.relatedId,
+          item.relatedText,
+          item.title,
+          item.description,
+        ],
+    ];
+    final csv = rows.map((row) => row.map(_csvCell).join(',')).join('\n');
+    await Clipboard.setData(ClipboardData(text: csv));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            isRu ? 'CSV скопирован в буфер обмена' : 'CSV copied to clipboard',
+          ),
+        ),
+      );
+  }
+
+  String _csvCell(String value) {
+    final escaped = value.replaceAll('"', '""');
+    return '"$escaped"';
+  }
+
+  void _showDetails(AuditLogItem entry, bool isRu) {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -236,35 +566,162 @@ class _AuditPanel extends StatelessWidget {
   }
 }
 
-class _FilterBar extends StatelessWidget {
-  const _FilterBar({
+class _AuditToolbar extends StatelessWidget {
+  const _AuditToolbar({
+    required this.scope,
     required this.value,
     required this.isRu,
-    required this.onChanged,
+    required this.query,
+    required this.actorQuery,
+    required this.profileQuery,
+    required this.dateFrom,
+    required this.dateTo,
+    required this.onScopeChanged,
+    required this.onTypeChanged,
+    required this.onQueryChanged,
+    required this.onActorChanged,
+    required this.onProfileChanged,
+    required this.onPickDateFrom,
+    required this.onPickDateTo,
+    required this.onClear,
+    required this.onExport,
   });
 
+  final AuditLogScope scope;
   final ProfileActionLogType value;
   final bool isRu;
-  final ValueChanged<ProfileActionLogType> onChanged;
+  final String query;
+  final String actorQuery;
+  final String profileQuery;
+  final DateTime? dateFrom;
+  final DateTime? dateTo;
+  final ValueChanged<AuditLogScope> onScopeChanged;
+  final ValueChanged<ProfileActionLogType> onTypeChanged;
+  final ValueChanged<String> onQueryChanged;
+  final ValueChanged<String> onActorChanged;
+  final ValueChanged<String> onProfileChanged;
+  final VoidCallback onPickDateFrom;
+  final VoidCallback onPickDateTo;
+  final VoidCallback onClear;
+  final VoidCallback? onExport;
 
   @override
   Widget build(BuildContext context) {
     final filters = ProfileActionLogType.values;
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: [
-          for (final type in filters) ...[
-            _AuditFilterChip(
-              label: _label(type),
-              selected: value == type,
-              onTap: () => onChanged(type),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: _AuditTextField(
+                initialValue: query,
+                hint: isRu ? 'Поиск по журналу' : 'Search audit log',
+                icon: Icons.search_rounded,
+                onChanged: onQueryChanged,
+              ),
             ),
-            if (type != filters.last) const SizedBox(width: 8),
+            const SizedBox(width: 8),
+            _AuditIconButton(
+              icon: Icons.content_copy_rounded,
+              tooltip: isRu ? 'Скопировать CSV' : 'Copy CSV',
+              onTap: onExport,
+            ),
+            const SizedBox(width: 8),
+            _AuditIconButton(
+              icon: Icons.close_rounded,
+              tooltip: isRu ? 'Сбросить фильтры' : 'Clear filters',
+              onTap: onClear,
+            ),
           ],
-        ],
-      ),
+        ),
+        const SizedBox(height: 10),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              for (final currentScope in AuditLogScope.values) ...[
+                _AuditFilterChip(
+                  label: _scopeLabel(currentScope),
+                  selected: scope == currentScope,
+                  onTap: () => onScopeChanged(currentScope),
+                ),
+                const SizedBox(width: 8),
+              ],
+              if (scope != AuditLogScope.admin)
+                for (final type in filters) ...[
+                  _AuditFilterChip(
+                    label: _label(type),
+                    selected: value == type,
+                    onTap: () => onTypeChanged(type),
+                  ),
+                  if (type != filters.last) const SizedBox(width: 8),
+                ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final isNarrow = constraints.maxWidth < 560;
+            final fields = [
+              _AuditTextField(
+                initialValue: actorQuery,
+                hint: isRu ? 'Автор' : 'Actor',
+                icon: Icons.person_search_rounded,
+                onChanged: onActorChanged,
+              ),
+              _AuditTextField(
+                initialValue: profileQuery,
+                hint: isRu ? 'Анкета / связь' : 'Profile / related',
+                icon: Icons.badge_rounded,
+                onChanged: onProfileChanged,
+              ),
+            ];
+            if (isNarrow) {
+              return Column(
+                children: [
+                  for (final field in fields) ...[
+                    field,
+                    const SizedBox(height: 8),
+                  ],
+                  _DateFilters(
+                    isRu: isRu,
+                    dateFrom: dateFrom,
+                    dateTo: dateTo,
+                    onPickDateFrom: onPickDateFrom,
+                    onPickDateTo: onPickDateTo,
+                  ),
+                ],
+              );
+            }
+            return Row(
+              children: [
+                for (final field in fields) ...[
+                  Expanded(child: field),
+                  const SizedBox(width: 8),
+                ],
+                _DateFilters(
+                  isRu: isRu,
+                  dateFrom: dateFrom,
+                  dateTo: dateTo,
+                  onPickDateFrom: onPickDateFrom,
+                  onPickDateTo: onPickDateTo,
+                ),
+              ],
+            );
+          },
+        ),
+      ],
     );
+  }
+
+  String _scopeLabel(AuditLogScope scope) {
+    return switch (scope) {
+      AuditLogScope.all => isRu ? 'Все' : 'All',
+      AuditLogScope.profile => isRu ? 'Профили' : 'Profiles',
+      AuditLogScope.admin => isRu ? 'Админка' : 'Back office',
+    };
   }
 
   String _label(ProfileActionLogType type) {
@@ -275,6 +732,174 @@ class _FilterBar extends StatelessWidget {
       ProfileActionLogType.folder => isRu ? 'Папки' : 'Folders',
       ProfileActionLogType.message => isRu ? 'Чат' : 'Chat',
     };
+  }
+}
+
+class _AuditTextField extends StatefulWidget {
+  const _AuditTextField({
+    required this.initialValue,
+    required this.hint,
+    required this.icon,
+    required this.onChanged,
+  });
+
+  final String initialValue;
+  final String hint;
+  final IconData icon;
+  final ValueChanged<String> onChanged;
+
+  @override
+  State<_AuditTextField> createState() => _AuditTextFieldState();
+}
+
+class _AuditTextFieldState extends State<_AuditTextField> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialValue);
+  }
+
+  @override
+  void didUpdateWidget(covariant _AuditTextField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialValue != widget.initialValue &&
+        _controller.text != widget.initialValue) {
+      _controller.text = widget.initialValue;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: _controller,
+      onChanged: widget.onChanged,
+      style: adminBodyStyle(size: 13, color: kTextDark),
+      decoration: InputDecoration(
+        isDense: true,
+        prefixIcon: Icon(widget.icon, size: 18, color: kTextMuted),
+        hintText: widget.hint,
+        hintStyle: adminBodyStyle(size: 13, color: kTextMuted),
+        filled: true,
+        fillColor: Colors.white.withValues(alpha: 0.84),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: const BorderSide(color: kBorderColor),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: const BorderSide(color: kBorderColor),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: const BorderSide(color: BrandTheme.redTop),
+        ),
+      ),
+    );
+  }
+}
+
+class _DateFilters extends StatelessWidget {
+  const _DateFilters({
+    required this.isRu,
+    required this.dateFrom,
+    required this.dateTo,
+    required this.onPickDateFrom,
+    required this.onPickDateTo,
+  });
+
+  final bool isRu;
+  final DateTime? dateFrom;
+  final DateTime? dateTo;
+  final VoidCallback onPickDateFrom;
+  final VoidCallback onPickDateTo;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _DateButton(
+          label: isRu ? 'С' : 'From',
+          value: _date(dateFrom),
+          onTap: onPickDateFrom,
+        ),
+        const SizedBox(width: 8),
+        _DateButton(
+          label: isRu ? 'ПО' : 'To',
+          value: _date(dateTo),
+          onTap: onPickDateTo,
+        ),
+      ],
+    );
+  }
+
+  String _date(DateTime? value) {
+    if (value == null) return '';
+    return '${value.day.toString().padLeft(2, '0')}.${value.month.toString().padLeft(2, '0')}';
+  }
+}
+
+class _DateButton extends StatelessWidget {
+  const _DateButton({
+    required this.label,
+    required this.value,
+    required this.onTap,
+  });
+
+  final String label;
+  final String value;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return _AuditFilterChip(
+      label: value.isEmpty ? label : '$label $value',
+      selected: value.isNotEmpty,
+      onTap: onTap,
+    );
+  }
+}
+
+class _AuditIconButton extends StatelessWidget {
+  const _AuditIconButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: onTap,
+        child: Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
+            color: onTap == null
+                ? Colors.white.withValues(alpha: 0.42)
+                : Colors.white.withValues(alpha: 0.86),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: kBorderColor),
+          ),
+          child: Icon(icon, color: onTap == null ? kTextMuted : kTextDark),
+        ),
+      ),
+    );
   }
 }
 
@@ -322,10 +947,10 @@ class _AuditList extends StatelessWidget {
     required this.onSelect,
   });
 
-  final List<ProfileActionLogEntry> logs;
+  final List<AuditLogItem> logs;
   final String selectedId;
   final bool isRu;
-  final ValueChanged<ProfileActionLogEntry> onSelect;
+  final ValueChanged<AuditLogItem> onSelect;
 
   @override
   Widget build(BuildContext context) {
@@ -353,7 +978,13 @@ class _AuditList extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Icon(_icon(log.actionType), color: BrandTheme.redTop, size: 22),
+                Icon(
+                  log.isAdminAction
+                      ? Icons.admin_panel_settings_rounded
+                      : _icon(log.actionType),
+                  color: log.isAdminAction ? kTextDark : BrandTheme.redTop,
+                  size: 22,
+                ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(
@@ -372,6 +1003,9 @@ class _AuditList extends StatelessWidget {
                       const SizedBox(height: 3),
                       Text(
                         [
+                          log.isAdminAction
+                              ? (isRu ? 'Админка' : 'Back office')
+                              : '',
                           log.actorLabel,
                           _status(log.status),
                         ].where((e) => e.trim().isNotEmpty).join(' • '),
@@ -439,7 +1073,7 @@ class _AuditList extends StatelessWidget {
 class _AuditDetails extends StatelessWidget {
   const _AuditDetails({required this.entry, required this.isRu});
 
-  final ProfileActionLogEntry? entry;
+  final AuditLogItem? entry;
   final bool isRu;
 
   @override
@@ -462,13 +1096,20 @@ class _AuditDetails extends StatelessWidget {
         ),
         const SizedBox(height: 14),
         _DetailLine(label: isRu ? 'Автор' : 'Actor', value: log.actorLabel),
+        _DetailLine(
+          label: isRu ? 'Источник' : 'Scope',
+          value: log.isAdminAction
+              ? (isRu ? 'Админка' : 'Back office')
+              : (isRu ? 'Профиль' : 'Profile'),
+        ),
         _DetailLine(label: isRu ? 'Тип' : 'Type', value: log.actionType),
         _DetailLine(label: isRu ? 'Статус' : 'Status', value: log.status),
         _DetailLine(
           label: isRu ? 'Дата' : 'Date',
           value: _fullDate(log.createdAt),
         ),
-        _DetailLine(label: 'Profile ID', value: log.profileId),
+        if (log.profileId.isNotEmpty)
+          _DetailLine(label: 'Profile ID', value: log.profileId),
         _DetailLine(
           label: isRu ? 'Связь' : 'Related',
           value: [
@@ -582,7 +1223,7 @@ class _TextBox extends StatelessWidget {
 class _AuditTimeline extends StatelessWidget {
   const _AuditTimeline({required this.entry, required this.isRu});
 
-  final ProfileActionLogEntry entry;
+  final AuditLogItem entry;
   final bool isRu;
 
   @override

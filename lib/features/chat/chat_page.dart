@@ -2059,18 +2059,25 @@ class _ChatAvatar extends StatelessWidget {
         border: Border.all(color: Colors.white, width: 1.5),
         boxShadow: BrandTheme.basePillShadow(isDark: false),
       ),
-      clipBehavior: Clip.antiAlias,
       child: avatarUrl.trim().isEmpty
           ? const Icon(Icons.person_rounded, color: Colors.white, size: 19)
-          : CachedNetworkImage(
-              imageUrl: avatarUrl,
-              fit: BoxFit.cover,
-              memCacheWidth: 96,
-              maxWidthDiskCache: 160,
-              errorWidget: (_, _, _) => const Icon(
-                Icons.person_rounded,
-                color: Colors.white,
-                size: 19,
+          : ClipOval(
+              child: SizedBox.expand(
+                child: CachedNetworkImage(
+                  imageUrl: avatarUrl,
+                  fit: BoxFit.cover,
+                  alignment: Alignment.center,
+                  memCacheWidth: 160,
+                  maxWidthDiskCache: 220,
+                  errorWidget: (_, _, _) => const ColoredBox(
+                    color: kTextDark,
+                    child: Icon(
+                      Icons.person_rounded,
+                      color: Colors.white,
+                      size: 19,
+                    ),
+                  ),
+                ),
               ),
             ),
     );

@@ -272,32 +272,7 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
   }
 
   List<CatalogSavedSearch> _builtInSavedSearches(AppLocalizations t) {
-    return [
-      CatalogSavedSearch(
-        id: 'builtin_fashion_18_25',
-        title: t.savedSearchFashion1825,
-        filters: const CatalogFilterSnapshot(ageFrom: 18, ageTo: 25),
-        isBuiltin: true,
-      ),
-      CatalogSavedSearch(
-        id: 'builtin_kids',
-        title: t.savedSearchKids,
-        filters: const CatalogFilterSnapshot(ageFrom: 3, ageTo: 17),
-        isBuiltin: true,
-      ),
-      CatalogSavedSearch(
-        id: 'builtin_commercial',
-        title: t.savedSearchCommercial,
-        filters: const CatalogFilterSnapshot(ageFrom: 18, ageTo: 45),
-        isBuiltin: true,
-      ),
-      CatalogSavedSearch(
-        id: 'builtin_sports',
-        title: t.savedSearchSports,
-        filters: const CatalogFilterSnapshot(ageFrom: 16, ageTo: 35),
-        isBuiltin: true,
-      ),
-    ];
+    return const <CatalogSavedSearch>[];
   }
 
   Future<void> _applySavedSearch(CatalogSavedSearch search) async {

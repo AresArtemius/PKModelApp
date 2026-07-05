@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/app_error_mapper.dart';
+import '../../core/admin_action_log_service.dart';
 import '../../core/roles_provider.dart';
 import '../../core/router.dart';
 import '../../gen_l10n/app_localizations.dart';
@@ -196,6 +197,23 @@ class CastingAgentApplicationsPage extends ConsumerWidget {
           'p_approved': approved,
           'p_comment': '',
         },
+      );
+      await AdminActionLogService(Supabase.instance.client).log(
+        actionType: approved
+            ? 'casting_agent_application_approved'
+            : 'casting_agent_application_rejected',
+        title: approved
+            ? 'Заявка заказчика одобрена'
+            : 'Заявка заказчика отклонена',
+        description: application.comment,
+        targetTable: 'casting_agent_applications',
+        targetId: application.id,
+        targetText: [
+          application.owner.displayName,
+          application.owner.companyName,
+          application.owner.email,
+        ].where((e) => e.trim().isNotEmpty).join(' • '),
+        status: approved ? 'approved' : 'rejected',
       );
     } catch (error) {
       if (!context.mounted) return;

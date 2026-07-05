@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/supabase_provider.dart';
+import '../../core/admin_action_log_service.dart';
 import '../../gen_l10n/app_localizations.dart';
 import '../../ui/brand/brand_admin_header.dart';
 import '../../ui/brand/brand_theme.dart';
@@ -59,6 +60,14 @@ class _CreateCastingAdminPageState
       'dates': dates.map((d) => _dateOnly(d).toIso8601String()).toList(),
       'created_at': DateTime.now().toIso8601String(),
     });
+    await AdminActionLogService(sb).log(
+      actionType: 'casting_created',
+      title: 'Кастинг создан',
+      description: desc,
+      targetTable: 'castings',
+      targetText: title,
+      status: 'created',
+    );
 
     if (!mounted) return;
     context.go('/castings');
