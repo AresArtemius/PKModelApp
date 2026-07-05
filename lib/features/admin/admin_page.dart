@@ -331,7 +331,7 @@ class _AdminHome extends StatelessWidget {
               _AdminDashboardHeader(
                 title: ru ? 'АДМИН-ПАНЕЛЬ' : 'BACK OFFICE',
                 subtitle: ru
-                    ? 'Заявки, безопасность, подборки, кастинги и журнал действий'
+                    ? 'Заявки, безопасность, подборки, кастинги, SLA и журнал действий'
                     : 'Requests, safety, selections, castings and audit log',
                 total: counts.total,
               ),
@@ -2525,12 +2525,19 @@ class _AdminStatGrid extends StatelessWidget {
     final stats = [
       (label: ru ? 'МОДЕРАЦИЯ' : 'MODERATION', value: counts.moderation),
       (label: ru ? 'ЗАЯВКИ' : 'REQUESTS', value: counts.agentApplications),
-      (label: ru ? 'ОБЪЕДИНЕНИЯ' : 'MERGE', value: counts.accountMerges),
+      (label: ru ? 'ОБЪЕДИНЕНИЯ' : 'MERGES', value: counts.accountMerges),
       (label: ru ? 'БЕЗОПАСНОСТЬ' : 'SAFETY', value: counts.safety),
+      (label: ru ? 'ПРОСРОЧЕНО' : 'OVERDUE', value: counts.overdueTasks),
+      (label: ru ? 'КРИТИЧНО' : 'CRITICAL', value: counts.criticalTasks),
+      (label: ru ? 'МОИ ПРОСРОЧ.' : 'MY OVERDUE', value: counts.myOverdueTasks),
     ];
     return LayoutBuilder(
       builder: (context, constraints) {
-        final columns = constraints.maxWidth >= 980 ? 4 : 2;
+        final columns = constraints.maxWidth >= 1280
+            ? 4
+            : constraints.maxWidth >= 760
+            ? 3
+            : 2;
         final gap = 10.0;
         final itemWidth =
             (constraints.maxWidth - gap * (columns - 1)) / columns;
