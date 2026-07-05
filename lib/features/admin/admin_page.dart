@@ -37,7 +37,7 @@ final _adminTaskAssignmentsProvider = FutureProvider<List<_AdminTaskAssignment>>
     final rows = await sb
         .from('admin_task_assignments')
         .select(
-          'id,target_table,target_id,assigned_to_user_id,assigned_to_name,assigned_at',
+          'id,target_table,target_id,assigned_to_user_id,assigned_to_name,assigned_at,priority,due_at',
         )
         .order('assigned_at', ascending: false);
     return (rows as List)
@@ -51,6 +51,21 @@ final _adminTaskAssignmentsProvider = FutureProvider<List<_AdminTaskAssignment>>
     if (SupabaseCompat.isMissingRelation(e, const ['admin_task_assignments'])) {
       return const <_AdminTaskAssignment>[];
     }
+    if (SupabaseCompat.isMissingAnyColumn(e, const ['priority', 'due_at'])) {
+      final rows = await sb
+          .from('admin_task_assignments')
+          .select(
+            'id,target_table,target_id,assigned_to_user_id,assigned_to_name,assigned_at',
+          )
+          .order('assigned_at', ascending: false);
+      return (rows as List)
+          .map(
+            (row) => _AdminTaskAssignment.fromMap(
+              Map<String, dynamic>.from(row as Map),
+            ),
+          )
+          .toList(growable: false);
+    }
     rethrow;
   }
 });
@@ -63,6 +78,8 @@ class _AdminTaskAssignment {
     required this.assignedToUserId,
     required this.assignedToName,
     required this.assignedAt,
+    required this.priority,
+    required this.dueAt,
   });
 
   factory _AdminTaskAssignment.fromMap(Map<String, dynamic> map) {
@@ -73,6 +90,8 @@ class _AdminTaskAssignment {
       assignedToUserId: (map['assigned_to_user_id'] ?? '').toString().trim(),
       assignedToName: (map['assigned_to_name'] ?? '').toString().trim(),
       assignedAt: DateTime.tryParse((map['assigned_at'] ?? '').toString()),
+      priority: _normalizeAdminTaskPriority(map['priority']),
+      dueAt: DateTime.tryParse((map['due_at'] ?? '').toString()),
     );
   }
 
@@ -82,8 +101,16 @@ class _AdminTaskAssignment {
   final String assignedToUserId;
   final String assignedToName;
   final DateTime? assignedAt;
+  final String priority;
+  final DateTime? dueAt;
 
   String get key => '$targetTable:$targetId';
+}
+
+String _normalizeAdminTaskPriority(Object? value) {
+  final raw = (value ?? '').toString().trim().toLowerCase();
+  if (raw == 'critical' || raw == 'urgent' || raw == 'normal') return raw;
+  return 'normal';
 }
 
 class AdminPage extends ConsumerWidget {
@@ -422,6 +449,8 @@ class _AdminWorkspaceRow {
     required this.filter,
     this.assignedToUserId = '',
     this.assignedToName = '',
+    this.priority = 'normal',
+    this.dueAt,
   });
 
   final String id;
@@ -436,14 +465,40 @@ class _AdminWorkspaceRow {
   final _AdminWorkspaceFilter filter;
   final String assignedToUserId;
   final String assignedToName;
+  final String priority;
+  final DateTime? dueAt;
 
   String get assignmentKey => '$targetTable:$targetId';
   String get assignmentLabel => assignedToName.trim().isNotEmpty
       ? assignedToName.trim()
       : assignedToUserId.trim();
+  bool get isOverdue =>
+      dueAt != null && dueAt!.isBefore(DateTime.now().toUtc());
+  int get priorityRank => switch (priority) {
+    'critical' => 3,
+    'urgent' => 2,
+    _ => 1,
+  };
+  String priorityLabel(bool ru) => switch (priority) {
+    'critical' => ru ? 'Критично' : 'Critical',
+    'urgent' => ru ? 'Срочно' : 'Urgent',
+    _ => ru ? 'Обычно' : 'Normal',
+  };
+  String dueLabel(bool ru) {
+    final due = dueAt;
+    if (due == null) return ru ? 'Без срока' : 'No due date';
+    final local = due.toLocal();
+    final date =
+        '${local.day.toString().padLeft(2, '0')}.${local.month.toString().padLeft(2, '0')}';
+    if (isOverdue) return ru ? 'Просрочено: $date' : 'Overdue: $date';
+    return ru ? 'До $date' : 'Due $date';
+  }
+
+  String slaLabel(bool ru) => '${priorityLabel(ru)} • ${dueLabel(ru)}';
 
   String get searchable =>
-      '$kind $title $subtitle $status $dateText $assignmentLabel'.toLowerCase();
+      '$kind $title $subtitle $status $dateText $assignmentLabel $priority'
+          .toLowerCase();
 }
 
 class _AdminWorkspaceTable extends ConsumerStatefulWidget {
@@ -514,6 +569,8 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
               assignmentFor('profiles', item.id)?.assignedToUserId ?? '',
           assignedToName:
               assignmentFor('profiles', item.id)?.assignedToName ?? '',
+          priority: assignmentFor('profiles', item.id)?.priority ?? 'normal',
+          dueAt: assignmentFor('profiles', item.id)?.dueAt,
         ),
       for (final item in applications.valueOrNull ?? const [])
         _AdminWorkspaceRow(
@@ -545,6 +602,10 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
                 item.id,
               )?.assignedToName ??
               '',
+          priority:
+              assignmentFor('casting_agent_applications', item.id)?.priority ??
+              'normal',
+          dueAt: assignmentFor('casting_agent_applications', item.id)?.dueAt,
         ),
       for (final item in merges.valueOrNull ?? const [])
         _AdminWorkspaceRow(
@@ -574,6 +635,10 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
                 item.id,
               )?.assignedToName ??
               '',
+          priority:
+              assignmentFor('account_merge_requests', item.id)?.priority ??
+              'normal',
+          dueAt: assignmentFor('account_merge_requests', item.id)?.dueAt,
         ),
       for (final row in safety.valueOrNull ?? const <Map<String, dynamic>>[])
         _AdminWorkspaceRow(
@@ -608,10 +673,31 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
                 (row['id'] ?? '').toString(),
               )?.assignedToName ??
               '',
+          priority:
+              assignmentFor(
+                'profile_reports',
+                (row['id'] ?? '').toString(),
+              )?.priority ??
+              'normal',
+          dueAt: assignmentFor(
+            'profile_reports',
+            (row['id'] ?? '').toString(),
+          )?.dueAt,
         ),
     ];
 
-    rows.sort((a, b) => b.dateText.compareTo(a.dateText));
+    rows.sort((a, b) {
+      final overdue = (b.isOverdue ? 1 : 0).compareTo(a.isOverdue ? 1 : 0);
+      if (overdue != 0) return overdue;
+      final priority = b.priorityRank.compareTo(a.priorityRank);
+      if (priority != 0) return priority;
+      final aDue = a.dueAt;
+      final bDue = b.dueAt;
+      if (aDue != null && bDue != null) return aDue.compareTo(bDue);
+      if (aDue != null) return -1;
+      if (bDue != null) return 1;
+      return b.dateText.compareTo(a.dateText);
+    });
 
     final query = _searchC.text.trim().toLowerCase();
     final filtered = rows
@@ -758,6 +844,27 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
               onUnassign: selectedRows.isEmpty || _bulkBusy
                   ? null
                   : () => _unassignRows(selectedRows),
+              onSetNormal: selectedRows.isEmpty || _bulkBusy
+                  ? null
+                  : () => _setRowsPriority(selectedRows, 'normal'),
+              onSetUrgent: selectedRows.isEmpty || _bulkBusy
+                  ? null
+                  : () => _setRowsPriority(selectedRows, 'urgent'),
+              onSetCritical: selectedRows.isEmpty || _bulkBusy
+                  ? null
+                  : () => _setRowsPriority(selectedRows, 'critical'),
+              onDue24h: selectedRows.isEmpty || _bulkBusy
+                  ? null
+                  : () => _setRowsDue(selectedRows, const Duration(hours: 24)),
+              onDue48h: selectedRows.isEmpty || _bulkBusy
+                  ? null
+                  : () => _setRowsDue(selectedRows, const Duration(hours: 48)),
+              onDue7d: selectedRows.isEmpty || _bulkBusy
+                  ? null
+                  : () => _setRowsDue(selectedRows, const Duration(days: 7)),
+              onClearDue: selectedRows.isEmpty || _bulkBusy
+                  ? null
+                  : () => _clearRowsDue(selectedRows),
             ),
             const SizedBox(height: 12),
           ],
@@ -1270,6 +1377,105 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
     );
   }
 
+  Future<void> _setRowsPriority(
+    List<_AdminWorkspaceRow> rows,
+    String priority,
+  ) async {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final normalized = _normalizeAdminTaskPriority(priority);
+    final label = _priorityLabel(normalized, ru);
+    await _upsertTaskMeta(
+      rows: rows,
+      successMessage: ru ? 'Приоритет: $label' : 'Priority: $label',
+      actionType: 'admin_tasks_priority_updated',
+      title: ru ? 'Приоритет задач обновлен' : 'Task priority updated',
+      status: normalized,
+      values: <String, dynamic>{'priority': normalized},
+      extraMetadata: <String, dynamic>{'priority': normalized},
+    );
+  }
+
+  Future<void> _setRowsDue(
+    List<_AdminWorkspaceRow> rows,
+    Duration duration,
+  ) async {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final dueAt = DateTime.now().toUtc().add(duration);
+    await _upsertTaskMeta(
+      rows: rows,
+      successMessage: ru ? 'Срок обновлен' : 'Due date updated',
+      actionType: 'admin_tasks_due_updated',
+      title: ru ? 'Срок задач обновлен' : 'Task due date updated',
+      status: 'due_updated',
+      values: <String, dynamic>{'due_at': dueAt.toIso8601String()},
+      extraMetadata: <String, dynamic>{
+        'due_at': dueAt.toIso8601String(),
+        'duration_hours': duration.inHours,
+      },
+    );
+  }
+
+  Future<void> _clearRowsDue(List<_AdminWorkspaceRow> rows) async {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    await _upsertTaskMeta(
+      rows: rows,
+      successMessage: ru ? 'Срок снят' : 'Due date cleared',
+      actionType: 'admin_tasks_due_cleared',
+      title: ru ? 'Срок задач снят' : 'Task due date cleared',
+      status: 'due_cleared',
+      values: <String, dynamic>{'due_at': null},
+      extraMetadata: const <String, dynamic>{'due_at': null},
+    );
+  }
+
+  Future<void> _upsertTaskMeta({
+    required List<_AdminWorkspaceRow> rows,
+    required String successMessage,
+    required String actionType,
+    required String title,
+    required String status,
+    required Map<String, dynamic> values,
+    required Map<String, dynamic> extraMetadata,
+  }) async {
+    await _runBulkAction(
+      successMessage: successMessage,
+      action: () async {
+        final sb = ref.read(supabaseProvider);
+        final user = sb.auth.currentUser;
+        final now = DateTime.now().toUtc().toIso8601String();
+        await sb.from('admin_task_assignments').upsert(<Map<String, dynamic>>[
+          for (final row in rows)
+            <String, dynamic>{
+              'target_table': row.targetTable,
+              'target_id': row.targetId,
+              'updated_at': now,
+              if (user != null) 'assigned_by_user_id': user.id,
+              ...values,
+            },
+        ], onConflict: 'target_table,target_id');
+        await AdminActionLogService(sb).log(
+          actionType: actionType,
+          title: title,
+          description: rows.map((row) => row.title).join(' • '),
+          targetTable: 'admin_task_assignments',
+          targetText: '${rows.length}',
+          status: status,
+          metadata: <String, dynamic>{
+            ...extraMetadata,
+            'rows': _assignmentLogRows(rows),
+          },
+        );
+        ref.invalidate(_adminTaskAssignmentsProvider);
+      },
+    );
+  }
+
+  String _priorityLabel(String priority, bool ru) => switch (priority) {
+    'critical' => ru ? 'Критично' : 'Critical',
+    'urgent' => ru ? 'Срочно' : 'Urgent',
+    _ => ru ? 'Обычно' : 'Normal',
+  };
+
   Future<String> _loadCurrentAdminName(
     SupabaseClient sb,
     String userId, {
@@ -1302,6 +1508,8 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
           'table': row.targetTable,
           'type': row.kind,
           'title': row.title,
+          'priority': row.priority,
+          'due_at': row.dueAt?.toUtc().toIso8601String() ?? '',
         },
     ];
   }
@@ -1460,13 +1668,17 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
   }
 
   String _rowsToCsv(List<_AdminWorkspaceRow> rows) {
-    final buffer = StringBuffer('type,title,details,assignee,status,date,id\n');
+    final buffer = StringBuffer(
+      'type,title,details,sla,assignee,status,date,id\n',
+    );
     for (final row in rows) {
+      final ru = Localizations.localeOf(context).languageCode == 'ru';
       buffer.writeln(
         [
           row.kind,
           row.title,
           row.subtitle,
+          row.slaLabel(ru),
           row.assignmentLabel,
           row.status,
           row.dateText,
@@ -1485,8 +1697,12 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
   String _adminBulkErrorText(PostgrestException error) {
     final ru = Localizations.localeOf(context).languageCode == 'ru';
     if (SupabaseCompat.isMissingRelation(error, const [
-      'admin_task_assignments',
-    ])) {
+          'admin_task_assignments',
+        ]) ||
+        SupabaseCompat.isMissingAnyColumn(error, const [
+          'priority',
+          'due_at',
+        ])) {
       return ru
           ? 'Примените SQL supabase/sql/admin_task_assignments.sql'
           : 'Apply supabase/sql/admin_task_assignments.sql';
@@ -1630,6 +1846,13 @@ class _AdminBulkBar extends StatelessWidget {
     required this.onExport,
     required this.onAssignToMe,
     required this.onUnassign,
+    required this.onSetNormal,
+    required this.onSetUrgent,
+    required this.onSetCritical,
+    required this.onDue24h,
+    required this.onDue48h,
+    required this.onDue7d,
+    required this.onClearDue,
   });
 
   final int count;
@@ -1644,6 +1867,13 @@ class _AdminBulkBar extends StatelessWidget {
   final VoidCallback? onExport;
   final VoidCallback? onAssignToMe;
   final VoidCallback? onUnassign;
+  final VoidCallback? onSetNormal;
+  final VoidCallback? onSetUrgent;
+  final VoidCallback? onSetCritical;
+  final VoidCallback? onDue24h;
+  final VoidCallback? onDue48h;
+  final VoidCallback? onDue7d;
+  final VoidCallback? onClearDue;
 
   @override
   Widget build(BuildContext context) {
@@ -1694,6 +1924,42 @@ class _AdminBulkBar extends StatelessWidget {
                 label: ru ? 'СНЯТЬ ОТВ.' : 'UNASSIGN',
                 icon: Icons.person_remove_rounded,
                 onTap: onUnassign,
+              ),
+              _AdminBulkButton(
+                label: ru ? 'ОБЫЧНО' : 'NORMAL',
+                icon: Icons.low_priority_rounded,
+                onTap: onSetNormal,
+              ),
+              _AdminBulkButton(
+                label: ru ? 'СРОЧНО' : 'URGENT',
+                icon: Icons.priority_high_rounded,
+                onTap: onSetUrgent,
+              ),
+              _AdminBulkButton(
+                label: ru ? 'КРИТИЧНО' : 'CRITICAL',
+                icon: Icons.local_fire_department_rounded,
+                onTap: onSetCritical,
+                dark: true,
+              ),
+              _AdminBulkButton(
+                label: '24Ч',
+                icon: Icons.timer_rounded,
+                onTap: onDue24h,
+              ),
+              _AdminBulkButton(
+                label: '48Ч',
+                icon: Icons.av_timer_rounded,
+                onTap: onDue48h,
+              ),
+              _AdminBulkButton(
+                label: '7Д',
+                icon: Icons.event_available_rounded,
+                onTap: onDue7d,
+              ),
+              _AdminBulkButton(
+                label: ru ? 'БЕЗ СРОКА' : 'NO DUE',
+                icon: Icons.event_busy_rounded,
+                onTap: onClearDue,
               ),
               _AdminBulkButton(
                 label: ru ? 'CSV' : 'CSV',
@@ -1960,11 +2226,12 @@ class _AdminRowsTable extends StatelessWidget {
         columnWidths: const {
           0: FixedColumnWidth(44),
           1: FixedColumnWidth(112),
-          2: FlexColumnWidth(1.35),
-          3: FlexColumnWidth(1.15),
-          4: FixedColumnWidth(128),
-          5: FixedColumnWidth(112),
-          6: FixedColumnWidth(86),
+          2: FlexColumnWidth(1.25),
+          3: FlexColumnWidth(1.05),
+          4: FixedColumnWidth(142),
+          5: FixedColumnWidth(128),
+          6: FixedColumnWidth(112),
+          7: FixedColumnWidth(86),
         },
         border: TableBorder(
           horizontalInside: BorderSide(
@@ -1980,6 +2247,7 @@ class _AdminRowsTable extends StatelessWidget {
               'ТИП',
               'НАЗВАНИЕ',
               'ДЕТАЛИ',
+              'SLA',
               'ОТВЕТСТВ.',
               'СТАТУС',
               'ДАТА',
@@ -2003,6 +2271,13 @@ class _AdminRowsTable extends StatelessWidget {
                 _TableCellBox(text: row.kind),
                 _TableCellBox(text: row.title, strong: true),
                 _TableCellBox(text: row.subtitle),
+                _TableCellBox(
+                  text: row.slaLabel(
+                    Localizations.localeOf(context).languageCode == 'ru',
+                  ),
+                  accent: row.isOverdue || row.priorityRank > 1,
+                  strong: row.isOverdue || row.priority == 'critical',
+                ),
                 _TableCellBox(
                   text: row.assignmentLabel.isEmpty ? '—' : row.assignmentLabel,
                   accent: row.assignedToUserId.isNotEmpty,
@@ -2124,6 +2399,21 @@ class _AdminMobileRowCard extends StatelessWidget {
                     style: adminBodyStyle(size: 12, color: kTextMuted),
                   ),
                 ],
+                const SizedBox(height: 4),
+                Text(
+                  row.slaLabel(
+                    Localizations.localeOf(context).languageCode == 'ru',
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: adminBodyStyle(
+                    size: 11,
+                    color: row.isOverdue || row.priorityRank > 1
+                        ? BrandTheme.redTop
+                        : kTextMuted,
+                    weight: FontWeight.w900,
+                  ),
+                ),
                 const SizedBox(height: 4),
                 Text(
                   row.assignmentLabel.isEmpty
