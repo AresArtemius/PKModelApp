@@ -125,16 +125,10 @@ class AdminActionLogService {
         'status': status.trim().isEmpty ? 'done' : status.trim(),
         'metadata': metadata,
       });
-    } on PostgrestException catch (e) {
-      final isMissing =
-          SupabaseCompat.isMissingRelation(e, const ['admin_action_logs']) ||
-          SupabaseCompat.isMissingAnyColumn(e, const [
-            'actor_name',
-            'actor_company',
-            'target_table',
-            'target_text',
-          ]);
-      if (!isMissing) rethrow;
+    } on PostgrestException {
+      // Audit is intentionally best-effort: admin operations must not fail
+      // because the optional log table/policies have not been applied yet.
+      return;
     }
   }
 
@@ -150,12 +144,9 @@ class AdminActionLogService {
         name: (map['full_name'] ?? '').toString().trim(),
         company: (map['company_name'] ?? '').toString().trim(),
       );
-    } on PostgrestException catch (e) {
-      if (!SupabaseCompat.isMissingRelation(e, const ['user_profiles'])) {
-        rethrow;
-      }
+    } on PostgrestException {
+      return const _AdminActionActorSnapshot();
     }
-    return const _AdminActionActorSnapshot();
   }
 
   String? _nullIfEmpty(String value) {

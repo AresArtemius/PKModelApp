@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/admin_action_log_service.dart';
 import '../../core/app_error_mapper.dart';
 import '../../core/router.dart';
 import '../../core/supabase_provider.dart';
@@ -126,6 +127,20 @@ class _SelectionAdminPageState extends ConsumerState<SelectionAdminPage> {
       await sb.rpc(
         'admin_delete_selection_entities',
         params: {'p_selection_ids': selectionIds, 'p_casting_ids': castingIds},
+      );
+      await AdminActionLogService(sb).log(
+        actionType: 'selection_entities_bulk_deleted',
+        title: 'Массовое удаление подборок',
+        description:
+            'Удалено подборок: ${selectionIds.length}; кастингов: ${castingIds.length}.',
+        targetTable: 'selections',
+        targetText: '${selectionIds.length + castingIds.length} объектов',
+        status: 'deleted',
+        metadata: {
+          'selection_ids': selectionIds,
+          'casting_ids': castingIds,
+          'total': selectionIds.length + castingIds.length,
+        },
       );
 
       if (!mounted) return;

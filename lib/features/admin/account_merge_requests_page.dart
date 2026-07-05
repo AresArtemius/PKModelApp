@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/app_error_mapper.dart';
+import '../../core/admin_action_log_service.dart';
 import '../../core/router.dart';
 import '../../gen_l10n/app_localizations.dart';
 import '../../ui/brand/brand_admin_header.dart';
@@ -106,7 +107,8 @@ class AccountMergeRequestsPage extends ConsumerWidget {
   }) async {
     final t = AppLocalizations.of(context)!;
     try {
-      await Supabase.instance.client.rpc(
+      final sb = Supabase.instance.client;
+      await sb.rpc(
         'admin_decide_account_merge_request',
         params: {
           'p_request_id': request.id,
@@ -114,6 +116,28 @@ class AccountMergeRequestsPage extends ConsumerWidget {
           'p_admin_note': approved
               ? 'Проверено администратором. Номер записан в профиль аккаунта.'
               : 'Отклонено администратором.',
+        },
+      );
+      await AdminActionLogService(sb).log(
+        actionType: approved
+            ? 'account_merge_request_approved'
+            : 'account_merge_request_rejected',
+        title: approved
+            ? 'Одобрено объединение аккаунта'
+            : 'Отклонено объединение аккаунта',
+        description: approved
+            ? 'Телефон ${request.requestedPhone} записан в профиль аккаунта.'
+            : 'Заявка на объединение аккаунтов отклонена.',
+        targetTable: 'account_merge_requests',
+        targetId: request.id,
+        targetText: request.title,
+        status: approved ? 'approved' : 'rejected',
+        metadata: {
+          'requester_user_id': request.requesterUserId,
+          'requested_phone': request.requestedPhone,
+          'requester_email': request.requesterEmail,
+          'requester_phone': request.requesterPhone,
+          'requester_company_name': request.requesterCompanyName,
         },
       );
       ref.invalidate(accountMergeRequestsProvider);

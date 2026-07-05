@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/services.dart';
 
+import '../../core/admin_action_log_service.dart';
 import '../../core/app_error_mapper.dart';
 import '../../core/public_links.dart';
 import '../../core/router.dart';
@@ -304,6 +305,21 @@ class SelectionProjectPage extends ConsumerWidget {
                         .update({'status': next.storageValue})
                         .eq('id', selectionId);
                   }
+                  await AdminActionLogService(sb).log(
+                    actionType: 'selection_status_changed',
+                    title: 'Статус подборки изменен',
+                    description: selectionStatusLabel(t, next),
+                    targetTable: 'selections',
+                    targetId: selectionId,
+                    targetText: title,
+                    status: next.storageValue,
+                    metadata: {
+                      'selection_id': selectionId,
+                      'selection_title': title,
+                      'previous_status': status.storageValue,
+                      'next_status': next.storageValue,
+                    },
+                  );
                   ref.invalidate(selectionProjectProvider(selectionId));
                 } catch (e) {
                   if (!context.mounted) return;
@@ -340,6 +356,25 @@ class SelectionProjectPage extends ConsumerWidget {
                         })
                         .eq('id', selectionId);
                   }
+                  await AdminActionLogService(sb).log(
+                    actionType: next
+                        ? 'selection_public_link_enabled'
+                        : 'selection_public_link_disabled',
+                    title: next
+                        ? 'Публичная ссылка подборки включена'
+                        : 'Публичная ссылка подборки выключена',
+                    description: publicLink,
+                    targetTable: 'selections',
+                    targetId: selectionId,
+                    targetText: title,
+                    status: next ? 'public' : 'private',
+                    metadata: {
+                      'selection_id': selectionId,
+                      'selection_title': title,
+                      'public_link': publicLink,
+                      'is_public': next,
+                    },
+                  );
                   ref.invalidate(selectionProjectProvider(selectionId));
                   ref.invalidate(adminSelectionListProvider);
                 } catch (e) {

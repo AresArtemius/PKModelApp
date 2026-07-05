@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/admin_action_log_service.dart';
 import '../../core/app_error_mapper.dart';
 import '../../core/router.dart';
 import '../../core/supabase_compat.dart';
@@ -35,6 +36,55 @@ final safetyReportsProvider =
 
 class SafetyAdminPage extends ConsumerWidget {
   const SafetyAdminPage({super.key});
+
+  Future<void> _setReportStatus({
+    required BuildContext context,
+    required WidgetRef ref,
+    required Map<String, dynamic> row,
+    required String status,
+  }) async {
+    final t = AppLocalizations.of(context)!;
+    final sb = ref.read(supabaseProvider);
+    final reportId = (row['id'] ?? '').toString().trim();
+    final profileId = (row['profile_id'] ?? '').toString().trim();
+    final reason = (row['reason'] ?? '').toString().trim();
+    if (reportId.isEmpty) return;
+
+    try {
+      await sb
+          .from('profile_reports')
+          .update({'status': status})
+          .eq('id', reportId);
+      await AdminActionLogService(sb).log(
+        actionType: 'safety_report_status_changed',
+        title: status == 'closed' ? 'Жалоба закрыта' : 'Жалоба взята в работу',
+        description: reason,
+        targetTable: 'profile_reports',
+        targetId: reportId,
+        targetText: profileId,
+        status: status,
+        metadata: {
+          'profile_id': profileId,
+          'reason': reason,
+          'comment': (row['comment'] ?? '').toString(),
+        },
+      );
+      ref.invalidate(safetyReportsProvider);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(content: Text('Статус жалобы обновлен')));
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text('${t.errorUpper}: ${AppErrorMapper.message(e, t)}'),
+          ),
+        );
+    }
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -73,7 +123,15 @@ class SafetyAdminPage extends ConsumerWidget {
                               const SizedBox(height: kGap12),
                           itemBuilder: (context, index) {
                             final row = items[index];
-                            return _ReportCard(row: row);
+                            return _ReportCard(
+                              row: row,
+                              onStatusChanged: (status) => _setReportStatus(
+                                context: context,
+                                ref: ref,
+                                row: row,
+                                status: status,
+                              ),
+                            );
                           },
                         );
                       },
@@ -90,15 +148,18 @@ class SafetyAdminPage extends ConsumerWidget {
 }
 
 class _ReportCard extends StatelessWidget {
-  const _ReportCard({required this.row});
+  const _ReportCard({required this.row, required this.onStatusChanged});
 
   final Map<String, dynamic> row;
+  final ValueChanged<String> onStatusChanged;
 
   @override
   Widget build(BuildContext context) {
     String text(String key) => (row[key] ?? '').toString().trim();
     final profileId = text('profile_id');
     final comment = text('comment');
+    final status = text('status').isEmpty ? 'open' : text('status');
+    final isClosed = status == 'closed' || status == 'resolved';
 
     return Container(
       padding: kLoginCardPad,
@@ -127,6 +188,13 @@ class _ReportCard extends StatelessWidget {
                   ),
                 ),
               ),
+              const SizedBox(width: 8),
+              TextButton(
+                onPressed: () =>
+                    onStatusChanged(isClosed ? 'in_review' : 'closed'),
+                child: Text(isClosed ? 'В РАБОТУ' : 'ЗАКРЫТЬ'),
+              ),
+              const SizedBox(width: 8),
               if (profileId.isNotEmpty)
                 TextButton(
                   onPressed: () =>
