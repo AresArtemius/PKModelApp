@@ -10,7 +10,11 @@ import '../../gen_l10n/app_localizations.dart';
 import '../../ui/brand/brand_pill_button.dart';
 import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
+import 'account_merge_requests_page.dart';
 import 'admin_style.dart';
+import 'casting_agent_applications_page.dart';
+import 'moderation_admin_page.dart';
+import 'safety_admin_page.dart';
 
 const _kAdminBg = BrandTheme.greyMid;
 
@@ -297,10 +301,584 @@ class _AdminHome extends StatelessWidget {
                   dense: false,
                 ),
               ],
+              const SizedBox(height: 18),
+              const _AdminWorkspaceTable(),
             ],
           ),
         ),
       ],
+    );
+  }
+}
+
+enum _AdminWorkspaceFilter { all, profiles, applications, safety }
+
+class _AdminWorkspaceRow {
+  const _AdminWorkspaceRow({
+    required this.id,
+    required this.kind,
+    required this.title,
+    required this.subtitle,
+    required this.status,
+    required this.dateText,
+    required this.route,
+    required this.filter,
+  });
+
+  final String id;
+  final String kind;
+  final String title;
+  final String subtitle;
+  final String status;
+  final String dateText;
+  final String route;
+  final _AdminWorkspaceFilter filter;
+
+  String get searchable =>
+      '$kind $title $subtitle $status $dateText'.toLowerCase();
+}
+
+class _AdminWorkspaceTable extends ConsumerStatefulWidget {
+  const _AdminWorkspaceTable();
+
+  @override
+  ConsumerState<_AdminWorkspaceTable> createState() =>
+      _AdminWorkspaceTableState();
+}
+
+class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
+  final TextEditingController _searchC = TextEditingController();
+  final Set<String> _selected = <String>{};
+  _AdminWorkspaceFilter _filter = _AdminWorkspaceFilter.all;
+
+  @override
+  void dispose() {
+    _searchC.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final profiles = ref.watch(pendingProfilesProvider);
+    final applications = ref.watch(castingAgentApplicationsProvider);
+    final merges = ref.watch(accountMergeRequestsProvider);
+    final safety = ref.watch(safetyReportsProvider);
+
+    final loading =
+        profiles.isLoading ||
+        applications.isLoading ||
+        merges.isLoading ||
+        safety.isLoading;
+    final rows = <_AdminWorkspaceRow>[
+      for (final item in profiles.valueOrNull ?? const [])
+        _AdminWorkspaceRow(
+          id: 'profile:${item.id}',
+          kind: ru ? 'Анкета' : 'Profile',
+          title: item.fullName.trim().isEmpty ? 'Анкета' : item.fullName.trim(),
+          subtitle: [
+            item.profileTypeLabel(context),
+            item.city,
+            item.country,
+          ].where((part) => part.trim().isNotEmpty).join(' • '),
+          status: ru ? 'На модерации' : 'Pending',
+          dateText: '',
+          route: Routes.moderationAdmin,
+          filter: _AdminWorkspaceFilter.profiles,
+        ),
+      for (final item in applications.valueOrNull ?? const [])
+        _AdminWorkspaceRow(
+          id: 'application:${item.id}',
+          kind: ru ? 'Заявка' : 'Request',
+          title: item.owner.displayName.isEmpty
+              ? item.userId
+              : item.owner.displayName,
+          subtitle: [
+            item.requestedType.label(context),
+            item.owner.companyName,
+            item.owner.city,
+          ].where((part) => part.trim().isNotEmpty).join(' • '),
+          status: ru ? 'Ожидает' : 'Pending',
+          dateText: _dateText(item.createdAt),
+          route: Routes.castingAgentApplicationsAdmin,
+          filter: _AdminWorkspaceFilter.applications,
+        ),
+      for (final item in merges.valueOrNull ?? const [])
+        _AdminWorkspaceRow(
+          id: 'merge:${item.id}',
+          kind: 'Merge',
+          title: item.title,
+          subtitle: [
+            item.requestedPhone,
+            item.requesterEmail,
+            item.requesterPhone,
+          ].where((part) => part.trim().isNotEmpty).join(' • '),
+          status: ru ? 'Ожидает' : 'Pending',
+          dateText: _dateText(item.createdAt),
+          route: Routes.accountMergeRequestsAdmin,
+          filter: _AdminWorkspaceFilter.applications,
+        ),
+      for (final row in safety.valueOrNull ?? const <Map<String, dynamic>>[])
+        _AdminWorkspaceRow(
+          id: 'safety:${(row['id'] ?? '').toString()}',
+          kind: 'Safety',
+          title: (row['reason'] ?? '').toString().trim().isEmpty
+              ? (ru ? 'Жалоба' : 'Report')
+              : (row['reason'] ?? '').toString().trim(),
+          subtitle: [
+            (row['profile_id'] ?? '').toString(),
+            (row['comment'] ?? '').toString(),
+          ].where((part) => part.trim().isNotEmpty).join(' • '),
+          status: (row['status'] ?? '').toString().trim().isEmpty
+              ? 'open'
+              : (row['status'] ?? '').toString().trim(),
+          dateText: _dateText(
+            DateTime.tryParse((row['created_at'] ?? '').toString()),
+          ),
+          route: Routes.safetyAdmin,
+          filter: _AdminWorkspaceFilter.safety,
+        ),
+    ];
+
+    rows.sort((a, b) => b.dateText.compareTo(a.dateText));
+
+    final query = _searchC.text.trim().toLowerCase();
+    final filtered = rows
+        .where((row) {
+          final filterOk =
+              _filter == _AdminWorkspaceFilter.all || row.filter == _filter;
+          final searchOk = query.isEmpty || row.searchable.contains(query);
+          return filterOk && searchOk;
+        })
+        .toList(growable: false);
+
+    _selected.removeWhere((id) => !filtered.any((row) => row.id == id));
+
+    return _AdminPanelSurface(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final compact = constraints.maxWidth < 760;
+              final header = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    ru ? 'ОПЕРАТОРСКИЙ СТОЛ' : 'WORKSPACE',
+                    style: adminCommandStyle(size: 15, letterSpacing: 1.2),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    ru
+                        ? 'Живые очереди, поиск и выбор строк'
+                        : 'Live queues, search and row selection',
+                    style: adminBodyStyle(
+                      size: 12,
+                      color: kTextMuted,
+                      weight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              );
+              final search = SizedBox(
+                width: compact ? double.infinity : 360,
+                child: TextField(
+                  controller: _searchC,
+                  onChanged: (_) => setState(() {}),
+                  decoration: InputDecoration(
+                    hintText: ru ? 'Поиск по таблице' : 'Search table',
+                    prefixIcon: const Icon(Icons.search_rounded),
+                    filled: true,
+                    fillColor: Colors.white.withValues(alpha: 0.76),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(18),
+                      borderSide: const BorderSide(color: kBorderColor),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(18),
+                      borderSide: const BorderSide(color: kBorderColor),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(18),
+                      borderSide: const BorderSide(color: BrandTheme.redTop),
+                    ),
+                  ),
+                  style: adminBodyStyle(size: 14, color: kTextDark),
+                ),
+              );
+              if (compact) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [header, const SizedBox(height: 12), search],
+                );
+              }
+              return Row(
+                children: [
+                  Expanded(child: header),
+                  const SizedBox(width: 12),
+                  search,
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 14),
+          _AdminWorkspaceFilters(
+            selected: _filter,
+            onChanged: (value) => setState(() => _filter = value),
+          ),
+          const SizedBox(height: 12),
+          if (_selected.isNotEmpty) ...[
+            _AdminBulkBar(
+              count: _selected.length,
+              onClear: () => setState(_selected.clear),
+              onOpen: () {
+                final first = filtered.firstWhere(
+                  (row) => _selected.contains(row.id),
+                  orElse: () => filtered.first,
+                );
+                context.go(first.route);
+              },
+            ),
+            const SizedBox(height: 12),
+          ],
+          if (loading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 18),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (filtered.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 18),
+              child: Text(
+                ru ? 'СТРОК НЕТ' : 'NO ROWS',
+                textAlign: TextAlign.center,
+                style: adminCommandStyle(
+                  size: 13,
+                  color: kTextMuted,
+                  letterSpacing: 1.0,
+                ),
+              ),
+            )
+          else
+            _AdminRowsTable(
+              rows: filtered,
+              selected: _selected,
+              onToggle: (id) {
+                setState(() {
+                  if (!_selected.add(id)) _selected.remove(id);
+                });
+              },
+            ),
+        ],
+      ),
+    );
+  }
+
+  String _dateText(DateTime? date) {
+    if (date == null) return '';
+    final local = date.toLocal();
+    return '${local.day.toString().padLeft(2, '0')}.'
+        '${local.month.toString().padLeft(2, '0')}';
+  }
+}
+
+class _AdminWorkspaceFilters extends StatelessWidget {
+  const _AdminWorkspaceFilters({
+    required this.selected,
+    required this.onChanged,
+  });
+
+  final _AdminWorkspaceFilter selected;
+  final ValueChanged<_AdminWorkspaceFilter> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final items = [
+      (value: _AdminWorkspaceFilter.all, label: ru ? 'ВСЕ' : 'ALL'),
+      (
+        value: _AdminWorkspaceFilter.profiles,
+        label: ru ? 'АНКЕТЫ' : 'PROFILES',
+      ),
+      (
+        value: _AdminWorkspaceFilter.applications,
+        label: ru ? 'ЗАЯВКИ' : 'REQUESTS',
+      ),
+      (value: _AdminWorkspaceFilter.safety, label: 'SAFETY'),
+    ];
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        for (final item in items)
+          ChoiceChip(
+            selected: selected == item.value,
+            label: Text(item.label),
+            onSelected: (_) => onChanged(item.value),
+            selectedColor: kTextDark,
+            backgroundColor: Colors.white.withValues(alpha: 0.72),
+            labelStyle: adminCommandStyle(
+              size: 11,
+              letterSpacing: 0.9,
+              color: selected == item.value ? Colors.white : kTextDark,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(999),
+              side: BorderSide(
+                color: selected == item.value ? kTextDark : kBorderColor,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _AdminBulkBar extends StatelessWidget {
+  const _AdminBulkBar({
+    required this.count,
+    required this.onClear,
+    required this.onOpen,
+  });
+
+  final int count;
+  final VoidCallback onClear;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: catalogSearchDecoration(
+        radius: 18,
+        borderColor: BrandTheme.redTop.withValues(alpha: 0.42),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              ru ? 'Выбрано: $count' : 'Selected: $count',
+              style: adminCommandStyle(size: 12, letterSpacing: 0.8),
+            ),
+          ),
+          TextButton(onPressed: onClear, child: Text(ru ? 'СБРОС' : 'CLEAR')),
+          const SizedBox(width: 8),
+          ElevatedButton(
+            onPressed: onOpen,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: kTextDark,
+              foregroundColor: Colors.white,
+            ),
+            child: Text(ru ? 'ОТКРЫТЬ' : 'OPEN'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AdminRowsTable extends StatelessWidget {
+  const _AdminRowsTable({
+    required this.rows,
+    required this.selected,
+    required this.onToggle,
+  });
+
+  final List<_AdminWorkspaceRow> rows;
+  final Set<String> selected;
+  final ValueChanged<String> onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final narrow = MediaQuery.sizeOf(context).width < 760;
+    if (narrow) {
+      return Column(
+        children: [
+          for (final row in rows) ...[
+            _AdminMobileRowCard(
+              row: row,
+              selected: selected.contains(row.id),
+              onToggle: () => onToggle(row.id),
+            ),
+            const SizedBox(height: 10),
+          ],
+        ],
+      );
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(18),
+      child: Table(
+        columnWidths: const {
+          0: FixedColumnWidth(44),
+          1: FixedColumnWidth(112),
+          2: FlexColumnWidth(1.4),
+          3: FlexColumnWidth(1.2),
+          4: FixedColumnWidth(112),
+          5: FixedColumnWidth(86),
+        },
+        border: TableBorder(
+          horizontalInside: BorderSide(
+            color: kBorderColor.withValues(alpha: 0.7),
+          ),
+        ),
+        children: [
+          _tableRow(
+            context,
+            header: true,
+            cells: const ['', 'ТИП', 'НАЗВАНИЕ', 'ДЕТАЛИ', 'СТАТУС', 'ДАТА'],
+          ),
+          for (final row in rows)
+            TableRow(
+              decoration: BoxDecoration(
+                color: selected.contains(row.id)
+                    ? BrandTheme.redTop.withValues(alpha: 0.06)
+                    : Colors.white.withValues(alpha: 0.42),
+              ),
+              children: [
+                _TableCellBox(
+                  child: Checkbox(
+                    value: selected.contains(row.id),
+                    activeColor: BrandTheme.redTop,
+                    onChanged: (_) => onToggle(row.id),
+                  ),
+                ),
+                _TableCellBox(text: row.kind),
+                _TableCellBox(text: row.title, strong: true),
+                _TableCellBox(text: row.subtitle),
+                _TableCellBox(text: row.status, accent: true),
+                _TableCellBox(text: row.dateText),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
+  TableRow _tableRow(
+    BuildContext context, {
+    required bool header,
+    required List<String> cells,
+  }) {
+    return TableRow(
+      decoration: BoxDecoration(
+        color: header ? kTextDark : Colors.white.withValues(alpha: 0.42),
+      ),
+      children: [
+        for (final cell in cells)
+          _TableCellBox(text: cell, header: header, strong: header),
+      ],
+    );
+  }
+}
+
+class _TableCellBox extends StatelessWidget {
+  const _TableCellBox({
+    this.text = '',
+    this.child,
+    this.header = false,
+    this.strong = false,
+    this.accent = false,
+  });
+
+  final String text;
+  final Widget? child;
+  final bool header;
+  final bool strong;
+  final bool accent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 52,
+      alignment: Alignment.centerLeft,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      child:
+          child ??
+          Text(
+            text,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: header
+                ? adminCommandStyle(
+                    size: 11,
+                    letterSpacing: 0.8,
+                    color: Colors.white,
+                  )
+                : adminBodyStyle(
+                    size: 13,
+                    color: accent ? BrandTheme.redTop : kTextDark,
+                    weight: strong ? FontWeight.w900 : FontWeight.w700,
+                  ),
+          ),
+    );
+  }
+}
+
+class _AdminMobileRowCard extends StatelessWidget {
+  const _AdminMobileRowCard({
+    required this.row,
+    required this.selected,
+    required this.onToggle,
+  });
+
+  final _AdminWorkspaceRow row;
+  final bool selected;
+  final VoidCallback onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: catalogSearchDecoration(
+        radius: 18,
+        borderColor: selected ? BrandTheme.redTop : kBorderColor,
+      ),
+      child: Row(
+        children: [
+          Checkbox(
+            value: selected,
+            activeColor: BrandTheme.redTop,
+            onChanged: (_) => onToggle(),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(row.kind, style: adminCommandStyle(size: 11)),
+                const SizedBox(height: 4),
+                Text(
+                  row.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: adminCommandStyle(size: 15, letterSpacing: 0.5),
+                ),
+                if (row.subtitle.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    row.subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: adminBodyStyle(size: 12, color: kTextMuted),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            row.status,
+            style: adminCommandStyle(
+              size: 10,
+              color: BrandTheme.redTop,
+              letterSpacing: 0.6,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
