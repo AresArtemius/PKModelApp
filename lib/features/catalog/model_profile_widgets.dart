@@ -417,7 +417,7 @@ class _PortfolioStatChip extends StatelessWidget {
   }
 }
 
-class _PortfolioActionHistoryStrip extends StatelessWidget {
+class _PortfolioActionHistoryStrip extends StatefulWidget {
   const _PortfolioActionHistoryStrip({
     required this.future,
     required this.isRu,
@@ -427,14 +427,26 @@ class _PortfolioActionHistoryStrip extends StatelessWidget {
   final bool isRu;
 
   @override
+  State<_PortfolioActionHistoryStrip> createState() =>
+      _PortfolioActionHistoryStripState();
+}
+
+class _PortfolioActionHistoryStripState
+    extends State<_PortfolioActionHistoryStrip> {
+  _ProfileActionKind? _filter;
+
+  @override
   Widget build(BuildContext context) {
-    final source = future;
+    final source = widget.future;
     if (source == null) return const SizedBox.shrink();
     return FutureBuilder<List<_ProfileActionHistoryItem>>(
       future: source,
       builder: (context, snapshot) {
         final items = snapshot.data ?? const <_ProfileActionHistoryItem>[];
         if (items.isEmpty) return const SizedBox.shrink();
+        final visible = _filter == null
+            ? items
+            : items.where((item) => item.kind == _filter).toList();
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
@@ -445,61 +457,146 @@ class _PortfolioActionHistoryStrip extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                isRu ? 'История действий' : 'Action history',
-                style: _commandStyle(fontSize: 11, letterSpacing: 0.8),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      widget.isRu ? 'История действий' : 'Action history',
+                      style: _commandStyle(fontSize: 11, letterSpacing: 0.8),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => _openFullHistory(context, items),
+                    style: TextButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      foregroundColor: BrandTheme.redTop,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                    ),
+                    child: Text(
+                      widget.isRu ? 'ВСЕ' : 'ALL',
+                      style: _commandStyle(
+                        fontSize: 10,
+                        color: BrandTheme.redTop,
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 8),
-              for (final item in items) ...[
-                Row(
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
                   children: [
-                    Icon(
-                      _actionIcon(item.kind),
-                      color: BrandTheme.redTop,
-                      size: 16,
+                    _ActionFilterChip(
+                      label: widget.isRu ? 'Все' : 'All',
+                      selected: _filter == null,
+                      onTap: () => setState(() => _filter = null),
                     ),
-                    const SizedBox(width: 7),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                    for (final kind in _availableKinds(items)) ...[
+                      const SizedBox(width: 6),
+                      _ActionFilterChip(
+                        label: _kindLabel(kind),
+                        selected: _filter == kind,
+                        onTap: () => setState(() => _filter = kind),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+              if (visible.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Text(
+                    widget.isRu ? 'Нет действий этого типа' : 'No actions here',
+                    style: _bodyStyle(fontSize: 11, color: kTextMuted),
+                  ),
+                )
+              else
+                for (final item in visible.take(4)) ...[
+                  InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: () => _openActionDetails(context, item),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 3),
+                      child: Row(
                         children: [
-                          Text(
-                            item.title.trim(),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: _bodyStyle(
-                              fontSize: 12,
-                              color: kTextDark,
-                              weight: FontWeight.w800,
+                          Icon(
+                            _actionIcon(item.kind),
+                            color: BrandTheme.redTop,
+                            size: 16,
+                          ),
+                          const SizedBox(width: 7),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  item.title.trim(),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: _bodyStyle(
+                                    fontSize: 12,
+                                    color: kTextDark,
+                                    weight: FontWeight.w800,
+                                  ),
+                                ),
+                                Text(
+                                  _actionSubtitle(item),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: _bodyStyle(
+                                    fontSize: 11,
+                                    color: kTextMuted,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
+                          const SizedBox(width: 8),
                           Text(
-                            _actionSubtitle(item),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: _bodyStyle(fontSize: 11, color: kTextMuted),
+                            _formatActionDate(item.createdAt),
+                            style: _commandStyle(
+                              fontSize: 10,
+                              color: kTextMuted,
+                              letterSpacing: 0.4,
+                            ),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Text(
-                      _formatActionDate(item.createdAt),
-                      style: _commandStyle(
-                        fontSize: 10,
-                        color: kTextMuted,
-                        letterSpacing: 0.4,
-                      ),
-                    ),
-                  ],
-                ),
-                if (item != items.last) const SizedBox(height: 8),
-              ],
+                  ),
+                  if (item != visible.take(4).last) const SizedBox(height: 4),
+                ],
             ],
           ),
         );
       },
     );
+  }
+
+  List<_ProfileActionKind> _availableKinds(
+    List<_ProfileActionHistoryItem> items,
+  ) {
+    final kinds = <_ProfileActionKind>[];
+    for (final item in items) {
+      if (!kinds.contains(item.kind)) kinds.add(item.kind);
+    }
+    return kinds;
+  }
+
+  String _kindLabel(_ProfileActionKind kind) {
+    switch (kind) {
+      case _ProfileActionKind.invite:
+        return widget.isRu ? 'Приглашения' : 'Invites';
+      case _ProfileActionKind.selection:
+        return widget.isRu ? 'Подборки' : 'Selections';
+      case _ProfileActionKind.folder:
+        return widget.isRu ? 'Папки' : 'Folders';
+      case _ProfileActionKind.message:
+        return widget.isRu ? 'Чат' : 'Chat';
+    }
   }
 
   IconData _actionIcon(_ProfileActionKind kind) {
@@ -519,23 +616,23 @@ class _PortfolioActionHistoryStrip extends StatelessWidget {
     final actor = item.actorCompany.trim().isNotEmpty
         ? item.actorCompany.trim()
         : item.actorName.trim();
-    final actorLabel = actor.isEmpty ? '' : (isRu ? '$actor • ' : '$actor • ');
+    final actorLabel = actor.isEmpty ? '' : '$actor • ';
     final template = item.templateKey.trim().isEmpty
         ? ''
-        : (isRu ? ' • шаблон' : ' • template');
+        : (widget.isRu ? ' • шаблон' : ' • template');
     final status = _statusLabel(item.status);
     final statusPart = status.isEmpty ? '' : ' • $status';
     switch (item.kind) {
       case _ProfileActionKind.invite:
-        return '$actorLabel${isRu ? 'приглашение' : 'invitation'}$template$statusPart';
+        return '$actorLabel${widget.isRu ? 'приглашение' : 'invitation'}$template$statusPart';
       case _ProfileActionKind.selection:
-        return '$actorLabel${isRu ? 'добавлено в подборку' : 'added to selection'}$statusPart';
+        return '$actorLabel${widget.isRu ? 'добавлено в подборку' : 'added to selection'}$statusPart';
       case _ProfileActionKind.folder:
-        return '$actorLabel${isRu ? 'добавлено в папку' : 'added to folder'}$statusPart';
+        return '$actorLabel${widget.isRu ? 'добавлено в папку' : 'added to folder'}$statusPart';
       case _ProfileActionKind.message:
         final action = item.subtitle == 'incoming'
-            ? (isRu ? 'сообщение получено' : 'incoming message')
-            : (isRu ? 'сообщение отправлено' : 'message sent');
+            ? (widget.isRu ? 'сообщение получено' : 'incoming message')
+            : (widget.isRu ? 'сообщение отправлено' : 'message sent');
         return '$actorLabel$action$statusPart';
     }
   }
@@ -543,15 +640,15 @@ class _PortfolioActionHistoryStrip extends StatelessWidget {
   String _statusLabel(String value) {
     switch (value.trim()) {
       case 'sent':
-        return isRu ? 'отправлено' : 'sent';
+        return widget.isRu ? 'отправлено' : 'sent';
       case 'delivered':
-        return isRu ? 'доставлено' : 'delivered';
+        return widget.isRu ? 'доставлено' : 'delivered';
       case 'read':
-        return isRu ? 'прочитано' : 'read';
+        return widget.isRu ? 'прочитано' : 'read';
       case 'failed':
-        return isRu ? 'ошибка' : 'failed';
+        return widget.isRu ? 'ошибка' : 'failed';
       case 'archived':
-        return isRu ? 'архив' : 'archived';
+        return widget.isRu ? 'архив' : 'archived';
       default:
         return '';
     }
@@ -563,6 +660,434 @@ class _PortfolioActionHistoryStrip extends StatelessWidget {
     final day = local.day.toString().padLeft(2, '0');
     final month = local.month.toString().padLeft(2, '0');
     return '$day.$month';
+  }
+
+  void _openFullHistory(
+    BuildContext context,
+    List<_ProfileActionHistoryItem> items,
+  ) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: 0.32),
+      builder: (_) =>
+          _ProfileActionHistorySheet(items: items, isRu: widget.isRu),
+    );
+  }
+
+  void _openActionDetails(
+    BuildContext context,
+    _ProfileActionHistoryItem item,
+  ) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: 0.32),
+      builder: (_) => _ProfileActionDetailsSheet(item: item, isRu: widget.isRu),
+    );
+  }
+}
+
+class _ActionFilterChip extends StatelessWidget {
+  const _ActionFilterChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+        decoration: BoxDecoration(
+          color: selected ? kTextDark : Colors.white.withValues(alpha: 0.78),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: selected ? kTextDark : kBorderColor),
+        ),
+        child: Text(
+          label,
+          style: _bodyStyle(
+            fontSize: 11,
+            color: selected ? Colors.white : kTextDark,
+            weight: FontWeight.w800,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileActionHistorySheet extends StatelessWidget {
+  const _ProfileActionHistorySheet({required this.items, required this.isRu});
+
+  final List<_ProfileActionHistoryItem> items;
+  final bool isRu;
+
+  @override
+  Widget build(BuildContext context) {
+    final bottom = MediaQuery.viewInsetsOf(context).bottom;
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(16, 0, 16, 16 + bottom),
+        child: Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(context).height * 0.82,
+          ),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
+          decoration: pillDecoration(isDark: false, radius: kCardRadius),
+          child: ListView.separated(
+            shrinkWrap: true,
+            itemCount: items.length + 1,
+            separatorBuilder: (_, index) => index == 0
+                ? const SizedBox(height: 10)
+                : const Divider(height: 18, color: kBorderColor),
+            itemBuilder: (context, index) {
+              if (index == 0) {
+                return Text(
+                  isRu ? 'ИСТОРИЯ ДЕЙСТВИЙ' : 'ACTION HISTORY',
+                  textAlign: TextAlign.center,
+                  style: _commandStyle(fontSize: 18, letterSpacing: 2.2),
+                );
+              }
+              final item = items[index - 1];
+              return ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(_iconFor(item.kind), color: BrandTheme.redTop),
+                title: Text(
+                  item.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: _bodyStyle(
+                    fontSize: 14,
+                    color: kTextDark,
+                    weight: FontWeight.w800,
+                  ),
+                ),
+                subtitle: Text(
+                  _line(item),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: _bodyStyle(fontSize: 12, color: kTextMuted),
+                ),
+                trailing: Text(
+                  _date(item.createdAt),
+                  style: _commandStyle(
+                    fontSize: 10,
+                    color: kTextMuted,
+                    letterSpacing: 0.4,
+                  ),
+                ),
+                onTap: () => showModalBottomSheet<void>(
+                  context: context,
+                  isScrollControlled: true,
+                  backgroundColor: Colors.transparent,
+                  builder: (_) =>
+                      _ProfileActionDetailsSheet(item: item, isRu: isRu),
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  IconData _iconFor(_ProfileActionKind kind) {
+    return switch (kind) {
+      _ProfileActionKind.invite => Icons.send_rounded,
+      _ProfileActionKind.selection => Icons.dashboard_customize_rounded,
+      _ProfileActionKind.folder => Icons.folder_rounded,
+      _ProfileActionKind.message => Icons.chat_bubble_rounded,
+    };
+  }
+
+  String _line(_ProfileActionHistoryItem item) {
+    final actor = item.actorCompany.isNotEmpty
+        ? item.actorCompany
+        : item.actorName;
+    final status = item.status.isEmpty ? '' : ' • ${item.status}';
+    return <String>[
+          actor,
+          item.subtitle,
+          item.templateKey,
+        ].where((e) => e.trim().isNotEmpty).join(' • ') +
+        status;
+  }
+
+  String _date(DateTime? value) {
+    if (value == null) return '';
+    final local = value.toLocal();
+    return '${local.day.toString().padLeft(2, '0')}.${local.month.toString().padLeft(2, '0')}';
+  }
+}
+
+class _ProfileActionDetailsSheet extends StatelessWidget {
+  const _ProfileActionDetailsSheet({required this.item, required this.isRu});
+
+  final _ProfileActionHistoryItem item;
+  final bool isRu;
+
+  @override
+  Widget build(BuildContext context) {
+    final bottom = MediaQuery.viewInsetsOf(context).bottom;
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(16, 0, 16, 16 + bottom),
+        child: Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(context).height * 0.82,
+          ),
+          padding: const EdgeInsets.fromLTRB(18, 18, 18, 20),
+          decoration: pillDecoration(isDark: false, radius: kCardRadius),
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  isRu ? 'ДЕТАЛИ ДЕЙСТВИЯ' : 'ACTION DETAILS',
+                  textAlign: TextAlign.center,
+                  style: _commandStyle(fontSize: 18, letterSpacing: 2.2),
+                ),
+                const SizedBox(height: kGap14),
+                _ActionDetailLine(
+                  label: isRu ? 'Действие' : 'Action',
+                  value: _kindLabel(item.kind),
+                ),
+                _ActionDetailLine(
+                  label: isRu ? 'Название' : 'Title',
+                  value: item.title,
+                ),
+                _ActionDetailLine(
+                  label: isRu ? 'Автор' : 'Actor',
+                  value: _actor(item),
+                ),
+                _ActionDetailLine(
+                  label: isRu ? 'Статус' : 'Status',
+                  value: item.status,
+                ),
+                _ActionDetailLine(
+                  label: isRu ? 'Дата' : 'Date',
+                  value: _fullDate(item.createdAt),
+                ),
+                if (item.relatedTable.isNotEmpty || item.relatedText.isNotEmpty)
+                  _ActionDetailLine(
+                    label: isRu ? 'Связь' : 'Related',
+                    value: [
+                      item.relatedTable,
+                      item.relatedText,
+                    ].where((e) => e.trim().isNotEmpty).join(' • '),
+                  ),
+                if (item.templateBody.trim().isNotEmpty) ...[
+                  const SizedBox(height: kGap10),
+                  _ActionTextBlock(
+                    title: isRu ? 'ШАБЛОН' : 'TEMPLATE',
+                    text: item.templateBody.trim(),
+                  ),
+                ],
+                if (item.title.trim().isNotEmpty) ...[
+                  const SizedBox(height: kGap10),
+                  _ActionTextBlock(
+                    title: isRu ? 'СООБЩЕНИЕ' : 'MESSAGE',
+                    text: item.title.trim(),
+                  ),
+                ],
+                const SizedBox(height: kGap14),
+                _ActionTimeline(item: item, isRu: isRu),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _kindLabel(_ProfileActionKind kind) {
+    return switch (kind) {
+      _ProfileActionKind.invite => isRu ? 'Приглашение' : 'Invitation',
+      _ProfileActionKind.selection => isRu ? 'Подборка' : 'Selection',
+      _ProfileActionKind.folder => isRu ? 'Папка' : 'Folder',
+      _ProfileActionKind.message => isRu ? 'Чат' : 'Chat',
+    };
+  }
+
+  String _actor(_ProfileActionHistoryItem item) {
+    if (item.actorCompany.isNotEmpty && item.actorName.isNotEmpty) {
+      return '${item.actorCompany} • ${item.actorName}';
+    }
+    if (item.actorCompany.isNotEmpty) return item.actorCompany;
+    if (item.actorName.isNotEmpty) return item.actorName;
+    return isRu ? 'Не указан' : 'Unknown';
+  }
+
+  String _fullDate(DateTime? value) {
+    if (value == null) return '';
+    final local = value.toLocal();
+    final date =
+        '${local.day.toString().padLeft(2, '0')}.${local.month.toString().padLeft(2, '0')}.${local.year}';
+    final time =
+        '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
+    return '$date $time';
+  }
+}
+
+class _ActionDetailLine extends StatelessWidget {
+  const _ActionDetailLine({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    if (value.trim().isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 96,
+            child: Text(
+              label,
+              style: _commandStyle(
+                fontSize: 11,
+                color: kTextMuted,
+                letterSpacing: 0.6,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: _bodyStyle(fontSize: 13, color: kTextDark),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ActionTextBlock extends StatelessWidget {
+  const _ActionTextBlock({required this.title, required this.text});
+
+  final String title;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.82),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: kBorderColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: _commandStyle(fontSize: 11, letterSpacing: 0.8)),
+          const SizedBox(height: 7),
+          Text(text, style: _bodyStyle(fontSize: 13, color: kTextDark)),
+        ],
+      ),
+    );
+  }
+}
+
+class _ActionTimeline extends StatelessWidget {
+  const _ActionTimeline({required this.item, required this.isRu});
+
+  final _ProfileActionHistoryItem item;
+  final bool isRu;
+
+  @override
+  Widget build(BuildContext context) {
+    final steps = [
+      (
+        label: isRu ? 'Создано' : 'Created',
+        date: item.createdAt,
+        active: item.createdAt != null,
+      ),
+      (
+        label: isRu ? 'Отправлено' : 'Sent',
+        date: item.createdAt,
+        active: _hasReached('sent'),
+      ),
+      (
+        label: isRu ? 'Доставлено' : 'Delivered',
+        date: item.deliveredAt,
+        active: _hasReached('delivered'),
+      ),
+      (
+        label: isRu ? 'Прочитано' : 'Read',
+        date: item.readAt,
+        active: _hasReached('read'),
+      ),
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          isRu ? 'TIMELINE' : 'TIMELINE',
+          style: _commandStyle(fontSize: 12, letterSpacing: 1),
+        ),
+        const SizedBox(height: 8),
+        for (final step in steps)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 7),
+            child: Row(
+              children: [
+                Icon(
+                  step.active
+                      ? Icons.check_circle_rounded
+                      : Icons.radio_button_unchecked_rounded,
+                  size: 16,
+                  color: step.active ? BrandTheme.redTop : kTextMuted,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    step.label,
+                    style: _bodyStyle(
+                      fontSize: 12,
+                      color: step.active ? kTextDark : kTextMuted,
+                      weight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                Text(
+                  _date(step.date),
+                  style: _bodyStyle(fontSize: 11, color: kTextMuted),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  bool _hasReached(String step) {
+    final order = {'created': 0, 'sent': 1, 'delivered': 2, 'read': 3};
+    final current = order[item.status] ?? 0;
+    return current >= (order[step] ?? 0);
+  }
+
+  String _date(DateTime? value) {
+    if (value == null) return '';
+    final local = value.toLocal();
+    return '${local.day.toString().padLeft(2, '0')}.${local.month.toString().padLeft(2, '0')} ${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
   }
 }
 

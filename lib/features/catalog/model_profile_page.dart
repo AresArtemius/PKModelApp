@@ -170,6 +170,11 @@ class _ProfileActionHistoryItem {
     this.status = '',
     this.templateKey = '',
     this.templateBody = '',
+    this.relatedTable = '',
+    this.relatedId = '',
+    this.relatedText = '',
+    this.deliveredAt,
+    this.readAt,
   });
 
   final _ProfileActionKind kind;
@@ -181,6 +186,11 @@ class _ProfileActionHistoryItem {
   final String status;
   final String templateKey;
   final String templateBody;
+  final String relatedTable;
+  final String relatedId;
+  final String relatedText;
+  final DateTime? deliveredAt;
+  final DateTime? readAt;
 }
 
 class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
@@ -726,7 +736,7 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
       sb,
     ).fetchForProfile(profileId: id, limit: 8);
     if (auditRows != null && auditRows.isNotEmpty) {
-      return auditRows.map(_profileActionFromAuditRow).take(6).toList();
+      return auditRows.map(_profileActionFromAuditRow).take(8).toList();
     }
 
     await _appendInvitationActions(sb, id, items);
@@ -743,10 +753,9 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
   }
 
   _ProfileActionHistoryItem _profileActionFromAuditRow(
-    Map<String, dynamic> row,
+    ProfileActionLogEntry row,
   ) {
-    final type = (row['action_type'] ?? '').toString().trim();
-    final kind = switch (type) {
+    final kind = switch (row.actionType) {
       'selection' => _ProfileActionKind.selection,
       'folder' => _ProfileActionKind.folder,
       'message' => _ProfileActionKind.message,
@@ -754,14 +763,19 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
     };
     return _ProfileActionHistoryItem(
       kind: kind,
-      title: (row['title'] ?? '').toString().trim(),
-      subtitle: (row['description'] ?? '').toString().trim(),
-      actorName: (row['actor_name'] ?? '').toString().trim(),
-      actorCompany: (row['actor_company'] ?? '').toString().trim(),
-      status: (row['status'] ?? '').toString().trim(),
-      templateKey: (row['template_key'] ?? '').toString().trim(),
-      templateBody: (row['template_body'] ?? '').toString().trim(),
-      createdAt: DateTime.tryParse((row['created_at'] ?? '').toString()),
+      title: row.title,
+      subtitle: row.description,
+      actorName: row.actorName,
+      actorCompany: row.actorCompany,
+      status: row.status,
+      templateKey: row.templateKey,
+      templateBody: row.templateBody,
+      relatedTable: row.relatedTable,
+      relatedId: row.relatedId,
+      relatedText: row.relatedText,
+      deliveredAt: row.deliveredAt,
+      readAt: row.readAt,
+      createdAt: row.createdAt,
     );
   }
 

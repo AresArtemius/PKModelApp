@@ -92,6 +92,12 @@ class AdminPage extends ConsumerWidget {
                     label: t.safetyAdminUpper,
                     onTap: () => context.go(Routes.safetyAdmin),
                   ),
+                  (
+                    label: Localizations.localeOf(context).languageCode == 'ru'
+                        ? 'ЖУРНАЛ ДЕЙСТВИЙ'
+                        : 'ACTION LOG',
+                    onTap: () => context.go(Routes.profileActionAuditAdmin),
+                  ),
                 ],
                 onExit: signOutAndGoLogin,
               );

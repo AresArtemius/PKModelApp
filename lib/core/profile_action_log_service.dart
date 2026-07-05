@@ -2,48 +2,169 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'supabase_compat.dart';
 
+enum ProfileActionLogType { all, invite, selection, folder, message }
+
+class ProfileActionLogEntry {
+  const ProfileActionLogEntry({
+    required this.id,
+    required this.profileId,
+    required this.targetUserId,
+    required this.actorUserId,
+    required this.actorName,
+    required this.actorCompany,
+    required this.actorAvatarUrl,
+    required this.actionType,
+    required this.title,
+    required this.description,
+    required this.templateKey,
+    required this.templateBody,
+    required this.status,
+    required this.relatedTable,
+    required this.relatedId,
+    required this.relatedText,
+    required this.deliveredAt,
+    required this.readAt,
+    required this.createdAt,
+  });
+
+  factory ProfileActionLogEntry.fromMap(Map<String, dynamic> map) {
+    return ProfileActionLogEntry(
+      id: (map['id'] ?? '').toString().trim(),
+      profileId: (map['profile_id'] ?? '').toString().trim(),
+      targetUserId: (map['target_user_id'] ?? '').toString().trim(),
+      actorUserId: (map['actor_user_id'] ?? '').toString().trim(),
+      actorName: (map['actor_name'] ?? '').toString().trim(),
+      actorCompany: (map['actor_company'] ?? '').toString().trim(),
+      actorAvatarUrl: (map['actor_avatar_url'] ?? '').toString().trim(),
+      actionType: (map['action_type'] ?? '').toString().trim(),
+      title: (map['title'] ?? '').toString().trim(),
+      description: (map['description'] ?? '').toString().trim(),
+      templateKey: (map['template_key'] ?? '').toString().trim(),
+      templateBody: (map['template_body'] ?? '').toString().trim(),
+      status: (map['status'] ?? '').toString().trim(),
+      relatedTable: (map['related_table'] ?? '').toString().trim(),
+      relatedId: (map['related_id'] ?? '').toString().trim(),
+      relatedText: (map['related_text'] ?? '').toString().trim(),
+      deliveredAt: DateTime.tryParse((map['delivered_at'] ?? '').toString()),
+      readAt: DateTime.tryParse((map['read_at'] ?? '').toString()),
+      createdAt: DateTime.tryParse((map['created_at'] ?? '').toString()),
+    );
+  }
+
+  final String id;
+  final String profileId;
+  final String targetUserId;
+  final String actorUserId;
+  final String actorName;
+  final String actorCompany;
+  final String actorAvatarUrl;
+  final String actionType;
+  final String title;
+  final String description;
+  final String templateKey;
+  final String templateBody;
+  final String status;
+  final String relatedTable;
+  final String relatedId;
+  final String relatedText;
+  final DateTime? deliveredAt;
+  final DateTime? readAt;
+  final DateTime? createdAt;
+
+  String get actorLabel {
+    if (actorCompany.isNotEmpty && actorName.isNotEmpty) {
+      return '$actorCompany • $actorName';
+    }
+    if (actorCompany.isNotEmpty) return actorCompany;
+    if (actorName.isNotEmpty) return actorName;
+    return actorUserId;
+  }
+}
+
 class ProfileActionLogService {
   const ProfileActionLogService(this._sb);
 
   final SupabaseClient _sb;
 
-  Future<List<Map<String, dynamic>>?> fetchForProfile({
+  static const _selectColumns =
+      'id,profile_id,target_user_id,actor_user_id,actor_name,actor_company,'
+      'actor_avatar_url,action_type,title,description,template_key,'
+      'template_body,status,related_table,related_id,related_text,'
+      'delivered_at,read_at,created_at';
+
+  Future<List<ProfileActionLogEntry>?> fetchForProfile({
     required String profileId,
     int limit = 8,
+    ProfileActionLogType type = ProfileActionLogType.all,
   }) async {
     final id = profileId.trim();
-    if (id.isEmpty) return const <Map<String, dynamic>>[];
+    if (id.isEmpty) return const <ProfileActionLogEntry>[];
     try {
-      final rows = await _sb
+      var query = _sb
           .from('profile_action_logs')
-          .select(
-            'id,profile_id,target_user_id,actor_user_id,actor_name,actor_company,'
-            'actor_avatar_url,action_type,title,description,template_key,'
-            'template_body,status,related_table,related_id,related_text,'
-            'delivered_at,read_at,created_at',
-          )
-          .eq('profile_id', id)
+          .select(_selectColumns)
+          .eq('profile_id', id);
+      query = _applyTypeFilter(query, type);
+      final rows = await query
           .order('created_at', ascending: false)
           .limit(limit);
-      return (rows as List)
-          .map((row) => Map<String, dynamic>.from(row as Map))
-          .toList(growable: false);
+      return _rowsFromResponse(rows);
     } on PostgrestException catch (e) {
-      if (SupabaseCompat.isMissingRelation(e, const ['profile_action_logs'])) {
-        return null;
-      }
-      if (SupabaseCompat.isMissingAnyColumn(e, const [
-        'actor_name',
-        'actor_company',
-        'template_key',
-        'template_body',
-        'delivered_at',
-        'read_at',
-      ])) {
-        return null;
-      }
+      if (_isUnavailable(e)) return null;
       rethrow;
     }
+  }
+
+  Future<List<ProfileActionLogEntry>?> fetchAdminLogs({
+    int limit = 80,
+    ProfileActionLogType type = ProfileActionLogType.all,
+  }) async {
+    try {
+      var query = _sb.from('profile_action_logs').select(_selectColumns);
+      query = _applyTypeFilter(query, type);
+      final rows = await query
+          .order('created_at', ascending: false)
+          .limit(limit);
+      return _rowsFromResponse(rows);
+    } on PostgrestException catch (e) {
+      if (_isUnavailable(e)) return null;
+      rethrow;
+    }
+  }
+
+  PostgrestFilterBuilder<List<Map<String, dynamic>>> _applyTypeFilter(
+    PostgrestFilterBuilder<List<Map<String, dynamic>>> query,
+    ProfileActionLogType type,
+  ) {
+    return switch (type) {
+      ProfileActionLogType.invite => query.eq('action_type', 'invite'),
+      ProfileActionLogType.selection => query.eq('action_type', 'selection'),
+      ProfileActionLogType.folder => query.eq('action_type', 'folder'),
+      ProfileActionLogType.message => query.eq('action_type', 'message'),
+      ProfileActionLogType.all => query,
+    };
+  }
+
+  List<ProfileActionLogEntry> _rowsFromResponse(dynamic rows) {
+    return (rows as List)
+        .map(
+          (row) => ProfileActionLogEntry.fromMap(
+            Map<String, dynamic>.from(row as Map),
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  bool _isUnavailable(PostgrestException e) {
+    return SupabaseCompat.isMissingRelation(e, const ['profile_action_logs']) ||
+        SupabaseCompat.isMissingAnyColumn(e, const [
+          'actor_name',
+          'actor_company',
+          'template_key',
+          'template_body',
+          'delivered_at',
+          'read_at',
+        ]);
   }
 
   Future<void> log({

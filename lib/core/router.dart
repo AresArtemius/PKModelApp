@@ -15,6 +15,7 @@ import '../features/admin/admin_page.dart';
 import '../features/admin/catalog_admin_page.dart';
 import '../features/admin/create_casting_admin_page.dart';
 import '../features/admin/moderation_admin_page.dart';
+import '../features/admin/profile_action_audit_page.dart';
 import '../features/auth/auth_required_page.dart';
 import '../features/auth/register_page.dart';
 import '../features/billing/billing_page.dart';
@@ -61,6 +62,7 @@ abstract class Routes {
   static const createCastingAdmin = '/create_casting_admin';
   static const adminSelection = '/admin_selection';
   static const safetyAdmin = '/safety_admin';
+  static const profileActionAuditAdmin = '/profile_action_audit_admin';
   static const adminSelectionProject = '/admin_selection_project';
   static const modelPrefix = '/model/';
   static const model = '/model/:id';
@@ -101,6 +103,7 @@ class AppShell extends StatelessWidget {
     if (path.startsWith(Routes.createCastingAdmin)) return 4;
     if (path.startsWith(Routes.adminSelection)) return 4;
     if (path.startsWith(Routes.safetyAdmin)) return 4;
+    if (path.startsWith(Routes.profileActionAuditAdmin)) return 4;
     if (path.startsWith(Routes.adminSelectionProject)) return 4;
     return 1;
   }
@@ -650,6 +653,10 @@ final List<RouteBase> appRoutes = [
       GoRoute(
         path: Routes.safetyAdmin,
         builder: (context, state) => const SafetyAdminPage(),
+      ),
+      GoRoute(
+        path: Routes.profileActionAuditAdmin,
+        builder: (context, state) => const ProfileActionAuditPage(),
       ),
       GoRoute(
         path: '${Routes.adminSelection}/:$_routeParamId',
