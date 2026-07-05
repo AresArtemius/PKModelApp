@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/admin_action_log_service.dart';
 import '../../core/admin_dashboard_counts_provider.dart';
 import '../../core/router.dart';
 import '../../core/roles_provider.dart';
@@ -14,6 +17,7 @@ import 'account_merge_requests_page.dart';
 import 'admin_style.dart';
 import 'casting_agent_applications_page.dart';
 import 'moderation_admin_page.dart';
+import '../profile/profile_model.dart';
 import 'safety_admin_page.dart';
 
 const _kAdminBg = BrandTheme.greyMid;
@@ -316,6 +320,7 @@ enum _AdminWorkspaceFilter { all, profiles, applications, safety }
 class _AdminWorkspaceRow {
   const _AdminWorkspaceRow({
     required this.id,
+    required this.targetId,
     required this.kind,
     required this.title,
     required this.subtitle,
@@ -326,6 +331,7 @@ class _AdminWorkspaceRow {
   });
 
   final String id;
+  final String targetId;
   final String kind;
   final String title;
   final String subtitle;
@@ -350,6 +356,7 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
   final TextEditingController _searchC = TextEditingController();
   final Set<String> _selected = <String>{};
   _AdminWorkspaceFilter _filter = _AdminWorkspaceFilter.all;
+  bool _bulkBusy = false;
 
   @override
   void dispose() {
@@ -374,6 +381,7 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
       for (final item in profiles.valueOrNull ?? const [])
         _AdminWorkspaceRow(
           id: 'profile:${item.id}',
+          targetId: item.id,
           kind: ru ? 'Анкета' : 'Profile',
           title: item.fullName.trim().isEmpty ? 'Анкета' : item.fullName.trim(),
           subtitle: [
@@ -389,6 +397,7 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
       for (final item in applications.valueOrNull ?? const [])
         _AdminWorkspaceRow(
           id: 'application:${item.id}',
+          targetId: item.id,
           kind: ru ? 'Заявка' : 'Request',
           title: item.owner.displayName.isEmpty
               ? item.userId
@@ -406,6 +415,7 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
       for (final item in merges.valueOrNull ?? const [])
         _AdminWorkspaceRow(
           id: 'merge:${item.id}',
+          targetId: item.id,
           kind: 'Merge',
           title: item.title,
           subtitle: [
@@ -421,6 +431,7 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
       for (final row in safety.valueOrNull ?? const <Map<String, dynamic>>[])
         _AdminWorkspaceRow(
           id: 'safety:${(row['id'] ?? '').toString()}',
+          targetId: (row['id'] ?? '').toString(),
           kind: 'Safety',
           title: (row['reason'] ?? '').toString().trim().isEmpty
               ? (ru ? 'Жалоба' : 'Report')
@@ -453,6 +464,24 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
         .toList(growable: false);
 
     _selected.removeWhere((id) => !filtered.any((row) => row.id == id));
+
+    final selectedRows = filtered
+        .where((row) => _selected.contains(row.id))
+        .toList(growable: false);
+    final profileById = <String, MyProfileState>{
+      for (final item in profiles.valueOrNull ?? const <MyProfileState>[])
+        item.id: item,
+    };
+    final selectedProfiles = selectedRows
+        .where((row) => row.filter == _AdminWorkspaceFilter.profiles)
+        .map((row) => profileById[row.targetId])
+        .whereType<MyProfileState>()
+        .toList(growable: false);
+    final selectedSafetyIds = selectedRows
+        .where((row) => row.filter == _AdminWorkspaceFilter.safety)
+        .map((row) => row.targetId.trim())
+        .where((id) => id.isNotEmpty)
+        .toList(growable: false);
 
     return _AdminPanelSurface(
       child: Column(
@@ -531,6 +560,9 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
           if (_selected.isNotEmpty) ...[
             _AdminBulkBar(
               count: _selected.length,
+              profileCount: selectedProfiles.length,
+              safetyCount: selectedSafetyIds.length,
+              busy: _bulkBusy,
               onClear: () => setState(_selected.clear),
               onOpen: () {
                 final first = filtered.firstWhere(
@@ -539,6 +571,18 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
                 );
                 context.go(first.route);
               },
+              onApproveProfiles: selectedProfiles.isEmpty || _bulkBusy
+                  ? null
+                  : () => _bulkApproveProfiles(selectedProfiles),
+              onRejectProfiles: selectedProfiles.isEmpty || _bulkBusy
+                  ? null
+                  : () => _bulkRejectProfiles(selectedProfiles),
+              onCloseSafety: selectedSafetyIds.isEmpty || _bulkBusy
+                  ? null
+                  : () => _bulkCloseSafetyReports(selectedSafetyIds),
+              onExport: selectedRows.isEmpty || _bulkBusy
+                  ? null
+                  : () => _exportRows(selectedRows),
             ),
             const SizedBox(height: 12),
           ],
@@ -580,6 +624,325 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
     final local = date.toLocal();
     return '${local.day.toString().padLeft(2, '0')}.'
         '${local.month.toString().padLeft(2, '0')}';
+  }
+
+  Future<void> _bulkApproveProfiles(List<MyProfileState> profiles) async {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    await _runBulkAction(
+      successMessage: ru
+          ? 'Анкеты одобрены: ${profiles.length}'
+          : 'Profiles approved: ${profiles.length}',
+      action: () async {
+        final sb = ref.read(supabaseProvider);
+        for (final profile in profiles) {
+          await _publishProfile(sb, profile);
+        }
+        await AdminActionLogService(sb).log(
+          actionType: 'bulk_profiles_approved',
+          title: ru ? 'Анкеты одобрены массово' : 'Profiles bulk approved',
+          description: profiles.map((e) => e.fullName).join(' • '),
+          targetTable: 'profiles',
+          targetText: '${profiles.length}',
+          status: 'approved',
+          metadata: <String, dynamic>{
+            'profile_ids': profiles.map((e) => e.id).toList(growable: false),
+          },
+        );
+        ref.invalidate(pendingProfilesProvider);
+        ref.invalidate(adminDashboardCountsProvider);
+        setState(() {
+          _selected.removeWhere(
+            (id) => profiles.any((profile) => id == 'profile:${profile.id}'),
+          );
+        });
+      },
+    );
+  }
+
+  Future<void> _bulkRejectProfiles(List<MyProfileState> profiles) async {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final ids = profiles.map((e) => e.id).toList(growable: false);
+    await _runBulkAction(
+      successMessage: ru
+          ? 'Анкеты отклонены: ${ids.length}'
+          : 'Profiles rejected: ${ids.length}',
+      action: () async {
+        final sb = ref.read(supabaseProvider);
+        await sb
+            .from('profiles')
+            .update(<String, dynamic>{
+              'status': 'rejected',
+              'moderation_comment': ru
+                  ? 'Отклонено массовым действием администратора.'
+                  : 'Rejected by admin bulk action.',
+            })
+            .inFilter('id', ids);
+        await AdminActionLogService(sb).log(
+          actionType: 'bulk_profiles_rejected',
+          title: ru ? 'Анкеты отклонены массово' : 'Profiles bulk rejected',
+          description: profiles.map((e) => e.fullName).join(' • '),
+          targetTable: 'profiles',
+          targetText: '${ids.length}',
+          status: 'rejected',
+          metadata: <String, dynamic>{'profile_ids': ids},
+        );
+        ref.invalidate(pendingProfilesProvider);
+        ref.invalidate(adminDashboardCountsProvider);
+        setState(() {
+          _selected.removeWhere(
+            (id) => ids.any((profileId) => id == 'profile:$profileId'),
+          );
+        });
+      },
+    );
+  }
+
+  Future<void> _bulkCloseSafetyReports(List<String> ids) async {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    await _runBulkAction(
+      successMessage: ru
+          ? 'Жалобы закрыты: ${ids.length}'
+          : 'Safety reports closed: ${ids.length}',
+      action: () async {
+        final sb = ref.read(supabaseProvider);
+        await sb
+            .from('profile_reports')
+            .update(<String, dynamic>{'status': 'closed'})
+            .inFilter('id', ids);
+        await AdminActionLogService(sb).log(
+          actionType: 'bulk_safety_closed',
+          title: ru
+              ? 'Safety-жалобы закрыты массово'
+              : 'Safety reports bulk closed',
+          description: ids.join(' • '),
+          targetTable: 'profile_reports',
+          targetText: '${ids.length}',
+          status: 'closed',
+          metadata: <String, dynamic>{'report_ids': ids},
+        );
+        ref.invalidate(safetyReportsProvider);
+        ref.invalidate(adminDashboardCountsProvider);
+        setState(() {
+          _selected.removeWhere(
+            (id) => ids.any((reportId) => id == 'safety:$reportId'),
+          );
+        });
+      },
+    );
+  }
+
+  Future<void> _exportRows(List<_AdminWorkspaceRow> rows) async {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    await _runBulkAction(
+      successMessage: ru
+          ? 'CSV скопирован: ${rows.length} строк'
+          : 'CSV copied: ${rows.length} rows',
+      action: () async {
+        final csv = _rowsToCsv(rows);
+        await Clipboard.setData(ClipboardData(text: csv));
+        final sb = ref.read(supabaseProvider);
+        await AdminActionLogService(sb).log(
+          actionType: 'bulk_rows_exported',
+          title: ru ? 'Строки экспортированы' : 'Rows exported',
+          description: rows.map((e) => e.title).join(' • '),
+          targetTable: 'admin_workspace',
+          targetText: '${rows.length}',
+          status: 'exported',
+          metadata: <String, dynamic>{
+            'row_ids': rows.map((e) => e.id).toList(growable: false),
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _runBulkAction({
+    required Future<void> Function() action,
+    required String successMessage,
+  }) async {
+    if (_bulkBusy) return;
+    setState(() => _bulkBusy = true);
+    try {
+      await action();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(successMessage)));
+    } on PostgrestException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(_adminBulkErrorText(e))));
+    } catch (_) {
+      if (!mounted) return;
+      final ru = Localizations.localeOf(context).languageCode == 'ru';
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              ru ? 'Не удалось выполнить действие' : 'Action failed',
+            ),
+          ),
+        );
+    } finally {
+      if (mounted) setState(() => _bulkBusy = false);
+    }
+  }
+
+  Future<void> _publishProfile(
+    SupabaseClient sb,
+    MyProfileState profile,
+  ) async {
+    final photoUrls = _mergeUniqueMedia(
+      profile.photoUrls,
+      profile.pendingPhotoUrls,
+    );
+    final videoUrls = _mergeUniqueMedia(
+      profile.videoUrls,
+      profile.pendingVideoUrls,
+    );
+    final preferredCover = profile.pendingCoverPhotoUrl.trim().isNotEmpty
+        ? profile.pendingCoverPhotoUrl
+        : profile.coverPhotoUrl;
+    final preferredCoverFocalX = profile.pendingCoverPhotoUrl.trim().isNotEmpty
+        ? profile.pendingCoverPhotoFocalX
+        : profile.coverPhotoFocalX;
+    final preferredCoverFocalY = profile.pendingCoverPhotoUrl.trim().isNotEmpty
+        ? profile.pendingCoverPhotoFocalY
+        : profile.coverPhotoFocalY;
+    final preferredShowreel = profile.pendingShowreelUrl.trim().isNotEmpty
+        ? profile.pendingShowreelUrl
+        : profile.showreelUrl;
+
+    try {
+      await sb
+          .from('profiles')
+          .update(<String, dynamic>{
+            'status': 'approved',
+            'moderation_comment': null,
+            'photo_urls': photoUrls,
+            'photo_category_labels': <String>[
+              ..._alignedLabels(
+                profile.photoCategoryLabels,
+                profile.photoUrls.length,
+                fallback: 'Портфолио',
+              ),
+              ..._alignedLabels(
+                profile.pendingPhotoCategoryLabels,
+                profile.pendingPhotoUrls.length,
+                fallback: 'Портфолио',
+              ),
+            ],
+            'cover_photo_url': _coverPhotoFrom(preferredCover, photoUrls),
+            'cover_photo_focal_x': preferredCoverFocalX.clamp(-1.0, 1.0),
+            'cover_photo_focal_y': preferredCoverFocalY.clamp(-1.0, 1.0),
+            'video_urls': videoUrls,
+            'video_preview_urls': _mergeUniqueMedia(
+              profile.videoPreviewUrls,
+              profile.pendingVideoPreviewUrls,
+            ),
+            'video_category_labels': <String>[
+              ..._alignedLabels(
+                profile.videoCategoryLabels,
+                profile.videoUrls.length,
+                fallback: 'Видео',
+              ),
+              ..._alignedLabels(
+                profile.pendingVideoCategoryLabels,
+                profile.pendingVideoUrls.length,
+                fallback: 'Видео',
+              ),
+            ],
+            'showreel_url': videoUrls.contains(preferredShowreel.trim())
+                ? preferredShowreel.trim()
+                : '',
+            'showreel_preview_url': videoUrls.contains(preferredShowreel.trim())
+                ? (profile.pendingShowreelPreviewUrl.trim().isNotEmpty
+                      ? profile.pendingShowreelPreviewUrl.trim()
+                      : profile.showreelPreviewUrl.trim())
+                : '',
+            'pending_photo_urls': const <String>[],
+            'pending_cover_photo_url': '',
+            'pending_cover_photo_focal_x': 0,
+            'pending_cover_photo_focal_y': -0.72,
+            'pending_video_urls': const <String>[],
+            'pending_video_preview_urls': const <String>[],
+            'pending_photo_category_labels': const <String>[],
+            'pending_video_category_labels': const <String>[],
+            'pending_showreel_url': '',
+            'pending_showreel_preview_url': '',
+            'has_pending_media': false,
+          })
+          .eq('id', profile.id);
+    } on PostgrestException catch (directError) {
+      if (directError.code == '22P02') rethrow;
+      await sb.rpc(
+        'admin_publish_profile',
+        params: {'p_profile_id': profile.id},
+      );
+    }
+  }
+
+  String _rowsToCsv(List<_AdminWorkspaceRow> rows) {
+    final buffer = StringBuffer('type,title,details,status,date,id\n');
+    for (final row in rows) {
+      buffer.writeln(
+        [
+          row.kind,
+          row.title,
+          row.subtitle,
+          row.status,
+          row.dateText,
+          row.targetId,
+        ].map(_csvCell).join(','),
+      );
+    }
+    return buffer.toString();
+  }
+
+  String _csvCell(String value) {
+    final escaped = value.replaceAll('"', '""');
+    return '"$escaped"';
+  }
+
+  String _adminBulkErrorText(PostgrestException error) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final message = error.message.trim();
+    if (message.isNotEmpty) return ru ? 'Ошибка Supabase: $message' : message;
+    return ru ? 'Не удалось выполнить действие' : 'Action failed';
+  }
+
+  List<String> _mergeUniqueMedia(List<String> published, List<String> pending) {
+    final seen = <String>{};
+    final result = <String>[];
+    for (final raw in [...published, ...pending]) {
+      final url = raw.trim();
+      if (url.isEmpty || !seen.add(url)) continue;
+      result.add(url);
+    }
+    return result;
+  }
+
+  List<String> _alignedLabels(
+    List<String> labels,
+    int length, {
+    required String fallback,
+  }) {
+    return [
+      for (var i = 0; i < length; i++)
+        if (i < labels.length && labels[i].trim().isNotEmpty)
+          labels[i].trim()
+        else
+          fallback,
+    ];
+  }
+
+  String _coverPhotoFrom(String preferred, List<String> photoUrls) {
+    final cover = preferred.trim();
+    final photos = photoUrls.map((e) => e.trim()).where((e) => e.isNotEmpty);
+    if (cover.isNotEmpty && photos.contains(cover)) return cover;
+    return photos.isEmpty ? '' : photos.first;
   }
 }
 
@@ -638,42 +1001,136 @@ class _AdminWorkspaceFilters extends StatelessWidget {
 class _AdminBulkBar extends StatelessWidget {
   const _AdminBulkBar({
     required this.count,
+    required this.profileCount,
+    required this.safetyCount,
+    required this.busy,
     required this.onClear,
     required this.onOpen,
+    required this.onApproveProfiles,
+    required this.onRejectProfiles,
+    required this.onCloseSafety,
+    required this.onExport,
   });
 
   final int count;
+  final int profileCount;
+  final int safetyCount;
+  final bool busy;
   final VoidCallback onClear;
   final VoidCallback onOpen;
+  final VoidCallback? onApproveProfiles;
+  final VoidCallback? onRejectProfiles;
+  final VoidCallback? onCloseSafety;
+  final VoidCallback? onExport;
 
   @override
   Widget build(BuildContext context) {
     final ru = Localizations.localeOf(context).languageCode == 'ru';
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.all(12),
       decoration: catalogSearchDecoration(
         radius: 18,
         borderColor: BrandTheme.redTop.withValues(alpha: 0.42),
       ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              ru ? 'Выбрано: $count' : 'Selected: $count',
-              style: adminCommandStyle(size: 12, letterSpacing: 0.8),
-            ),
-          ),
-          TextButton(onPressed: onClear, child: Text(ru ? 'СБРОС' : 'CLEAR')),
-          const SizedBox(width: 8),
-          ElevatedButton(
-            onPressed: onOpen,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: kTextDark,
-              foregroundColor: Colors.white,
-            ),
-            child: Text(ru ? 'ОТКРЫТЬ' : 'OPEN'),
-          ),
-        ],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 780;
+          final title = Text(
+            busy
+                ? (ru ? 'Выполняю действие...' : 'Running action...')
+                : (ru ? 'Выбрано: $count' : 'Selected: $count'),
+            style: adminCommandStyle(size: 12, letterSpacing: 0.8),
+          );
+          final actions = Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            alignment: compact ? WrapAlignment.start : WrapAlignment.end,
+            children: [
+              _AdminBulkButton(
+                label: ru ? 'ОДОБРИТЬ $profileCount' : 'APPROVE $profileCount',
+                icon: Icons.check_rounded,
+                onTap: onApproveProfiles,
+                dark: true,
+              ),
+              _AdminBulkButton(
+                label: ru ? 'ОТКЛОНИТЬ $profileCount' : 'REJECT $profileCount',
+                icon: Icons.close_rounded,
+                onTap: onRejectProfiles,
+              ),
+              _AdminBulkButton(
+                label: ru ? 'ЗАКРЫТЬ $safetyCount' : 'CLOSE $safetyCount',
+                icon: Icons.shield_rounded,
+                onTap: onCloseSafety,
+              ),
+              _AdminBulkButton(
+                label: ru ? 'CSV' : 'CSV',
+                icon: Icons.file_download_rounded,
+                onTap: onExport,
+              ),
+              _AdminBulkButton(
+                label: ru ? 'ОТКРЫТЬ' : 'OPEN',
+                icon: Icons.open_in_new_rounded,
+                onTap: busy ? null : onOpen,
+              ),
+              _AdminBulkButton(
+                label: ru ? 'СБРОС' : 'CLEAR',
+                icon: Icons.clear_rounded,
+                onTap: busy ? null : onClear,
+              ),
+            ],
+          );
+          if (compact) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [title, const SizedBox(height: 10), actions],
+            );
+          }
+          return Row(
+            children: [
+              Expanded(child: title),
+              const SizedBox(width: 12),
+              Flexible(flex: 2, child: actions),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _AdminBulkButton extends StatelessWidget {
+  const _AdminBulkButton({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+    this.dark = false,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback? onTap;
+  final bool dark;
+
+  @override
+  Widget build(BuildContext context) {
+    return ElevatedButton.icon(
+      onPressed: onTap,
+      icon: Icon(icon, size: 17),
+      label: Text(label),
+      style: ElevatedButton.styleFrom(
+        elevation: 0,
+        backgroundColor: dark
+            ? kTextDark
+            : Colors.white.withValues(alpha: 0.86),
+        disabledBackgroundColor: Colors.white.withValues(alpha: 0.34),
+        foregroundColor: dark ? Colors.white : kTextDark,
+        disabledForegroundColor: kTextMuted.withValues(alpha: 0.7),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(999),
+          side: BorderSide(color: dark ? kTextDark : kBorderColor),
+        ),
+        textStyle: adminCommandStyle(size: 10.5, letterSpacing: 0.8),
       ),
     );
   }
