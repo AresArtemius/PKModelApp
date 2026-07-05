@@ -317,6 +317,39 @@ class _AdminHome extends StatelessWidget {
 
 enum _AdminWorkspaceFilter { all, profiles, applications, safety }
 
+enum _AdminBulkActionType { approveProfiles, rejectProfiles, closeSafety }
+
+class _AdminBulkRowResult {
+  const _AdminBulkRowResult({
+    required this.id,
+    required this.title,
+    required this.success,
+    this.message = '',
+  });
+
+  final String id;
+  final String title;
+  final bool success;
+  final String message;
+}
+
+class _AdminBulkResult {
+  const _AdminBulkResult({
+    required this.actionType,
+    required this.title,
+    required this.rows,
+  });
+
+  final _AdminBulkActionType actionType;
+  final String title;
+  final List<_AdminBulkRowResult> rows;
+
+  Iterable<_AdminBulkRowResult> get failedRows =>
+      rows.where((row) => !row.success);
+  int get successCount => rows.where((row) => row.success).length;
+  int get failedCount => failedRows.length;
+}
+
 class _AdminWorkspaceRow {
   const _AdminWorkspaceRow({
     required this.id,
@@ -357,6 +390,7 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
   final Set<String> _selected = <String>{};
   _AdminWorkspaceFilter _filter = _AdminWorkspaceFilter.all;
   bool _bulkBusy = false;
+  _AdminBulkResult? _lastBulkResult;
 
   @override
   void dispose() {
@@ -482,6 +516,9 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
         .map((row) => row.targetId.trim())
         .where((id) => id.isNotEmpty)
         .toList(growable: false);
+    final selectedSafetyRows = selectedRows
+        .where((row) => row.filter == _AdminWorkspaceFilter.safety)
+        .toList(growable: false);
 
     return _AdminPanelSurface(
       child: Column(
@@ -579,10 +616,23 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
                   : () => _bulkRejectProfiles(selectedProfiles),
               onCloseSafety: selectedSafetyIds.isEmpty || _bulkBusy
                   ? null
-                  : () => _bulkCloseSafetyReports(selectedSafetyIds),
+                  : () => _bulkCloseSafetyReports(selectedSafetyRows),
               onExport: selectedRows.isEmpty || _bulkBusy
                   ? null
                   : () => _exportRows(selectedRows),
+            ),
+            const SizedBox(height: 12),
+          ],
+          if (_lastBulkResult != null) ...[
+            _AdminBulkResultPanel(
+              result: _lastBulkResult!,
+              busy: _bulkBusy,
+              onRetryFailed: _lastBulkResult!.failedCount == 0 || _bulkBusy
+                  ? null
+                  : () => _retryFailedRows(_lastBulkResult!),
+              onClear: _bulkBusy
+                  ? null
+                  : () => setState(() => _lastBulkResult = null),
             ),
             const SizedBox(height: 12),
           ],
@@ -628,46 +678,46 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
 
   Future<void> _bulkApproveProfiles(List<MyProfileState> profiles) async {
     final ru = Localizations.localeOf(context).languageCode == 'ru';
-    await _runBulkAction(
-      successMessage: ru
-          ? 'Анкеты одобрены: ${profiles.length}'
-          : 'Profiles approved: ${profiles.length}',
-      action: () async {
-        final sb = ref.read(supabaseProvider);
-        for (final profile in profiles) {
-          await _publishProfile(sb, profile);
-        }
-        await AdminActionLogService(sb).log(
-          actionType: 'bulk_profiles_approved',
-          title: ru ? 'Анкеты одобрены массово' : 'Profiles bulk approved',
-          description: profiles.map((e) => e.fullName).join(' • '),
-          targetTable: 'profiles',
-          targetText: '${profiles.length}',
-          status: 'approved',
-          metadata: <String, dynamic>{
-            'profile_ids': profiles.map((e) => e.id).toList(growable: false),
-          },
-        );
-        ref.invalidate(pendingProfilesProvider);
-        ref.invalidate(adminDashboardCountsProvider);
-        setState(() {
-          _selected.removeWhere(
-            (id) => profiles.any((profile) => id == 'profile:${profile.id}'),
-          );
-        });
-      },
+    final confirmed = await _confirmBulkAction(
+      title: ru ? 'ОДОБРИТЬ АНКЕТЫ?' : 'APPROVE PROFILES?',
+      message: ru
+          ? 'Будет опубликовано анкет: ${profiles.length}. После одобрения они появятся в каталоге.'
+          : '${profiles.length} profiles will be published to the catalog.',
+      confirmLabel: ru ? 'ОДОБРИТЬ' : 'APPROVE',
+      destructive: false,
+    );
+    if (!confirmed) return;
+    await _runProfileBulkAction(
+      actionType: _AdminBulkActionType.approveProfiles,
+      title: ru ? 'Одобрение анкет' : 'Profile approval',
+      profiles: profiles,
+      actionTypeForLog: 'bulk_profiles_approved',
+      logTitle: ru ? 'Анкеты одобрены массово' : 'Profiles bulk approved',
+      successSnack: ru ? 'Одобрено' : 'Approved',
+      runOne: (sb, profile) => _publishProfile(sb, profile),
+      logStatus: 'approved',
     );
   }
 
   Future<void> _bulkRejectProfiles(List<MyProfileState> profiles) async {
     final ru = Localizations.localeOf(context).languageCode == 'ru';
-    final ids = profiles.map((e) => e.id).toList(growable: false);
-    await _runBulkAction(
-      successMessage: ru
-          ? 'Анкеты отклонены: ${ids.length}'
-          : 'Profiles rejected: ${ids.length}',
-      action: () async {
-        final sb = ref.read(supabaseProvider);
+    final confirmed = await _confirmBulkAction(
+      title: ru ? 'ОТКЛОНИТЬ АНКЕТЫ?' : 'REJECT PROFILES?',
+      message: ru
+          ? 'Будет отклонено анкет: ${profiles.length}. Пользователь увидит статус отклонения.'
+          : '${profiles.length} profiles will be rejected.',
+      confirmLabel: ru ? 'ОТКЛОНИТЬ' : 'REJECT',
+      destructive: true,
+    );
+    if (!confirmed) return;
+    await _runProfileBulkAction(
+      actionType: _AdminBulkActionType.rejectProfiles,
+      title: ru ? 'Отклонение анкет' : 'Profile rejection',
+      profiles: profiles,
+      actionTypeForLog: 'bulk_profiles_rejected',
+      logTitle: ru ? 'Анкеты отклонены массово' : 'Profiles bulk rejected',
+      successSnack: ru ? 'Отклонено' : 'Rejected',
+      runOne: (sb, profile) async {
         await sb
             .from('profiles')
             .update(<String, dynamic>{
@@ -676,59 +726,305 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
                   ? 'Отклонено массовым действием администратора.'
                   : 'Rejected by admin bulk action.',
             })
-            .inFilter('id', ids);
-        await AdminActionLogService(sb).log(
-          actionType: 'bulk_profiles_rejected',
-          title: ru ? 'Анкеты отклонены массово' : 'Profiles bulk rejected',
-          description: profiles.map((e) => e.fullName).join(' • '),
-          targetTable: 'profiles',
-          targetText: '${ids.length}',
-          status: 'rejected',
-          metadata: <String, dynamic>{'profile_ids': ids},
-        );
-        ref.invalidate(pendingProfilesProvider);
-        ref.invalidate(adminDashboardCountsProvider);
-        setState(() {
-          _selected.removeWhere(
-            (id) => ids.any((profileId) => id == 'profile:$profileId'),
+            .eq('id', profile.id);
+      },
+      logStatus: 'rejected',
+    );
+  }
+
+  Future<void> _bulkCloseSafetyReports(List<_AdminWorkspaceRow> reports) async {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final confirmed = await _confirmBulkAction(
+      title: ru ? 'ЗАКРЫТЬ ЖАЛОБЫ?' : 'CLOSE SAFETY REPORTS?',
+      message: ru
+          ? 'Будет закрыто жалоб: ${reports.length}. Они уйдут из очереди безопасности.'
+          : '${reports.length} safety reports will be closed.',
+      confirmLabel: ru ? 'ЗАКРЫТЬ' : 'CLOSE',
+      destructive: true,
+    );
+    if (!confirmed) return;
+    await _runSafetyBulkAction(reports);
+  }
+
+  Future<void> _runProfileBulkAction({
+    required _AdminBulkActionType actionType,
+    required String title,
+    required List<MyProfileState> profiles,
+    required String actionTypeForLog,
+    required String logTitle,
+    required String successSnack,
+    required Future<void> Function(SupabaseClient sb, MyProfileState profile)
+    runOne,
+    required String logStatus,
+  }) async {
+    if (_bulkBusy) return;
+    setState(() => _bulkBusy = true);
+    final sb = ref.read(supabaseProvider);
+    final results = <_AdminBulkRowResult>[];
+    try {
+      for (final profile in profiles) {
+        try {
+          await runOne(sb, profile);
+          results.add(
+            _AdminBulkRowResult(
+              id: profile.id,
+              title: profile.fullName.trim().isEmpty
+                  ? profile.id
+                  : profile.fullName.trim(),
+              success: true,
+            ),
           );
-        });
+        } catch (e) {
+          results.add(
+            _AdminBulkRowResult(
+              id: profile.id,
+              title: profile.fullName.trim().isEmpty
+                  ? profile.id
+                  : profile.fullName.trim(),
+              success: false,
+              message: _errorText(e),
+            ),
+          );
+        }
+      }
+      await _logBulkResult(
+        sb: sb,
+        actionType: actionTypeForLog,
+        title: logTitle,
+        targetTable: 'profiles',
+        status: _bulkLogStatus(results, successStatus: logStatus),
+        results: results,
+      );
+      ref.invalidate(pendingProfilesProvider);
+      ref.invalidate(adminDashboardCountsProvider);
+      if (!mounted) return;
+      setState(() {
+        _lastBulkResult = _AdminBulkResult(
+          actionType: actionType,
+          title: title,
+          rows: results,
+        );
+        _selected.removeWhere(
+          (id) =>
+              results.any((row) => row.success && id == 'profile:${row.id}'),
+        );
+      });
+      _showBulkSnack(successSnack, results);
+    } finally {
+      if (mounted) setState(() => _bulkBusy = false);
+    }
+  }
+
+  Future<void> _runSafetyBulkAction(List<_AdminWorkspaceRow> reports) async {
+    if (_bulkBusy) return;
+    setState(() => _bulkBusy = true);
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final sb = ref.read(supabaseProvider);
+    final results = <_AdminBulkRowResult>[];
+    try {
+      for (final report in reports) {
+        try {
+          await sb
+              .from('profile_reports')
+              .update(<String, dynamic>{'status': 'closed'})
+              .eq('id', report.targetId);
+          results.add(
+            _AdminBulkRowResult(
+              id: report.targetId,
+              title: report.title,
+              success: true,
+            ),
+          );
+        } catch (e) {
+          results.add(
+            _AdminBulkRowResult(
+              id: report.targetId,
+              title: report.title,
+              success: false,
+              message: _errorText(e),
+            ),
+          );
+        }
+      }
+      await _logBulkResult(
+        sb: sb,
+        actionType: 'bulk_safety_closed',
+        title: ru
+            ? 'Жалобы безопасности закрыты массово'
+            : 'Safety reports bulk closed',
+        targetTable: 'profile_reports',
+        status: _bulkLogStatus(results, successStatus: 'closed'),
+        results: results,
+      );
+      ref.invalidate(safetyReportsProvider);
+      ref.invalidate(adminDashboardCountsProvider);
+      if (!mounted) return;
+      setState(() {
+        _lastBulkResult = _AdminBulkResult(
+          actionType: _AdminBulkActionType.closeSafety,
+          title: ru ? 'Закрытие жалоб' : 'Safety closing',
+          rows: results,
+        );
+        _selected.removeWhere(
+          (id) => results.any((row) => row.success && id == 'safety:${row.id}'),
+        );
+      });
+      _showBulkSnack(ru ? 'Закрыто' : 'Closed', results);
+    } finally {
+      if (mounted) setState(() => _bulkBusy = false);
+    }
+  }
+
+  Future<void> _retryFailedRows(_AdminBulkResult result) async {
+    final failedIds = result.failedRows.map((row) => row.id).toSet();
+    if (failedIds.isEmpty) return;
+    switch (result.actionType) {
+      case _AdminBulkActionType.approveProfiles:
+        final profiles =
+            (ref.read(pendingProfilesProvider).valueOrNull ??
+                    const <MyProfileState>[])
+                .where((profile) => failedIds.contains(profile.id))
+                .toList(growable: false);
+        if (profiles.isNotEmpty) await _bulkApproveProfiles(profiles);
+        break;
+      case _AdminBulkActionType.rejectProfiles:
+        final profiles =
+            (ref.read(pendingProfilesProvider).valueOrNull ??
+                    const <MyProfileState>[])
+                .where((profile) => failedIds.contains(profile.id))
+                .toList(growable: false);
+        if (profiles.isNotEmpty) await _bulkRejectProfiles(profiles);
+        break;
+      case _AdminBulkActionType.closeSafety:
+        final safetyRows =
+            (ref.read(safetyReportsProvider).valueOrNull ??
+                    const <Map<String, dynamic>>[])
+                .where(
+                  (row) => failedIds.contains((row['id'] ?? '').toString()),
+                )
+                .map(
+                  (row) => _AdminWorkspaceRow(
+                    id: 'safety:${(row['id'] ?? '').toString()}',
+                    targetId: (row['id'] ?? '').toString(),
+                    kind: 'Безопасность',
+                    title: (row['reason'] ?? '').toString().trim().isEmpty
+                        ? 'Жалоба'
+                        : (row['reason'] ?? '').toString().trim(),
+                    subtitle: (row['comment'] ?? '').toString(),
+                    status: (row['status'] ?? '').toString(),
+                    dateText: _dateText(
+                      DateTime.tryParse((row['created_at'] ?? '').toString()),
+                    ),
+                    route: Routes.safetyAdmin,
+                    filter: _AdminWorkspaceFilter.safety,
+                  ),
+                )
+                .toList(growable: false);
+        if (safetyRows.isNotEmpty) await _bulkCloseSafetyReports(safetyRows);
+        break;
+    }
+  }
+
+  Future<bool> _confirmBulkAction({
+    required String title,
+    required String message,
+    required String confirmLabel,
+    required bool destructive,
+  }) async {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Text(
+          title,
+          style: adminCommandStyle(size: 18, letterSpacing: 1.2),
+        ),
+        content: Text(
+          message,
+          style: adminBodyStyle(size: 14, color: kTextMuted),
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(ru ? 'ОТМЕНА' : 'CANCEL'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(
+              elevation: 0,
+              backgroundColor: destructive ? BrandTheme.redTop : kTextDark,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+            child: Text(confirmLabel),
+          ),
+        ],
+      ),
+    );
+    return confirmed ?? false;
+  }
+
+  Future<void> _logBulkResult({
+    required SupabaseClient sb,
+    required String actionType,
+    required String title,
+    required String targetTable,
+    required String status,
+    required List<_AdminBulkRowResult> results,
+  }) async {
+    await AdminActionLogService(sb).log(
+      actionType: actionType,
+      title: title,
+      description: results
+          .map((row) => '${row.success ? 'OK' : 'ERR'}:${row.title}')
+          .join(' • '),
+      targetTable: targetTable,
+      targetText: '${results.length}',
+      status: status,
+      metadata: <String, dynamic>{
+        'success_ids': results
+            .where((row) => row.success)
+            .map((row) => row.id)
+            .toList(growable: false),
+        'failed_ids': results
+            .where((row) => !row.success)
+            .map((row) => row.id)
+            .toList(growable: false),
+        'errors': <Map<String, String>>[
+          for (final row in results.where((row) => !row.success))
+            {'id': row.id, 'title': row.title, 'message': row.message},
+        ],
       },
     );
   }
 
-  Future<void> _bulkCloseSafetyReports(List<String> ids) async {
+  String _bulkLogStatus(
+    List<_AdminBulkRowResult> results, {
+    required String successStatus,
+  }) {
+    final failed = results.where((row) => !row.success).length;
+    if (failed == 0) return successStatus;
+    if (failed == results.length) return 'failed';
+    return 'partial';
+  }
+
+  void _showBulkSnack(String action, List<_AdminBulkRowResult> results) {
+    if (!mounted) return;
     final ru = Localizations.localeOf(context).languageCode == 'ru';
-    await _runBulkAction(
-      successMessage: ru
-          ? 'Жалобы закрыты: ${ids.length}'
-          : 'Safety reports closed: ${ids.length}',
-      action: () async {
-        final sb = ref.read(supabaseProvider);
-        await sb
-            .from('profile_reports')
-            .update(<String, dynamic>{'status': 'closed'})
-            .inFilter('id', ids);
-        await AdminActionLogService(sb).log(
-          actionType: 'bulk_safety_closed',
-          title: ru
-              ? 'Жалобы безопасности закрыты массово'
-              : 'Safety reports bulk closed',
-          description: ids.join(' • '),
-          targetTable: 'profile_reports',
-          targetText: '${ids.length}',
-          status: 'closed',
-          metadata: <String, dynamic>{'report_ids': ids},
-        );
-        ref.invalidate(safetyReportsProvider);
-        ref.invalidate(adminDashboardCountsProvider);
-        setState(() {
-          _selected.removeWhere(
-            (id) => ids.any((reportId) => id == 'safety:$reportId'),
-          );
-        });
-      },
-    );
+    final failed = results.where((row) => !row.success).length;
+    final success = results.length - failed;
+    final message = ru
+        ? '$action: $success успешно, $failed ошибок'
+        : '$action: $success succeeded, $failed failed';
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _exportRows(List<_AdminWorkspaceRow> rows) async {
@@ -911,6 +1207,16 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
     final message = error.message.trim();
     if (message.isNotEmpty) return ru ? 'Ошибка Supabase: $message' : message;
     return ru ? 'Не удалось выполнить действие' : 'Action failed';
+  }
+
+  String _errorText(Object error) {
+    if (error is PostgrestException) {
+      final message = error.message.trim();
+      if (message.isNotEmpty) return message;
+      if ((error.code ?? '').trim().isNotEmpty) return error.code!;
+    }
+    final message = error.toString().trim();
+    return message.isEmpty ? 'Unknown error' : message;
   }
 
   List<String> _mergeUniqueMedia(List<String> published, List<String> pending) {
@@ -1134,6 +1440,162 @@ class _AdminBulkButton extends StatelessWidget {
           side: BorderSide(color: dark ? kTextDark : kBorderColor),
         ),
         textStyle: adminCommandStyle(size: 10.5, letterSpacing: 0.8),
+      ),
+    );
+  }
+}
+
+class _AdminBulkResultPanel extends StatelessWidget {
+  const _AdminBulkResultPanel({
+    required this.result,
+    required this.busy,
+    required this.onRetryFailed,
+    required this.onClear,
+  });
+
+  final _AdminBulkResult result;
+  final bool busy;
+  final VoidCallback? onRetryFailed;
+  final VoidCallback? onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final failedRows = result.failedRows.toList(growable: false);
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: catalogSearchDecoration(
+        radius: 18,
+        borderColor: result.failedCount == 0
+            ? Colors.green.withValues(alpha: 0.35)
+            : BrandTheme.redTop.withValues(alpha: 0.45),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final compact = constraints.maxWidth < 680;
+              final header = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    result.title.toUpperCase(),
+                    style: adminCommandStyle(size: 12, letterSpacing: 1.0),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    ru
+                        ? 'Успешно: ${result.successCount} • Ошибок: ${result.failedCount}'
+                        : 'Succeeded: ${result.successCount} • Failed: ${result.failedCount}',
+                    style: adminBodyStyle(
+                      size: 12,
+                      color: kTextMuted,
+                      weight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              );
+              final actions = Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                alignment: compact ? WrapAlignment.start : WrapAlignment.end,
+                children: [
+                  _AdminBulkButton(
+                    label: ru ? 'ПОВТОРИТЬ ОШИБКИ' : 'RETRY FAILED',
+                    icon: Icons.refresh_rounded,
+                    onTap: onRetryFailed,
+                    dark: true,
+                  ),
+                  _AdminBulkButton(
+                    label: ru ? 'СКРЫТЬ' : 'HIDE',
+                    icon: Icons.close_rounded,
+                    onTap: busy ? null : onClear,
+                  ),
+                ],
+              );
+              if (compact) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [header, const SizedBox(height: 10), actions],
+                );
+              }
+              return Row(
+                children: [
+                  Expanded(child: header),
+                  const SizedBox(width: 12),
+                  actions,
+                ],
+              );
+            },
+          ),
+          if (failedRows.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            for (final row in failedRows.take(6)) ...[
+              _AdminBulkFailedRow(row: row),
+              const SizedBox(height: 6),
+            ],
+            if (failedRows.length > 6)
+              Text(
+                ru
+                    ? 'Еще ошибок: ${failedRows.length - 6}'
+                    : '${failedRows.length - 6} more failures',
+                style: adminBodyStyle(size: 12, color: kTextMuted),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _AdminBulkFailedRow extends StatelessWidget {
+  const _AdminBulkFailedRow({required this.row});
+
+  final _AdminBulkRowResult row;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: BrandTheme.redTop.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: BrandTheme.redTop.withValues(alpha: 0.16)),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.error_outline_rounded,
+            size: 18,
+            color: BrandTheme.redTop,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  row.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: adminBodyStyle(
+                    size: 12,
+                    color: kTextDark,
+                    weight: FontWeight.w900,
+                  ),
+                ),
+                if (row.message.isNotEmpty)
+                  Text(
+                    row.message,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: adminBodyStyle(size: 11, color: kTextMuted),
+                  ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
