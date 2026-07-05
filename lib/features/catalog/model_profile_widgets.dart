@@ -122,6 +122,7 @@ class _PortfolioHeroCard extends StatelessWidget {
     required this.onCompositePdf,
     required this.onCopyLink,
     required this.canUseAgentActions,
+    required this.inviteHistoryFuture,
     required this.isBusy,
     required this.onInvite,
     required this.onAddToSelection,
@@ -140,6 +141,7 @@ class _PortfolioHeroCard extends StatelessWidget {
   final VoidCallback onCompositePdf;
   final VoidCallback onCopyLink;
   final bool canUseAgentActions;
+  final Future<List<_ProfileInviteHistoryItem>>? inviteHistoryFuture;
   final bool isBusy;
   final VoidCallback onInvite;
   final VoidCallback onAddToSelection;
@@ -203,6 +205,7 @@ class _PortfolioHeroCard extends StatelessWidget {
       onCompositePdf: onCompositePdf,
       onCopyLink: onCopyLink,
       canUseAgentActions: canUseAgentActions,
+      inviteHistoryFuture: inviteHistoryFuture,
       isBusy: isBusy,
       onInvite: onInvite,
       onAddToSelection: onAddToSelection,
@@ -242,6 +245,7 @@ class _PortfolioIdentityPanel extends StatelessWidget {
     required this.onCompositePdf,
     required this.onCopyLink,
     required this.canUseAgentActions,
+    required this.inviteHistoryFuture,
     required this.isBusy,
     required this.onInvite,
     required this.onAddToSelection,
@@ -256,6 +260,7 @@ class _PortfolioIdentityPanel extends StatelessWidget {
   final VoidCallback onCompositePdf;
   final VoidCallback onCopyLink;
   final bool canUseAgentActions;
+  final Future<List<_ProfileInviteHistoryItem>>? inviteHistoryFuture;
   final bool isBusy;
   final VoidCallback onInvite;
   final VoidCallback onAddToSelection;
@@ -331,6 +336,8 @@ class _PortfolioIdentityPanel extends StatelessWidget {
               ),
             ],
           ),
+          const SizedBox(height: 10),
+          _PortfolioInviteHistoryStrip(future: inviteHistoryFuture, isRu: isRu),
           const SizedBox(height: 10),
         ],
         Wrap(
@@ -410,6 +417,81 @@ class _PortfolioStatChip extends StatelessWidget {
   }
 }
 
+class _PortfolioInviteHistoryStrip extends StatelessWidget {
+  const _PortfolioInviteHistoryStrip({
+    required this.future,
+    required this.isRu,
+  });
+
+  final Future<List<_ProfileInviteHistoryItem>>? future;
+  final bool isRu;
+
+  @override
+  Widget build(BuildContext context) {
+    final source = future;
+    if (source == null) return const SizedBox.shrink();
+    return FutureBuilder<List<_ProfileInviteHistoryItem>>(
+      future: source,
+      builder: (context, snapshot) {
+        final items = snapshot.data ?? const <_ProfileInviteHistoryItem>[];
+        if (items.isEmpty) return const SizedBox.shrink();
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.72),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: const Color(0xFFE0E0E0)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                isRu ? 'История приглашений' : 'Invitation history',
+                style: _commandStyle(fontSize: 11, letterSpacing: 0.8),
+              ),
+              const SizedBox(height: 8),
+              for (final item in items) ...[
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.check_circle_rounded,
+                      color: BrandTheme.redTop,
+                      size: 16,
+                    ),
+                    const SizedBox(width: 7),
+                    Expanded(
+                      child: Text(
+                        item.castingTitle.trim(),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: _bodyStyle(
+                          fontSize: 12,
+                          color: kTextDark,
+                          weight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      isRu ? 'ПРИГЛАШЕНА' : 'INVITED',
+                      style: _commandStyle(
+                        fontSize: 10,
+                        color: BrandTheme.redTop,
+                        letterSpacing: 0.7,
+                      ),
+                    ),
+                  ],
+                ),
+                if (item != items.last) const SizedBox(height: 6),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
 class _PortfolioActionButton extends StatelessWidget {
   const _PortfolioActionButton({
     required this.label,
@@ -427,43 +509,373 @@ class _PortfolioActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(999),
+      child: DecoratedBox(
+        decoration: pillDecoration(isDark: isDark, radius: 999),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: busy ? null : onTap,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (busy)
+                    SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: isDark ? Colors.white : _titleColor,
+                      ),
+                    )
+                  else
+                    Icon(
+                      icon,
+                      size: 18,
+                      color: isDark ? Colors.white : _titleColor,
+                    ),
+                  const SizedBox(width: 8),
+                  Text(
+                    label,
+                    style: _commandStyle(
+                      fontSize: 12,
+                      color: isDark ? Colors.white : _titleColor,
+                      weight: FontWeight.w700,
+                      letterSpacing: 1.4,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileInviteDraft {
+  const _ProfileInviteDraft({required this.message, required this.casting});
+
+  final String message;
+  final CastingModel? casting;
+}
+
+class _ProfileInviteSheet extends StatefulWidget {
+  const _ProfileInviteSheet({required this.modelName, required this.castings});
+
+  final String modelName;
+  final List<CastingModel> castings;
+
+  @override
+  State<_ProfileInviteSheet> createState() => _ProfileInviteSheetState();
+}
+
+class _ProfileInviteSheetState extends State<_ProfileInviteSheet> {
+  late final TextEditingController _messageController;
+  CastingModel? _selectedCasting;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedCasting = widget.castings.isNotEmpty
+        ? widget.castings.first
+        : null;
+    _messageController = TextEditingController(text: _templateMessage());
+  }
+
+  @override
+  void dispose() {
+    _messageController.dispose();
+    super.dispose();
+  }
+
+  bool get _isRu => Localizations.localeOf(
+    context,
+  ).languageCode.toLowerCase().startsWith('ru');
+
+  String _templateMessage() {
+    final name = widget.modelName.trim();
+    final castingTitle = _selectedCasting?.title.trim() ?? '';
+    if (_isRu) {
+      if (castingTitle.isNotEmpty) {
+        return 'Здравствуйте! Хотим пригласить вас по анкете: $name. Кастинг: $castingTitle.';
+      }
+      return 'Здравствуйте! Хотим пригласить вас по анкете: $name.';
+    }
+    if (castingTitle.isNotEmpty) {
+      return 'Hello! We would like to invite you regarding this profile: $name. Casting: $castingTitle.';
+    }
+    return 'Hello! We would like to invite you regarding this profile: $name.';
+  }
+
+  void _selectCasting(CastingModel? casting) {
+    setState(() {
+      _selectedCasting = casting;
+      _messageController.text = _templateMessage();
+      _messageController.selection = TextSelection.collapsed(
+        offset: _messageController.text.length,
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottom = MediaQuery.viewInsetsOf(context).bottom;
+    final castings = widget.castings;
+
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(16, 0, 16, 16 + bottom),
+        child: Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(context).height * 0.84,
+          ),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
+          decoration: pillDecoration(isDark: false, radius: kCardRadius),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  _isRu ? 'ПРИГЛАСИТЬ' : 'INVITE',
+                  textAlign: TextAlign.center,
+                  style: _commandStyle(fontSize: 18, letterSpacing: 2.2),
+                ),
+                const SizedBox(height: kGap6),
+                Text(
+                  widget.modelName,
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _bodyStyle(fontSize: 14, color: kTextMuted),
+                ),
+                const SizedBox(height: kGap14),
+                Text(
+                  _isRu ? 'Кастинг' : 'Casting',
+                  style: _commandStyle(fontSize: 13, letterSpacing: 0.9),
+                ),
+                const SizedBox(height: kGap8),
+                if (castings.isEmpty)
+                  _InviteCastingTile(
+                    title: _isRu ? 'Без кастинга' : 'No casting',
+                    subtitle: _isRu
+                        ? 'Отправить приглашение только в чат'
+                        : 'Send invitation only to chat',
+                    selected: _selectedCasting == null,
+                    onTap: () => _selectCasting(null),
+                  )
+                else ...[
+                  _InviteCastingTile(
+                    title: _isRu ? 'Без кастинга' : 'No casting',
+                    subtitle: _isRu
+                        ? 'Только сообщение в чат'
+                        : 'Chat message only',
+                    selected: _selectedCasting == null,
+                    onTap: () => _selectCasting(null),
+                  ),
+                  const SizedBox(height: kGap8),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 230),
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: castings.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: kGap8),
+                      itemBuilder: (context, index) {
+                        final casting = castings[index];
+                        final subtitle = [
+                          casting.datesText.trim(),
+                          casting.fee.trim(),
+                        ].where((e) => e.isNotEmpty).join(' • ');
+                        return _InviteCastingTile(
+                          title: casting.title.trim().isEmpty
+                              ? (_isRu ? 'Кастинг' : 'Casting')
+                              : casting.title.trim(),
+                          subtitle: subtitle.isEmpty
+                              ? (_isRu
+                                    ? 'Отметить как приглашена'
+                                    : 'Mark as invited')
+                              : subtitle,
+                          selected: _selectedCasting?.id == casting.id,
+                          onTap: () => _selectCasting(casting),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+                const SizedBox(height: kGap14),
+                Text(
+                  _isRu ? 'Сообщение' : 'Message',
+                  style: _commandStyle(fontSize: 13, letterSpacing: 0.9),
+                ),
+                const SizedBox(height: kGap8),
+                TextField(
+                  controller: _messageController,
+                  minLines: 3,
+                  maxLines: 5,
+                  style: _bodyStyle(fontSize: 15, color: kTextDark),
+                  decoration: InputDecoration(
+                    filled: true,
+                    fillColor: Colors.white.withValues(alpha: 0.92),
+                    hintText: _isRu ? 'Текст приглашения' : 'Invitation text',
+                    border: pillBorder(),
+                    enabledBorder: pillBorder(),
+                    focusedBorder: pillBorder(
+                      color: BrandTheme.redTop,
+                      width: 1.4,
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: kGap14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _PortfolioDialogButton(
+                        label: _isRu ? 'ОТМЕНА' : 'CANCEL',
+                        isDark: false,
+                        onTap: () => Navigator.of(context).pop(),
+                      ),
+                    ),
+                    const SizedBox(width: kGap10),
+                    Expanded(
+                      child: _PortfolioDialogButton(
+                        label: _isRu ? 'ОТПРАВИТЬ' : 'SEND',
+                        isDark: true,
+                        onTap: () {
+                          final message = _messageController.text.trim();
+                          if (message.isEmpty) return;
+                          Navigator.of(context).pop(
+                            _ProfileInviteDraft(
+                              message: message,
+                              casting: _selectedCasting,
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _InviteCastingTile extends StatelessWidget {
+  const _InviteCastingTile({
+    required this.title,
+    required this.subtitle,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String title;
+  final String subtitle;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(999),
-        onTap: busy ? null : onTap,
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
         child: Ink(
-          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
-          decoration: pillDecoration(isDark: isDark, radius: 999),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: selected
+                ? BrandTheme.redTop.withValues(alpha: 0.08)
+                : Colors.white.withValues(alpha: 0.9),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: selected ? BrandTheme.redTop : const Color(0xFFE0E0E0),
+              width: selected ? 1.4 : 1,
+            ),
+          ),
           child: Row(
-            mainAxisSize: MainAxisSize.min,
             children: [
-              if (busy)
-                SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: isDark ? Colors.white : _titleColor,
-                  ),
-                )
-              else
-                Icon(
-                  icon,
-                  size: 18,
-                  color: isDark ? Colors.white : _titleColor,
-                ),
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style: _commandStyle(
-                  fontSize: 12,
-                  color: isDark ? Colors.white : _titleColor,
-                  weight: FontWeight.w700,
-                  letterSpacing: 1.4,
+              Icon(
+                selected ? Icons.radio_button_checked : Icons.radio_button_off,
+                color: selected ? BrandTheme.redTop : kTextMuted,
+                size: 22,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: _commandStyle(fontSize: 13, letterSpacing: 0.45),
+                    ),
+                    if (subtitle.trim().isNotEmpty) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: _bodyStyle(fontSize: 12, color: kTextMuted),
+                      ),
+                    ],
+                  ],
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PortfolioDialogButton extends StatelessWidget {
+  const _PortfolioDialogButton({
+    required this.label,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(kPillRadius),
+      child: DecoratedBox(
+        decoration: pillDecoration(isDark: isDark, radius: kPillRadius),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 15),
+              child: Text(
+                label,
+                textAlign: TextAlign.center,
+                style: _commandStyle(
+                  fontSize: 13,
+                  color: isDark ? Colors.white : kTextDark,
+                  letterSpacing: 1.2,
+                ),
+              ),
+            ),
           ),
         ),
       ),

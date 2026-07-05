@@ -24,6 +24,8 @@ import 'model_data.dart';
 import 'profile_composite_pdf_service.dart';
 import '../admin/selection_providers.dart';
 import '../chat/chat_providers.dart';
+import '../castings/casting_model.dart';
+import '../castings/castings_provider.dart';
 import '../analytics/profile_analytics.dart';
 import '../profile/profile_model.dart';
 import '../profile/profile_supabase_schema.dart';
@@ -152,6 +154,18 @@ class ModelProfilePage extends ConsumerStatefulWidget {
 
   @override
   ConsumerState<ModelProfilePage> createState() => _ModelProfilePageState();
+}
+
+class _ProfileInviteHistoryItem {
+  const _ProfileInviteHistoryItem({
+    required this.castingTitle,
+    required this.status,
+    required this.createdAt,
+  });
+
+  final String castingTitle;
+  final String status;
+  final DateTime? createdAt;
 }
 
 class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
@@ -433,6 +447,9 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
                           onCompositePdf: () => _openCompositePdf(m),
                           onCopyLink: () => _copyPublicLink(m.id),
                           canUseAgentActions: canUseAgentTools,
+                          inviteHistoryFuture: canUseAgentTools
+                              ? _loadProfileInviteHistory(m.id)
+                              : null,
                           isBusy: _isPortfolioActionBusy,
                           onInvite: () => _inviteFromProfile(m),
                           onAddToSelection: () => _openPortfolioAddSheet(m),
@@ -682,6 +699,40 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
     }
   }
 
+  Future<List<_ProfileInviteHistoryItem>> _loadProfileInviteHistory(
+    String profileId,
+  ) async {
+    final id = profileId.trim();
+    if (id.isEmpty) return const <_ProfileInviteHistoryItem>[];
+    try {
+      final rows = await Supabase.instance.client
+          .from('casting_responses')
+          .select('created_at,status,casting:castings(title)')
+          .eq('profile_id', id)
+          .eq('status', 'invited')
+          .order('created_at', ascending: false)
+          .limit(4);
+      return (rows as List)
+          .map((raw) {
+            final row = Map<String, dynamic>.from(raw as Map);
+            final casting = row['casting'] is Map
+                ? Map<String, dynamic>.from(row['casting'] as Map)
+                : const <String, dynamic>{};
+            return _ProfileInviteHistoryItem(
+              castingTitle: (casting['title'] ?? '').toString(),
+              status: (row['status'] ?? '').toString(),
+              createdAt: DateTime.tryParse(
+                (row['created_at'] ?? '').toString(),
+              ),
+            );
+          })
+          .where((item) => item.castingTitle.trim().isNotEmpty)
+          .toList(growable: false);
+    } catch (_) {
+      return const <_ProfileInviteHistoryItem>[];
+    }
+  }
+
   Future<void> _openPortfolioAddSheet(ModelVm model) async {
     final folders = await ref.read(agentFoldersProvider.future);
     if (!mounted) return;
@@ -793,25 +844,80 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
   }
 
   Future<void> _inviteFromProfile(ModelVm model) async {
+    final t = AppLocalizations.of(context)!;
+    List<CastingModel> castings;
+    try {
+      castings = await ref.read(castingsProvider.future);
+    } catch (e) {
+      if (!mounted) return;
+      _showSnack(AppErrorMapper.message(e, t));
+      return;
+    }
+    if (!mounted) return;
+
+    final draft = await showModalBottomSheet<_ProfileInviteDraft>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: 0.3),
+      builder: (_) => _ProfileInviteSheet(
+        modelName: model.fullName.trim().isEmpty
+            ? t.profileNoName
+            : model.fullName.trim(),
+        castings: castings,
+      ),
+    );
+    if (!mounted || draft == null) return;
+
     await _runPortfolioAction(() async {
-      final t = AppLocalizations.of(context)!;
       final chatId = await _ensurePortfolioChat(model);
       if (chatId.isEmpty) return;
-      final name = model.fullName.trim().isEmpty
-          ? t.profileNoName
-          : model.fullName.trim();
+      if (draft.casting != null) {
+        await _markProfileInvitedToCasting(
+          model: model,
+          casting: draft.casting!,
+        );
+      }
       await ref
           .read(chatServiceProvider)
-          .sendMessage(
-            chatId: chatId,
-            body: t.localeName.toLowerCase().startsWith('ru')
-                ? 'Здравствуйте! Хотим пригласить вас по анкете: $name.'
-                : 'Hello! We would like to invite you regarding this profile: $name.',
-          );
+          .sendMessage(chatId: chatId, body: draft.message);
+      await ref.read(profileAnalyticsServiceProvider).trackInvitation(model.id);
       ref.invalidate(myChatsProvider(false));
+      ref.invalidate(myCastingResponseStatusesProvider);
+      setState(() {});
       if (!mounted) return;
+      _showSnack(
+        t.localeName.toLowerCase().startsWith('ru')
+            ? 'Приглашение отправлено'
+            : 'Invitation sent',
+      );
       context.push('${Routes.chatPrefix}$chatId');
     });
+  }
+
+  Future<void> _markProfileInvitedToCasting({
+    required ModelVm model,
+    required CastingModel casting,
+  }) async {
+    final castingId = casting.id.trim();
+    if (castingId.isEmpty) return;
+    try {
+      await Supabase.instance.client.from('casting_responses').upsert({
+        'casting_id': castingId,
+        'profile_id': model.id,
+        'user_id': model.userId,
+        'status': 'invited',
+      }, onConflict: 'casting_id,profile_id');
+    } on PostgrestException catch (e) {
+      final msg = '${e.message} ${e.details ?? ''} ${e.hint ?? ''}'
+          .toLowerCase();
+      if (!msg.contains('status') && !msg.contains('schema cache')) rethrow;
+      await Supabase.instance.client.from('casting_responses').upsert({
+        'casting_id': castingId,
+        'profile_id': model.id,
+        'user_id': model.userId,
+      }, onConflict: 'casting_id,profile_id');
+    }
   }
 
   Future<String> _ensurePortfolioChat(ModelVm model) async {
