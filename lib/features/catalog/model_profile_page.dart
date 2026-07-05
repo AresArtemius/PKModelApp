@@ -10,6 +10,7 @@ import 'package:video_player/video_player.dart';
 import 'package:video_thumbnail/video_thumbnail.dart';
 
 import '../../core/app_error_mapper.dart';
+import '../../core/app_logger.dart';
 import '../../core/roles_provider.dart';
 import '../../core/public_links.dart';
 import '../../core/router.dart';
@@ -17,9 +18,12 @@ import '../../gen_l10n/app_localizations.dart';
 import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
 import 'agent_workspace.dart';
+import 'create_selection_dialog.dart';
 import 'model_agent_tools.dart';
 import 'model_data.dart';
 import 'profile_composite_pdf_service.dart';
+import '../admin/selection_providers.dart';
+import '../chat/chat_providers.dart';
 import '../analytics/profile_analytics.dart';
 import '../profile/profile_model.dart';
 import '../profile/profile_supabase_schema.dart';
@@ -154,6 +158,7 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
   late Future<ModelVm?> _future;
   final GlobalKey _backKey = GlobalKey();
   bool _didInitFuture = false;
+  bool _isPortfolioActionBusy = false;
 
   @override
   void initState() {
@@ -427,6 +432,11 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
                               : null,
                           onCompositePdf: () => _openCompositePdf(m),
                           onCopyLink: () => _copyPublicLink(m.id),
+                          canUseAgentActions: canUseAgentTools,
+                          isBusy: _isPortfolioActionBusy,
+                          onInvite: () => _inviteFromProfile(m),
+                          onAddToSelection: () => _openPortfolioAddSheet(m),
+                          onMessage: () => _openProfileChat(m),
                         ),
                       ),
                       const SizedBox(height: _sectionGap),
@@ -646,6 +656,332 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
         ],
       ),
     );
+  }
+
+  void _showSnack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _runPortfolioAction(Future<void> Function() action) async {
+    if (_isPortfolioActionBusy) return;
+    setState(() => _isPortfolioActionBusy = true);
+    try {
+      await action();
+    } catch (e) {
+      assert(() {
+        AppLogger.error('Profile portfolio action failed', error: e);
+        return true;
+      }());
+      if (!mounted) return;
+      _showSnack(AppErrorMapper.message(e, AppLocalizations.of(context)!));
+    } finally {
+      if (mounted) setState(() => _isPortfolioActionBusy = false);
+    }
+  }
+
+  Future<void> _openPortfolioAddSheet(ModelVm model) async {
+    final folders = await ref.read(agentFoldersProvider.future);
+    if (!mounted) return;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: 0.28),
+      builder: (_) => _PortfolioAddSheet(
+        modelName: model.fullName,
+        folders: folders,
+        onFavorite: () {
+          Navigator.of(context).pop();
+          _addProfileToFavorite(model.id);
+        },
+        onCreateSelection: () {
+          Navigator.of(context).pop();
+          _createProfileSelection(model);
+        },
+        onCreateFolder: () {
+          Navigator.of(context).pop();
+          _createFolderAndAddProfile(model.id);
+        },
+        onAddToFolder: (folder) {
+          Navigator.of(context).pop();
+          _addProfileToFolder(model.id, folder);
+        },
+      ),
+    );
+  }
+
+  Future<void> _addProfileToFavorite(String profileId) async {
+    final t = AppLocalizations.of(context)!;
+    await _runPortfolioAction(() async {
+      await ref
+          .read(agentWorkspaceServiceProvider)
+          .addProfileToNamedFolder(
+            title: t.agentFavoriteFolderTitle,
+            profileId: profileId,
+          );
+      ref.invalidate(agentFoldersForProfileProvider(profileId));
+      ref.invalidate(agentFoldersProvider);
+      _showSnack(t.quickAddFavoriteDone);
+    });
+  }
+
+  Future<void> _addProfileToFolder(String profileId, AgentFolder folder) async {
+    final t = AppLocalizations.of(context)!;
+    await _runPortfolioAction(() async {
+      await ref
+          .read(agentWorkspaceServiceProvider)
+          .setProfileInFolder(
+            folderId: folder.id,
+            profileId: profileId,
+            selected: true,
+          );
+      ref.invalidate(agentFoldersForProfileProvider(profileId));
+      ref.invalidate(agentFoldersProvider);
+      _showSnack(t.quickAddFolderDone(folder.title));
+    });
+  }
+
+  Future<void> _createFolderAndAddProfile(String profileId) async {
+    final t = AppLocalizations.of(context)!;
+    final title = await showDialog<String>(
+      context: context,
+      barrierDismissible: true,
+      builder: (_) => AgentTextInputDialog(
+        title: t.agentFolderCreateTitle,
+        hint: t.agentFolderName,
+        actionLabel: t.saveUpper,
+      ),
+    );
+    if (!mounted || title == null || title.trim().isEmpty) return;
+
+    await _runPortfolioAction(() async {
+      await ref
+          .read(agentWorkspaceServiceProvider)
+          .addProfileToNamedFolder(title: title, profileId: profileId);
+      ref.invalidate(agentFoldersForProfileProvider(profileId));
+      ref.invalidate(agentFoldersProvider);
+      _showSnack(t.quickAddFolderDone(title.trim()));
+    });
+  }
+
+  Future<void> _createProfileSelection(ModelVm model) async {
+    final draft = await showDialog<SelectionDraft>(
+      context: context,
+      barrierDismissible: true,
+      builder: (_) => const CreateSelectionDialog(),
+    );
+    if (!mounted || draft == null || draft.title.trim().isEmpty) return;
+
+    final t = AppLocalizations.of(context)!;
+    await _runPortfolioAction(() async {
+      await _createSelectionWithItems(draft: draft, profileIds: [model.id]);
+      ref.invalidate(adminSelectionListProvider);
+      _showSnack(t.quickAddSelectionDone(draft.title.trim()));
+    });
+  }
+
+  Future<void> _openProfileChat(ModelVm model) async {
+    await _runPortfolioAction(() async {
+      final chatId = await _ensurePortfolioChat(model);
+      if (!mounted || chatId.isEmpty) return;
+      ref.invalidate(myChatsProvider(false));
+      context.push('${Routes.chatPrefix}$chatId');
+    });
+  }
+
+  Future<void> _inviteFromProfile(ModelVm model) async {
+    await _runPortfolioAction(() async {
+      final t = AppLocalizations.of(context)!;
+      final chatId = await _ensurePortfolioChat(model);
+      if (chatId.isEmpty) return;
+      final name = model.fullName.trim().isEmpty
+          ? t.profileNoName
+          : model.fullName.trim();
+      await ref
+          .read(chatServiceProvider)
+          .sendMessage(
+            chatId: chatId,
+            body: t.localeName.toLowerCase().startsWith('ru')
+                ? 'Здравствуйте! Хотим пригласить вас по анкете: $name.'
+                : 'Hello! We would like to invite you regarding this profile: $name.',
+          );
+      ref.invalidate(myChatsProvider(false));
+      if (!mounted) return;
+      context.push('${Routes.chatPrefix}$chatId');
+    });
+  }
+
+  Future<String> _ensurePortfolioChat(ModelVm model) async {
+    final currentUserId = Supabase.instance.client.auth.currentUser?.id ?? '';
+    if (currentUserId.isEmpty || model.userId.trim().isEmpty) return '';
+    if (currentUserId == model.userId.trim()) {
+      _showSnack(
+        AppLocalizations.of(context)!.localeName.toLowerCase().startsWith('ru')
+            ? 'Это ваша анкета'
+            : 'This is your own profile',
+      );
+      return '';
+    }
+
+    final selectionId = await _ensureQuickContactSelection(model);
+    if (selectionId.isEmpty) return '';
+    return ref
+        .read(chatServiceProvider)
+        .ensureSelectionChat(
+          selectionId: selectionId,
+          profileId: model.id,
+          modelUserId: model.userId,
+        );
+  }
+
+  Future<String> _ensureQuickContactSelection(ModelVm model) async {
+    final sb = Supabase.instance.client;
+    final uid = sb.auth.currentUser?.id;
+    if (uid == null || uid.isEmpty) return '';
+
+    final title =
+        AppLocalizations.of(context)!.localeName.toLowerCase().startsWith('ru')
+        ? 'Быстрые контакты'
+        : 'Quick contacts';
+
+    String selectionId = '';
+    try {
+      final existing = await sb
+          .from('selections')
+          .select('id')
+          .eq('created_by', uid)
+          .eq('title', title)
+          .order('created_at', ascending: false)
+          .limit(1);
+      if (existing.isNotEmpty) {
+        selectionId = ((existing.first as Map)['id'] ?? '').toString();
+      }
+    } on PostgrestException {
+      // Fallback below can still create a selection on older schemas.
+    }
+
+    if (selectionId.isEmpty) {
+      final inserted = await sb
+          .from('selections')
+          .insert({'title': title, 'created_by': uid})
+          .select('id')
+          .single();
+      selectionId = (inserted['id'] ?? '').toString();
+    }
+    if (selectionId.isEmpty) return '';
+
+    try {
+      await sb.from('selection_items').insert({
+        'selection_id': selectionId,
+        'profile_id': model.id,
+      });
+    } on PostgrestException catch (e) {
+      if (e.code != '23505') {
+        final message = '${e.message} ${e.details ?? ''}'.toLowerCase();
+        if (!message.contains('duplicate')) rethrow;
+      }
+    }
+    return selectionId;
+  }
+
+  Future<void> _createSelectionWithItems({
+    required SelectionDraft draft,
+    required List<String> profileIds,
+  }) async {
+    final sb = Supabase.instance.client;
+    final uid = sb.auth.currentUser?.id;
+
+    Future<bool> createViaRpc() async {
+      try {
+        await sb.rpc(
+          'create_selection_with_items',
+          params: {
+            'p_title': draft.title,
+            'p_profile_ids': profileIds,
+            'p_request_video_intro': draft.requestVideoIntro,
+            'p_video_intro_requirements': draft.videoIntroRequirements,
+          },
+        );
+        return true;
+      } on PostgrestException catch (e) {
+        final msg = '${e.message} ${e.details ?? ''} ${e.hint ?? ''}'
+            .toLowerCase();
+        if (msg.contains('create_selection_with_items') ||
+            msg.contains('function') ||
+            msg.contains('schema cache') ||
+            e.code == 'PGRST202') {
+          return false;
+        }
+        rethrow;
+      }
+    }
+
+    if (await createViaRpc()) return;
+
+    Future<Map<String, dynamic>> insertSelection({
+      required bool includeVideoRequest,
+      required bool includeCampaignFields,
+    }) async {
+      final payload = <String, dynamic>{
+        'title': draft.title,
+        if (uid != null) 'created_by': uid,
+        if (includeCampaignFields) 'client_name': draft.clientName,
+        if (includeCampaignFields) 'brand_name': draft.brandName,
+        if (includeCampaignFields) 'budget': draft.budget,
+        if (includeCampaignFields) 'location': draft.location,
+        if (includeCampaignFields) 'project_dates': draft.projectDates,
+        if (includeCampaignFields) 'project_roles': draft.projectRoles,
+        if (includeVideoRequest) 'request_video_intro': draft.requestVideoIntro,
+        if (includeVideoRequest)
+          'video_intro_requirements': draft.videoIntroRequirements,
+      };
+      return await sb.from('selections').insert(payload).select('id').single();
+    }
+
+    Map<String, dynamic> inserted;
+    try {
+      inserted = await insertSelection(
+        includeVideoRequest: true,
+        includeCampaignFields: true,
+      );
+    } on PostgrestException catch (e) {
+      final msg = '${e.message} ${e.details ?? ''} ${e.hint ?? ''}'
+          .toLowerCase();
+      if (!msg.contains('client_name') &&
+          !msg.contains('brand_name') &&
+          !msg.contains('budget') &&
+          !msg.contains('location') &&
+          !msg.contains('project_dates') &&
+          !msg.contains('project_roles') &&
+          !msg.contains('request_video_intro') &&
+          !msg.contains('video_intro_requirements') &&
+          !msg.contains('schema cache')) {
+        rethrow;
+      }
+      try {
+        inserted = await insertSelection(
+          includeVideoRequest: true,
+          includeCampaignFields: false,
+        );
+      } on PostgrestException {
+        inserted = await insertSelection(
+          includeVideoRequest: false,
+          includeCampaignFields: false,
+        );
+      }
+    }
+
+    final selectionId = (inserted['id'] ?? '').toString();
+    if (selectionId.isEmpty) throw StateError('selection_insert_failed');
+
+    await sb.from('selection_items').insert([
+      for (final profileId in profileIds)
+        {'selection_id': selectionId, 'profile_id': profileId},
+    ]);
+    ref.invalidate(adminSelectionListProvider);
   }
 
   void _openPhotos(BuildContext context, List<String> urls, int initialIndex) {

@@ -121,6 +121,11 @@ class _PortfolioHeroCard extends StatelessWidget {
     required this.onOpenPhotos,
     required this.onCompositePdf,
     required this.onCopyLink,
+    required this.canUseAgentActions,
+    required this.isBusy,
+    required this.onInvite,
+    required this.onAddToSelection,
+    required this.onMessage,
     this.onOpenVideo,
     this.onOpenShowreel,
   });
@@ -134,6 +139,11 @@ class _PortfolioHeroCard extends StatelessWidget {
   final VoidCallback? onOpenShowreel;
   final VoidCallback onCompositePdf;
   final VoidCallback onCopyLink;
+  final bool canUseAgentActions;
+  final bool isBusy;
+  final VoidCallback onInvite;
+  final VoidCallback onAddToSelection;
+  final VoidCallback onMessage;
 
   @override
   Widget build(BuildContext context) {
@@ -192,6 +202,11 @@ class _PortfolioHeroCard extends StatelessWidget {
       isRu: isRu,
       onCompositePdf: onCompositePdf,
       onCopyLink: onCopyLink,
+      canUseAgentActions: canUseAgentActions,
+      isBusy: isBusy,
+      onInvite: onInvite,
+      onAddToSelection: onAddToSelection,
+      onMessage: onMessage,
       onOpenShowreel: onOpenShowreel,
     );
 
@@ -226,6 +241,11 @@ class _PortfolioIdentityPanel extends StatelessWidget {
     required this.isRu,
     required this.onCompositePdf,
     required this.onCopyLink,
+    required this.canUseAgentActions,
+    required this.isBusy,
+    required this.onInvite,
+    required this.onAddToSelection,
+    required this.onMessage,
     this.onOpenShowreel,
   });
 
@@ -235,6 +255,11 @@ class _PortfolioIdentityPanel extends StatelessWidget {
   final bool isRu;
   final VoidCallback onCompositePdf;
   final VoidCallback onCopyLink;
+  final bool canUseAgentActions;
+  final bool isBusy;
+  final VoidCallback onInvite;
+  final VoidCallback onAddToSelection;
+  final VoidCallback onMessage;
   final VoidCallback? onOpenShowreel;
 
   @override
@@ -278,6 +303,36 @@ class _PortfolioIdentityPanel extends StatelessWidget {
           children: [for (final chip in statChips) _PortfolioStatChip(chip)],
         ),
         const SizedBox(height: 16),
+        if (canUseAgentActions) ...[
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _PortfolioActionButton(
+                label: isRu ? 'ПРИГЛАСИТЬ' : 'INVITE',
+                icon: Icons.send_rounded,
+                isDark: true,
+                busy: isBusy,
+                onTap: onInvite,
+              ),
+              _PortfolioActionButton(
+                label: isRu ? 'ДОБАВИТЬ' : 'ADD',
+                icon: Icons.playlist_add_rounded,
+                isDark: false,
+                busy: isBusy,
+                onTap: onAddToSelection,
+              ),
+              _PortfolioActionButton(
+                label: isRu ? 'НАПИСАТЬ' : 'MESSAGE',
+                icon: Icons.chat_bubble_rounded,
+                isDark: false,
+                busy: isBusy,
+                onTap: onMessage,
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+        ],
         Wrap(
           spacing: 10,
           runSpacing: 10,
@@ -285,13 +340,15 @@ class _PortfolioIdentityPanel extends StatelessWidget {
             _PortfolioActionButton(
               label: isRu ? 'КОМПОЗИТКА' : 'PDF',
               icon: Icons.picture_as_pdf_rounded,
-              isDark: true,
+              isDark: false,
+              busy: isBusy,
               onTap: onCompositePdf,
             ),
             _PortfolioActionButton(
               label: isRu ? 'ССЫЛКА' : 'LINK',
               icon: Icons.link_rounded,
               isDark: false,
+              busy: isBusy,
               onTap: onCopyLink,
             ),
             if (onOpenShowreel != null)
@@ -299,6 +356,7 @@ class _PortfolioIdentityPanel extends StatelessWidget {
                 label: 'SHOWREEL',
                 icon: Icons.play_arrow_rounded,
                 isDark: false,
+                busy: isBusy,
                 onTap: onOpenShowreel!,
               ),
           ],
@@ -357,12 +415,14 @@ class _PortfolioActionButton extends StatelessWidget {
     required this.label,
     required this.icon,
     required this.isDark,
+    required this.busy,
     required this.onTap,
   });
 
   final String label;
   final IconData icon;
   final bool isDark;
+  final bool busy;
   final VoidCallback onTap;
 
   @override
@@ -371,14 +431,28 @@ class _PortfolioActionButton extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(999),
-        onTap: onTap,
+        onTap: busy ? null : onTap,
         child: Ink(
           padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
           decoration: pillDecoration(isDark: isDark, radius: 999),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 18, color: isDark ? Colors.white : _titleColor),
+              if (busy)
+                SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: isDark ? Colors.white : _titleColor,
+                  ),
+                )
+              else
+                Icon(
+                  icon,
+                  size: 18,
+                  color: isDark ? Colors.white : _titleColor,
+                ),
               const SizedBox(width: 8),
               Text(
                 label,
@@ -496,6 +570,209 @@ class _HeroMedia extends StatelessWidget {
                     : _ModelVideoPreview(url: videoUrls.first),
               ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PortfolioAddSheet extends StatelessWidget {
+  const _PortfolioAddSheet({
+    required this.modelName,
+    required this.folders,
+    required this.onFavorite,
+    required this.onCreateSelection,
+    required this.onCreateFolder,
+    required this.onAddToFolder,
+  });
+
+  final String modelName;
+  final List<AgentFolder> folders;
+  final VoidCallback onFavorite;
+  final VoidCallback onCreateSelection;
+  final VoidCallback onCreateFolder;
+  final ValueChanged<AgentFolder> onAddToFolder;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
+          decoration: pillDecoration(isDark: false, radius: kCardRadius),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                t.quickAddTitleUpper,
+                textAlign: TextAlign.center,
+                style: _commandStyle(fontSize: 15, letterSpacing: 1.15),
+              ),
+              const SizedBox(height: kGap4),
+              Text(
+                modelName.trim().isEmpty ? t.profileNoName : modelName.trim(),
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: _bodyStyle(fontSize: 14, color: kTextMuted),
+              ),
+              const SizedBox(height: kGap14),
+              Row(
+                children: [
+                  Expanded(
+                    child: _PortfolioSheetAction(
+                      icon: Icons.favorite_rounded,
+                      label: t.quickAddFavorite,
+                      onTap: onFavorite,
+                    ),
+                  ),
+                  const SizedBox(width: kGap10),
+                  Expanded(
+                    child: _PortfolioSheetAction(
+                      icon: Icons.dashboard_customize_rounded,
+                      label: t.quickAddSelection,
+                      onTap: onCreateSelection,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: kGap14),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      t.quickAddFolder,
+                      style: _commandStyle(fontSize: 14, letterSpacing: 0.55),
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: onCreateFolder,
+                    icon: const Icon(Icons.create_new_folder_rounded, size: 18),
+                    label: Text(t.quickAddCreateFolder),
+                    style: TextButton.styleFrom(
+                      foregroundColor: BrandTheme.redTop,
+                      textStyle: BrandTheme.pillText.copyWith(
+                        fontSize: 12,
+                        letterSpacing: 0.45,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              if (folders.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: kGap4),
+                  child: Text(
+                    t.agentNoFolders,
+                    style: _bodyStyle(fontSize: 14),
+                  ),
+                )
+              else
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 220),
+                  child: SingleChildScrollView(
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (final folder in folders)
+                          _PortfolioFolderChip(
+                            label: folder.title,
+                            selected: folder.containsProfile,
+                            onTap: () => onAddToFolder(folder),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PortfolioSheetAction extends StatelessWidget {
+  const _PortfolioSheetAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(kPillRadius),
+        onTap: onTap,
+        child: Ink(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
+          decoration: pillDecoration(isDark: true, radius: kPillRadius),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, color: Colors.white, size: 18),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _commandStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    letterSpacing: 0.7,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PortfolioFolderChip extends StatelessWidget {
+  const _PortfolioFolderChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return ActionChip(
+      avatar: Icon(
+        selected ? Icons.check_rounded : Icons.folder_rounded,
+        size: 18,
+        color: selected ? Colors.white : BrandTheme.redTop,
+      ),
+      label: Text(label),
+      onPressed: onTap,
+      backgroundColor: selected ? BrandTheme.redTop : Colors.white,
+      labelStyle: TextStyle(
+        color: selected ? Colors.white : kTextDark,
+        fontWeight: FontWeight.w800,
+      ),
+      shape: StadiumBorder(
+        side: BorderSide(
+          color: selected ? BrandTheme.redTop : const Color(0xFFE0E0E0),
         ),
       ),
     );
