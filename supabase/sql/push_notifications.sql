@@ -27,10 +27,19 @@ create table if not exists public.app_notifications (
 alter table public.app_notifications
   add column if not exists type text not null default 'generic',
   add column if not exists data jsonb not null default '{}'::jsonb,
+  add column if not exists profile_action_log_id uuid,
   add column if not exists push_status text not null default 'pending',
   add column if not exists push_attempts integer not null default 0,
   add column if not exists push_sent_at timestamptz,
   add column if not exists push_error text,
+  add column if not exists email_status text not null default 'none',
+  add column if not exists email_attempts integer not null default 0,
+  add column if not exists email_sent_at timestamptz,
+  add column if not exists email_delivered_at timestamptz,
+  add column if not exists email_read_at timestamptz,
+  add column if not exists email_error text,
+  add column if not exists delivery_status text not null default 'created',
+  add column if not exists delivery_updated_at timestamptz,
   add column if not exists deleted_at timestamptz;
 
 do $$
@@ -46,11 +55,41 @@ begin
   end if;
 end $$;
 
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'app_notifications_email_status_check'
+  ) then
+    alter table public.app_notifications
+      add constraint app_notifications_email_status_check
+      check (email_status in ('none', 'pending', 'processing', 'sent', 'delivered', 'read', 'failed', 'skipped'));
+  end if;
+
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'app_notifications_delivery_status_check'
+  ) then
+    alter table public.app_notifications
+      add constraint app_notifications_delivery_status_check
+      check (delivery_status in ('created', 'queued', 'processing', 'sent', 'delivered', 'read', 'failed', 'skipped'));
+  end if;
+end $$;
+
 create index if not exists app_notifications_push_status_created_idx
   on public.app_notifications (push_status, created_at);
 
 create index if not exists app_notifications_type_created_idx
   on public.app_notifications (type, created_at desc);
+
+create index if not exists app_notifications_profile_action_log_idx
+  on public.app_notifications (profile_action_log_id)
+  where profile_action_log_id is not null;
+
+create index if not exists app_notifications_email_status_created_idx
+  on public.app_notifications (email_status, created_at);
 
 create index if not exists push_device_tokens_user_enabled_idx
   on public.push_device_tokens (user_id, enabled);
@@ -138,10 +177,19 @@ set search_path = public
 as $$
 declare
   v_id uuid;
+  v_profile_action_log_id uuid;
 begin
   if p_user_id is null then
     return null;
   end if;
+
+  begin
+    v_profile_action_log_id :=
+      nullif(btrim(coalesce(p_data ->> 'profile_action_log_id', '')), '')::uuid;
+  exception
+    when others then
+      v_profile_action_log_id := null;
+  end;
 
   insert into public.app_notifications (
     user_id,
@@ -149,7 +197,8 @@ begin
     body,
     route,
     type,
-    data
+    data,
+    profile_action_log_id
   )
   values (
     p_user_id,
@@ -157,7 +206,8 @@ begin
     coalesce(p_body, ''),
     coalesce(p_route, ''),
     coalesce(nullif(btrim(p_type), ''), 'generic'),
-    coalesce(p_data, '{}'::jsonb)
+    coalesce(p_data, '{}'::jsonb),
+    v_profile_action_log_id
   )
   returning id into v_id;
 
@@ -191,6 +241,192 @@ $$;
 
 grant execute on function public.mark_app_notification_push_attempt(uuid)
   to service_role;
+
+create or replace function public.mark_app_notification_email_status(
+  p_notification_id uuid,
+  p_status text,
+  p_error text default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $mark_app_notification_email_status$
+declare
+  v_status text := lower(btrim(coalesce(p_status, '')));
+  v_now timestamptz := now();
+begin
+  if p_notification_id is null then
+    return;
+  end if;
+
+  if v_status not in ('none', 'pending', 'processing', 'sent', 'delivered', 'read', 'failed', 'skipped') then
+    raise exception 'Unsupported email status: %', p_status;
+  end if;
+
+  update public.app_notifications
+  set
+    email_status = v_status,
+    email_attempts = case
+      when v_status = 'processing' then email_attempts + 1
+      else email_attempts
+    end,
+    email_sent_at = case
+      when v_status in ('sent', 'delivered', 'read') then coalesce(email_sent_at, v_now)
+      else email_sent_at
+    end,
+    email_delivered_at = case
+      when v_status in ('delivered', 'read') then coalesce(email_delivered_at, v_now)
+      else email_delivered_at
+    end,
+    email_read_at = case
+      when v_status = 'read' then coalesce(email_read_at, v_now)
+      else email_read_at
+    end,
+    email_error = case
+      when v_status = 'failed' then coalesce(p_error, '')
+      else null
+    end,
+    delivery_status = case
+      when v_status in ('none', 'pending') then 'queued'
+      when v_status = 'processing' then 'processing'
+      else v_status
+    end,
+    delivery_updated_at = v_now
+  where id = p_notification_id;
+end;
+$mark_app_notification_email_status$;
+
+grant execute on function public.mark_app_notification_email_status(
+  uuid,
+  text,
+  text
+) to service_role;
+
+create or replace function public.sync_profile_action_log_from_app_notification()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $sync_profile_action_log_from_app_notification$
+declare
+  v_log_id uuid;
+begin
+  v_log_id := new.profile_action_log_id;
+
+  if v_log_id is null then
+    begin
+      v_log_id :=
+        nullif(btrim(coalesce(new.data ->> 'profile_action_log_id', '')), '')::uuid;
+    exception
+      when others then
+        v_log_id := null;
+    end;
+  end if;
+
+  update public.app_notifications
+  set
+    delivery_status = case
+      when new.read_at is not null
+           or new.email_read_at is not null
+           or new.email_status = 'read' then 'read'
+      when new.email_delivered_at is not null
+           or new.email_status = 'delivered' then 'delivered'
+      when new.email_status = 'failed'
+           or new.push_status = 'failed' then 'failed'
+      when new.email_sent_at is not null
+           or new.email_status = 'sent'
+           or new.push_sent_at is not null
+           or new.push_status = 'sent' then 'sent'
+      when new.push_status = 'skipped'
+           or new.email_status = 'skipped' then 'skipped'
+      else delivery_status
+    end,
+    delivery_updated_at = case
+      when new.read_at is not null
+           or new.email_read_at is not null
+           or new.email_status in ('read', 'delivered', 'failed', 'sent', 'skipped')
+           or new.email_delivered_at is not null
+           or new.email_sent_at is not null
+           or new.push_status in ('sent', 'failed', 'skipped')
+           or new.push_sent_at is not null then now()
+      else delivery_updated_at
+    end
+  where id = new.id;
+
+  if v_log_id is null then
+    return new;
+  end if;
+
+  update public.profile_action_logs
+  set push_notification_id = new.id
+  where id = v_log_id
+    and push_notification_id is null;
+
+  if new.read_at is not null then
+    perform public.set_profile_action_delivery_status(
+      v_log_id,
+      'app',
+      'read',
+      null
+    );
+  elsif new.email_read_at is not null or new.email_status = 'read' then
+    perform public.set_profile_action_delivery_status(
+      v_log_id,
+      'email',
+      'read',
+      null
+    );
+  elsif new.email_delivered_at is not null or new.email_status = 'delivered' then
+    perform public.set_profile_action_delivery_status(
+      v_log_id,
+      'email',
+      'delivered',
+      null
+    );
+  elsif new.email_status = 'failed' then
+    perform public.set_profile_action_delivery_status(
+      v_log_id,
+      'email',
+      'failed',
+      new.email_error
+    );
+  elsif new.push_status = 'failed' then
+    perform public.set_profile_action_delivery_status(
+      v_log_id,
+      'push',
+      'failed',
+      new.push_error
+    );
+  elsif new.email_sent_at is not null or new.email_status = 'sent' then
+    perform public.set_profile_action_delivery_status(
+      v_log_id,
+      'email',
+      'sent',
+      null
+    );
+  elsif new.push_sent_at is not null or new.push_status in ('sent', 'skipped') then
+    perform public.set_profile_action_delivery_status(
+      v_log_id,
+      'push',
+      'sent',
+      new.push_error
+    );
+  end if;
+
+  return new;
+end;
+$sync_profile_action_log_from_app_notification$;
+
+drop trigger if exists app_notification_profile_action_status_sync
+  on public.app_notifications;
+
+create trigger app_notification_profile_action_status_sync
+after update of read_at, push_status, push_sent_at, push_error,
+  email_status, email_sent_at, email_delivered_at, email_read_at, email_error
+on public.app_notifications
+for each row
+execute function public.sync_profile_action_log_from_app_notification();
 
 create or replace function public.notify_selection_chat_message()
 returns trigger

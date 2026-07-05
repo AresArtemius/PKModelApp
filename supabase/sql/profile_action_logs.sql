@@ -24,6 +24,10 @@ create table if not exists public.profile_action_logs (
   related_id uuid,
   related_text text not null default '',
   metadata jsonb not null default '{}'::jsonb,
+  push_notification_id uuid,
+  delivery_channel text not null default 'in_app',
+  delivery_error text not null default '',
+  status_updated_at timestamptz not null default now(),
   delivered_at timestamptz,
   read_at timestamptz,
   created_at timestamptz not null default now()
@@ -43,6 +47,10 @@ alter table public.profile_action_logs
   add column if not exists related_id uuid,
   add column if not exists related_text text not null default '',
   add column if not exists metadata jsonb not null default '{}'::jsonb,
+  add column if not exists push_notification_id uuid,
+  add column if not exists delivery_channel text not null default 'in_app',
+  add column if not exists delivery_error text not null default '',
+  add column if not exists status_updated_at timestamptz not null default now(),
   add column if not exists delivered_at timestamptz,
   add column if not exists read_at timestamptz;
 
@@ -57,6 +65,87 @@ create index if not exists profile_action_logs_target_created_idx
 
 create index if not exists profile_action_logs_related_idx
   on public.profile_action_logs (related_table, related_id);
+
+create index if not exists profile_action_logs_delivery_status_idx
+  on public.profile_action_logs (status, delivery_channel, status_updated_at desc);
+
+create index if not exists profile_action_logs_push_notification_idx
+  on public.profile_action_logs (push_notification_id)
+  where push_notification_id is not null;
+
+create or replace function public.set_profile_action_delivery_status(
+  p_action_log_id uuid,
+  p_channel text,
+  p_status text,
+  p_error text default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $set_profile_action_delivery_status$
+declare
+  v_channel text := coalesce(nullif(btrim(p_channel), ''), 'server');
+  v_status text := lower(btrim(coalesce(p_status, '')));
+  v_now timestamptz := now();
+begin
+  if p_action_log_id is null then
+    return;
+  end if;
+
+  if v_status not in ('created', 'sent', 'delivered', 'read', 'failed', 'archived') then
+    return;
+  end if;
+
+  update public.profile_action_logs
+  set
+    status = case
+      when status = 'archived' then status
+      when status = 'read' and v_status <> 'archived' then status
+      when v_status = 'delivered' and status = 'failed' then 'delivered'
+      when v_status = 'sent' and status in ('created', 'failed') then 'sent'
+      else v_status
+    end,
+    delivery_channel = v_channel,
+    delivery_error = case
+      when v_status = 'failed' then coalesce(p_error, '')
+      else ''
+    end,
+    delivered_at = case
+      when v_status in ('delivered', 'read') then coalesce(delivered_at, v_now)
+      else delivered_at
+    end,
+    read_at = case
+      when v_status = 'read' then coalesce(read_at, v_now)
+      else read_at
+    end,
+    status_updated_at = v_now,
+    metadata = jsonb_set(
+      jsonb_set(
+        jsonb_set(
+          coalesce(metadata, '{}'::jsonb),
+          '{delivery_channel}',
+          to_jsonb(v_channel),
+          true
+        ),
+        '{delivery_status}',
+        to_jsonb(v_status),
+        true
+      ),
+      '{delivery_error}',
+      to_jsonb(coalesce(p_error, '')),
+      true
+    )
+  where id = p_action_log_id;
+end;
+$set_profile_action_delivery_status$;
+
+grant execute on function public.set_profile_action_delivery_status(
+  uuid,
+  text,
+  text,
+  text
+) to service_role;
 
 alter table public.profile_action_logs enable row level security;
 
