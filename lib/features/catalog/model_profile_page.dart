@@ -11,6 +11,7 @@ import 'package:video_thumbnail/video_thumbnail.dart';
 
 import '../../core/app_error_mapper.dart';
 import '../../core/app_logger.dart';
+import '../../core/profile_action_log_service.dart';
 import '../../core/roles_provider.dart';
 import '../../core/public_links.dart';
 import '../../core/router.dart';
@@ -164,12 +165,22 @@ class _ProfileActionHistoryItem {
     required this.title,
     required this.subtitle,
     required this.createdAt,
+    this.actorName = '',
+    this.actorCompany = '',
+    this.status = '',
+    this.templateKey = '',
+    this.templateBody = '',
   });
 
   final _ProfileActionKind kind;
   final String title;
   final String subtitle;
   final DateTime? createdAt;
+  final String actorName;
+  final String actorCompany;
+  final String status;
+  final String templateKey;
+  final String templateBody;
 }
 
 class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
@@ -711,6 +722,13 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
     final items = <_ProfileActionHistoryItem>[];
     final sb = Supabase.instance.client;
 
+    final auditRows = await ProfileActionLogService(
+      sb,
+    ).fetchForProfile(profileId: id, limit: 8);
+    if (auditRows != null && auditRows.isNotEmpty) {
+      return auditRows.map(_profileActionFromAuditRow).take(6).toList();
+    }
+
     await _appendInvitationActions(sb, id, items);
     await _appendSelectionActions(sb, id, items);
     await _appendFolderActions(sb, id, items);
@@ -722,6 +740,29 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
       return right.compareTo(left);
     });
     return items.take(6).toList(growable: false);
+  }
+
+  _ProfileActionHistoryItem _profileActionFromAuditRow(
+    Map<String, dynamic> row,
+  ) {
+    final type = (row['action_type'] ?? '').toString().trim();
+    final kind = switch (type) {
+      'selection' => _ProfileActionKind.selection,
+      'folder' => _ProfileActionKind.folder,
+      'message' => _ProfileActionKind.message,
+      _ => _ProfileActionKind.invite,
+    };
+    return _ProfileActionHistoryItem(
+      kind: kind,
+      title: (row['title'] ?? '').toString().trim(),
+      subtitle: (row['description'] ?? '').toString().trim(),
+      actorName: (row['actor_name'] ?? '').toString().trim(),
+      actorCompany: (row['actor_company'] ?? '').toString().trim(),
+      status: (row['status'] ?? '').toString().trim(),
+      templateKey: (row['template_key'] ?? '').toString().trim(),
+      templateBody: (row['template_body'] ?? '').toString().trim(),
+      createdAt: DateTime.tryParse((row['created_at'] ?? '').toString()),
+    );
   }
 
   Future<void> _appendInvitationActions(
@@ -878,7 +919,7 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
         folders: folders,
         onFavorite: () {
           Navigator.of(context).pop();
-          _addProfileToFavorite(model.id);
+          _addProfileToFavorite(model);
         },
         onCreateSelection: () {
           Navigator.of(context).pop();
@@ -886,17 +927,18 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
         },
         onCreateFolder: () {
           Navigator.of(context).pop();
-          _createFolderAndAddProfile(model.id);
+          _createFolderAndAddProfile(model);
         },
         onAddToFolder: (folder) {
           Navigator.of(context).pop();
-          _addProfileToFolder(model.id, folder);
+          _addProfileToFolder(model, folder);
         },
       ),
     );
   }
 
-  Future<void> _addProfileToFavorite(String profileId) async {
+  Future<void> _addProfileToFavorite(ModelVm model) async {
+    final profileId = model.id;
     final t = AppLocalizations.of(context)!;
     await _runPortfolioAction(() async {
       await ref
@@ -906,13 +948,22 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
             profileId: profileId,
           );
       ref.invalidate(agentFoldersForProfileProvider(profileId));
+      await _logProfileAction(
+        model: model,
+        actionType: 'folder',
+        title: t.agentFavoriteFolderTitle,
+        description: 'favorite',
+        relatedTable: 'casting_agent_folders',
+        relatedText: t.agentFavoriteFolderTitle,
+      );
       ref.invalidate(agentFoldersProvider);
       if (mounted) setState(() {});
       _showSnack(t.quickAddFavoriteDone);
     });
   }
 
-  Future<void> _addProfileToFolder(String profileId, AgentFolder folder) async {
+  Future<void> _addProfileToFolder(ModelVm model, AgentFolder folder) async {
+    final profileId = model.id;
     final t = AppLocalizations.of(context)!;
     await _runPortfolioAction(() async {
       await ref
@@ -923,13 +974,23 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
             selected: true,
           );
       ref.invalidate(agentFoldersForProfileProvider(profileId));
+      await _logProfileAction(
+        model: model,
+        actionType: 'folder',
+        title: folder.title,
+        description: 'folder',
+        relatedTable: 'casting_agent_folders',
+        relatedId: folder.id,
+        relatedText: folder.title,
+      );
       ref.invalidate(agentFoldersProvider);
       if (mounted) setState(() {});
       _showSnack(t.quickAddFolderDone(folder.title));
     });
   }
 
-  Future<void> _createFolderAndAddProfile(String profileId) async {
+  Future<void> _createFolderAndAddProfile(ModelVm model) async {
+    final profileId = model.id;
     final t = AppLocalizations.of(context)!;
     final title = await showDialog<String>(
       context: context,
@@ -947,6 +1008,14 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
           .read(agentWorkspaceServiceProvider)
           .addProfileToNamedFolder(title: title, profileId: profileId);
       ref.invalidate(agentFoldersForProfileProvider(profileId));
+      await _logProfileAction(
+        model: model,
+        actionType: 'folder',
+        title: title.trim(),
+        description: 'folder',
+        relatedTable: 'casting_agent_folders',
+        relatedText: title.trim(),
+      );
       ref.invalidate(agentFoldersProvider);
       if (mounted) setState(() {});
       _showSnack(t.quickAddFolderDone(title.trim()));
@@ -964,6 +1033,14 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
     final t = AppLocalizations.of(context)!;
     await _runPortfolioAction(() async {
       await _createSelectionWithItems(draft: draft, profileIds: [model.id]);
+      await _logProfileAction(
+        model: model,
+        actionType: 'selection',
+        title: draft.title.trim(),
+        description: 'selection',
+        relatedTable: 'selections',
+        relatedText: draft.title.trim(),
+      );
       ref.invalidate(adminSelectionListProvider);
       if (mounted) setState(() {});
       _showSnack(t.quickAddSelectionDone(draft.title.trim()));
@@ -1017,6 +1094,22 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
       await ref
           .read(chatServiceProvider)
           .sendMessage(chatId: chatId, body: draft.message);
+      await _logProfileAction(
+        model: model,
+        actionType: 'invite',
+        title: draft.casting?.title.trim().isNotEmpty == true
+            ? draft.casting!.title.trim()
+            : (t.localeName.toLowerCase().startsWith('ru')
+                  ? 'Приглашение'
+                  : 'Invitation'),
+        description: draft.casting == null ? 'invite_chat' : 'invite_casting',
+        templateKey: draft.templateKey,
+        templateBody: draft.templateBody,
+        status: 'sent',
+        relatedTable: draft.casting == null ? 'selection_chats' : 'castings',
+        relatedId: draft.casting?.id ?? chatId,
+        relatedText: draft.casting?.title ?? '',
+      );
       await ref.read(profileAnalyticsServiceProvider).trackInvitation(model.id);
       ref.invalidate(myChatsProvider(false));
       ref.invalidate(myCastingResponseStatusesProvider);
@@ -1029,6 +1122,33 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
       );
       context.push('${Routes.chatPrefix}$chatId');
     });
+  }
+
+  Future<void> _logProfileAction({
+    required ModelVm model,
+    required String actionType,
+    required String title,
+    String description = '',
+    String templateKey = '',
+    String templateBody = '',
+    String status = 'created',
+    String relatedTable = '',
+    String relatedId = '',
+    String relatedText = '',
+  }) async {
+    await ProfileActionLogService(Supabase.instance.client).log(
+      profileId: model.id,
+      targetUserId: model.userId,
+      actionType: actionType,
+      title: title,
+      description: description,
+      templateKey: templateKey,
+      templateBody: templateBody,
+      status: status,
+      relatedTable: relatedTable,
+      relatedId: relatedId,
+      relatedText: relatedText,
+    );
   }
 
   Future<void> _markProfileInvitedToCasting({

@@ -516,18 +516,44 @@ class _PortfolioActionHistoryStrip extends StatelessWidget {
   }
 
   String _actionSubtitle(_ProfileActionHistoryItem item) {
+    final actor = item.actorCompany.trim().isNotEmpty
+        ? item.actorCompany.trim()
+        : item.actorName.trim();
+    final actorLabel = actor.isEmpty ? '' : (isRu ? '$actor • ' : '$actor • ');
+    final template = item.templateKey.trim().isEmpty
+        ? ''
+        : (isRu ? ' • шаблон' : ' • template');
+    final status = _statusLabel(item.status);
+    final statusPart = status.isEmpty ? '' : ' • $status';
     switch (item.kind) {
       case _ProfileActionKind.invite:
-        return isRu ? 'Вы пригласили в кастинг' : 'You invited to casting';
+        return '$actorLabel${isRu ? 'приглашение' : 'invitation'}$template$statusPart';
       case _ProfileActionKind.selection:
-        return isRu ? 'Вы добавили в подборку' : 'You added to selection';
+        return '$actorLabel${isRu ? 'добавлено в подборку' : 'added to selection'}$statusPart';
       case _ProfileActionKind.folder:
-        return isRu ? 'Вы добавили в папку' : 'You added to folder';
+        return '$actorLabel${isRu ? 'добавлено в папку' : 'added to folder'}$statusPart';
       case _ProfileActionKind.message:
-        if (item.subtitle == 'outgoing') {
-          return isRu ? 'Вы написали в чат' : 'You sent a chat message';
-        }
-        return isRu ? 'Вам написали в чат' : 'Incoming chat message';
+        final action = item.subtitle == 'incoming'
+            ? (isRu ? 'сообщение получено' : 'incoming message')
+            : (isRu ? 'сообщение отправлено' : 'message sent');
+        return '$actorLabel$action$statusPart';
+    }
+  }
+
+  String _statusLabel(String value) {
+    switch (value.trim()) {
+      case 'sent':
+        return isRu ? 'отправлено' : 'sent';
+      case 'delivered':
+        return isRu ? 'доставлено' : 'delivered';
+      case 'read':
+        return isRu ? 'прочитано' : 'read';
+      case 'failed':
+        return isRu ? 'ошибка' : 'failed';
+      case 'archived':
+        return isRu ? 'архив' : 'archived';
+      default:
+        return '';
     }
   }
 
@@ -606,10 +632,17 @@ class _PortfolioActionButton extends StatelessWidget {
 }
 
 class _ProfileInviteDraft {
-  const _ProfileInviteDraft({required this.message, required this.casting});
+  const _ProfileInviteDraft({
+    required this.message,
+    required this.casting,
+    required this.templateKey,
+    required this.templateBody,
+  });
 
   final String message;
   final CastingModel? casting;
+  final String templateKey;
+  final String templateBody;
 }
 
 class _ProfileInviteSheet extends StatefulWidget {
@@ -805,6 +838,10 @@ class _ProfileInviteSheetState extends State<_ProfileInviteSheet> {
                             _ProfileInviteDraft(
                               message: message,
                               casting: _selectedCasting,
+                              templateKey: _selectedCasting == null
+                                  ? 'profile_invite_chat'
+                                  : 'profile_invite_casting',
+                              templateBody: _templateMessage(),
                             ),
                           );
                         },

@@ -1,7 +1,20 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/profile_action_log_service.dart';
 import '../../core/supabase_compat.dart';
 import 'chat_models.dart';
+
+class _ChatActionContext {
+  const _ChatActionContext({
+    required this.profileId,
+    required this.modelUserId,
+    required this.agentUserId,
+  });
+
+  final String profileId;
+  final String modelUserId;
+  final String agentUserId;
+}
 
 class ChatService {
   const ChatService(this._sb);
@@ -965,15 +978,106 @@ class ChatService {
       'file_mime': fileMime.trim().isEmpty ? null : fileMime.trim(),
     };
 
+    Map<String, dynamic>? inserted;
     try {
-      await _sb.from('selection_chat_messages').insert(payload);
+      final row = await _sb
+          .from('selection_chat_messages')
+          .insert(payload)
+          .select('id,read_at')
+          .single();
+      inserted = Map<String, dynamic>.from(row);
     } on PostgrestException catch (e) {
-      if (!_isMissingChatFileColumn(e) || mediaType == 'file') rethrow;
-      payload
-        ..remove('file_name')
-        ..remove('file_size')
-        ..remove('file_mime');
-      await _sb.from('selection_chat_messages').insert(payload);
+      if (_isMissingChatFileColumn(e) && mediaType != 'file') {
+        payload
+          ..remove('file_name')
+          ..remove('file_size')
+          ..remove('file_mime');
+        final row = await _sb
+            .from('selection_chat_messages')
+            .insert(payload)
+            .select('id,read_at')
+            .single();
+        inserted = Map<String, dynamic>.from(row);
+      } else if (SupabaseCompat.isMissingColumn(e, 'read_at')) {
+        final row = await _sb
+            .from('selection_chat_messages')
+            .insert(payload)
+            .select('id')
+            .single();
+        inserted = Map<String, dynamic>.from(row);
+      } else {
+        rethrow;
+      }
+    }
+
+    await _logMessageProfileAction(
+      chatId: chatId,
+      messageId: (inserted['id'] ?? '').toString(),
+      body: payload['body']?.toString() ?? text,
+      mediaType: mediaType,
+      userId: userId,
+      readAt: DateTime.tryParse((inserted['read_at'] ?? '').toString()),
+    );
+  }
+
+  Future<void> _logMessageProfileAction({
+    required String chatId,
+    required String messageId,
+    required String body,
+    required String mediaType,
+    required String userId,
+    DateTime? readAt,
+  }) async {
+    try {
+      final context = await _loadChatActionContext(chatId);
+      if (context == null || context.profileId.isEmpty) return;
+      final targetUserId = userId == context.modelUserId
+          ? context.agentUserId
+          : context.modelUserId;
+      final title = body.trim().isNotEmpty
+          ? body.trim()
+          : switch (mediaType.trim()) {
+              'video' => 'Видео',
+              'file' => 'Файл',
+              'image' => 'Фото',
+              _ => 'Сообщение',
+            };
+      await ProfileActionLogService(_sb).log(
+        profileId: context.profileId,
+        targetUserId: targetUserId,
+        actionType: 'message',
+        title: title,
+        description: userId == context.modelUserId ? 'incoming' : 'outgoing',
+        status: readAt == null ? 'sent' : 'read',
+        relatedTable: 'selection_chat_messages',
+        relatedId: messageId,
+        relatedText: chatId,
+        readAt: readAt,
+        metadata: {'chat_id': chatId, 'media_type': mediaType},
+      );
+    } on PostgrestException {
+      // Audit logging is best-effort and must not break sending messages.
+    }
+  }
+
+  Future<_ChatActionContext?> _loadChatActionContext(String chatId) async {
+    final id = chatId.trim();
+    if (id.isEmpty) return null;
+    try {
+      final row = await _sb
+          .from('selection_chats')
+          .select('profile_id,model_user_id,agent_user_id')
+          .eq('id', id)
+          .maybeSingle();
+      if (row == null) return null;
+      return _ChatActionContext(
+        profileId: (row['profile_id'] ?? '').toString().trim(),
+        modelUserId: (row['model_user_id'] ?? '').toString().trim(),
+        agentUserId: (row['agent_user_id'] ?? '').toString().trim(),
+      );
+    } on PostgrestException catch (e) {
+      if (_isRlsRecursion(e)) return null;
+      rethrow;
     }
   }
 
@@ -983,6 +1087,7 @@ class ChatService {
 
     try {
       await _sb.rpc('mark_selection_chat_read', params: {'p_chat_id': chatId});
+      await _markChatActionLogsRead(chatId);
       return;
     } on PostgrestException catch (e) {
       final missingSupport =
@@ -999,8 +1104,23 @@ class ChatService {
           .neq('sender_id', userId)
           .filter('read_at', 'is', null)
           .filter('deleted_at', 'is', null);
+      await _markChatActionLogsRead(chatId);
     } on PostgrestException catch (e) {
       if (!SupabaseCompat.isMissingColumn(e, 'read_at')) rethrow;
+    }
+  }
+
+  Future<void> _markChatActionLogsRead(String chatId) async {
+    try {
+      final now = DateTime.now();
+      await _sb
+          .from('profile_action_logs')
+          .update({'status': 'read', 'read_at': now.toUtc().toIso8601String()})
+          .eq('related_table', 'selection_chat_messages')
+          .eq('related_text', chatId)
+          .neq('actor_user_id', _sb.auth.currentUser?.id ?? '');
+    } on PostgrestException {
+      // Audit read-state sync is best-effort.
     }
   }
 
