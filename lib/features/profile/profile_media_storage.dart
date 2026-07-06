@@ -71,6 +71,8 @@ class ProfileMediaStorage {
   static const _photoJpegQuality = 86;
   static const _tusVersion = '1.0.0';
   static const _tusChunkSize = 6 * 1024 * 1024;
+  static const _uploadResponseTimeout = Duration(minutes: 3);
+  static const _webSdkUploadTimeout = Duration(minutes: 8);
 
   final SupabaseClient _sb;
 
@@ -110,16 +112,35 @@ class ProfileMediaStorage {
   }) async {
     if (kIsWeb && onProgress != null) {
       cancelToken?.throwIfCancelled();
-      onProgress(0.02);
-      final url = await _uploadBinaryWithSdk(
-        bucket: bucket,
-        path: path,
-        bytes: bytes,
-        contentType: contentType,
-      );
-      cancelToken?.throwIfCancelled();
-      onProgress(1);
-      return url;
+      var optimisticProgress = 0.02;
+      onProgress(optimisticProgress);
+      Timer? progressTimer;
+      if (bytes.length > 512 * 1024) {
+        progressTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+          if (cancelToken?.isCancelled == true) return;
+          optimisticProgress = (optimisticProgress + 0.025).clamp(0.02, 0.92);
+          onProgress(optimisticProgress);
+        });
+      }
+      try {
+        final url =
+            await _uploadBinaryWithSdk(
+              bucket: bucket,
+              path: path,
+              bytes: bytes,
+              contentType: contentType,
+            ).timeout(
+              _webSdkUploadTimeout,
+              onTimeout: () => throw TimeoutException(
+                'Браузер слишком долго загружает файл в Storage. Нажмите «Повторить».',
+              ),
+            );
+        cancelToken?.throwIfCancelled();
+        onProgress(1);
+        return url;
+      } finally {
+        progressTimer?.cancel();
+      }
     }
 
     if (onProgress != null) {
@@ -167,7 +188,7 @@ class ProfileMediaStorage {
         .uploadBinary(
           path,
           bytes,
-          fileOptions: FileOptions(contentType: contentType, upsert: false),
+          fileOptions: FileOptions(contentType: contentType, upsert: true),
         );
 
     return _sb.storage.from(bucket).getPublicUrl(path);
@@ -375,6 +396,27 @@ class ProfileMediaStorage {
     ValueChanged<ProfileMediaResumableProgress>? onResumableProgress,
     ProfileMediaUploadCancelToken? cancelToken,
   }) async {
+    if (kIsWeb) {
+      // Safari/Chrome on iOS can keep Supabase TUS sessions stuck forever.
+      // Keep the durable app-level queue, but use the Storage SDK as the
+      // reliable web path so media actually reaches the profile.
+      onResumableProgress?.call(
+        const ProfileMediaResumableProgress(
+          progress: 0,
+          uploadUrl: '',
+          uploadedBytes: 0,
+        ),
+      );
+      return uploadBinary(
+        bucket: bucket,
+        path: path,
+        bytes: bytes,
+        contentType: contentType,
+        onProgress: onProgress,
+        cancelToken: cancelToken,
+      );
+    }
+
     try {
       return await _uploadBinaryResumable(
         bucket: bucket,
@@ -387,7 +429,7 @@ class ProfileMediaStorage {
         onResumableProgress: onResumableProgress,
         cancelToken: cancelToken,
       );
-    } catch (e) {
+    } catch (_) {
       cancelToken?.throwIfCancelled();
       final hasStartedResumable =
           resumableUploadUrl.trim().isNotEmpty || resumableUploadedBytes > 0;
@@ -498,21 +540,23 @@ class ProfileMediaStorage {
   }) async {
     final storage = _sb.storage.from(bucket);
     final uri = Uri.parse('${storage.url}/upload/resumable');
-    final response = await http.post(
-      uri,
-      headers: {
-        ...storage.headers,
-        'Tus-Resumable': _tusVersion,
-        'Upload-Length': '$bytesLength',
-        'Upload-Metadata': _tusMetadata({
-          'bucketName': bucket,
-          'objectName': path,
-          'contentType': contentType,
-          'cacheControl': '3600',
-        }),
-        'x-upsert': 'false',
-      },
-    );
+    final response = await http
+        .post(
+          uri,
+          headers: {
+            ...storage.headers,
+            'Tus-Resumable': _tusVersion,
+            'Upload-Length': '$bytesLength',
+            'Upload-Metadata': _tusMetadata({
+              'bucketName': bucket,
+              'objectName': path,
+              'contentType': contentType,
+              'cacheControl': '3600',
+            }),
+            'x-upsert': 'true',
+          },
+        )
+        .timeout(_uploadResponseTimeout);
     if (response.statusCode < 200 || response.statusCode > 299) {
       throw StorageException(
         _storageErrorMessage(response),
@@ -535,7 +579,7 @@ class ProfileMediaStorage {
       final request = http.Request('HEAD', Uri.parse(uploadUrl))
         ..headers.addAll(storage.headers)
         ..headers['Tus-Resumable'] = _tusVersion;
-      final response = await request.send();
+      final response = await request.send().timeout(_uploadResponseTimeout);
       if (response.statusCode == 404 || response.statusCode == 410) {
         return null;
       }
@@ -685,9 +729,15 @@ class ProfileMediaStorage {
     Future<http.StreamedResponse> responseFuture,
     ProfileMediaUploadCancelToken? cancelToken,
   ) async {
-    if (cancelToken == null) return responseFuture;
+    final timedResponse = responseFuture.timeout(
+      _uploadResponseTimeout,
+      onTimeout: () => throw TimeoutException(
+        'Storage не ответил за 3 минуты. Нажмите «Повторить».',
+      ),
+    );
+    if (cancelToken == null) return timedResponse;
     final result = await Future.any<Object>([
-      responseFuture,
+      timedResponse,
       cancelToken.cancelled.then<Object>(
         (_) => throw const ProfileMediaUploadCancelled(),
       ),

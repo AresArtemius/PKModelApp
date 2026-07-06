@@ -155,7 +155,7 @@ Future<void> main() async {
           error: e,
           stackTrace: stack,
         );
-        _runBootstrap(_BootstrapErrorKind.init);
+        _runBootstrap(_BootstrapErrorKind.init, details: e.toString());
         return;
       }
 
@@ -163,7 +163,7 @@ Future<void> main() async {
     },
     (error, stack) {
       AppLogger.error('Bootstrap zone error', error: error, stackTrace: stack);
-      _runBootstrap(_BootstrapErrorKind.init);
+      _runBootstrap(_BootstrapErrorKind.init, details: error.toString());
     },
   );
 }
