@@ -865,10 +865,7 @@ class ProfileMediaUploadQueue
             _replaceItem(taskId, item);
             await _persistQueue();
 
-            final prepared = await MediaTools.prepareVideo(
-              inputPath: item.path,
-              outputPath: await _compressedVideoPath(task.uid, item.id),
-            );
+            final prepared = await _prepareVideoSafely(task, item);
             if (_isPausedOrCancelled(taskId)) {
               await _pauseCurrentItem(taskId, item);
               return;
@@ -1074,6 +1071,30 @@ class ProfileMediaUploadQueue
       return 'Не удалось загрузить медиа. Проверьте соединение и повторите.';
     }
     return message;
+  }
+
+  Future<PreparedVideo> _prepareVideoSafely(
+    ProfileMediaUploadTask task,
+    ProfileMediaUploadItem item,
+  ) async {
+    try {
+      return await MediaTools.prepareVideo(
+        inputPath: item.path,
+        outputPath: await _compressedVideoPath(task.uid, item.id),
+      );
+    } catch (e, st) {
+      AppLogger.warning(
+        'Video preparation skipped, uploading original',
+        error: e,
+        stackTrace: st,
+      );
+      return PreparedVideo(
+        path: item.path,
+        originalBytes: 0,
+        preparedBytes: 0,
+        compressed: false,
+      );
+    }
   }
 
   Future<void> _pauseCurrentItem(

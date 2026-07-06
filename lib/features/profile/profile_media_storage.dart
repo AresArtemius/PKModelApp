@@ -109,17 +109,45 @@ class ProfileMediaStorage {
     ProfileMediaUploadCancelToken? cancelToken,
   }) async {
     if (onProgress != null) {
-      await _uploadBinaryWithProgress(
-        bucket: bucket,
-        path: path,
-        bytes: bytes,
-        contentType: contentType,
-        onProgress: onProgress,
-        cancelToken: cancelToken,
-      );
-      return _sb.storage.from(bucket).getPublicUrl(path);
+      try {
+        await _uploadBinaryWithProgress(
+          bucket: bucket,
+          path: path,
+          bytes: bytes,
+          contentType: contentType,
+          onProgress: onProgress,
+          cancelToken: cancelToken,
+        );
+        return _sb.storage.from(bucket).getPublicUrl(path);
+      } on ProfileMediaUploadCancelled {
+        rethrow;
+      } catch (_) {
+        cancelToken?.throwIfCancelled();
+        final url = await _uploadBinaryWithSdk(
+          bucket: bucket,
+          path: path,
+          bytes: bytes,
+          contentType: contentType,
+        );
+        onProgress(1);
+        return url;
+      }
     }
 
+    return _uploadBinaryWithSdk(
+      bucket: bucket,
+      path: path,
+      bytes: bytes,
+      contentType: contentType,
+    );
+  }
+
+  Future<String> _uploadBinaryWithSdk({
+    required String bucket,
+    required String path,
+    required Uint8List bytes,
+    required String contentType,
+  }) async {
     await _sb.storage
         .from(bucket)
         .uploadBinary(
