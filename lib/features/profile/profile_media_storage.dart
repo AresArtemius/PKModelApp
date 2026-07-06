@@ -349,7 +349,7 @@ class ProfileMediaStorage {
       cancelToken?.throwIfCancelled();
       final hasStartedResumable =
           resumableUploadUrl.trim().isNotEmpty || resumableUploadedBytes > 0;
-      if (hasStartedResumable || bytes.length > 32 * 1024 * 1024) {
+      if (hasStartedResumable) {
         rethrow;
       }
       onResumableProgress?.call(

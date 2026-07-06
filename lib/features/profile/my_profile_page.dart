@@ -1431,6 +1431,11 @@ class _UploadItemChip extends StatelessWidget {
 
   String _diagnosticLabel(BuildContext context) {
     final parts = <String>[];
+    final error = item.error.trim();
+    if (item.status == ProfileMediaUploadItemStatus.failed &&
+        error.isNotEmpty) {
+      parts.add(error);
+    }
     final storage = item.webStorage.trim().toLowerCase();
     if (storage == 'opfs') {
       parts.add('OPFS');
