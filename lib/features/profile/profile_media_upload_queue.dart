@@ -25,7 +25,13 @@ final profileMediaUploadQueueProvider =
       List<ProfileMediaUploadTask>
     >((ref) => ProfileMediaUploadQueue(ref));
 
-enum ProfileMediaUploadStatus { uploading, paused, failed, completed }
+enum ProfileMediaUploadStatus {
+  uploading,
+  finalizing,
+  paused,
+  failed,
+  completed,
+}
 
 enum ProfileMediaUploadItemKind { photo, video }
 
@@ -798,7 +804,8 @@ class ProfileMediaUploadQueue
       ];
       var uploadedVideoPreviewUrls = <String>[
         for (final item in task.items)
-          if (item.isVideo) item.previewUrl.trim(),
+          if (item.isVideo && item.url.trim().isNotEmpty)
+            item.previewUrl.trim(),
       ];
       var uploadedPhotoCategoryLabels = <String>[
         for (final item in task.items)
@@ -928,6 +935,7 @@ class ProfileMediaUploadQueue
               url: url,
               error: '',
               progress: 1,
+              webDiagnostic: kIsWeb ? 'загружено, сохраняем анкету' : '',
             );
             uploadedPhotoUrls = [...uploadedPhotoUrls, url];
             uploadedPhotoCategoryLabels = [
@@ -956,6 +964,7 @@ class ProfileMediaUploadQueue
               progress: 1,
               resumableUploadUrl: '',
               resumableUploadedBytes: 0,
+              webDiagnostic: kIsWeb ? 'загружено, сохраняем анкету' : '',
             );
             uploadedVideoUrls = [...uploadedVideoUrls, result.videoUrl];
             uploadedVideoPreviewUrls = [
@@ -1018,6 +1027,9 @@ class ProfileMediaUploadQueue
         await _persistQueue();
         return;
       }
+
+      _replace(task.copyWith(status: ProfileMediaUploadStatus.finalizing));
+      await _persistQueue();
 
       await _finishUploadedTask(
         task,
@@ -1184,19 +1196,46 @@ class ProfileMediaUploadQueue
           : baseProfile.coverPhotoUrl,
     );
 
-    final notifier = ref.read(myProfileProvider.notifier);
-    final saved = await notifier.saveProfileWithPendingMedia(
-      profile: profileForMedia,
-      newPhotoUrls: uploadedPhotoUrls,
-      newVideoUrls: uploadedVideoUrls,
-      newVideoPreviewUrls: uploadedVideoPreviewUrls,
-      newPhotoCategoryLabels: uploadedPhotoCategoryLabels,
-      newVideoCategoryLabels: uploadedVideoCategoryLabels,
-      newShowreelUrl: uploadedShowreelUrl,
-      newShowreelPreviewUrl: uploadedShowreelPreviewUrl,
-    );
-    if (task.approveImmediately) {
-      await notifier.publishAdminProfile(saved.id);
+    try {
+      final notifier = ref.read(myProfileProvider.notifier);
+      final saved = await notifier
+          .saveProfileWithPendingMedia(
+            profile: profileForMedia,
+            newPhotoUrls: uploadedPhotoUrls,
+            newVideoUrls: uploadedVideoUrls,
+            newVideoPreviewUrls: uploadedVideoPreviewUrls,
+            newPhotoCategoryLabels: uploadedPhotoCategoryLabels,
+            newVideoCategoryLabels: uploadedVideoCategoryLabels,
+            newShowreelUrl: uploadedShowreelUrl,
+            newShowreelPreviewUrl: uploadedShowreelPreviewUrl,
+          )
+          .timeout(
+            const Duration(seconds: 45),
+            onTimeout: () => throw TimeoutException(
+              'Файл загружен, но Supabase слишком долго сохраняет медиа в анкету. Нажмите «Повторить».',
+            ),
+          );
+      if (task.approveImmediately) {
+        await notifier
+            .publishAdminProfile(saved.id)
+            .timeout(
+              const Duration(seconds: 45),
+              onTimeout: () => throw TimeoutException(
+                'Файл загружен, но публикация анкеты заняла слишком много времени. Нажмите «Повторить».',
+              ),
+            );
+      }
+    } catch (e) {
+      final latest = _taskById(task.id) ?? task;
+      _replace(
+        latest.copyWith(
+          status: ProfileMediaUploadStatus.failed,
+          error: _errorMessage(e),
+          paused: false,
+        ),
+      );
+      await _persistQueue();
+      rethrow;
     }
     _replace(task.copyWith(status: ProfileMediaUploadStatus.completed));
     await _persistQueue();

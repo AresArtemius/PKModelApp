@@ -277,6 +277,37 @@ class ProfileSupabaseSchema {
     return next;
   }
 
+  static Map<String, dynamic> withoutMissingOwnOptionalPayload(
+    PostgrestException error,
+    Map<String, dynamic> payload,
+  ) {
+    final next = Map<String, dynamic>.from(payload);
+
+    void removeAll(Iterable<String> columns) {
+      for (final column in columns) {
+        next.remove(column);
+      }
+    }
+
+    if (isMissingProfessionalColumn(error)) removeAll(professionalColumns);
+    if (isMissingVerificationColumn(error)) removeAll(verificationColumns);
+    if (isMissingBirthDateColumn(error)) removeAll(_birthDateColumns);
+    if (SupabaseCompat.isMissingAnyColumn(error, _mediaCategoryColumns)) {
+      removeAll(_mediaCategoryColumns);
+    }
+    if (SupabaseCompat.isMissingAnyColumn(error, coverPhotoColumns)) {
+      removeAll(coverPhotoColumns);
+    }
+    if (SupabaseCompat.isMissingAnyColumn(error, showreelColumns)) {
+      removeAll(showreelColumns);
+    }
+    if (SupabaseCompat.isMissingAnyColumn(error, _pendingMediaColumns)) {
+      removeAll(_pendingMediaColumns);
+    }
+
+    return next;
+  }
+
   static String _join(Iterable<String> columns) {
     return columns.toSet().join(', ');
   }

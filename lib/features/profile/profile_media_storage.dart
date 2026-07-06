@@ -108,6 +108,20 @@ class ProfileMediaStorage {
     ValueChanged<double>? onProgress,
     ProfileMediaUploadCancelToken? cancelToken,
   }) async {
+    if (kIsWeb && onProgress != null) {
+      cancelToken?.throwIfCancelled();
+      onProgress(0.02);
+      final url = await _uploadBinaryWithSdk(
+        bucket: bucket,
+        path: path,
+        bytes: bytes,
+        contentType: contentType,
+      );
+      cancelToken?.throwIfCancelled();
+      onProgress(1);
+      return url;
+    }
+
     if (onProgress != null) {
       try {
         await _uploadBinaryWithProgress(

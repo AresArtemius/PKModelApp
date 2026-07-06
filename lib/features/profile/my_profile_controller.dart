@@ -136,10 +136,14 @@ class MyProfileController
     return ProfileSupabaseSchema.isMissingOwnOptionalColumn(e);
   }
 
-  Map<String, dynamic> _withoutProfessionalPayload(
+  Map<String, dynamic> _withoutMissingOwnOptionalPayload(
+    PostgrestException error,
     Map<String, dynamic> payload,
   ) {
-    return ProfileSupabaseSchema.withoutProfessionalPayload(payload);
+    return ProfileSupabaseSchema.withoutMissingOwnOptionalPayload(
+      error,
+      payload,
+    );
   }
 
   Future<List<dynamic>> _selectOwnProfiles(String uid) async {
@@ -190,7 +194,7 @@ class MyProfileController
       if (!_isMissingOptionalProfileColumn(e)) rethrow;
       final data = await _sb
           .from(ProfileSupabaseSchema.table)
-          .insert(_withoutProfessionalPayload(payload))
+          .insert(_withoutMissingOwnOptionalPayload(e, payload))
           .select(ProfileSupabaseSchema.selectOwn(includeOptional: false))
           .single();
       return Map<String, dynamic>.from(data as Map);
@@ -215,7 +219,7 @@ class MyProfileController
       if (!_isMissingOptionalProfileColumn(e)) rethrow;
       final data = await _sb
           .from(ProfileSupabaseSchema.table)
-          .update(_withoutProfessionalPayload(payload))
+          .update(_withoutMissingOwnOptionalPayload(e, payload))
           .eq('id', profileId)
           .eq('user_id', uid)
           .select(ProfileSupabaseSchema.selectOwn(includeOptional: false))

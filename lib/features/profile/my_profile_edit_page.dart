@@ -1034,10 +1034,13 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
     } catch (e, st) {
       AppLogger.error('Failed to save profile', error: e, stackTrace: st);
       if (!mounted) return null;
+      final technicalMessage = _technicalSaveError(e);
       setState(() {
         _error = e is MyProfileException
             ? _profileErrorText(e, _t)
-            : _t.profileErrorSaveFailed;
+            : technicalMessage.isEmpty
+            ? _t.profileErrorSaveFailed
+            : '${_t.profileErrorSaveFailed}\n$technicalMessage';
       });
       return null;
     } finally {
@@ -1045,6 +1048,29 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
         setState(() => _saving = false);
       }
     }
+  }
+
+  String _technicalSaveError(Object error) {
+    if (error is PostgrestException) {
+      final details = error.details?.toString().trim() ?? '';
+      final parts = <String>[
+        if (error.message.trim().isNotEmpty) error.message.trim(),
+        if ((error.code ?? '').trim().isNotEmpty) 'code: ${error.code}',
+        if (details.isNotEmpty) 'details: $details',
+      ];
+      return parts.join('\n');
+    }
+    if (error is StorageException) {
+      final parts = <String>[
+        if (error.message.trim().isNotEmpty) error.message.trim(),
+        if ((error.statusCode ?? '').trim().isNotEmpty)
+          'status: ${error.statusCode}',
+      ];
+      return parts.join('\n');
+    }
+    final message = error.toString().trim();
+    if (message.isEmpty || message == 'Exception') return '';
+    return message;
   }
 
   void _showMediaUploadQueuedSnack() {

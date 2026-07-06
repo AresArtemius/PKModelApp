@@ -1313,6 +1313,8 @@ class _ProfileUploadStatusLine extends StatelessWidget {
     final label = switch (task.status) {
       ProfileMediaUploadStatus.uploading =>
         ru ? 'Медиа загружаются' : 'Media uploading',
+      ProfileMediaUploadStatus.finalizing =>
+        ru ? 'Сохраняем медиа в анкете' : 'Saving media to profile',
       ProfileMediaUploadStatus.paused =>
         ru ? 'Загрузка на паузе' : 'Media upload paused',
       ProfileMediaUploadStatus.failed =>
@@ -1336,7 +1338,8 @@ class _ProfileUploadStatusLine extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (task.status == ProfileMediaUploadStatus.uploading) ...[
+              if (task.status == ProfileMediaUploadStatus.uploading ||
+                  task.status == ProfileMediaUploadStatus.finalizing) ...[
                 const SizedBox(
                   width: 12,
                   height: 12,
@@ -1345,7 +1348,9 @@ class _ProfileUploadStatusLine extends StatelessWidget {
                 const SizedBox(width: 7),
               ],
               Text(
-                '$label ${task.progressPercent}%: ${_mediaLabel(context)}',
+                task.status == ProfileMediaUploadStatus.finalizing
+                    ? '$label: ${_mediaLabel(context)}'
+                    : '$label ${task.progressPercent}%: ${_mediaLabel(context)}',
                 style: _accountBodyStyle(
                   color: isFailed ? Colors.white : kTextMuted,
                   size: 11,
