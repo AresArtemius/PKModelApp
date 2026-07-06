@@ -998,12 +998,13 @@ class _VideoThumbImageState extends State<_VideoThumbImage> {
 
   @override
   Widget build(BuildContext context) {
+    final controller = _controller;
+    final videoUrl = widget.url?.trim() ?? '';
     final previewUrl = widget.previewUrl?.trim() ?? '';
-    if (previewUrl.isNotEmpty) {
+    if (previewUrl.isNotEmpty && videoUrl.isEmpty && widget.file == null) {
       return _NetworkThumbImage(url: previewUrl);
     }
 
-    final controller = _controller;
     final init = _init;
 
     if (controller == null || init == null) {
@@ -1367,7 +1368,9 @@ class _VideoViewerPageState extends State<_VideoViewerPage> {
     _controller = controller;
     _init = controller.initialize().then((_) async {
       await controller.setLooping(true);
-      if (mounted) setState(() {});
+      await controller.setVolume(1);
+      await controller.play();
+      if (mounted) setState(() => _playing = true);
     });
   }
 

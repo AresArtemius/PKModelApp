@@ -9,7 +9,9 @@ import 'profile_media_web_upload_cache_web.dart';
 
 extension type _FileHandleArray(JSObject _) implements JSObject {
   external int get length;
-  external web.FileSystemFileHandle item(int index);
+
+  web.FileSystemFileHandle at(int index) =>
+      getProperty<web.FileSystemFileHandle>(index.toString().toJS);
 }
 
 abstract final class ProfileMediaWebNativePicker {
@@ -70,7 +72,7 @@ abstract final class ProfileMediaWebNativePicker {
     final handles = _FileHandleArray(rawHandles as JSObject);
     final files = <XFile>[];
     for (var i = 0; i < handles.length; i++) {
-      final handle = handles.item(i);
+      final handle = handles.at(i);
       final file = await handle.getFile().toDart;
       final buffer = await file.arrayBuffer().toDart;
       final path = ProfileMediaWebUploadCache.registerNativeHandle(handle);

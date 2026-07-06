@@ -58,6 +58,14 @@ class MyProfileController
 
   String? get _currentUserId => ref.read(currentUserIdProvider);
 
+  List<String> _normalizedVideoPreviewUrls(
+    List<String> previewUrls,
+    int videoCount,
+  ) => [
+    for (var i = 0; i < videoCount; i++)
+      i < previewUrls.length ? previewUrls[i].trim() : '',
+  ];
+
   List<MyProfileState> get _currentList => [
     ...(state.value ?? const <MyProfileState>[]),
   ];
@@ -240,7 +248,10 @@ class MyProfileController
     'cover_photo_focal_x': s.coverPhotoFocalX.clamp(-1.0, 1.0),
     'cover_photo_focal_y': s.coverPhotoFocalY.clamp(-1.0, 1.0),
     'video_urls': s.videoUrls,
-    'video_preview_urls': s.videoPreviewUrls,
+    'video_preview_urls': _normalizedVideoPreviewUrls(
+      s.videoPreviewUrls,
+      s.videoUrls.length,
+    ),
     'video_category_labels': _normalizedCategoryLabels(
       s.videoCategoryLabels,
       s.videoUrls.length,
@@ -264,7 +275,10 @@ class MyProfileController
     'pending_cover_photo_focal_x': s.pendingCoverPhotoFocalX.clamp(-1.0, 1.0),
     'pending_cover_photo_focal_y': s.pendingCoverPhotoFocalY.clamp(-1.0, 1.0),
     'pending_video_urls': s.pendingVideoUrls,
-    'pending_video_preview_urls': s.pendingVideoPreviewUrls,
+    'pending_video_preview_urls': _normalizedVideoPreviewUrls(
+      s.pendingVideoPreviewUrls,
+      s.pendingVideoUrls.length,
+    ),
     'pending_video_category_labels': _normalizedCategoryLabels(
       s.pendingVideoCategoryLabels,
       s.pendingVideoUrls.length,
@@ -444,10 +458,10 @@ class MyProfileController
           photoUrls,
         ),
         'video_urls': videoUrls,
-        'video_preview_urls': [
+        'video_preview_urls': _normalizedVideoPreviewUrls([
           ...profile.videoPreviewUrls,
           ...newVideoPreviewUrls,
-        ],
+        ], videoUrls.length),
         'video_category_labels': [
           ..._normalizedCategoryLabels(
             profile.videoCategoryLabels,
@@ -542,12 +556,15 @@ class MyProfileController
       'cover_photo_url': nextCoverPhotoUrl,
       'video_urls': publishedVideoUrls,
       'video_preview_urls': publishImmediately
-          ? [
+          ? _normalizedVideoPreviewUrls([
               ...profile.videoPreviewUrls,
               ...profile.pendingVideoPreviewUrls,
               ...newVideoPreviewUrls,
-            ]
-          : profile.videoPreviewUrls,
+            ], publishedVideoUrls.length)
+          : _normalizedVideoPreviewUrls(
+              profile.videoPreviewUrls,
+              publishedVideoUrls.length,
+            ),
       'video_category_labels': publishImmediately
           ? [
               ..._normalizedCategoryLabels(
@@ -607,7 +624,10 @@ class MyProfileController
       'pending_video_urls': pendingVideoUrls,
       'pending_video_preview_urls': publishImmediately
           ? const <String>[]
-          : [...profile.pendingVideoPreviewUrls, ...newVideoPreviewUrls],
+          : _normalizedVideoPreviewUrls([
+              ...profile.pendingVideoPreviewUrls,
+              ...newVideoPreviewUrls,
+            ], pendingVideoUrls.length),
       'pending_video_category_labels': publishImmediately
           ? const <String>[]
           : [
@@ -724,7 +744,10 @@ class MyProfileController
       'photo_category_labels': photoCategoryLabels,
       'cover_photo_url': _normalizedCoverPhotoUrl(preferredCover, photoUrls),
       'video_urls': videoUrls,
-      'video_preview_urls': videoPreviewUrls,
+      'video_preview_urls': _normalizedVideoPreviewUrls(
+        videoPreviewUrls,
+        videoUrls.length,
+      ),
       'video_category_labels': videoCategoryLabels,
       'showreel_url': _normalizedShowreelUrl(preferredShowreel, videoUrls),
       'showreel_preview_url':
