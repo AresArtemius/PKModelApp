@@ -108,17 +108,18 @@ void _runBootstrap(_BootstrapErrorKind kind, {String? details}) {
         message: t.bootstrapConfigErrorMessage,
       );
     case _BootstrapErrorKind.init:
-      final d = details ?? '';
+      final d = (details ?? '').trim();
       return (
         title: t.bootstrapInitErrorTitle,
         message: d.isEmpty
-            ? t.bootstrapInitErrorMessage
+            ? '${t.bootstrapInitErrorMessage}\nДетали: неизвестная ошибка инициализации.'
             : '${t.bootstrapInitErrorMessage}\n$d',
       );
   }
 }
 
 Future<void> main() async {
+  var appStarted = false;
   await runZonedGuarded(
     () async {
       WidgetsFlutterBinding.ensureInitialized();
@@ -160,10 +161,22 @@ Future<void> main() async {
       }
 
       runApp(const ProviderScope(child: MyApp()));
+      appStarted = true;
     },
     (error, stack) {
-      AppLogger.error('Bootstrap zone error', error: error, stackTrace: stack);
-      _runBootstrap(_BootstrapErrorKind.init, details: error.toString());
+      AppLogger.error('App zone error', error: error, stackTrace: stack);
+      if (!appStarted) {
+        _runBootstrap(_BootstrapErrorKind.init, details: error.toString());
+        return;
+      }
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stack,
+          library: 'app_zone',
+          context: ErrorDescription('unhandled asynchronous app error'),
+        ),
+      );
     },
   );
 }

@@ -1034,13 +1034,8 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
     } catch (e, st) {
       AppLogger.error('Failed to save profile', error: e, stackTrace: st);
       if (!mounted) return null;
-      final technicalMessage = _technicalSaveError(e);
       setState(() {
-        _error = e is MyProfileException
-            ? _profileErrorText(e, _t)
-            : technicalMessage.isEmpty
-            ? _t.profileErrorSaveFailed
-            : '${_t.profileErrorSaveFailed}\n$technicalMessage';
+        _error = _saveErrorText(e);
       });
       return null;
     } finally {
@@ -1050,6 +1045,16 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
     }
   }
 
+  String _saveErrorText(Object error) {
+    if (error is MyProfileException) {
+      return '${_profileErrorText(error, _t)}\ncode: ${error.code.name}\ntype: ${error.runtimeType}';
+    }
+    final technicalMessage = _technicalSaveError(error);
+    return technicalMessage.isEmpty
+        ? '${_t.profileErrorSaveFailed}\ntype: ${error.runtimeType}'
+        : '${_t.profileErrorSaveFailed}\n$technicalMessage';
+  }
+
   String _technicalSaveError(Object error) {
     if (error is PostgrestException) {
       final details = error.details?.toString().trim() ?? '';
@@ -1057,6 +1062,7 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
         if (error.message.trim().isNotEmpty) error.message.trim(),
         if ((error.code ?? '').trim().isNotEmpty) 'code: ${error.code}',
         if (details.isNotEmpty) 'details: $details',
+        'type: ${error.runtimeType}',
       ];
       return parts.join('\n');
     }
@@ -1065,12 +1071,13 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
         if (error.message.trim().isNotEmpty) error.message.trim(),
         if ((error.statusCode ?? '').trim().isNotEmpty)
           'status: ${error.statusCode}',
+        'type: ${error.runtimeType}',
       ];
       return parts.join('\n');
     }
     final message = error.toString().trim();
     if (message.isEmpty || message == 'Exception') return '';
-    return message;
+    return '$message\ntype: ${error.runtimeType}';
   }
 
   void _showMediaUploadQueuedSnack() {

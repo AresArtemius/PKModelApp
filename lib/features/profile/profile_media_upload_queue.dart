@@ -847,6 +847,7 @@ class ProfileMediaUploadQueue
           status: ProfileMediaUploadItemStatus.preparing,
           error: '',
           progress: 0,
+          webDiagnostic: kIsWeb ? 'готовим файл к загрузке' : '',
         );
         _replaceItem(taskId, item);
         await _persistQueue();
@@ -861,6 +862,7 @@ class ProfileMediaUploadQueue
             item = item.copyWith(
               status: ProfileMediaUploadItemStatus.compressing,
               progress: 0,
+              webDiagnostic: kIsWeb ? 'оптимизируем фото' : '',
             );
             _replaceItem(taskId, item);
             await _persistQueue();
@@ -868,6 +870,7 @@ class ProfileMediaUploadQueue
             item = item.copyWith(
               status: ProfileMediaUploadItemStatus.compressing,
               progress: 0,
+              webDiagnostic: kIsWeb ? 'готовим видео без нативного сжатия' : '',
             );
             _replaceItem(taskId, item);
             await _persistQueue();
@@ -893,6 +896,7 @@ class ProfileMediaUploadQueue
           item = item.copyWith(
             status: ProfileMediaUploadItemStatus.uploading,
             progress: 0,
+            webDiagnostic: kIsWeb ? 'отправляем файл в Supabase Storage' : '',
           );
           _replaceItem(taskId, item);
           await _persistQueue();
@@ -992,6 +996,7 @@ class ProfileMediaUploadQueue
           item = item.copyWith(
             status: ProfileMediaUploadItemStatus.failed,
             error: message,
+            webDiagnostic: kIsWeb ? 'ошибка: $message' : '',
           );
           _replaceItem(taskId, item);
           final failedTask = _taskById(taskId);
@@ -1028,7 +1033,17 @@ class ProfileMediaUploadQueue
         return;
       }
 
-      _replace(task.copyWith(status: ProfileMediaUploadStatus.finalizing));
+      _replace(
+        task.copyWith(
+          status: ProfileMediaUploadStatus.finalizing,
+          items: [
+            for (final item in task.items)
+              item.copyWith(
+                webDiagnostic: kIsWeb ? 'сохраняем медиа в анкету' : '',
+              ),
+          ],
+        ),
+      );
       await _persistQueue();
 
       await _finishUploadedTask(
@@ -1055,6 +1070,16 @@ class ProfileMediaUploadQueue
             status: ProfileMediaUploadStatus.failed,
             error: message,
             paused: false,
+            items: [
+              for (final item in task.items)
+                item.isDone
+                    ? item.copyWith(
+                        webDiagnostic: kIsWeb
+                            ? 'файл загружен, ошибка сохранения анкеты: $message'
+                            : '',
+                      )
+                    : item,
+            ],
           ),
         );
         await _persistQueue();
@@ -1078,17 +1103,29 @@ class ProfileMediaUploadQueue
   }
 
   String _errorMessage(Object error) {
+    final type = error.runtimeType.toString();
     final message = error.toString().trim();
-    if (message.isEmpty || message == 'Exception') {
-      return 'Не удалось загрузить медиа. Проверьте соединение и повторите.';
+    if (message.contains('MissingPluginException')) {
+      return 'Недоступен нативный модуль обработки видео в этой web-среде. type: $type. $message';
     }
-    return message;
+    if (message.isEmpty || message == 'Exception') {
+      return 'Не удалось загрузить медиа. type: $type. Проверьте соединение и повторите.';
+    }
+    return '$message\ntype: $type';
   }
 
   Future<PreparedVideo> _prepareVideoSafely(
     ProfileMediaUploadTask task,
     ProfileMediaUploadItem item,
   ) async {
+    if (kIsWeb) {
+      return PreparedVideo(
+        path: item.path,
+        originalBytes: 0,
+        preparedBytes: 0,
+        compressed: false,
+      );
+    }
     try {
       return await MediaTools.prepareVideo(
         inputPath: item.path,
@@ -1227,11 +1264,22 @@ class ProfileMediaUploadQueue
       }
     } catch (e) {
       final latest = _taskById(task.id) ?? task;
+      final message = _errorMessage(e);
       _replace(
         latest.copyWith(
           status: ProfileMediaUploadStatus.failed,
-          error: _errorMessage(e),
+          error: message,
           paused: false,
+          items: [
+            for (final item in latest.items)
+              item.isDone
+                  ? item.copyWith(
+                      webDiagnostic: kIsWeb
+                          ? 'файл загружен, ошибка сохранения анкеты: $message'
+                          : '',
+                    )
+                  : item,
+          ],
         ),
       );
       await _persistQueue();
