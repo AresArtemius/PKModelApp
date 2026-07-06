@@ -1,8 +1,8 @@
 # Push notifications setup
 
 This app stores device tokens in `public.push_device_tokens`, writes notification
-events to `public.app_notifications`, and sends real push notifications through
-the Supabase Edge Function `send-push-notifications`.
+events to `public.app_notifications`, and sends production push/email delivery
+through the Supabase Edge Function `send-notifications`.
 
 ## 1. Apply SQL
 
@@ -15,6 +15,8 @@ supabase/sql/push_notifications.sql
 It adds:
 
 - push queue fields to `app_notifications`;
+- optional email queue fields to `app_notifications`;
+- server delivery status sync from `app_notifications` to `profile_action_logs`;
 - notification triggers for chat messages, selection invitations, video intro
   requests, profile moderation, and casting-agent application moderation;
 - RLS policies for notification and device-token tables.
@@ -51,7 +53,7 @@ For Web/GitHub Pages:
 The Pages workflow writes `web/firebase-web-config.js` during build, so Firebase
 Web keys do not need to be hardcoded in the repository.
 
-## 3. Deploy Edge Function
+## 3. Configure server delivery secrets
 
 Set Supabase secrets from a Firebase service account:
 
@@ -61,20 +63,38 @@ supabase secrets set FCM_CLIENT_EMAIL="firebase-adminsdk-...@your-project.iam.gs
 supabase secrets set FCM_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
 ```
 
+For email delivery the production worker uses Resend:
+
+```bash
+supabase secrets set RESEND_API_KEY="re_..."
+supabase secrets set EMAIL_FROM="PK Management <noreply@your-domain.com>"
+supabase secrets set PUBLIC_APP_URL="https://aresartemius.github.io/PKModelApp/"
+```
+
+Email is not sent for every notification by default. It is queued only when
+`enqueue_app_notification(..., p_data)` contains `"send_email": true`. The worker
+uses `email_to` from `p_data` first, then falls back to `user_profiles.email`.
+
+## 4. Deploy Edge Function
+
 Deploy:
 
 ```bash
-supabase functions deploy send-push-notifications --no-verify-jwt
+supabase functions deploy send-notifications --no-verify-jwt
 ```
 
-## 4. Trigger delivery
+The older `send-push-notifications` function can remain deployed for backward
+compatibility, but `send-notifications` is the production worker for both push
+and email status updates.
+
+## 5. Trigger delivery
 
 Use one of these options:
 
 - Database Webhook on `public.app_notifications` insert that calls
-  `/functions/v1/send-push-notifications` with the inserted record.
+  `/functions/v1/send-notifications` with the inserted record.
 - Scheduled Function/Cron every minute that calls
-  `/functions/v1/send-push-notifications` without a body, so it processes all
+  `/functions/v1/send-notifications` without a body, so it processes all
   pending notifications.
 
 The function supports both modes.

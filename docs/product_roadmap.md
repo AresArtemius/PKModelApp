@@ -44,9 +44,10 @@
 - Расширенный UI истории действий: фильтры по типам, просмотр полного текста шаблона/сообщения, timeline доставки и отдельная страница audit log для админки.
 - Поиск/экспорт audit log и глубокая фильтрация по источнику, типу, автору, анкете/связи и дате.
 - Серверное обновление статусов доставки/прочтения для email/push вне чата: `app_notifications` может быть связан с `profile_action_logs`, а SQL-триггер переносит `sent/delivered/read/failed` в историю действий профиля.
+- Production delivery worker `send-notifications`: единая Supabase Edge Function для push через FCM и email через Resend, с записью серверных статусов обратно в `app_notifications`.
 
 Не хватает:
-- Email/push worker, который реально отправляет письма и push в production и заполняет серверные статусы доставки.
+- Включенного production расписания/webhook для `send-notifications` и настроенных secrets Firebase/Resend в Supabase.
 
 ## 3. Chats
 

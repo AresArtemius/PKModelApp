@@ -34,6 +34,9 @@ alter table public.app_notifications
   add column if not exists push_error text,
   add column if not exists email_status text not null default 'none',
   add column if not exists email_attempts integer not null default 0,
+  add column if not exists email_to text not null default '',
+  add column if not exists email_subject text not null default '',
+  add column if not exists email_body text not null default '',
   add column if not exists email_sent_at timestamptz,
   add column if not exists email_delivered_at timestamptz,
   add column if not exists email_read_at timestamptz,
@@ -178,6 +181,8 @@ as $$
 declare
   v_id uuid;
   v_profile_action_log_id uuid;
+  v_email_to text := '';
+  v_send_email boolean := false;
 begin
   if p_user_id is null then
     return null;
@@ -191,6 +196,25 @@ begin
       v_profile_action_log_id := null;
   end;
 
+  v_send_email := lower(coalesce(p_data ->> 'send_email', 'false')) in (
+    'true',
+    '1',
+    'yes',
+    'email'
+  );
+
+  if v_send_email then
+    v_email_to := nullif(btrim(coalesce(p_data ->> 'email_to', '')), '');
+
+    if v_email_to is null then
+      select nullif(btrim(coalesce(email, '')), '')
+      into v_email_to
+      from public.user_profiles
+      where user_id = p_user_id
+      limit 1;
+    end if;
+  end if;
+
   insert into public.app_notifications (
     user_id,
     title,
@@ -198,7 +222,11 @@ begin
     route,
     type,
     data,
-    profile_action_log_id
+    profile_action_log_id,
+    email_status,
+    email_to,
+    email_subject,
+    email_body
   )
   values (
     p_user_id,
@@ -207,7 +235,11 @@ begin
     coalesce(p_route, ''),
     coalesce(nullif(btrim(p_type), ''), 'generic'),
     coalesce(p_data, '{}'::jsonb),
-    v_profile_action_log_id
+    v_profile_action_log_id,
+    case when v_send_email then 'pending' else 'none' end,
+    coalesce(v_email_to, ''),
+    coalesce(nullif(btrim(p_data ->> 'email_subject'), ''), coalesce(p_title, '')),
+    coalesce(nullif(btrim(p_data ->> 'email_body'), ''), coalesce(p_body, ''))
   )
   returning id into v_id;
 
