@@ -834,9 +834,14 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
         if (shouldAutoDetectCover) {
           unawaited(_applyPickedCoverFocal(firstNewIndex));
         }
-      } catch (_) {
+      } catch (e, st) {
+        AppLogger.error(
+          'Failed to pick profile photos',
+          error: e,
+          stackTrace: st,
+        );
         if (!mounted) return;
-        setState(() => _error = _t.profileErrorSaveFailed);
+        setState(() => _error = _saveErrorText(e));
       }
     });
   }
@@ -862,9 +867,14 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
             List<String>.filled(picked.length, 'Видео'),
           );
         });
-      } catch (_) {
+      } catch (e, st) {
+        AppLogger.error(
+          'Failed to pick profile videos',
+          error: e,
+          stackTrace: st,
+        );
         if (!mounted) return;
-        setState(() => _error = _t.profileErrorSaveFailed);
+        setState(() => _error = _saveErrorText(e));
       }
     });
   }
@@ -1734,7 +1744,7 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
                     ),
                     if (_error != null) ...[
                       const SizedBox(height: kGap14),
-                      Text(
+                      SelectableText(
                         _error!,
                         textAlign: TextAlign.center,
                         style: kProfileErrorTextStyle,
@@ -1904,7 +1914,7 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
                                 const SizedBox(height: kGap16),
 
                                 if (_error != null) ...[
-                                  Text(
+                                  SelectableText(
                                     _error!,
                                     textAlign: TextAlign.center,
                                     style: kProfileErrorTextStyle,
