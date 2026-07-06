@@ -982,9 +982,10 @@ class ProfileMediaUploadQueue
           await _handleCancelledItem(taskId, item);
           return;
         } catch (e) {
+          final message = _errorMessage(e);
           item = item.copyWith(
             status: ProfileMediaUploadItemStatus.failed,
-            error: e.toString().trim(),
+            error: message,
           );
           _replaceItem(taskId, item);
           final failedTask = _taskById(taskId);
@@ -992,7 +993,7 @@ class ProfileMediaUploadQueue
             _replace(
               failedTask.copyWith(
                 status: ProfileMediaUploadStatus.failed,
-                error: e.toString().trim(),
+                error: message,
                 paused: false,
               ),
             );
@@ -1039,10 +1040,11 @@ class ProfileMediaUploadQueue
       );
       final task = _taskById(taskId);
       if (task != null) {
+        final message = _errorMessage(e);
         _replace(
           task.copyWith(
             status: ProfileMediaUploadStatus.failed,
-            error: e.toString().trim(),
+            error: message,
             paused: false,
           ),
         );
@@ -1064,6 +1066,14 @@ class ProfileMediaUploadQueue
   String _pathSeedForItem(ProfileMediaUploadItem item) {
     if (item.uploadAttempt <= 0) return item.id;
     return '${item.id}_retry_${item.uploadAttempt}';
+  }
+
+  String _errorMessage(Object error) {
+    final message = error.toString().trim();
+    if (message.isEmpty || message == 'Exception') {
+      return 'Не удалось загрузить медиа. Проверьте соединение и повторите.';
+    }
+    return message;
   }
 
   Future<void> _pauseCurrentItem(

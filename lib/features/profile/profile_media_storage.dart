@@ -292,13 +292,13 @@ class ProfileMediaStorage {
 
     final videoBytes = await file.readAsBytes();
     cancelToken?.throwIfCancelled();
-    final videoUrl = await _uploadBinaryResumable(
+    final videoUrl = await _uploadVideoBytes(
       bucket: bucket,
       path: storagePath,
       bytes: videoBytes,
       contentType: ct,
-      initialUploadUrl: resumableUploadUrl,
-      initialUploadedBytes: resumableUploadedBytes,
+      resumableUploadUrl: resumableUploadUrl,
+      resumableUploadedBytes: resumableUploadedBytes,
       onProgress: onProgress,
       onResumableProgress: onResumableProgress,
       cancelToken: cancelToken,
@@ -320,6 +320,54 @@ class ProfileMediaStorage {
       previewUrl = '';
     }
     return (videoUrl: videoUrl, previewUrl: previewUrl);
+  }
+
+  Future<String> _uploadVideoBytes({
+    required String bucket,
+    required String path,
+    required Uint8List bytes,
+    required String contentType,
+    required String resumableUploadUrl,
+    required int resumableUploadedBytes,
+    ValueChanged<double>? onProgress,
+    ValueChanged<ProfileMediaResumableProgress>? onResumableProgress,
+    ProfileMediaUploadCancelToken? cancelToken,
+  }) async {
+    try {
+      return await _uploadBinaryResumable(
+        bucket: bucket,
+        path: path,
+        bytes: bytes,
+        contentType: contentType,
+        initialUploadUrl: resumableUploadUrl,
+        initialUploadedBytes: resumableUploadedBytes,
+        onProgress: onProgress,
+        onResumableProgress: onResumableProgress,
+        cancelToken: cancelToken,
+      );
+    } catch (e) {
+      cancelToken?.throwIfCancelled();
+      final hasStartedResumable =
+          resumableUploadUrl.trim().isNotEmpty || resumableUploadedBytes > 0;
+      if (hasStartedResumable || bytes.length > 32 * 1024 * 1024) {
+        rethrow;
+      }
+      onResumableProgress?.call(
+        const ProfileMediaResumableProgress(
+          progress: 0,
+          uploadUrl: '',
+          uploadedBytes: 0,
+        ),
+      );
+      return uploadBinary(
+        bucket: bucket,
+        path: path,
+        bytes: bytes,
+        contentType: contentType,
+        onProgress: onProgress,
+        cancelToken: cancelToken,
+      );
+    }
   }
 
   Future<String> _uploadBinaryResumable({
