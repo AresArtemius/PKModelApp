@@ -94,8 +94,13 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   _PendingChatAttachment? _pendingAttachment;
   DateTime? _lastTypingSentAt;
   Timer? _typingStopTimer;
+  Timer? _searchDebounceTimer;
   final List<ChatMessage> _olderMessages = [];
+  List<ChatMessage> _serverSearchResults = const <ChatMessage>[];
   final _picker = ImagePicker();
+  bool _serverSearchLoading = false;
+  String _serverSearchQuery = '';
+  String _serverSearchError = '';
 
   SupabaseClient get _sb => ref.read(supabaseProvider);
 
@@ -113,6 +118,10 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     _searchQuery = '';
     _searchHitCursor = 0;
     _activeSearchMessageId = null;
+    _serverSearchResults = const <ChatMessage>[];
+    _serverSearchLoading = false;
+    _serverSearchQuery = '';
+    _serverSearchError = '';
     _searchController.clear();
     _pendingAttachment = null;
     _lastTypingSentAt = null;
@@ -127,6 +136,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   @override
   void dispose() {
     _typingStopTimer?.cancel();
+    _searchDebounceTimer?.cancel();
     unawaited(_setTyping(false));
     _messageController.removeListener(_handleTypingChanged);
     _messageController.dispose();
@@ -251,6 +261,11 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   List<ChatMessage> _searchHits(List<ChatMessage> messages) {
     final query = _searchQuery.trim().toLowerCase();
     if (query.isEmpty) return const <ChatMessage>[];
+    if (_serverSearchQuery.toLowerCase() == query &&
+        !_serverSearchLoading &&
+        _serverSearchError.isEmpty) {
+      return _serverSearchResults;
+    }
     return messages
         .where(
           (message) =>
@@ -266,7 +281,12 @@ class _ChatPageState extends ConsumerState<ChatPage> {
         _searchQuery = '';
         _searchHitCursor = 0;
         _activeSearchMessageId = null;
+        _serverSearchResults = const <ChatMessage>[];
+        _serverSearchLoading = false;
+        _serverSearchQuery = '';
+        _serverSearchError = '';
         _searchController.clear();
+        _searchDebounceTimer?.cancel();
       }
     });
   }
@@ -277,6 +297,55 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       _searchHitCursor = 0;
       _activeSearchMessageId = null;
     });
+    _scheduleServerSearch(value);
+  }
+
+  void _scheduleServerSearch(String value) {
+    _searchDebounceTimer?.cancel();
+    final query = value.trim();
+    if (query.isEmpty) {
+      setState(() {
+        _serverSearchResults = const <ChatMessage>[];
+        _serverSearchLoading = false;
+        _serverSearchQuery = '';
+        _serverSearchError = '';
+      });
+      return;
+    }
+    setState(() {
+      _serverSearchLoading = true;
+      _serverSearchError = '';
+    });
+    _searchDebounceTimer = Timer(const Duration(milliseconds: 320), () {
+      unawaited(_runServerSearch(query));
+    });
+  }
+
+  Future<void> _runServerSearch(String query) async {
+    try {
+      final results = await ref
+          .read(chatServiceProvider)
+          .searchMessages(chatId: widget.chatId, query: query);
+      if (!mounted || _searchQuery.trim() != query) return;
+      setState(() {
+        _serverSearchResults = results;
+        _serverSearchQuery = query;
+        _serverSearchLoading = false;
+        _serverSearchError = '';
+        if (_searchHitCursor >= results.length) _searchHitCursor = 0;
+      });
+    } catch (error) {
+      if (!mounted || _searchQuery.trim() != query) return;
+      setState(() {
+        _serverSearchResults = const <ChatMessage>[];
+        _serverSearchQuery = query;
+        _serverSearchLoading = false;
+        _serverSearchError = AppErrorMapper.message(
+          error,
+          AppLocalizations.of(context)!,
+        );
+      });
+    }
   }
 
   Future<void> _jumpToSearchHit(
@@ -284,12 +353,42 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     List<ChatMessage> hits, {
     required int direction,
   }) async {
-    if (hits.isEmpty || visibleMessages.isEmpty) return;
+    if (hits.isEmpty) return;
     final nextCursor = direction == 0
         ? _searchHitCursor.clamp(0, hits.length - 1).toInt()
         : (_searchHitCursor + direction) % hits.length;
     final safeCursor = nextCursor < 0 ? hits.length - 1 : nextCursor;
     final target = hits[safeCursor];
+    final effectiveMessages = _ensureMessageVisible(target, visibleMessages);
+    await _jumpToSearchTarget(
+      target: target,
+      visibleMessages: effectiveMessages,
+      cursor: safeCursor,
+    );
+  }
+
+  List<ChatMessage> _ensureMessageVisible(
+    ChatMessage target,
+    List<ChatMessage> visibleMessages,
+  ) {
+    if (visibleMessages.any((item) => item.id == target.id)) {
+      return visibleMessages;
+    }
+    setState(() {
+      _olderMessages.removeWhere((item) => item.id == target.id);
+      _olderMessages.add(target);
+    });
+    return _mergedMessages(
+      ref.read(chatMessagesProvider(widget.chatId)).valueOrNull ??
+          const <ChatMessage>[],
+    );
+  }
+
+  Future<void> _jumpToSearchTarget({
+    required ChatMessage target,
+    required List<ChatMessage> visibleMessages,
+    required int cursor,
+  }) async {
     final targetIndex = visibleMessages.indexWhere(
       (item) => item.id == target.id,
     );
@@ -298,9 +397,10 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     const estimatedMessageExtent = 96.0;
     final targetOffset = reverseBuilderIndex * estimatedMessageExtent;
     setState(() {
-      _searchHitCursor = safeCursor;
+      _searchHitCursor = cursor;
       _activeSearchMessageId = target.id;
     });
+    await WidgetsBinding.instance.endOfFrame;
     if (!_messageListController.hasClients) return;
     final clampedOffset = targetOffset
         .clamp(0.0, _messageListController.position.maxScrollExtent)
@@ -1064,6 +1164,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                     query: _searchQuery,
                     hitCount: searchHits.length,
                     currentPosition: searchPosition,
+                    loading: _serverSearchLoading,
+                    errorText: _serverSearchError,
                     onChanged: _handleSearchChanged,
                     onClose: _toggleSearch,
                     onPrevious: () => _jumpToSearchHit(
@@ -1438,6 +1540,8 @@ class _ChatSearchPanel extends StatelessWidget {
     required this.query,
     required this.hitCount,
     required this.currentPosition,
+    required this.loading,
+    required this.errorText,
     required this.onChanged,
     required this.onClose,
     required this.onPrevious,
@@ -1449,6 +1553,8 @@ class _ChatSearchPanel extends StatelessWidget {
   final String query;
   final int hitCount;
   final int currentPosition;
+  final bool loading;
+  final String errorText;
   final ValueChanged<String> onChanged;
   final VoidCallback onClose;
   final VoidCallback onPrevious;
@@ -1461,8 +1567,13 @@ class _ChatSearchPanel extends StatelessWidget {
         Localizations.localeOf(context).languageCode.toLowerCase() == 'ru';
     final hasQuery = query.trim().isNotEmpty;
     final hasHits = hitCount > 0;
+    final hasError = errorText.trim().isNotEmpty;
     final statusText = !hasQuery
         ? (isRussian ? 'Поиск' : 'Search')
+        : loading
+        ? '...'
+        : hasError
+        ? (isRussian ? 'Ошибка' : 'Error')
         : hasHits
         ? '$currentPosition / $hitCount'
         : (isRussian ? 'Нет' : 'None');
@@ -1509,22 +1620,38 @@ class _ChatSearchPanel extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: hasQuery && !hasHits ? BrandTheme.redTop : kTextMuted,
+                color: hasError || (hasQuery && !loading && !hasHits)
+                    ? BrandTheme.redTop
+                    : kTextMuted,
                 fontSize: 12,
                 fontWeight: FontWeight.w900,
                 letterSpacing: 0,
               ),
             ),
           ),
+          if (loading)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8),
+              child: SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: kTextMuted,
+                ),
+              ),
+            ),
           IconButton(
             visualDensity: VisualDensity.compact,
-            onPressed: hasHits ? onPrevious : null,
+            tooltip: hasError ? errorText : null,
+            onPressed: hasHits && !loading ? onPrevious : null,
             icon: const Icon(Icons.keyboard_arrow_up_rounded),
             color: kTextDark,
           ),
           IconButton(
             visualDensity: VisualDensity.compact,
-            onPressed: hasHits ? onNext : null,
+            tooltip: hasError ? errorText : null,
+            onPressed: hasHits && !loading ? onNext : null,
             icon: const Icon(Icons.keyboard_arrow_down_rounded),
             color: kTextDark,
           ),

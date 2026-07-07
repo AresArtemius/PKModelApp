@@ -21,6 +21,7 @@ class ChatService {
 
   static const int _invitationListLimit = 100;
   static const int _messageStreamLimit = 120;
+  static const int _messageSearchLimit = 80;
   static const int _reactionStreamLimit = _messageStreamLimit * 3;
   static const int _typingStreamLimit = 8;
   static const String _baseMessageSelect =
@@ -912,6 +913,106 @@ class ChatService {
               )
               .toList(growable: false),
         );
+  }
+
+  Future<List<ChatMessage>> searchMessages({
+    required String chatId,
+    required String query,
+    int limit = _messageSearchLimit,
+  }) async {
+    final cleanChatId = chatId.trim();
+    final cleanQuery = query.trim();
+    if (cleanChatId.isEmpty || cleanQuery.isEmpty) {
+      return const <ChatMessage>[];
+    }
+
+    try {
+      final rows = await _sb.rpc(
+        'search_selection_chat_messages',
+        params: {
+          'p_chat_id': cleanChatId,
+          'p_query': cleanQuery,
+          'p_limit': limit.clamp(1, _messageSearchLimit),
+        },
+      );
+      return (rows as List<dynamic>)
+          .map((e) => ChatMessage.fromMap(Map<String, dynamic>.from(e as Map)))
+          .where((e) => !e.isDeleted)
+          .toList(growable: false);
+    } on PostgrestException catch (e) {
+      if (!SupabaseCompat.isMissingRpc(e, 'search_selection_chat_messages')) {
+        rethrow;
+      }
+    }
+
+    return _searchMessagesFallback(
+      chatId: cleanChatId,
+      query: cleanQuery,
+      limit: limit,
+    );
+  }
+
+  Future<List<ChatMessage>> _searchMessagesFallback({
+    required String chatId,
+    required String query,
+    required int limit,
+  }) async {
+    Future<List<dynamic>> run({
+      required bool includeReadFields,
+      required bool includeFileFields,
+      required bool includeMetadata,
+    }) async {
+      return await _sb
+          .from('selection_chat_messages')
+          .select(
+            _messageSelect(
+              includeReadFields: includeReadFields,
+              includeFileFields: includeFileFields,
+              includeMetadata: includeMetadata,
+            ),
+          )
+          .eq('chat_id', chatId)
+          .ilike('body', '%$query%')
+          .filter('deleted_at', 'is', null)
+          .order('created_at')
+          .limit(limit.clamp(1, _messageSearchLimit));
+    }
+
+    List<dynamic> rows;
+    try {
+      rows = await run(
+        includeReadFields: true,
+        includeFileFields: true,
+        includeMetadata: true,
+      );
+    } on PostgrestException catch (e) {
+      if (_isMissingChatFileColumn(e)) {
+        rows = await run(
+          includeReadFields: true,
+          includeFileFields: false,
+          includeMetadata: true,
+        );
+      } else if (_isMissingChatMetadataColumn(e)) {
+        rows = await run(
+          includeReadFields: true,
+          includeFileFields: true,
+          includeMetadata: false,
+        );
+      } else if (_isMissingChatReadField(e)) {
+        rows = await run(
+          includeReadFields: false,
+          includeFileFields: true,
+          includeMetadata: true,
+        );
+      } else {
+        rethrow;
+      }
+    }
+
+    return rows
+        .map((e) => ChatMessage.fromMap(Map<String, dynamic>.from(e as Map)))
+        .where((e) => !e.isDeleted)
+        .toList(growable: false);
   }
 
   Future<List<ChatMessage>> fetchMessagesBefore({
