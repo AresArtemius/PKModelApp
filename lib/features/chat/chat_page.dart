@@ -363,6 +363,28 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     }
   }
 
+  ChatMessage? _singleSelectedMessage(List<ChatMessage> visibleMessages) {
+    if (_selectedMessageIds.length != 1) return null;
+    final id = _selectedMessageIds.first;
+    for (final message in visibleMessages) {
+      if (message.id == id) return message;
+    }
+    return null;
+  }
+
+  void _replyToSelectedMessage(ChatMessage message) {
+    setState(() {
+      _replyingTo = message;
+      _selectedMessageIds.clear();
+    });
+  }
+
+  Future<void> _toggleSelectedMessagePinned(ChatMessage message) async {
+    await _setMessagePinned(message, !message.isPinned);
+    if (!mounted) return;
+    _clearMessageSelection();
+  }
+
   bool get _isRussian =>
       Localizations.localeOf(context).languageCode.toLowerCase() == 'ru';
 
@@ -849,11 +871,10 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     );
     if (confirmed != true) return;
     try {
-      for (final id in cleanIds) {
-        await ref.read(chatServiceProvider).deleteMessageForEveryone(id);
-      }
+      await ref.read(chatServiceProvider).deleteMessagesForEveryone(cleanIds);
       if (!mounted) return;
       setState(() => _selectedMessageIds.removeAll(cleanIds));
+      ref.invalidate(pinnedChatMessagesProvider(widget.chatId));
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -915,6 +936,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     final searchVisibleMessages = messages.valueOrNull == null
         ? const <ChatMessage>[]
         : _mergedMessages(messages.valueOrNull!);
+    final selectedMessage = _singleSelectedMessage(searchVisibleMessages);
     final searchHits = _searchHits(searchVisibleMessages);
     final pinnedPanelMessages = _pinnedMessagesForPanel(
       pinnedMessages.valueOrNull ?? const <ChatMessage>[],
@@ -1082,15 +1104,24 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                                             mine: item.senderId == userId,
                                           )
                                         : null,
-                                    onLongPress: () => _selectionMode
-                                        ? _toggleMessageSelection(
-                                            item,
-                                            mine: item.senderId == userId,
-                                          )
-                                        : _showMessageActions(
-                                            message: item,
-                                            mine: item.senderId == userId,
-                                          ),
+                                    onLongPress: () {
+                                      final mine = item.senderId == userId;
+                                      if (_selectionMode || mine) {
+                                        _toggleMessageSelection(
+                                          item,
+                                          mine: mine,
+                                        );
+                                        return;
+                                      }
+                                      _showMessageActions(
+                                        message: item,
+                                        mine: mine,
+                                      );
+                                    },
+                                    onSecondaryTap: () => _showMessageActions(
+                                      message: item,
+                                      mine: item.senderId == userId,
+                                    ),
                                   );
                                 },
                               );
@@ -1111,7 +1142,14 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                 if (_selectionMode) ...[
                   _MessageSelectionBar(
                     count: _selectedMessageIds.length,
+                    singleMessage: selectedMessage,
                     onCancel: _clearMessageSelection,
+                    onReply: selectedMessage == null
+                        ? null
+                        : () => _replyToSelectedMessage(selectedMessage),
+                    onTogglePin: selectedMessage == null
+                        ? null
+                        : () => _toggleSelectedMessagePinned(selectedMessage),
                     onDelete: () => _deleteSelectedMessages(
                       Set<String>.from(_selectedMessageIds),
                     ),
@@ -1882,18 +1920,27 @@ class _ContextIconButton extends StatelessWidget {
 class _MessageSelectionBar extends StatelessWidget {
   const _MessageSelectionBar({
     required this.count,
+    required this.singleMessage,
     required this.onCancel,
+    required this.onReply,
+    required this.onTogglePin,
     required this.onDelete,
   });
 
   final int count;
+  final ChatMessage? singleMessage;
   final VoidCallback onCancel;
+  final VoidCallback? onReply;
+  final VoidCallback? onTogglePin;
   final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
     final isRussian =
         Localizations.localeOf(context).languageCode.toLowerCase() == 'ru';
+    final pinTooltip = singleMessage?.isPinned == true
+        ? (isRussian ? 'Открепить' : 'Unpin')
+        : (isRussian ? 'Закрепить' : 'Pin');
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
       decoration: BoxDecoration(
@@ -1910,7 +1957,9 @@ class _MessageSelectionBar extends StatelessWidget {
           ),
           Expanded(
             child: Text(
-              isRussian ? 'ВЫБРАНО: $count' : 'SELECTED: $count',
+              isRussian
+                  ? 'ВЫБРАНО СООБЩЕНИЙ: $count'
+                  : 'MESSAGES SELECTED: $count',
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 13,
@@ -1919,6 +1968,29 @@ class _MessageSelectionBar extends StatelessWidget {
               ),
             ),
           ),
+          if (onReply != null)
+            Tooltip(
+              message: isRussian ? 'Ответить' : 'Reply',
+              child: IconButton(
+                visualDensity: VisualDensity.compact,
+                onPressed: onReply,
+                icon: const Icon(Icons.reply_rounded, color: Colors.white),
+              ),
+            ),
+          if (onTogglePin != null)
+            Tooltip(
+              message: pinTooltip,
+              child: IconButton(
+                visualDensity: VisualDensity.compact,
+                onPressed: onTogglePin,
+                icon: Icon(
+                  singleMessage?.isPinned == true
+                      ? Icons.push_pin_rounded
+                      : Icons.push_pin_outlined,
+                  color: Colors.white,
+                ),
+              ),
+            ),
           IconButton(
             visualDensity: VisualDensity.compact,
             onPressed: onDelete,
@@ -1942,6 +2014,7 @@ class _MessageBubble extends StatelessWidget {
     required this.activeSearchResult,
     required this.onTap,
     required this.onLongPress,
+    required this.onSecondaryTap,
   });
 
   final ChatMessage message;
@@ -1954,6 +2027,7 @@ class _MessageBubble extends StatelessWidget {
   final VoidCallback onMediaTap;
   final VoidCallback? onTap;
   final VoidCallback onLongPress;
+  final VoidCallback onSecondaryTap;
 
   @override
   Widget build(BuildContext context) {
@@ -1967,6 +2041,7 @@ class _MessageBubble extends StatelessWidget {
     final bubble = GestureDetector(
       onTap: onTap,
       onLongPress: onLongPress,
+      onSecondaryTap: onSecondaryTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 160),
         constraints: const BoxConstraints(maxWidth: 244),

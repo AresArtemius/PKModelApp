@@ -1270,13 +1270,23 @@ class ChatService {
   }
 
   Future<void> deleteMessageForEveryone(String messageId) async {
+    await deleteMessagesForEveryone([messageId]);
+  }
+
+  Future<void> deleteMessagesForEveryone(Iterable<String> messageIds) async {
     final userId = _sb.auth.currentUser?.id;
-    if (userId == null || messageId.trim().isEmpty) return;
+    if (userId == null) return;
+    final ids = messageIds
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    if (ids.isEmpty) return;
 
     await _sb
         .from('selection_chat_messages')
         .update({'deleted_at': DateTime.now().toUtc().toIso8601String()})
-        .eq('id', messageId)
+        .inFilter('id', ids)
         .eq('sender_id', userId);
   }
 
