@@ -2,10 +2,15 @@
 -- Run after selection_chats.sql.
 
 alter table public.selection_chat_messages
-  add column if not exists read_at timestamptz;
+  add column if not exists read_at timestamptz,
+  add column if not exists listened_at timestamptz;
 
 create index if not exists selection_chat_messages_chat_read_idx
   on public.selection_chat_messages (chat_id, read_at);
+
+create index if not exists selection_chat_messages_audio_listened_idx
+  on public.selection_chat_messages (chat_id, listened_at)
+  where media_type = 'audio';
 
 create table if not exists public.selection_chat_typing_states (
   chat_id uuid not null references public.selection_chats(id) on delete cascade,
@@ -105,6 +110,43 @@ end;
 $mark_selection_chat_read$;
 
 grant execute on function public.mark_selection_chat_read(uuid)
+  to authenticated;
+
+create or replace function public.mark_selection_chat_audio_listened(
+  p_message_id uuid
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+set row_security = off
+as $mark_selection_chat_audio_listened$
+declare
+  v_user_id uuid := auth.uid();
+begin
+  if v_user_id is null then
+    raise exception 'Not authenticated';
+  end if;
+
+  update public.selection_chat_messages m
+  set
+    listened_at = coalesce(m.listened_at, now()),
+    read_at = coalesce(m.read_at, now())
+  from public.selection_chats sc
+  where m.id = p_message_id
+    and m.chat_id = sc.id
+    and m.media_type = 'audio'
+    and m.sender_id <> v_user_id
+    and m.deleted_at is null
+    and (
+      sc.model_user_id = v_user_id
+      or sc.agent_user_id = v_user_id
+      or public.current_user_is_admin()
+    );
+end;
+$mark_selection_chat_audio_listened$;
+
+grant execute on function public.mark_selection_chat_audio_listened(uuid)
   to authenticated;
 
 create or replace function public.set_selection_chat_typing(

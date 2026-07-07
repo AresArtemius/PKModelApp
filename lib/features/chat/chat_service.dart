@@ -31,16 +31,16 @@ class ChatService {
   final SupabaseClient _sb;
 
   String _messageSelect({
-    bool includeReadAt = false,
+    bool includeReadFields = false,
     bool includeFileFields = true,
     bool includePinnedFields = false,
     bool includeMetadata = true,
   }) {
-    final readAt = includeReadAt ? ',read_at' : '';
+    final readFields = includeReadFields ? ',read_at,listened_at' : '';
     final fileFields = includeFileFields ? _fileMessageFields : '';
     final pinnedFields = includePinnedFields ? ',pinned_at,pinned_by' : '';
     final metadataFields = includeMetadata ? _metadataMessageFields : '';
-    return '$_baseMessageSelect$readAt$fileFields$pinnedFields$metadataFields';
+    return '$_baseMessageSelect$readFields$fileFields$pinnedFields$metadataFields';
   }
 
   Future<List<CastingInvitation>> fetchMyInvitations(String userId) async {
@@ -258,6 +258,11 @@ class ChatService {
 
   bool _isMissingChatMetadataColumn(PostgrestException e) {
     return SupabaseCompat.isMissingColumn(e, 'metadata');
+  }
+
+  bool _isMissingChatReadField(PostgrestException e) {
+    return SupabaseCompat.isMissingColumn(e, 'read_at') ||
+        SupabaseCompat.isMissingColumn(e, 'listened_at');
   }
 
   Future<String> ensureSelectionChat({
@@ -652,6 +657,7 @@ class ChatService {
         lastMessage: latest == null ? '' : _chatPreview(latest),
         lastMessageMediaType: latest?.mediaType ?? 'text',
         lastMessageMetadata: latest?.metadata ?? const <String, dynamic>{},
+        lastMessageListenedAt: latest?.listenedAt,
         lastMessageAt: latest?.createdAt ?? fallbackTime,
         unreadCount: unreadCount,
         pinned: pinnedAt.trim().isNotEmpty,
@@ -797,6 +803,7 @@ class ChatService {
           .from('selection_chat_messages')
           .select(
             _messageSelect(
+              includeReadFields: true,
               includeFileFields: includeFileFields,
               includeMetadata: includeMetadata,
             ),
@@ -815,6 +822,20 @@ class ChatService {
         rows = await run(includeFileFields: false, includeMetadata: true);
       } else if (_isMissingChatMetadataColumn(e)) {
         rows = await run(includeFileFields: true, includeMetadata: false);
+      } else if (_isMissingChatReadField(e)) {
+        rows = await _sb
+            .from('selection_chat_messages')
+            .select(
+              _messageSelect(
+                includeReadFields: false,
+                includeFileFields: true,
+                includeMetadata: true,
+              ),
+            )
+            .eq('chat_id', chatId)
+            .filter('deleted_at', 'is', null)
+            .order('created_at', ascending: false)
+            .limit(1);
       } else {
         rethrow;
       }
@@ -899,14 +920,14 @@ class ChatService {
     int limit = 60,
   }) async {
     Future<List<dynamic>> run({
-      required bool includeReadAt,
+      required bool includeReadFields,
       required bool includeMetadata,
     }) async {
       return await _sb
           .from('selection_chat_messages')
           .select(
             _messageSelect(
-              includeReadAt: includeReadAt,
+              includeReadFields: includeReadFields,
               includeMetadata: includeMetadata,
             ),
           )
@@ -918,14 +939,14 @@ class ChatService {
 
     List<dynamic> rows;
     try {
-      rows = await run(includeReadAt: true, includeMetadata: true);
+      rows = await run(includeReadFields: true, includeMetadata: true);
     } on PostgrestException catch (e) {
       if (_isMissingChatFileColumn(e)) {
         rows = await _sb
             .from('selection_chat_messages')
             .select(
               _messageSelect(
-                includeReadAt: true,
+                includeReadFields: true,
                 includeFileFields: false,
                 includeMetadata: true,
               ),
@@ -935,13 +956,13 @@ class ChatService {
             .order('created_at', ascending: false)
             .limit(limit);
       } else if (_isMissingChatMetadataColumn(e)) {
-        rows = await run(includeReadAt: true, includeMetadata: false);
+        rows = await run(includeReadFields: true, includeMetadata: false);
       } else if (_isMissingChatPinnedColumn(e)) {
-        rows = await run(includeReadAt: true, includeMetadata: true);
-      } else if (!SupabaseCompat.isMissingColumn(e, 'read_at')) {
+        rows = await run(includeReadFields: true, includeMetadata: true);
+      } else if (!_isMissingChatReadField(e)) {
         rethrow;
       } else {
-        rows = await run(includeReadAt: false, includeMetadata: true);
+        rows = await run(includeReadFields: false, includeMetadata: true);
       }
     }
 
@@ -964,7 +985,7 @@ class ChatService {
           .from('selection_chat_messages')
           .select(
             _messageSelect(
-              includeReadAt: true,
+              includeReadFields: true,
               includePinnedFields: includePinnedFields,
               includeMetadata: includeMetadata,
             ),
@@ -984,6 +1005,28 @@ class ChatService {
           .toList(growable: false);
     } on PostgrestException catch (e) {
       if (_isMissingChatPinnedColumn(e)) return const <ChatMessage>[];
+      if (_isMissingChatReadField(e)) {
+        final rows = await _sb
+            .from('selection_chat_messages')
+            .select(
+              _messageSelect(
+                includeReadFields: false,
+                includePinnedFields: true,
+                includeMetadata: true,
+              ),
+            )
+            .eq('chat_id', chatId)
+            .filter('deleted_at', 'is', null)
+            .filter('pinned_at', 'not.is', null)
+            .order('pinned_at', ascending: false)
+            .limit(5);
+        return rows
+            .map(
+              (e) => ChatMessage.fromMap(Map<String, dynamic>.from(e as Map)),
+            )
+            .where((e) => !e.isDeleted && e.isPinned)
+            .toList(growable: false);
+      }
       if (_isMissingChatMetadataColumn(e)) {
         final rows = await run(
           includePinnedFields: true,
@@ -1047,6 +1090,48 @@ class ChatService {
       }
     }
     return avatars;
+  }
+
+  Future<void> markVoiceMessageListened(ChatMessage message) async {
+    final userId = _sb.auth.currentUser?.id;
+    if (userId == null ||
+        message.id.trim().isEmpty ||
+        message.chatId.trim().isEmpty ||
+        !message.isAudio ||
+        message.senderId == userId ||
+        message.listenedAt != null) {
+      return;
+    }
+
+    try {
+      await _sb.rpc(
+        'mark_selection_chat_audio_listened',
+        params: {'p_message_id': message.id},
+      );
+      return;
+    } on PostgrestException catch (e) {
+      final missingSupport =
+          SupabaseCompat.isMissingRpc(
+            e,
+            'mark_selection_chat_audio_listened',
+          ) ||
+          SupabaseCompat.isMissingColumn(e, 'listened_at');
+      if (!missingSupport) rethrow;
+    }
+
+    try {
+      await _sb
+          .from('selection_chat_messages')
+          .update({'listened_at': DateTime.now().toUtc().toIso8601String()})
+          .eq('id', message.id)
+          .eq('chat_id', message.chatId)
+          .neq('sender_id', userId)
+          .eq('media_type', 'audio')
+          .filter('deleted_at', 'is', null)
+          .filter('listened_at', 'is', null);
+    } on PostgrestException catch (e) {
+      if (!SupabaseCompat.isMissingColumn(e, 'listened_at')) rethrow;
+    }
   }
 
   Future<void> sendMessage({

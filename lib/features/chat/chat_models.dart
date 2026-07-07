@@ -161,6 +161,7 @@ class ChatListItem {
     required this.lastMessage,
     required this.lastMessageMediaType,
     required this.lastMessageMetadata,
+    required this.lastMessageListenedAt,
     required this.lastMessageAt,
     required this.unreadCount,
     required this.pinned,
@@ -176,11 +177,13 @@ class ChatListItem {
   final String lastMessage;
   final String lastMessageMediaType;
   final Map<String, dynamic> lastMessageMetadata;
+  final DateTime? lastMessageListenedAt;
   final DateTime? lastMessageAt;
   final int unreadCount;
   final bool pinned;
   final bool archived;
   bool get lastMessageIsAudio => lastMessageMediaType == 'audio';
+  bool get lastMessageAudioListened => lastMessageListenedAt != null;
   Duration? get lastMessageAudioDuration =>
       _audioDurationFromMetadata(lastMessageMetadata);
 
@@ -194,6 +197,7 @@ class ChatListItem {
     String? lastMessage,
     String? lastMessageMediaType,
     Map<String, dynamic>? lastMessageMetadata,
+    DateTime? lastMessageListenedAt,
     DateTime? lastMessageAt,
     int? unreadCount,
     bool? pinned,
@@ -209,6 +213,8 @@ class ChatListItem {
       lastMessage: lastMessage ?? this.lastMessage,
       lastMessageMediaType: lastMessageMediaType ?? this.lastMessageMediaType,
       lastMessageMetadata: lastMessageMetadata ?? this.lastMessageMetadata,
+      lastMessageListenedAt:
+          lastMessageListenedAt ?? this.lastMessageListenedAt,
       lastMessageAt: lastMessageAt ?? this.lastMessageAt,
       unreadCount: unreadCount ?? this.unreadCount,
       pinned: pinned ?? this.pinned,
@@ -351,6 +357,7 @@ class ChatMessage {
     required this.metadata,
     required this.deletedAt,
     required this.readAt,
+    required this.listenedAt,
     required this.pinnedAt,
     required this.pinnedBy,
     required this.createdAt,
@@ -369,6 +376,7 @@ class ChatMessage {
   final Map<String, dynamic> metadata;
   final DateTime? deletedAt;
   final DateTime? readAt;
+  final DateTime? listenedAt;
   final DateTime? pinnedAt;
   final String pinnedBy;
   final DateTime? createdAt;
@@ -405,6 +413,7 @@ class ChatMessage {
       metadata: _mapOrEmpty(map['metadata']),
       deletedAt: DateTime.tryParse((map['deleted_at'] ?? '').toString()),
       readAt: DateTime.tryParse((map['read_at'] ?? '').toString()),
+      listenedAt: DateTime.tryParse((map['listened_at'] ?? '').toString()),
       pinnedAt: DateTime.tryParse((map['pinned_at'] ?? '').toString()),
       pinnedBy: (map['pinned_by'] ?? '').toString(),
       createdAt: DateTime.tryParse((map['created_at'] ?? '').toString()),

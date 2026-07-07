@@ -172,6 +172,14 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     }
   }
 
+  Future<void> _markVoiceListened(ChatMessage message) async {
+    try {
+      await ref.read(chatServiceProvider).markVoiceMessageListened(message);
+    } catch (_) {
+      // Voice listens are best effort while older SQL is still possible.
+    }
+  }
+
   Future<void> _send() async {
     if (_sending || _uploadingMedia) return;
     if (!await _ensureCanUseChat()) return;
@@ -1157,6 +1165,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                                         item.senderId == userId && index == 0,
                                     onMediaTap: () =>
                                         _openMediaViewer(context, item),
+                                    onVoiceListened: () =>
+                                        _markVoiceListened(item),
                                     selected: _selectedMessageIds.contains(
                                       item.id,
                                     ),
@@ -2075,6 +2085,7 @@ class _MessageBubble extends StatelessWidget {
     required this.avatarUrl,
     required this.showReadStatus,
     required this.onMediaTap,
+    required this.onVoiceListened,
     required this.selected,
     required this.searchQuery,
     required this.activeSearchResult,
@@ -2091,6 +2102,7 @@ class _MessageBubble extends StatelessWidget {
   final String searchQuery;
   final bool activeSearchResult;
   final VoidCallback onMediaTap;
+  final VoidCallback onVoiceListened;
   final VoidCallback? onTap;
   final VoidCallback onLongPress;
   final VoidCallback onSecondaryTap;
@@ -2140,6 +2152,7 @@ class _MessageBubble extends StatelessWidget {
                 message: message,
                 onTap: onMediaTap,
                 showReadStatus: showReadStatus,
+                onVoiceListened: onVoiceListened,
               ),
               if (visibleBody.isNotEmpty) const SizedBox(height: 8),
             ],
@@ -2397,11 +2410,13 @@ class _MessageMedia extends StatelessWidget {
     required this.message,
     required this.onTap,
     required this.showReadStatus,
+    required this.onVoiceListened,
   });
 
   final ChatMessage message;
   final VoidCallback onTap;
   final bool showReadStatus;
+  final VoidCallback onVoiceListened;
 
   @override
   Widget build(BuildContext context) {
@@ -2412,6 +2427,7 @@ class _MessageMedia extends StatelessWidget {
       return _AudioMessagePlayer(
         message: message,
         showReadStatus: showReadStatus,
+        onListened: onVoiceListened,
       );
     }
     final imageUrl = message.mediaThumbnailUrl.isNotEmpty
@@ -2462,10 +2478,12 @@ class _AudioMessagePlayer extends StatefulWidget {
   const _AudioMessagePlayer({
     required this.message,
     required this.showReadStatus,
+    required this.onListened,
   });
 
   final ChatMessage message;
   final bool showReadStatus;
+  final VoidCallback onListened;
 
   @override
   State<_AudioMessagePlayer> createState() => _AudioMessagePlayerState();
@@ -2478,6 +2496,7 @@ class _AudioMessagePlayerState extends State<_AudioMessagePlayer> {
   StreamSubscription<Duration?>? _durationSub;
   bool _loading = false;
   bool _playing = false;
+  bool _listenedMarked = false;
   Duration _position = Duration.zero;
   Duration _duration = Duration.zero;
 
@@ -2528,12 +2547,19 @@ class _AudioMessagePlayerState extends State<_AudioMessagePlayer> {
         await _player.setUrl(widget.message.mediaUrl);
       }
       await _player.play();
+      _markListenedOnce();
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Не удалось воспроизвести аудио')),
       );
     }
+  }
+
+  void _markListenedOnce() {
+    if (_listenedMarked || widget.message.listenedAt != null) return;
+    _listenedMarked = true;
+    widget.onListened();
   }
 
   @override
@@ -2548,8 +2574,13 @@ class _AudioMessagePlayerState extends State<_AudioMessagePlayer> {
     final displayDuration = knownDuration.inMilliseconds > 0
         ? knownDuration
         : _position;
+    final listened = widget.message.listenedAt != null;
     final read = widget.message.readAt != null;
-    final statusText = read ? 'прочитано' : 'доставлено';
+    final statusText = listened
+        ? 'прослушано'
+        : read
+        ? 'прочитано'
+        : 'доставлено';
     return Container(
       width: 232,
       padding: const EdgeInsets.fromLTRB(10, 10, 12, 10),
@@ -2630,15 +2661,23 @@ class _AudioMessagePlayerState extends State<_AudioMessagePlayer> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
-                        read ? Icons.done_all_rounded : Icons.done_rounded,
+                        listened
+                            ? Icons.graphic_eq_rounded
+                            : read
+                            ? Icons.done_all_rounded
+                            : Icons.done_rounded,
                         size: 14,
-                        color: read ? BrandTheme.redTop : kTextMuted,
+                        color: listened || read
+                            ? BrandTheme.redTop
+                            : kTextMuted,
                       ),
                       const SizedBox(width: 4),
                       Text(
                         statusText,
                         style: TextStyle(
-                          color: read ? BrandTheme.redTop : kTextMuted,
+                          color: listened || read
+                              ? BrandTheme.redTop
+                              : kTextMuted,
                           fontSize: 10,
                           fontWeight: FontWeight.w900,
                           letterSpacing: 0.2,

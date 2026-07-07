@@ -619,6 +619,7 @@ class _ChatVoicePreview extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final unread = item.unreadCount > 0;
+    final listened = item.lastMessageAudioListened;
     final duration = _formatVoicePreviewDuration(item.lastMessageAudioDuration);
     return Row(
       children: [
@@ -650,12 +651,12 @@ class _ChatVoicePreview extends StatelessWidget {
             ),
           ),
         ),
-        if (unread) ...[
+        if (unread || listened) ...[
           const SizedBox(width: 7),
-          const Text(
-            'новое',
+          Text(
+            unread ? 'новое' : 'прослушано',
             style: TextStyle(
-              color: BrandTheme.redTop,
+              color: unread ? BrandTheme.redTop : kTextMuted,
               fontSize: 10,
               fontWeight: FontWeight.w900,
               letterSpacing: 0.5,
