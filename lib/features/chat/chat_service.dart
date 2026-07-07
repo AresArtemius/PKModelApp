@@ -16,6 +16,27 @@ class _ChatActionContext {
   final String agentUserId;
 }
 
+class _ChatContentFlags {
+  const _ChatContentFlags({
+    required this.hasMedia,
+    required this.hasFile,
+    required this.hasAudio,
+    required this.hasPinned,
+  });
+
+  final bool hasMedia;
+  final bool hasFile;
+  final bool hasAudio;
+  final bool hasPinned;
+
+  static const empty = _ChatContentFlags(
+    hasMedia: false,
+    hasFile: false,
+    hasAudio: false,
+    hasPinned: false,
+  );
+}
+
 class ChatService {
   const ChatService(this._sb);
 
@@ -637,6 +658,7 @@ class ChatService {
       final selectionTitle = (selection['title'] ?? '').toString().trim();
       final accountPreview = accountPreviews[otherUserId];
       final latest = await _fetchLatestMessage(chatId);
+      final flags = await _fetchChatContentFlags(chatId);
       final fallbackTime = DateTime.tryParse(
         (map['updated_at'] ?? map['created_at'] ?? '').toString(),
       );
@@ -663,6 +685,11 @@ class ChatService {
         unreadCount: unreadCount,
         pinned: pinnedAt.trim().isNotEmpty,
         archived: isArchived,
+        hasMediaMessages: flags.hasMedia || (latest != null && latest.hasMedia),
+        hasFileMessages: flags.hasFile || (latest != null && latest.isFile),
+        hasAudioMessages: flags.hasAudio || (latest != null && latest.isAudio),
+        hasPinnedMessages:
+            flags.hasPinned || (latest != null && latest.isPinned),
       );
 
       unreadByParticipant[participantKey] =
@@ -694,6 +721,75 @@ class ChatService {
       return bTime.compareTo(aTime);
     });
     return items;
+  }
+
+  Future<_ChatContentFlags> _fetchChatContentFlags(String chatId) async {
+    try {
+      final rows = await _sb
+          .from('selection_chat_messages')
+          .select('media_type,pinned_at')
+          .eq('chat_id', chatId)
+          .filter('deleted_at', 'is', null)
+          .or('media_type.neq.text,pinned_at.not.is.null')
+          .limit(80);
+      var hasMedia = false;
+      var hasFile = false;
+      var hasAudio = false;
+      var hasPinned = false;
+      for (final raw in rows as List) {
+        final map = Map<String, dynamic>.from(raw as Map);
+        final mediaType = (map['media_type'] ?? 'text').toString();
+        if (mediaType != 'text') hasMedia = true;
+        if (mediaType == 'file') hasFile = true;
+        if (mediaType == 'audio') hasAudio = true;
+        if ((map['pinned_at'] ?? '').toString().trim().isNotEmpty) {
+          hasPinned = true;
+        }
+      }
+      return _ChatContentFlags(
+        hasMedia: hasMedia,
+        hasFile: hasFile,
+        hasAudio: hasAudio,
+        hasPinned: hasPinned,
+      );
+    } on PostgrestException catch (e) {
+      if (_isMissingChatPinnedColumn(e)) {
+        return _fetchChatMediaFlagsWithoutPinned(chatId);
+      }
+      return _ChatContentFlags.empty;
+    }
+  }
+
+  Future<_ChatContentFlags> _fetchChatMediaFlagsWithoutPinned(
+    String chatId,
+  ) async {
+    try {
+      final rows = await _sb
+          .from('selection_chat_messages')
+          .select('media_type')
+          .eq('chat_id', chatId)
+          .filter('deleted_at', 'is', null)
+          .neq('media_type', 'text')
+          .limit(80);
+      var hasMedia = false;
+      var hasFile = false;
+      var hasAudio = false;
+      for (final raw in rows as List) {
+        final map = Map<String, dynamic>.from(raw as Map);
+        final mediaType = (map['media_type'] ?? 'text').toString();
+        if (mediaType != 'text') hasMedia = true;
+        if (mediaType == 'file') hasFile = true;
+        if (mediaType == 'audio') hasAudio = true;
+      }
+      return _ChatContentFlags(
+        hasMedia: hasMedia,
+        hasFile: hasFile,
+        hasAudio: hasAudio,
+        hasPinned: false,
+      );
+    } on PostgrestException {
+      return _ChatContentFlags.empty;
+    }
   }
 
   Future<Map<String, _ChatAccountPreview>> _fetchAccountPreviews(
@@ -950,6 +1046,62 @@ class ChatService {
       query: cleanQuery,
       limit: limit,
     );
+  }
+
+  Future<Set<String>> searchMyChatIds({
+    required String query,
+    int limit = 100,
+  }) async {
+    final cleanQuery = query.trim();
+    if (cleanQuery.isEmpty) return const <String>{};
+    Future<List<dynamic>> run({
+      required bool includeFileFields,
+      required bool includePinnedFields,
+    }) async {
+      final fileFields = includeFileFields ? ',file_name,file_mime' : '';
+      final pinnedFields = includePinnedFields ? ',pinned_at' : '';
+      return await _sb
+          .from('selection_chat_messages')
+          .select('chat_id,body,media_type$fileFields$pinnedFields')
+          .filter('deleted_at', 'is', null)
+          .or(_chatSearchOrFilter(cleanQuery, includeFileFields))
+          .order('created_at', ascending: false)
+          .limit(limit.clamp(1, 200));
+    }
+
+    List<dynamic> rows;
+    try {
+      rows = await run(includeFileFields: true, includePinnedFields: true);
+    } on PostgrestException catch (e) {
+      if (_isMissingChatFileColumn(e)) {
+        rows = await run(includeFileFields: false, includePinnedFields: true);
+      } else if (_isMissingChatPinnedColumn(e)) {
+        rows = await run(includeFileFields: true, includePinnedFields: false);
+      } else {
+        rethrow;
+      }
+    }
+
+    return rows
+        .map((raw) => (raw as Map)['chat_id']?.toString() ?? '')
+        .where((id) => id.isNotEmpty)
+        .toSet();
+  }
+
+  String _chatSearchOrFilter(String query, bool includeFileFields) {
+    final escaped = query
+        .replaceAll(RegExp(r'[,()]'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim()
+        .replaceAll('%', r'\%')
+        .replaceAll('*', r'\*');
+    final parts = <String>[
+      'body.ilike.%$escaped%',
+      'media_type.ilike.%$escaped%',
+      if (includeFileFields) 'file_name.ilike.%$escaped%',
+      if (includeFileFields) 'file_mime.ilike.%$escaped%',
+    ];
+    return parts.join(',');
   }
 
   Future<List<ChatMessage>> _searchMessagesFallback({

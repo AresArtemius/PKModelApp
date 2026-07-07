@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:cached_network_image/cached_network_image.dart';
@@ -62,6 +63,48 @@ enum _ChatRoleFilter {
   }
 }
 
+enum _ChatContentFilter {
+  all,
+  unread,
+  pinned,
+  media,
+  files,
+  voice;
+
+  String get label {
+    return switch (this) {
+      _ChatContentFilter.all => 'ВСЕ СООБЩЕНИЯ',
+      _ChatContentFilter.unread => 'НОВЫЕ',
+      _ChatContentFilter.pinned => 'ЗАКРЕП',
+      _ChatContentFilter.media => 'МЕДИА',
+      _ChatContentFilter.files => 'ФАЙЛЫ',
+      _ChatContentFilter.voice => 'ГОЛОСОВЫЕ',
+    };
+  }
+
+  IconData get icon {
+    return switch (this) {
+      _ChatContentFilter.all => Icons.all_inbox_rounded,
+      _ChatContentFilter.unread => Icons.mark_chat_unread_rounded,
+      _ChatContentFilter.pinned => Icons.push_pin_rounded,
+      _ChatContentFilter.media => Icons.photo_library_rounded,
+      _ChatContentFilter.files => Icons.attach_file_rounded,
+      _ChatContentFilter.voice => Icons.mic_rounded,
+    };
+  }
+
+  bool matches(ChatListItem item) {
+    return switch (this) {
+      _ChatContentFilter.all => true,
+      _ChatContentFilter.unread => item.unreadCount > 0,
+      _ChatContentFilter.pinned => item.pinned || item.hasPinnedMessages,
+      _ChatContentFilter.media => item.hasMediaMessages,
+      _ChatContentFilter.files => item.hasFileMessages,
+      _ChatContentFilter.voice => item.hasAudioMessages,
+    };
+  }
+}
+
 TextStyle _chatTitleStyle({
   Color color = kTextDark,
   double size = 18,
@@ -93,23 +136,69 @@ class ChatsPage extends ConsumerStatefulWidget {
 
 class _ChatsPageState extends ConsumerState<ChatsPage> {
   final _searchController = TextEditingController();
+  Timer? _searchDebounceTimer;
   String _query = '';
+  String _serverSearchQuery = '';
+  Set<String> _serverSearchChatIds = const <String>{};
+  bool _serverSearchLoading = false;
   String? _selectedChatId;
   bool _archived = false;
   _ChatRoleFilter _roleFilter = _ChatRoleFilter.all;
+  _ChatContentFilter _contentFilter = _ChatContentFilter.all;
 
   @override
   void initState() {
     super.initState();
     _searchController.addListener(() {
-      setState(() => _query = _searchController.text);
+      final value = _searchController.text;
+      setState(() => _query = value);
+      _scheduleServerChatSearch(value);
     });
   }
 
   @override
   void dispose() {
+    _searchDebounceTimer?.cancel();
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _scheduleServerChatSearch(String value) {
+    _searchDebounceTimer?.cancel();
+    final query = value.trim();
+    if (query.isEmpty) {
+      setState(() {
+        _serverSearchQuery = '';
+        _serverSearchChatIds = const <String>{};
+        _serverSearchLoading = false;
+      });
+      return;
+    }
+    setState(() => _serverSearchLoading = true);
+    _searchDebounceTimer = Timer(const Duration(milliseconds: 320), () {
+      unawaited(_runServerChatSearch(query));
+    });
+  }
+
+  Future<void> _runServerChatSearch(String query) async {
+    try {
+      final ids = await ref
+          .read(chatServiceProvider)
+          .searchMyChatIds(query: query);
+      if (!mounted || _query.trim() != query) return;
+      setState(() {
+        _serverSearchQuery = query;
+        _serverSearchChatIds = ids;
+        _serverSearchLoading = false;
+      });
+    } catch (_) {
+      if (!mounted || _query.trim() != query) return;
+      setState(() {
+        _serverSearchQuery = query;
+        _serverSearchChatIds = const <String>{};
+        _serverSearchLoading = false;
+      });
+    }
   }
 
   Future<void> _setPinned(ChatListItem item, bool value) async {
@@ -160,13 +249,26 @@ class _ChatsPageState extends ConsumerState<ChatsPage> {
                     onInvitations: () => context.go(Routes.invitations),
                   ),
                   const SizedBox(height: 14),
-                  _ChatsSearch(controller: _searchController),
+                  _ChatsSearch(
+                    controller: _searchController,
+                    loading: _serverSearchLoading,
+                  ),
                   const SizedBox(height: 14),
                   _ChatRoleSegments(
                     value: _roleFilter,
                     onChanged: (value) {
                       setState(() {
                         _roleFilter = value;
+                        _selectedChatId = null;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                  _ChatContentSegments(
+                    value: _contentFilter,
+                    onChanged: (value) {
+                      setState(() {
+                        _contentFilter = value;
                         _selectedChatId = null;
                       });
                     },
@@ -182,19 +284,28 @@ class _ChatsPageState extends ConsumerState<ChatsPage> {
                       ),
                       data: (items) {
                         final visible = items
-                            .where(
-                              (item) =>
-                                  item.matches(_query) &&
-                                  _roleFilter.matches(item),
-                            )
+                            .where((item) {
+                              final query = _query.trim();
+                              final localMatch = item.matches(query);
+                              final serverMatch =
+                                  _serverSearchQuery == query &&
+                                  _serverSearchChatIds.contains(item.id);
+                              return (localMatch || serverMatch) &&
+                                  _roleFilter.matches(item) &&
+                                  _contentFilter.matches(item);
+                            })
                             .toList(growable: false);
                         if (visible.isEmpty) {
                           return _ChatsEmptyState(
                             title: _archived
                                 ? 'АРХИВ ПУСТ'
-                                : _roleFilter.emptyTitle,
+                                : _contentFilter == _ChatContentFilter.all
+                                ? _roleFilter.emptyTitle
+                                : 'НИЧЕГО НЕ НАЙДЕНО',
                             message: _archived
                                 ? 'Архивированные диалоги появятся здесь.'
+                                : _contentFilter != _ChatContentFilter.all
+                                ? 'Попробуйте другой фильтр или очистите поиск.'
                                 : _roleFilter.emptyMessage,
                           );
                         }
@@ -314,9 +425,10 @@ class _ArchiveToggle extends StatelessWidget {
 }
 
 class _ChatsSearch extends StatelessWidget {
-  const _ChatsSearch({required this.controller});
+  const _ChatsSearch({required this.controller, required this.loading});
 
   final TextEditingController controller;
+  final bool loading;
 
   @override
   Widget build(BuildContext context) {
@@ -337,6 +449,15 @@ class _ChatsSearch extends StatelessWidget {
               ),
             ),
           ),
+          if (loading)
+            const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: kTextMuted,
+              ),
+            ),
         ],
       ),
     );
@@ -444,6 +565,77 @@ class _ChatRoleSegments extends StatelessWidget {
                           spacing: 1,
                           weight: FontWeight.w900,
                         ),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            })
+            .toList(growable: false),
+      ),
+    );
+  }
+}
+
+class _ChatContentSegments extends StatelessWidget {
+  const _ChatContentSegments({required this.value, required this.onChanged});
+
+  final _ChatContentFilter value;
+  final ValueChanged<_ChatContentFilter> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: _ChatContentFilter.values
+            .map((filter) {
+              final selected = filter == value;
+              return Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(999),
+                    onTap: () => onChanged(filter),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 160),
+                      height: 38,
+                      alignment: Alignment.center,
+                      padding: const EdgeInsets.symmetric(horizontal: 13),
+                      decoration: BoxDecoration(
+                        color: selected
+                            ? kTextDark
+                            : Colors.white.withValues(alpha: 0.78),
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(
+                          color: selected
+                              ? kTextDark
+                              : kBorderColor.withValues(alpha: 0.82),
+                        ),
+                        boxShadow: selected
+                            ? BrandTheme.basePillShadow(isDark: true)
+                            : const [],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            filter.icon,
+                            size: 15,
+                            color: selected ? Colors.white : kTextMuted,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            filter.label,
+                            style: _chatTitleStyle(
+                              color: selected ? Colors.white : kTextMuted,
+                              size: 10,
+                              spacing: 0.8,
+                              weight: FontWeight.w900,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),

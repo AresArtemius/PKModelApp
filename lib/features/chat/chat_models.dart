@@ -166,6 +166,10 @@ class ChatListItem {
     required this.unreadCount,
     required this.pinned,
     required this.archived,
+    required this.hasMediaMessages,
+    required this.hasFileMessages,
+    required this.hasAudioMessages,
+    required this.hasPinnedMessages,
   });
 
   final String id;
@@ -182,6 +186,10 @@ class ChatListItem {
   final int unreadCount;
   final bool pinned;
   final bool archived;
+  final bool hasMediaMessages;
+  final bool hasFileMessages;
+  final bool hasAudioMessages;
+  final bool hasPinnedMessages;
   bool get lastMessageIsAudio => lastMessageMediaType == 'audio';
   bool get lastMessageAudioListened => lastMessageListenedAt != null;
   Duration? get lastMessageAudioDuration =>
@@ -202,6 +210,10 @@ class ChatListItem {
     int? unreadCount,
     bool? pinned,
     bool? archived,
+    bool? hasMediaMessages,
+    bool? hasFileMessages,
+    bool? hasAudioMessages,
+    bool? hasPinnedMessages,
   }) {
     return ChatListItem(
       id: id ?? this.id,
@@ -219,6 +231,10 @@ class ChatListItem {
       unreadCount: unreadCount ?? this.unreadCount,
       pinned: pinned ?? this.pinned,
       archived: archived ?? this.archived,
+      hasMediaMessages: hasMediaMessages ?? this.hasMediaMessages,
+      hasFileMessages: hasFileMessages ?? this.hasFileMessages,
+      hasAudioMessages: hasAudioMessages ?? this.hasAudioMessages,
+      hasPinnedMessages: hasPinnedMessages ?? this.hasPinnedMessages,
     );
   }
 
@@ -236,7 +252,11 @@ class ChatListItem {
     return title.toLowerCase().contains(q) ||
         contextLabel.toLowerCase().contains(q) ||
         participantRole.label.toLowerCase().contains(q) ||
-        lastMessage.toLowerCase().contains(q);
+        lastMessage.toLowerCase().contains(q) ||
+        (hasMediaMessages && 'медиа media фото video видео'.contains(q)) ||
+        (hasFileMessages && 'файл file документ document'.contains(q)) ||
+        (hasAudioMessages && 'голосовое audio voice аудио'.contains(q)) ||
+        (hasPinnedMessages && 'закреп pinned pin'.contains(q));
   }
 }
 
