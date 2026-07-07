@@ -290,6 +290,79 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     );
   }
 
+  Future<void> _jumpToMessage(
+    String messageId,
+    List<ChatMessage> visibleMessages,
+  ) async {
+    final targetIndex = visibleMessages.indexWhere(
+      (item) => item.id == messageId,
+    );
+    if (targetIndex == -1) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _isRussian
+                ? 'Сообщение выше в истории. Загрузите старые сообщения.'
+                : 'This message is earlier in history. Load older messages.',
+          ),
+        ),
+      );
+      return;
+    }
+    final reverseBuilderIndex = visibleMessages.length - 1 - targetIndex;
+    const estimatedMessageExtent = 96.0;
+    final targetOffset = reverseBuilderIndex * estimatedMessageExtent;
+    setState(() => _activeSearchMessageId = messageId);
+    if (!_messageListController.hasClients) return;
+    final clampedOffset = targetOffset
+        .clamp(0.0, _messageListController.position.maxScrollExtent)
+        .toDouble();
+    await _messageListController.animateTo(
+      clampedOffset,
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  List<ChatMessage> _pinnedMessagesForPanel(
+    List<ChatMessage> fetched,
+    List<ChatMessage> visible,
+  ) {
+    final byId = <String, ChatMessage>{};
+    for (final message in fetched) {
+      if (message.isPinned && !message.isDeleted) byId[message.id] = message;
+    }
+    for (final message in visible) {
+      if (message.isPinned && !message.isDeleted) byId[message.id] = message;
+    }
+    final result = byId.values.toList(growable: false);
+    result.sort((a, b) {
+      final aTime = a.pinnedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final bTime = b.pinnedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+      return bTime.compareTo(aTime);
+    });
+    return result;
+  }
+
+  Future<void> _setMessagePinned(ChatMessage message, bool pinned) async {
+    try {
+      await ref
+          .read(chatServiceProvider)
+          .setMessagePinned(messageId: message.id, pinned: pinned);
+      ref.invalidate(pinnedChatMessagesProvider(widget.chatId));
+      ref.invalidate(chatMessagesProvider(widget.chatId));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            AppErrorMapper.message(error, AppLocalizations.of(context)!),
+          ),
+        ),
+      );
+    }
+  }
+
   bool get _isRussian =>
       Localizations.localeOf(context).languageCode.toLowerCase() == 'ru';
 
@@ -678,6 +751,18 @@ class _ChatPageState extends ConsumerState<ChatPage> {
               setState(() => _replyingTo = message);
             },
           ),
+          _ActionSheetTile(
+            icon: message.isPinned
+                ? Icons.push_pin_rounded
+                : Icons.push_pin_outlined,
+            title: message.isPinned
+                ? (_isRussian ? 'Открепить' : 'Unpin')
+                : (_isRussian ? 'Закрепить' : 'Pin'),
+            onTap: () async {
+              Navigator.of(context).pop();
+              await _setMessagePinned(message, !message.isPinned);
+            },
+          ),
           if (mine)
             _ActionSheetTile(
               icon: Icons.checklist_rounded,
@@ -821,6 +906,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     final t = AppLocalizations.of(context)!;
     final userId = ref.watch(currentUserIdProvider) ?? '';
     final messages = ref.watch(chatMessagesProvider(widget.chatId));
+    final pinnedMessages = ref.watch(pinnedChatMessagesProvider(widget.chatId));
     final typingStates = ref.watch(chatTypingStatesProvider(widget.chatId));
     final summary = ref.watch(chatSummaryProvider(widget.chatId));
     final contexts = ref.watch(chatContextsProvider(widget.chatId));
@@ -830,6 +916,10 @@ class _ChatPageState extends ConsumerState<ChatPage> {
         ? const <ChatMessage>[]
         : _mergedMessages(messages.valueOrNull!);
     final searchHits = _searchHits(searchVisibleMessages);
+    final pinnedPanelMessages = _pinnedMessagesForPanel(
+      pinnedMessages.valueOrNull ?? const <ChatMessage>[],
+      searchVisibleMessages,
+    );
     final searchPosition = searchHits.isEmpty
         ? 0
         : _searchHitCursor.clamp(0, searchHits.length - 1).toInt() + 1;
@@ -906,6 +996,17 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                     summary: chatContext,
                     contexts:
                         contexts.valueOrNull ?? const <ChatContextEntry>[],
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                if (pinnedPanelMessages.isNotEmpty) ...[
+                  _PinnedMessagesPanel(
+                    messages: pinnedPanelMessages,
+                    isRussian: _isRussian,
+                    previewBuilder: _replyPreviewText,
+                    onTap: (message) =>
+                        _jumpToMessage(message.id, searchVisibleMessages),
+                    onUnpin: (message) => _setMessagePinned(message, false),
                   ),
                   const SizedBox(height: 12),
                 ],
@@ -1086,6 +1187,132 @@ class _LoadOlderMessagesButton extends StatelessWidget {
                   ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _PinnedMessagesPanel extends StatelessWidget {
+  const _PinnedMessagesPanel({
+    required this.messages,
+    required this.isRussian,
+    required this.previewBuilder,
+    required this.onTap,
+    required this.onUnpin,
+  });
+
+  final List<ChatMessage> messages;
+  final bool isRussian;
+  final String Function(ChatMessage message) previewBuilder;
+  final ValueChanged<ChatMessage> onTap;
+  final ValueChanged<ChatMessage> onUnpin;
+
+  @override
+  Widget build(BuildContext context) {
+    final visibleMessages = messages.take(3).toList(growable: false);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: kBorderColor),
+        boxShadow: BrandTheme.basePillShadow(isDark: false),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.push_pin_rounded,
+                size: 18,
+                color: BrandTheme.redTop,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                isRussian ? 'ЗАКРЕПЛЕНО' : 'PINNED',
+                style: const TextStyle(
+                  color: kTextDark,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.3,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                messages.length.toString(),
+                style: const TextStyle(
+                  color: kTextMuted,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          for (final message in visibleMessages)
+            _PinnedMessageRow(
+              message: message,
+              preview: previewBuilder(message),
+              isRussian: isRussian,
+              onTap: () => onTap(message),
+              onUnpin: () => onUnpin(message),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PinnedMessageRow extends StatelessWidget {
+  const _PinnedMessageRow({
+    required this.message,
+    required this.preview,
+    required this.isRussian,
+    required this.onTap,
+    required this.onUnpin,
+  });
+
+  final ChatMessage message;
+  final String preview;
+  final bool isRussian;
+  final VoidCallback onTap;
+  final VoidCallback onUnpin;
+
+  @override
+  Widget build(BuildContext context) {
+    final cleanPreview = preview.trim().isEmpty
+        ? (isRussian ? 'Сообщение' : 'Message')
+        : preview.trim();
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Row(
+        children: [
+          Expanded(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onTap,
+              child: Text(
+                cleanPreview,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: kTextMuted,
+                  fontWeight: FontWeight.w800,
+                  height: 1.2,
+                ),
+              ),
+            ),
+          ),
+          IconButton(
+            tooltip: isRussian ? 'Открепить' : 'Unpin',
+            onPressed: onUnpin,
+            icon: const Icon(Icons.close_rounded, size: 18),
+            color: kTextMuted,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints.tightFor(width: 34, height: 34),
+          ),
+        ],
       ),
     );
   }
@@ -1812,6 +2039,26 @@ class _MessageBubble extends StatelessWidget {
                     Icons.check_rounded,
                     size: 15,
                     color: Colors.white,
+                  ),
+                ),
+              ),
+            if (message.isPinned)
+              Positioned(
+                top: -7,
+                right: mine ? null : -7,
+                left: mine ? -7 : null,
+                child: Container(
+                  width: 24,
+                  height: 24,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: BrandTheme.redTop, width: 2),
+                  ),
+                  child: const Icon(
+                    Icons.push_pin_rounded,
+                    size: 13,
+                    color: BrandTheme.redTop,
                   ),
                 ),
               ),

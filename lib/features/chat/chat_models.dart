@@ -339,6 +339,8 @@ class ChatMessage {
     required this.fileMime,
     required this.deletedAt,
     required this.readAt,
+    required this.pinnedAt,
+    required this.pinnedBy,
     required this.createdAt,
   });
 
@@ -354,9 +356,12 @@ class ChatMessage {
   final String fileMime;
   final DateTime? deletedAt;
   final DateTime? readAt;
+  final DateTime? pinnedAt;
+  final String pinnedBy;
   final DateTime? createdAt;
 
   bool get isDeleted => deletedAt != null;
+  bool get isPinned => pinnedAt != null;
   bool get hasMedia => mediaUrl.trim().isNotEmpty;
   bool get isImage => mediaType == 'image';
   bool get isVideo => mediaType == 'video';
@@ -383,6 +388,8 @@ class ChatMessage {
       fileMime: (map['file_mime'] ?? '').toString().trim(),
       deletedAt: DateTime.tryParse((map['deleted_at'] ?? '').toString()),
       readAt: DateTime.tryParse((map['read_at'] ?? '').toString()),
+      pinnedAt: DateTime.tryParse((map['pinned_at'] ?? '').toString()),
+      pinnedBy: (map['pinned_by'] ?? '').toString(),
       createdAt: DateTime.tryParse((map['created_at'] ?? '').toString()),
     );
   }

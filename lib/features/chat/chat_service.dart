@@ -32,10 +32,12 @@ class ChatService {
   String _messageSelect({
     bool includeReadAt = false,
     bool includeFileFields = true,
+    bool includePinnedFields = false,
   }) {
     final readAt = includeReadAt ? ',read_at' : '';
     final fileFields = includeFileFields ? _fileMessageFields : '';
-    return '$_baseMessageSelect$readAt$fileFields';
+    final pinnedFields = includePinnedFields ? ',pinned_at,pinned_by' : '';
+    return '$_baseMessageSelect$readAt$fileFields$pinnedFields';
   }
 
   Future<List<CastingInvitation>> fetchMyInvitations(String userId) async {
@@ -244,6 +246,11 @@ class ChatService {
     return SupabaseCompat.isMissingColumn(e, 'file_name') ||
         SupabaseCompat.isMissingColumn(e, 'file_size') ||
         SupabaseCompat.isMissingColumn(e, 'file_mime');
+  }
+
+  bool _isMissingChatPinnedColumn(PostgrestException e) {
+    return SupabaseCompat.isMissingColumn(e, 'pinned_at') ||
+        SupabaseCompat.isMissingColumn(e, 'pinned_by');
   }
 
   Future<String> ensureSelectionChat({
@@ -879,6 +886,8 @@ class ChatService {
             .lt('created_at', before.toUtc().toIso8601String())
             .order('created_at', ascending: false)
             .limit(limit);
+      } else if (_isMissingChatPinnedColumn(e)) {
+        rows = await run(includeReadAt: true);
       } else if (!SupabaseCompat.isMissingColumn(e, 'read_at')) {
         rethrow;
       } else {
@@ -892,6 +901,37 @@ class ChatService {
         .toList(growable: false)
         .reversed
         .toList(growable: false);
+  }
+
+  Future<List<ChatMessage>> fetchPinnedMessages(String chatId) async {
+    if (chatId.trim().isEmpty) return const <ChatMessage>[];
+
+    Future<List<dynamic>> run({required bool includePinnedFields}) async {
+      return await _sb
+          .from('selection_chat_messages')
+          .select(
+            _messageSelect(
+              includeReadAt: true,
+              includePinnedFields: includePinnedFields,
+            ),
+          )
+          .eq('chat_id', chatId)
+          .filter('deleted_at', 'is', null)
+          .filter('pinned_at', 'not.is', null)
+          .order('pinned_at', ascending: false)
+          .limit(5);
+    }
+
+    try {
+      final rows = await run(includePinnedFields: true);
+      return rows
+          .map((e) => ChatMessage.fromMap(Map<String, dynamic>.from(e as Map)))
+          .where((e) => !e.isDeleted && e.isPinned)
+          .toList(growable: false);
+    } on PostgrestException catch (e) {
+      if (_isMissingChatPinnedColumn(e)) return const <ChatMessage>[];
+      rethrow;
+    }
   }
 
   Future<Map<String, String>> fetchChatParticipantAvatars(String chatId) async {
@@ -1189,6 +1229,43 @@ class ChatService {
       if (!SupabaseCompat.isMissingRpc(e, 'set_selection_chat_archived')) {
         rethrow;
       }
+    }
+  }
+
+  Future<void> setMessagePinned({
+    required String messageId,
+    required bool pinned,
+  }) async {
+    final userId = _sb.auth.currentUser?.id;
+    if (userId == null || messageId.trim().isEmpty) return;
+
+    try {
+      await _sb.rpc(
+        'set_selection_chat_message_pinned',
+        params: {'p_message_id': messageId, 'p_pinned': pinned},
+      );
+      return;
+    } on PostgrestException catch (e) {
+      if (!SupabaseCompat.isMissingRpc(
+        e,
+        'set_selection_chat_message_pinned',
+      )) {
+        rethrow;
+      }
+    }
+
+    try {
+      await _sb
+          .from('selection_chat_messages')
+          .update({
+            'pinned_at': pinned
+                ? DateTime.now().toUtc().toIso8601String()
+                : null,
+            'pinned_by': pinned ? userId : null,
+          })
+          .eq('id', messageId);
+    } on PostgrestException catch (e) {
+      if (!_isMissingChatPinnedColumn(e)) rethrow;
     }
   }
 

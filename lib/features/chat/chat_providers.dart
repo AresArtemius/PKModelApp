@@ -35,6 +35,11 @@ final chatMessagesProvider = StreamProvider.autoDispose
       return ref.watch(chatServiceProvider).watchMessages(chatId);
     });
 
+final pinnedChatMessagesProvider = FutureProvider.autoDispose
+    .family<List<ChatMessage>, String>((ref, chatId) {
+      return ref.watch(chatServiceProvider).fetchPinnedMessages(chatId);
+    });
+
 final chatReactionsProvider = StreamProvider.autoDispose
     .family<List<ChatReaction>, String>((ref, chatId) {
       return ref.watch(chatServiceProvider).watchReactions(chatId);
