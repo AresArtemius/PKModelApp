@@ -68,12 +68,18 @@ class ChatPage extends ConsumerStatefulWidget {
 
 class _ChatPageState extends ConsumerState<ChatPage> {
   final _messageController = TextEditingController();
+  final _searchController = TextEditingController();
+  final _messageListController = ScrollController();
   bool _sending = false;
   bool _uploadingMedia = false;
   bool _loadingOlderMessages = false;
   bool _hasOlderMessages = true;
   ChatMessage? _replyingTo;
   final Set<String> _selectedMessageIds = <String>{};
+  bool _searchOpen = false;
+  String _searchQuery = '';
+  int _searchHitCursor = 0;
+  String? _activeSearchMessageId;
   _PendingChatAttachment? _pendingAttachment;
   DateTime? _lastTypingSentAt;
   Timer? _typingStopTimer;
@@ -92,6 +98,11 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     _loadingOlderMessages = false;
     _replyingTo = null;
     _selectedMessageIds.clear();
+    _searchOpen = false;
+    _searchQuery = '';
+    _searchHitCursor = 0;
+    _activeSearchMessageId = null;
+    _searchController.clear();
     _pendingAttachment = null;
     _lastTypingSentAt = null;
   }
@@ -108,6 +119,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     unawaited(_setTyping(false));
     _messageController.removeListener(_handleTypingChanged);
     _messageController.dispose();
+    _searchController.dispose();
+    _messageListController.dispose();
     super.dispose();
   }
 
@@ -199,6 +212,82 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     final compact = source.replaceAll(RegExp(r'\s+'), ' ').trim();
     if (compact.length <= 90) return compact;
     return '${compact.substring(0, 90)}...';
+  }
+
+  String _messageSearchText(ChatMessage message) {
+    final parsed = _ParsedMessageBody.from(message.body);
+    final parts = <String>[
+      parsed.replyQuote,
+      parsed.body,
+      if (message.isImage) _isRussian ? 'фото изображение' : 'photo image',
+      if (message.isVideo) _isRussian ? 'видео' : 'video',
+      if (message.isFile) message.fileDisplayName,
+    ];
+    return parts.join(' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+  }
+
+  List<ChatMessage> _searchHits(List<ChatMessage> messages) {
+    final query = _searchQuery.trim().toLowerCase();
+    if (query.isEmpty) return const <ChatMessage>[];
+    return messages
+        .where(
+          (message) =>
+              _messageSearchText(message).toLowerCase().contains(query),
+        )
+        .toList(growable: false);
+  }
+
+  void _toggleSearch() {
+    setState(() {
+      _searchOpen = !_searchOpen;
+      if (!_searchOpen) {
+        _searchQuery = '';
+        _searchHitCursor = 0;
+        _activeSearchMessageId = null;
+        _searchController.clear();
+      }
+    });
+  }
+
+  void _handleSearchChanged(String value) {
+    setState(() {
+      _searchQuery = value;
+      _searchHitCursor = 0;
+      _activeSearchMessageId = null;
+    });
+  }
+
+  Future<void> _jumpToSearchHit(
+    List<ChatMessage> visibleMessages,
+    List<ChatMessage> hits, {
+    required int direction,
+  }) async {
+    if (hits.isEmpty || visibleMessages.isEmpty) return;
+    final nextCursor = direction == 0
+        ? _searchHitCursor.clamp(0, hits.length - 1).toInt()
+        : (_searchHitCursor + direction) % hits.length;
+    final safeCursor = nextCursor < 0 ? hits.length - 1 : nextCursor;
+    final target = hits[safeCursor];
+    final targetIndex = visibleMessages.indexWhere(
+      (item) => item.id == target.id,
+    );
+    if (targetIndex == -1) return;
+    final reverseBuilderIndex = visibleMessages.length - 1 - targetIndex;
+    const estimatedMessageExtent = 96.0;
+    final targetOffset = reverseBuilderIndex * estimatedMessageExtent;
+    setState(() {
+      _searchHitCursor = safeCursor;
+      _activeSearchMessageId = target.id;
+    });
+    if (!_messageListController.hasClients) return;
+    final clampedOffset = targetOffset
+        .clamp(0.0, _messageListController.position.maxScrollExtent)
+        .toDouble();
+    await _messageListController.animateTo(
+      clampedOffset,
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOutCubic,
+    );
   }
 
   bool get _isRussian =>
@@ -737,6 +826,13 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     final contexts = ref.watch(chatContextsProvider(widget.chatId));
     final avatars = ref.watch(chatParticipantAvatarsProvider(widget.chatId));
     final avatarMap = avatars.valueOrNull ?? const <String, String>{};
+    final searchVisibleMessages = messages.valueOrNull == null
+        ? const <ChatMessage>[]
+        : _mergedMessages(messages.valueOrNull!);
+    final searchHits = _searchHits(searchVisibleMessages);
+    final searchPosition = searchHits.isEmpty
+        ? 0
+        : _searchHitCursor.clamp(0, searchHits.length - 1).toInt() + 1;
     final headerData = summary.maybeWhen(
       data: (value) {
         final title = (value?.accountTitle ?? '').trim();
@@ -772,9 +868,37 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                   onBack: widget.embedded
                       ? widget.onClose
                       : () => context.pop(),
+                  onSearch: _toggleSearch,
+                  searchActive: _searchOpen,
                   onDeleteChat: _deleteChat,
                 ),
                 const SizedBox(height: 12),
+                if (_searchOpen) ...[
+                  _ChatSearchPanel(
+                    controller: _searchController,
+                    query: _searchQuery,
+                    hitCount: searchHits.length,
+                    currentPosition: searchPosition,
+                    onChanged: _handleSearchChanged,
+                    onClose: _toggleSearch,
+                    onPrevious: () => _jumpToSearchHit(
+                      searchVisibleMessages,
+                      searchHits,
+                      direction: -1,
+                    ),
+                    onNext: () => _jumpToSearchHit(
+                      searchVisibleMessages,
+                      searchHits,
+                      direction: 1,
+                    ),
+                    onSubmitted: () => _jumpToSearchHit(
+                      searchVisibleMessages,
+                      searchHits,
+                      direction: 0,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 if (chatContext != null &&
                     (chatContext.profileName.trim().isNotEmpty ||
                         chatContext.selectionTitle.trim().isNotEmpty)) ...[
@@ -820,6 +944,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                               }
 
                               return ListView.builder(
+                                controller: _messageListController,
                                 reverse: true,
                                 itemCount:
                                     visibleMessages.length +
@@ -847,6 +972,9 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                                     selected: _selectedMessageIds.contains(
                                       item.id,
                                     ),
+                                    searchQuery: _searchQuery,
+                                    activeSearchResult:
+                                        _activeSearchMessageId == item.id,
                                     onTap: _selectionMode
                                         ? () => _toggleMessageSelection(
                                             item,
@@ -963,6 +1091,114 @@ class _LoadOlderMessagesButton extends StatelessWidget {
   }
 }
 
+class _ChatSearchPanel extends StatelessWidget {
+  const _ChatSearchPanel({
+    required this.controller,
+    required this.query,
+    required this.hitCount,
+    required this.currentPosition,
+    required this.onChanged,
+    required this.onClose,
+    required this.onPrevious,
+    required this.onNext,
+    required this.onSubmitted,
+  });
+
+  final TextEditingController controller;
+  final String query;
+  final int hitCount;
+  final int currentPosition;
+  final ValueChanged<String> onChanged;
+  final VoidCallback onClose;
+  final VoidCallback onPrevious;
+  final VoidCallback onNext;
+  final VoidCallback onSubmitted;
+
+  @override
+  Widget build(BuildContext context) {
+    final isRussian =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ru';
+    final hasQuery = query.trim().isNotEmpty;
+    final hasHits = hitCount > 0;
+    final statusText = !hasQuery
+        ? (isRussian ? 'Поиск' : 'Search')
+        : hasHits
+        ? '$currentPosition / $hitCount'
+        : (isRussian ? 'Нет' : 'None');
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: kBorderColor),
+        boxShadow: BrandTheme.basePillShadow(isDark: false),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.search_rounded, color: kTextDark, size: 22),
+          const SizedBox(width: 8),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              autofocus: true,
+              onChanged: onChanged,
+              onSubmitted: (_) => onSubmitted(),
+              textInputAction: TextInputAction.search,
+              decoration: InputDecoration(
+                hintText: isRussian ? 'Поиск по сообщениям' : 'Search messages',
+                border: InputBorder.none,
+                isDense: true,
+                hintStyle: const TextStyle(
+                  color: kTextMuted,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              style: const TextStyle(
+                color: kTextDark,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          ConstrainedBox(
+            constraints: const BoxConstraints(minWidth: 46, maxWidth: 86),
+            child: Text(
+              statusText,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: hasQuery && !hasHits ? BrandTheme.redTop : kTextMuted,
+                fontSize: 12,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 0,
+              ),
+            ),
+          ),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            onPressed: hasHits ? onPrevious : null,
+            icon: const Icon(Icons.keyboard_arrow_up_rounded),
+            color: kTextDark,
+          ),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            onPressed: hasHits ? onNext : null,
+            icon: const Icon(Icons.keyboard_arrow_down_rounded),
+            color: kTextDark,
+          ),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            onPressed: onClose,
+            icon: const Icon(Icons.close_rounded),
+            color: kTextDark,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ChatHeaderData {
   const _ChatHeaderData({
     required this.title,
@@ -981,6 +1217,8 @@ class _ChatHeader extends StatelessWidget {
     required this.subtitle,
     required this.avatarUrl,
     required this.onBack,
+    required this.onSearch,
+    required this.searchActive,
     required this.onDeleteChat,
   });
 
@@ -988,6 +1226,8 @@ class _ChatHeader extends StatelessWidget {
   final String subtitle;
   final String avatarUrl;
   final VoidCallback? onBack;
+  final VoidCallback onSearch;
+  final bool searchActive;
   final VoidCallback onDeleteChat;
 
   @override
@@ -1044,7 +1284,18 @@ class _ChatHeader extends StatelessWidget {
             ),
           ),
         ),
-        _IconPill(icon: Icons.delete_outline_rounded, onTap: onDeleteChat),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _IconPill(
+              icon: Icons.search_rounded,
+              onTap: onSearch,
+              active: searchActive,
+            ),
+            const SizedBox(width: 8),
+            _IconPill(icon: Icons.delete_outline_rounded, onTap: onDeleteChat),
+          ],
+        ),
       ],
     );
   }
@@ -1460,6 +1711,8 @@ class _MessageBubble extends StatelessWidget {
     required this.showReadStatus,
     required this.onMediaTap,
     required this.selected,
+    required this.searchQuery,
+    required this.activeSearchResult,
     required this.onTap,
     required this.onLongPress,
   });
@@ -1469,6 +1722,8 @@ class _MessageBubble extends StatelessWidget {
   final String avatarUrl;
   final bool showReadStatus;
   final bool selected;
+  final String searchQuery;
+  final bool activeSearchResult;
   final VoidCallback onMediaTap;
   final VoidCallback? onTap;
   final VoidCallback onLongPress;
@@ -1490,11 +1745,17 @@ class _MessageBubble extends StatelessWidget {
         constraints: const BoxConstraints(maxWidth: 244),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: mine ? kTextDark : Colors.white.withValues(alpha: 0.82),
+          color: activeSearchResult
+              ? BrandTheme.redTop.withValues(alpha: mine ? 0.92 : 0.08)
+              : mine
+              ? kTextDark
+              : Colors.white.withValues(alpha: 0.82),
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
-            color: selected ? BrandTheme.redTop : kBorderColor,
-            width: selected ? 2 : 1,
+            color: selected || activeSearchResult
+                ? BrandTheme.redTop
+                : kBorderColor,
+            width: selected || activeSearchResult ? 2 : 1,
           ),
         ),
         child: Column(
@@ -1509,13 +1770,17 @@ class _MessageBubble extends StatelessWidget {
               if (visibleBody.isNotEmpty) const SizedBox(height: 8),
             ],
             if (visibleBody.isNotEmpty)
-              Text(
-                visibleBody,
+              _HighlightedMessageText(
+                text: visibleBody,
+                query: searchQuery,
                 style: TextStyle(
                   color: mine ? Colors.white : kTextDark,
                   fontWeight: FontWeight.w700,
                   height: 1.25,
                 ),
+                highlightColor: mine
+                    ? Colors.white.withValues(alpha: 0.22)
+                    : BrandTheme.redTop.withValues(alpha: 0.18),
               ),
           ],
         ),
@@ -1600,6 +1865,58 @@ class _ParsedMessageBody {
       body: withoutPrefix
           .substring(separatorIndex + _replySeparator.length)
           .trim(),
+    );
+  }
+}
+
+class _HighlightedMessageText extends StatelessWidget {
+  const _HighlightedMessageText({
+    required this.text,
+    required this.query,
+    required this.style,
+    required this.highlightColor,
+  });
+
+  final String text;
+  final String query;
+  final TextStyle style;
+  final Color highlightColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final cleanQuery = query.trim();
+    if (cleanQuery.isEmpty || text.isEmpty) return Text(text, style: style);
+
+    final lowerText = text.toLowerCase();
+    final lowerQuery = cleanQuery.toLowerCase();
+    final spans = <TextSpan>[];
+    var cursor = 0;
+
+    while (cursor < text.length) {
+      final index = lowerText.indexOf(lowerQuery, cursor);
+      if (index < 0) break;
+      if (index > cursor) {
+        spans.add(TextSpan(text: text.substring(cursor, index)));
+      }
+      spans.add(
+        TextSpan(
+          text: text.substring(index, index + lowerQuery.length),
+          style: style.copyWith(
+            backgroundColor: highlightColor,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      );
+      cursor = index + lowerQuery.length;
+    }
+
+    if (spans.isEmpty) return Text(text, style: style);
+    if (cursor < text.length) {
+      spans.add(TextSpan(text: text.substring(cursor)));
+    }
+
+    return RichText(
+      text: TextSpan(style: style, children: spans),
     );
   }
 }
@@ -2557,10 +2874,15 @@ class _ActionSheetTile extends StatelessWidget {
 }
 
 class _IconPill extends StatelessWidget {
-  const _IconPill({required this.icon, required this.onTap});
+  const _IconPill({
+    required this.icon,
+    required this.onTap,
+    this.active = false,
+  });
 
   final IconData icon;
   final VoidCallback onTap;
+  final bool active;
 
   @override
   Widget build(BuildContext context) {
@@ -2572,10 +2894,13 @@ class _IconPill extends StatelessWidget {
         alignment: Alignment.center,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(999),
-          color: Colors.white.withValues(alpha: 0.76),
-          border: Border.all(color: kBorderColor, width: 1),
+          color: active ? kTextDark : Colors.white.withValues(alpha: 0.76),
+          border: Border.all(
+            color: active ? BrandTheme.redTop : kBorderColor,
+            width: active ? 1.5 : 1,
+          ),
         ),
-        child: Icon(icon, color: kTextDark, size: 22),
+        child: Icon(icon, color: active ? Colors.white : kTextDark, size: 22),
       ),
     );
   }
