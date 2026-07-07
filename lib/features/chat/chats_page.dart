@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -72,6 +74,14 @@ TextStyle _chatTitleStyle({
     letterSpacing: spacing,
     fontWeight: weight,
   );
+}
+
+String _formatVoicePreviewDuration(Duration? duration) {
+  final value = duration ?? Duration.zero;
+  final totalSeconds = value.inSeconds.clamp(0, 24 * 60 * 60);
+  final minutes = (totalSeconds ~/ 60).toString().padLeft(2, '0');
+  final seconds = (totalSeconds % 60).toString().padLeft(2, '0');
+  return '$minutes:$seconds';
 }
 
 class ChatsPage extends ConsumerStatefulWidget {
@@ -528,22 +538,24 @@ class _ChatListTile extends StatelessWidget {
                     Row(
                       children: [
                         Expanded(
-                          child: Text(
-                            item.lastMessage.isEmpty
-                                ? 'Диалог создан'
-                                : item.lastMessage,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: item.unreadCount > 0
-                                  ? kTextDark
-                                  : kTextMuted,
-                              fontSize: 13,
-                              fontWeight: item.unreadCount > 0
-                                  ? FontWeight.w800
-                                  : FontWeight.w600,
-                            ),
-                          ),
+                          child: item.lastMessageIsAudio
+                              ? _ChatVoicePreview(item: item)
+                              : Text(
+                                  item.lastMessage.isEmpty
+                                      ? 'Диалог создан'
+                                      : item.lastMessage,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: item.unreadCount > 0
+                                        ? kTextDark
+                                        : kTextMuted,
+                                    fontSize: 13,
+                                    fontWeight: item.unreadCount > 0
+                                        ? FontWeight.w800
+                                        : FontWeight.w600,
+                                  ),
+                                ),
                         ),
                         if (item.unreadCount > 0) ...[
                           const SizedBox(width: 8),
@@ -596,6 +608,100 @@ class _ChatListTile extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _ChatVoicePreview extends StatelessWidget {
+  const _ChatVoicePreview({required this.item});
+
+  final ChatListItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    final unread = item.unreadCount > 0;
+    final duration = _formatVoicePreviewDuration(item.lastMessageAudioDuration);
+    return Row(
+      children: [
+        Icon(
+          Icons.mic_rounded,
+          size: 15,
+          color: unread ? BrandTheme.redTop : kTextMuted,
+        ),
+        const SizedBox(width: 5),
+        Text(
+          duration == '00:00' ? 'Голосовое' : duration,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: unread ? kTextDark : kTextMuted,
+            fontSize: 12,
+            fontWeight: unread ? FontWeight.w900 : FontWeight.w800,
+          ),
+        ),
+        const SizedBox(width: 7),
+        Expanded(
+          child: SizedBox(
+            height: 18,
+            child: CustomPaint(
+              painter: _ChatVoicePreviewPainter(
+                seed: item.id,
+                color: unread ? BrandTheme.redTop : kTextMuted,
+              ),
+            ),
+          ),
+        ),
+        if (unread) ...[
+          const SizedBox(width: 7),
+          const Text(
+            'новое',
+            style: TextStyle(
+              color: BrandTheme.redTop,
+              fontSize: 10,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _ChatVoicePreviewPainter extends CustomPainter {
+  const _ChatVoicePreviewPainter({required this.seed, required this.color});
+
+  final String seed;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.width <= 0 || size.height <= 0) return;
+    final hash = seed.hashCode.abs();
+    final bars = math.max(12, (size.width / 5).floor());
+    final step = size.width / bars;
+    final barWidth = math.min(2.4, step * 0.52);
+    final paint = Paint()
+      ..color = color.withValues(alpha: 0.74)
+      ..style = PaintingStyle.fill;
+    final radius = Radius.circular(barWidth);
+
+    for (var i = 0; i < bars; i++) {
+      final wave =
+          0.28 +
+          0.72 * ((math.sin((i + 2) * ((hash % 13) + 5) * 0.61) + 1) / 2);
+      final height = math.max(4.0, size.height * wave);
+      final x = i * step + (step - barWidth) / 2;
+      final y = (size.height - height) / 2;
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(Rect.fromLTWH(x, y, barWidth, height), radius),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _ChatVoicePreviewPainter oldDelegate) {
+    return oldDelegate.seed != seed || oldDelegate.color != color;
   }
 }
 

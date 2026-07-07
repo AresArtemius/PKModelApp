@@ -2136,7 +2136,11 @@ class _MessageBubble extends StatelessWidget {
               const SizedBox(height: 8),
             ],
             if (message.hasMedia) ...[
-              _MessageMedia(message: message, onTap: onMediaTap),
+              _MessageMedia(
+                message: message,
+                onTap: onMediaTap,
+                showReadStatus: showReadStatus,
+              ),
               if (visibleBody.isNotEmpty) const SizedBox(height: 8),
             ],
             if (visibleBody.isNotEmpty)
@@ -2207,7 +2211,8 @@ class _MessageBubble extends StatelessWidget {
               ),
           ],
         ),
-        if (showReadStatus) _MessageReadStatus(readAt: message.readAt),
+        if (showReadStatus && !message.isAudio)
+          _MessageReadStatus(readAt: message.readAt),
       ],
     );
 
@@ -2388,10 +2393,15 @@ class _MessageReadStatus extends StatelessWidget {
 }
 
 class _MessageMedia extends StatelessWidget {
-  const _MessageMedia({required this.message, required this.onTap});
+  const _MessageMedia({
+    required this.message,
+    required this.onTap,
+    required this.showReadStatus,
+  });
 
   final ChatMessage message;
   final VoidCallback onTap;
+  final bool showReadStatus;
 
   @override
   Widget build(BuildContext context) {
@@ -2399,7 +2409,10 @@ class _MessageMedia extends StatelessWidget {
       return _MessageFileCard(message: message, onTap: onTap);
     }
     if (message.isAudio) {
-      return _AudioMessagePlayer(message: message);
+      return _AudioMessagePlayer(
+        message: message,
+        showReadStatus: showReadStatus,
+      );
     }
     final imageUrl = message.mediaThumbnailUrl.isNotEmpty
         ? message.mediaThumbnailUrl
@@ -2446,9 +2459,13 @@ class _MessageMedia extends StatelessWidget {
 }
 
 class _AudioMessagePlayer extends StatefulWidget {
-  const _AudioMessagePlayer({required this.message});
+  const _AudioMessagePlayer({
+    required this.message,
+    required this.showReadStatus,
+  });
 
   final ChatMessage message;
+  final bool showReadStatus;
 
   @override
   State<_AudioMessagePlayer> createState() => _AudioMessagePlayerState();
@@ -2531,15 +2548,18 @@ class _AudioMessagePlayerState extends State<_AudioMessagePlayer> {
     final displayDuration = knownDuration.inMilliseconds > 0
         ? knownDuration
         : _position;
+    final read = widget.message.readAt != null;
+    final statusText = read ? 'прочитано' : 'доставлено';
     return Container(
-      width: 220,
-      padding: const EdgeInsets.fromLTRB(10, 9, 12, 9),
+      width: 232,
+      padding: const EdgeInsets.fromLTRB(10, 10, 12, 10),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           InkWell(
             onTap: _loading ? null : _toggle,
@@ -2571,16 +2591,32 @@ class _AudioMessagePlayerState extends State<_AudioMessagePlayer> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Голосовое сообщение',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: kTextDark,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 0.2,
-                  ),
+                Row(
+                  children: [
+                    const Icon(Icons.mic_rounded, size: 14, color: kTextDark),
+                    const SizedBox(width: 4),
+                    const Expanded(
+                      child: Text(
+                        'Голосовое',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: kTextDark,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0.2,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      _formatVoiceDuration(displayDuration),
+                      style: const TextStyle(
+                        color: kTextMuted,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 6),
                 _VoiceWaveform(
@@ -2588,16 +2624,30 @@ class _AudioMessagePlayerState extends State<_AudioMessagePlayer> {
                   progress: progress,
                   active: _playing,
                 ),
+                if (widget.showReadStatus) ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        read ? Icons.done_all_rounded : Icons.done_rounded,
+                        size: 14,
+                        color: read ? BrandTheme.redTop : kTextMuted,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        statusText,
+                        style: TextStyle(
+                          color: read ? BrandTheme.redTop : kTextMuted,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0.2,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            _formatVoiceDuration(displayDuration),
-            style: const TextStyle(
-              color: kTextMuted,
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
             ),
           ),
         ],

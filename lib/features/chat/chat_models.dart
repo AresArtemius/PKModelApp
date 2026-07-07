@@ -159,6 +159,8 @@ class ChatListItem {
     required this.contextLabel,
     required this.participantRole,
     required this.lastMessage,
+    required this.lastMessageMediaType,
+    required this.lastMessageMetadata,
     required this.lastMessageAt,
     required this.unreadCount,
     required this.pinned,
@@ -172,10 +174,15 @@ class ChatListItem {
   final String contextLabel;
   final ChatParticipantRole participantRole;
   final String lastMessage;
+  final String lastMessageMediaType;
+  final Map<String, dynamic> lastMessageMetadata;
   final DateTime? lastMessageAt;
   final int unreadCount;
   final bool pinned;
   final bool archived;
+  bool get lastMessageIsAudio => lastMessageMediaType == 'audio';
+  Duration? get lastMessageAudioDuration =>
+      _audioDurationFromMetadata(lastMessageMetadata);
 
   ChatListItem copyWith({
     String? id,
@@ -185,6 +192,8 @@ class ChatListItem {
     String? contextLabel,
     ChatParticipantRole? participantRole,
     String? lastMessage,
+    String? lastMessageMediaType,
+    Map<String, dynamic>? lastMessageMetadata,
     DateTime? lastMessageAt,
     int? unreadCount,
     bool? pinned,
@@ -198,6 +207,8 @@ class ChatListItem {
       contextLabel: contextLabel ?? this.contextLabel,
       participantRole: participantRole ?? this.participantRole,
       lastMessage: lastMessage ?? this.lastMessage,
+      lastMessageMediaType: lastMessageMediaType ?? this.lastMessageMediaType,
+      lastMessageMetadata: lastMessageMetadata ?? this.lastMessageMetadata,
       lastMessageAt: lastMessageAt ?? this.lastMessageAt,
       unreadCount: unreadCount ?? this.unreadCount,
       pinned: pinned ?? this.pinned,
@@ -369,22 +380,7 @@ class ChatMessage {
   bool get isVideo => mediaType == 'video';
   bool get isFile => mediaType == 'file';
   bool get isAudio => mediaType == 'audio';
-  Duration? get audioDuration {
-    final raw =
-        metadata['duration_ms'] ??
-        metadata['durationMs'] ??
-        metadata['duration_seconds'] ??
-        metadata['durationSeconds'];
-    if (raw == null) return null;
-    final number = raw is num ? raw : num.tryParse(raw.toString());
-    if (number == null || number <= 0) return null;
-    final isSeconds =
-        raw == metadata['duration_seconds'] ||
-        raw == metadata['durationSeconds'];
-    return isSeconds
-        ? Duration(milliseconds: (number * 1000).round())
-        : Duration(milliseconds: number.round());
-  }
+  Duration? get audioDuration => _audioDurationFromMetadata(metadata);
 
   String get fileDisplayName {
     final explicit = fileName.trim();
@@ -414,6 +410,22 @@ class ChatMessage {
       createdAt: DateTime.tryParse((map['created_at'] ?? '').toString()),
     );
   }
+}
+
+Duration? _audioDurationFromMetadata(Map<String, dynamic> metadata) {
+  final raw =
+      metadata['duration_ms'] ??
+      metadata['durationMs'] ??
+      metadata['duration_seconds'] ??
+      metadata['durationSeconds'];
+  if (raw == null) return null;
+  final number = raw is num ? raw : num.tryParse(raw.toString());
+  if (number == null || number <= 0) return null;
+  final isSeconds =
+      raw == metadata['duration_seconds'] || raw == metadata['durationSeconds'];
+  return isSeconds
+      ? Duration(milliseconds: (number * 1000).round())
+      : Duration(milliseconds: number.round());
 }
 
 Map<String, dynamic> _mapOrEmpty(dynamic raw) {

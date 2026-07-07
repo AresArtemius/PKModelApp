@@ -650,6 +650,8 @@ class ChatService {
             ? ChatParticipantRole.model
             : ChatParticipantRole.client,
         lastMessage: latest == null ? '' : _chatPreview(latest),
+        lastMessageMediaType: latest?.mediaType ?? 'text',
+        lastMessageMetadata: latest?.metadata ?? const <String, dynamic>{},
         lastMessageAt: latest?.createdAt ?? fallbackTime,
         unreadCount: unreadCount,
         pinned: pinnedAt.trim().isNotEmpty,
