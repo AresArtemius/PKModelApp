@@ -26,6 +26,8 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>PK Management использует микрофон для записи голосовых сообщений в чатах.</string>
 
 	<key>CFBundleURLTypes</key>
 	<array>

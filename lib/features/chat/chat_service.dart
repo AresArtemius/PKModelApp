@@ -1006,6 +1006,8 @@ class ChatService {
                 ? 'Видео'
                 : mediaType == 'file'
                 ? 'Файл'
+                : mediaType == 'audio'
+                ? 'Голосовое сообщение'
                 : 'Фото')
           : text,
       'media_type': mediaType,
@@ -1079,6 +1081,7 @@ class ChatService {
           : switch (mediaType.trim()) {
               'video' => 'Видео',
               'file' => 'Файл',
+              'audio' => 'Голосовое сообщение',
               'image' => 'Фото',
               _ => 'Сообщение',
             };

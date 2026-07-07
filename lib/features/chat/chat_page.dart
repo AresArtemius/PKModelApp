@@ -9,6 +9,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image/image.dart' as image_lib;
 import 'package:image_picker/image_picker.dart';
+import 'package:just_audio/just_audio.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:record/record.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:video_player/video_player.dart';
 import 'package:video_thumbnail/video_thumbnail.dart';
@@ -48,6 +51,13 @@ String _formatFileSize(int? bytes) {
   }
   final text = unit == 0 ? size.toStringAsFixed(0) : size.toStringAsFixed(1);
   return '$text ${units[unit]}';
+}
+
+String _formatVoiceDuration(Duration duration) {
+  final totalSeconds = duration.inSeconds.clamp(0, 24 * 60 * 60);
+  final minutes = (totalSeconds ~/ 60).toString().padLeft(2, '0');
+  final seconds = (totalSeconds % 60).toString().padLeft(2, '0');
+  return '$minutes:$seconds';
 }
 
 class ChatPage extends ConsumerStatefulWidget {
@@ -208,6 +218,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
         ? (message.fileDisplayName.isEmpty
               ? (_isRussian ? 'Файл' : 'File')
               : message.fileDisplayName)
+        : message.isAudio
+        ? (_isRussian ? 'Голосовое сообщение' : 'Voice message')
         : '';
     final compact = source.replaceAll(RegExp(r'\s+'), ' ').trim();
     if (compact.length <= 90) return compact;
@@ -222,6 +234,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       if (message.isImage) _isRussian ? 'фото изображение' : 'photo image',
       if (message.isVideo) _isRussian ? 'видео' : 'video',
       if (message.isFile) message.fileDisplayName,
+      if (message.isAudio) _isRussian ? 'голосовое аудио' : 'voice audio',
     ];
     return parts.join(' ').replaceAll(RegExp(r'\s+'), ' ').trim();
   }
@@ -415,6 +428,19 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     };
   }
 
+  String _audioContentType(String ext, String mimeType) {
+    final mime = mimeType.trim();
+    if (mime.isNotEmpty) return mime;
+    return switch (ext) {
+      'mp3' => 'audio/mpeg',
+      'wav' => 'audio/wav',
+      'webm' => 'audio/webm',
+      'ogg' => 'audio/ogg',
+      'aac' => 'audio/aac',
+      _ => 'audio/mp4',
+    };
+  }
+
   String _documentContentType(String ext, String mimeType) {
     final mime = mimeType.trim();
     if (mime.isNotEmpty) return mime;
@@ -556,6 +582,21 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     });
   }
 
+  Future<void> _recordVoiceMessage() async {
+    if (_sending || _uploadingMedia) return;
+    if (!await _ensureCanUseChat()) return;
+    if (!mounted) return;
+
+    final attachment = await showModalBottomSheet<_PendingChatAttachment>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => const _VoiceRecorderSheet(),
+    );
+    if (attachment == null || !mounted) return;
+    setState(() => _pendingAttachment = attachment);
+  }
+
   Future<void> _sendAttachment({
     required _PendingChatAttachment attachment,
     required String body,
@@ -568,6 +609,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       final stamp = DateTime.now().millisecondsSinceEpoch;
       final ext = attachment.isFile
           ? _fileExt(attachment.fileName)
+          : attachment.isAudio
+          ? _fileExt(attachment.fileName)
           : _ext(
               attachment.file?.path ?? attachment.fileName,
               video: attachment.isVideo,
@@ -579,6 +622,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       final mediaPath = '$userId/chats/${widget.chatId}/$stamp.$ext';
       final contentType = attachment.isFile
           ? _documentContentType(ext, attachment.mimeType)
+          : attachment.isAudio
+          ? _audioContentType(ext, attachment.mimeType)
           : _contentType(ext, video: attachment.isVideo);
       final mediaUrl = await _uploadBytes(
         path: mediaPath,
@@ -620,9 +665,15 @@ class _ChatPageState extends ConsumerState<ChatPage> {
             mediaType: attachment.mediaType,
             mediaUrl: mediaUrl,
             mediaThumbnailUrl: thumbnailUrl,
-            fileName: attachment.isFile ? attachment.fileName : '',
-            fileSize: attachment.isFile ? attachment.fileSize : null,
-            fileMime: attachment.isFile ? contentType : '',
+            fileName: attachment.isFile || attachment.isAudio
+                ? attachment.fileName
+                : '',
+            fileSize: attachment.isFile || attachment.isAudio
+                ? attachment.fileSize
+                : null,
+            fileMime: attachment.isFile || attachment.isAudio
+                ? contentType
+                : '',
           );
     } finally {
       if (mounted) setState(() => _uploadingMedia = false);
@@ -667,6 +718,14 @@ class _ChatPageState extends ConsumerState<ChatPage> {
             onTap: () {
               Navigator.of(context).pop();
               _selectPendingFile();
+            },
+          ),
+          _ActionSheetTile(
+            icon: Icons.mic_rounded,
+            title: _isRussian ? 'Голосовое сообщение' : 'Voice message',
+            onTap: () {
+              Navigator.of(context).pop();
+              _recordVoiceMessage();
             },
           ),
         ],
@@ -1169,6 +1228,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                       setState(() => _pendingAttachment = null),
                   onSend: _send,
                   onAttach: _showAttachMenu,
+                  onRecordVoice: _recordVoiceMessage,
                 ),
               ],
             ),
@@ -2035,7 +2095,9 @@ class _MessageBubble extends StatelessWidget {
     final visibleBody =
         message.hasMedia &&
             ((message.isImage && parsedBody.body.trim() == 'Фото') ||
-                (message.isVideo && parsedBody.body.trim() == 'Видео'))
+                (message.isVideo && parsedBody.body.trim() == 'Видео') ||
+                (message.isAudio &&
+                    parsedBody.body.trim() == 'Голосовое сообщение'))
         ? ''
         : parsedBody.body.trim();
     final bubble = GestureDetector(
@@ -2330,6 +2392,9 @@ class _MessageMedia extends StatelessWidget {
     if (message.isFile) {
       return _MessageFileCard(message: message, onTap: onTap);
     }
+    if (message.isAudio) {
+      return _AudioMessagePlayer(message: message);
+    }
     final imageUrl = message.mediaThumbnailUrl.isNotEmpty
         ? message.mediaThumbnailUrl
         : message.mediaUrl;
@@ -2369,6 +2434,166 @@ class _MessageMedia extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _AudioMessagePlayer extends StatefulWidget {
+  const _AudioMessagePlayer({required this.message});
+
+  final ChatMessage message;
+
+  @override
+  State<_AudioMessagePlayer> createState() => _AudioMessagePlayerState();
+}
+
+class _AudioMessagePlayerState extends State<_AudioMessagePlayer> {
+  late final AudioPlayer _player;
+  StreamSubscription<PlayerState>? _stateSub;
+  StreamSubscription<Duration>? _positionSub;
+  StreamSubscription<Duration?>? _durationSub;
+  bool _loading = false;
+  bool _playing = false;
+  Duration _position = Duration.zero;
+  Duration _duration = Duration.zero;
+
+  @override
+  void initState() {
+    super.initState();
+    _player = AudioPlayer();
+    _stateSub = _player.playerStateStream.listen((state) {
+      if (!mounted) return;
+      setState(() {
+        _playing = state.playing;
+        _loading =
+            state.processingState == ProcessingState.loading ||
+            state.processingState == ProcessingState.buffering;
+      });
+      if (state.processingState == ProcessingState.completed) {
+        _player.seek(Duration.zero);
+        _player.pause();
+      }
+    });
+    _positionSub = _player.positionStream.listen((position) {
+      if (!mounted) return;
+      setState(() => _position = position);
+    });
+    _durationSub = _player.durationStream.listen((duration) {
+      if (!mounted || duration == null) return;
+      setState(() => _duration = duration);
+    });
+  }
+
+  @override
+  void dispose() {
+    unawaited(_stateSub?.cancel());
+    unawaited(_positionSub?.cancel());
+    unawaited(_durationSub?.cancel());
+    unawaited(_player.dispose());
+    super.dispose();
+  }
+
+  Future<void> _toggle() async {
+    if (widget.message.mediaUrl.trim().isEmpty) return;
+    try {
+      if (_playing) {
+        await _player.pause();
+        return;
+      }
+      if (_player.audioSource == null) {
+        await _player.setUrl(widget.message.mediaUrl);
+      }
+      await _player.play();
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Не удалось воспроизвести аудио')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final total = _duration.inMilliseconds <= 0 ? 1 : _duration.inMilliseconds;
+    final progress = (_position.inMilliseconds / total).clamp(0.0, 1.0);
+    final displayDuration = _duration.inMilliseconds > 0
+        ? _duration
+        : _position;
+    return Container(
+      width: 220,
+      padding: const EdgeInsets.fromLTRB(10, 9, 12, 9),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
+      ),
+      child: Row(
+        children: [
+          InkWell(
+            onTap: _loading ? null : _toggle,
+            borderRadius: BorderRadius.circular(18),
+            child: Container(
+              width: 36,
+              height: 36,
+              decoration: const BoxDecoration(
+                color: kTextDark,
+                shape: BoxShape.circle,
+              ),
+              child: _loading
+                  ? const Padding(
+                      padding: EdgeInsets.all(10),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : Icon(
+                      _playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                      color: Colors.white,
+                      size: 24,
+                    ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Голосовое сообщение',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: kTextDark,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(999),
+                  child: LinearProgressIndicator(
+                    value: progress,
+                    minHeight: 5,
+                    color: BrandTheme.redTop,
+                    backgroundColor: kTextDark.withValues(alpha: 0.12),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            _formatVoiceDuration(displayDuration),
+            style: const TextStyle(
+              color: kTextMuted,
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -2722,7 +2947,7 @@ class _VideoPlayerSurfaceState extends State<_VideoPlayerSurface> {
   }
 }
 
-enum _PendingAttachmentKind { image, video, file }
+enum _PendingAttachmentKind { image, video, file, audio }
 
 class _PendingChatAttachment {
   const _PendingChatAttachment({
@@ -2746,10 +2971,12 @@ class _PendingChatAttachment {
   bool get isImage => kind == _PendingAttachmentKind.image;
   bool get isVideo => kind == _PendingAttachmentKind.video;
   bool get isFile => kind == _PendingAttachmentKind.file;
+  bool get isAudio => kind == _PendingAttachmentKind.audio;
   String get mediaType => switch (kind) {
     _PendingAttachmentKind.image => 'image',
     _PendingAttachmentKind.video => 'video',
     _PendingAttachmentKind.file => 'file',
+    _PendingAttachmentKind.audio => 'audio',
   };
 }
 
@@ -2794,6 +3021,351 @@ class _ChatAvatar extends StatelessWidget {
   }
 }
 
+class _VoiceRecorderSheet extends StatefulWidget {
+  const _VoiceRecorderSheet();
+
+  @override
+  State<_VoiceRecorderSheet> createState() => _VoiceRecorderSheetState();
+}
+
+class _VoiceRecorderSheetState extends State<_VoiceRecorderSheet> {
+  final _recorder = AudioRecorder();
+  final _player = AudioPlayer();
+  Timer? _timer;
+  StreamSubscription<PlayerState>? _playerStateSub;
+  bool _recording = false;
+  bool _saving = false;
+  bool _playing = false;
+  Duration _duration = Duration.zero;
+  String? _recordedPath;
+  Uint8List? _recordedBytes;
+  String _error = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _playerStateSub = _player.playerStateStream.listen((state) {
+      if (!mounted) return;
+      setState(() => _playing = state.playing);
+      if (state.processingState == ProcessingState.completed) {
+        _player.seek(Duration.zero);
+        _player.pause();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    unawaited(_playerStateSub?.cancel());
+    unawaited(_recorder.cancel());
+    unawaited(_recorder.dispose());
+    unawaited(_player.dispose());
+    super.dispose();
+  }
+
+  Future<String> _recordingPath() async {
+    final stamp = DateTime.now().millisecondsSinceEpoch;
+    if (kIsWeb) return 'voice_$stamp.m4a';
+    final dir = await getTemporaryDirectory();
+    return '${dir.path}/voice_$stamp.m4a';
+  }
+
+  Future<void> _start() async {
+    setState(() => _error = '');
+    try {
+      final allowed = await _recorder.hasPermission();
+      if (!allowed) {
+        if (!mounted) return;
+        setState(() {
+          _error = 'Нет доступа к микрофону. Разрешите микрофон в настройках.';
+        });
+        return;
+      }
+      await _player.stop();
+      final path = await _recordingPath();
+      await _recorder.start(
+        const RecordConfig(
+          encoder: AudioEncoder.aacLc,
+          bitRate: 96000,
+          sampleRate: 44100,
+          numChannels: 1,
+          autoGain: true,
+          echoCancel: true,
+          noiseSuppress: true,
+        ),
+        path: path,
+      );
+      _timer?.cancel();
+      _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (!mounted) return;
+        setState(() => _duration += const Duration(seconds: 1));
+      });
+      setState(() {
+        _recording = true;
+        _recordedPath = null;
+        _recordedBytes = null;
+        _duration = Duration.zero;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _error = 'Не удалось начать запись: $error');
+    }
+  }
+
+  Future<void> _stop() async {
+    setState(() {
+      _saving = true;
+      _error = '';
+    });
+    try {
+      final path = await _recorder.stop();
+      _timer?.cancel();
+      if (path == null || path.trim().isEmpty) {
+        throw StateError('Файл записи не создан');
+      }
+      final bytes = await XFile(path).readAsBytes();
+      if (bytes.isEmpty) {
+        throw StateError('Файл записи пустой');
+      }
+      if (!mounted) return;
+      setState(() {
+        _recording = false;
+        _recordedPath = path;
+        _recordedBytes = bytes;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _error = 'Не удалось сохранить запись: $error');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _togglePreview() async {
+    final path = _recordedPath;
+    if (path == null || path.isEmpty) return;
+    try {
+      if (_playing) {
+        await _player.pause();
+        return;
+      }
+      if (_player.audioSource == null) {
+        if (kIsWeb) {
+          await _player.setUrl(path);
+        } else {
+          await _player.setFilePath(path);
+        }
+      }
+      await _player.play();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _error = 'Не удалось прослушать запись: $error');
+    }
+  }
+
+  void _reset() {
+    _timer?.cancel();
+    unawaited(_player.stop());
+    setState(() {
+      _recording = false;
+      _saving = false;
+      _playing = false;
+      _duration = Duration.zero;
+      _recordedPath = null;
+      _recordedBytes = null;
+      _error = '';
+    });
+  }
+
+  void _attach() {
+    final bytes = _recordedBytes;
+    final path = _recordedPath;
+    if (bytes == null || bytes.isEmpty || path == null || path.isEmpty) return;
+    final stamp = DateTime.now().millisecondsSinceEpoch;
+    Navigator.of(context).pop(
+      _PendingChatAttachment(
+        file: XFile(path),
+        kind: _PendingAttachmentKind.audio,
+        fileName: 'voice_$stamp.m4a',
+        fileSize: bytes.length,
+        mimeType: 'audio/mp4',
+        bytes: bytes,
+        previewBytes: null,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasRecording = _recordedBytes != null && _recordedBytes!.isNotEmpty;
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 14,
+        right: 14,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 14,
+      ),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(22, 22, 22, 18),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(32),
+          boxShadow: BrandTheme.basePillShadow(isDark: false),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'ГОЛОСОВОЕ',
+              style: TextStyle(
+                color: kTextDark,
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 4,
+              ),
+            ),
+            const SizedBox(height: 18),
+            Container(
+              width: 112,
+              height: 112,
+              decoration: BoxDecoration(
+                color: _recording ? BrandTheme.redTop : kTextDark,
+                shape: BoxShape.circle,
+                boxShadow: BrandTheme.basePillShadow(isDark: false),
+              ),
+              child: Icon(
+                _recording ? Icons.graphic_eq_rounded : Icons.mic_rounded,
+                color: Colors.white,
+                size: 46,
+              ),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              _formatVoiceDuration(_duration),
+              style: const TextStyle(
+                color: kTextDark,
+                fontSize: 28,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1.4,
+              ),
+            ),
+            if (_error.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Text(
+                _error,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: BrandTheme.redTop,
+                  fontWeight: FontWeight.w800,
+                  height: 1.2,
+                ),
+              ),
+            ],
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                Expanded(
+                  child: _SheetPillButton(
+                    label: _recording ? 'СТОП' : 'ЗАПИСЬ',
+                    dark: true,
+                    loading: _saving,
+                    onTap: _saving
+                        ? null
+                        : _recording
+                        ? _stop
+                        : _start,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _SheetPillButton(
+                    label: _playing ? 'ПАУЗА' : 'ПРОСЛУШАТЬ',
+                    onTap: hasRecording && !_recording ? _togglePreview : null,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: _SheetPillButton(
+                    label: 'УДАЛИТЬ',
+                    onTap: hasRecording || _recording ? _reset : null,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _SheetPillButton(
+                    label: 'ПРИКРЕПИТЬ',
+                    dark: true,
+                    onTap: hasRecording && !_recording ? _attach : null,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SheetPillButton extends StatelessWidget {
+  const _SheetPillButton({
+    required this.label,
+    required this.onTap,
+    this.dark = false,
+    this.loading = false,
+  });
+
+  final String label;
+  final VoidCallback? onTap;
+  final bool dark;
+  final bool loading;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onTap != null && !loading;
+    return Opacity(
+      opacity: enabled || loading ? 1 : 0.42,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(999),
+          onTap: loading ? null : onTap,
+          child: Container(
+            height: 54,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              gradient: dark && enabled ? BrandTheme.darkPillGradient : null,
+              color: dark && enabled ? null : Colors.white,
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: kBorderColor),
+              boxShadow: BrandTheme.basePillShadow(isDark: false),
+            ),
+            child: loading
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Text(
+                    label,
+                    style: TextStyle(
+                      color: dark && enabled ? Colors.white : kTextDark,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.8,
+                    ),
+                  ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _Composer extends StatelessWidget {
   const _Composer({
     required this.controller,
@@ -2805,6 +3377,7 @@ class _Composer extends StatelessWidget {
     required this.onRemoveAttachment,
     required this.onSend,
     required this.onAttach,
+    required this.onRecordVoice,
   });
 
   final TextEditingController controller;
@@ -2816,6 +3389,7 @@ class _Composer extends StatelessWidget {
   final VoidCallback onRemoveAttachment;
   final VoidCallback onSend;
   final VoidCallback onAttach;
+  final VoidCallback onRecordVoice;
 
   @override
   Widget build(BuildContext context) {
@@ -2895,6 +3469,11 @@ class _Composer extends StatelessWidget {
                 ),
               ),
               IconButton(
+                tooltip: 'Голосовое сообщение',
+                onPressed: sending ? null : onRecordVoice,
+                icon: const Icon(Icons.mic_rounded, color: kTextDark),
+              ),
+              IconButton(
                 onPressed: sending ? null : onSend,
                 icon: sending
                     ? const SizedBox(
@@ -2926,6 +3505,7 @@ class _PendingAttachmentPreview extends StatelessWidget {
     final isRussian =
         Localizations.localeOf(context).languageCode.toLowerCase() == 'ru';
     final isFile = attachment.isFile;
+    final isAudio = attachment.isAudio;
     final size = _formatFileSize(attachment.fileSize);
     return Container(
       padding: const EdgeInsets.all(8),
@@ -2941,7 +3521,16 @@ class _PendingAttachmentPreview extends StatelessWidget {
             child: SizedBox(
               width: 74,
               height: 74,
-              child: isFile
+              child: isAudio
+                  ? Container(
+                      color: kTextDark,
+                      child: const Icon(
+                        Icons.mic_rounded,
+                        color: Colors.white,
+                        size: 34,
+                      ),
+                    )
+                  : isFile
                   ? Container(
                       color: kTextDark,
                       child: const Icon(
@@ -2972,6 +3561,8 @@ class _PendingAttachmentPreview extends StatelessWidget {
                 Text(
                   isFile
                       ? (isRussian ? 'ФАЙЛ ГОТОВ' : 'FILE READY')
+                      : isAudio
+                      ? (isRussian ? 'ГОЛОСОВОЕ ГОТОВО' : 'VOICE READY')
                       : attachment.isVideo
                       ? (isRussian ? 'ВИДЕО ГОТОВО' : 'VIDEO READY')
                       : (isRussian ? 'ФОТО ГОТОВО' : 'PHOTO READY'),
@@ -2987,6 +3578,13 @@ class _PendingAttachmentPreview extends StatelessWidget {
                   isFile
                       ? [
                           attachment.fileName,
+                          if (size.isNotEmpty) size,
+                        ].where((e) => e.trim().isNotEmpty).join(' • ')
+                      : isAudio
+                      ? [
+                          isRussian
+                              ? 'Можно добавить подпись и отправить.'
+                              : 'You can add a caption and send.',
                           if (size.isNotEmpty) size,
                         ].where((e) => e.trim().isNotEmpty).join(' • ')
                       : isRussian

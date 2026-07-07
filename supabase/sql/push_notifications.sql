@@ -503,6 +503,7 @@ begin
           when new.media_type = 'image' then 'Фото'
           when new.media_type = 'video' then 'Видео'
           when new.media_type = 'file' then coalesce(nullif(new.file_name, ''), 'Файл')
+          when new.media_type = 'audio' then 'Голосовое сообщение'
           else 'Новое сообщение'
         end
       ),

@@ -74,7 +74,7 @@ begin
 
   alter table public.selection_chat_messages
     add constraint selection_chat_messages_media_type_check
-    check (media_type in ('text', 'image', 'video', 'file'));
+    check (media_type in ('text', 'image', 'video', 'file', 'audio'));
 end $$;
 
 alter table public.selection_chat_messages

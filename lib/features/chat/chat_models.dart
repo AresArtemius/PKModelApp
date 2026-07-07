@@ -366,6 +366,7 @@ class ChatMessage {
   bool get isImage => mediaType == 'image';
   bool get isVideo => mediaType == 'video';
   bool get isFile => mediaType == 'file';
+  bool get isAudio => mediaType == 'audio';
   String get fileDisplayName {
     final explicit = fileName.trim();
     if (explicit.isNotEmpty) return explicit;
