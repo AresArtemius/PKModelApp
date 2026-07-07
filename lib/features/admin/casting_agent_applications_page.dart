@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/app_error_mapper.dart';
 import '../../core/admin_action_log_service.dart';
+import '../../core/admin_dashboard_counts_provider.dart';
 import '../../core/roles_provider.dart';
 import '../../core/router.dart';
 import '../../gen_l10n/app_localizations.dart';
@@ -224,6 +225,7 @@ class CastingAgentApplicationsPage extends ConsumerWidget {
     }
 
     ref.invalidate(castingAgentApplicationsProvider);
+    ref.invalidate(adminDashboardCountsProvider);
     ref.invalidate(accountRoleProvider);
     ref.invalidate(isAdminProvider);
     ref.invalidate(canCreateSelectionsProvider);

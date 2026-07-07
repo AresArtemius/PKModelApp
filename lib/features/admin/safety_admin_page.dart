@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/admin_action_log_service.dart';
+import '../../core/admin_dashboard_counts_provider.dart';
 import '../../core/app_error_mapper.dart';
 import '../../core/router.dart';
 import '../../core/supabase_compat.dart';
@@ -70,6 +71,7 @@ class SafetyAdminPage extends ConsumerWidget {
         },
       );
       ref.invalidate(safetyReportsProvider);
+      ref.invalidate(adminDashboardCountsProvider);
       if (!context.mounted) return;
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()

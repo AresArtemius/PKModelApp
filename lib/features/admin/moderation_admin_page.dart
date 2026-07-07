@@ -9,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/app_error_mapper.dart';
 import '../../core/admin_action_log_service.dart';
+import '../../core/admin_dashboard_counts_provider.dart';
 import '../../core/supabase_compat.dart';
 import '../../core/supabase_provider.dart';
 import '../../core/roles_provider.dart';
@@ -180,6 +181,11 @@ final pendingProfilesProvider =
           .toList(growable: false);
     });
 
+void _refreshModerationQueues(WidgetRef ref) {
+  ref.invalidate(pendingProfilesProvider);
+  ref.invalidate(adminDashboardCountsProvider);
+}
+
 class ModerationAdminPage extends ConsumerStatefulWidget {
   const ModerationAdminPage({super.key});
 
@@ -297,7 +303,7 @@ class _ModerationAdminPageState extends ConsumerState<ModerationAdminPage> {
       targetText: profile.fullName.trim(),
       status: 'approved',
     );
-    ref.invalidate(pendingProfilesProvider);
+    _refreshModerationQueues(ref);
   }
 
   Future<void> _rejectProfile(
@@ -325,7 +331,7 @@ class _ModerationAdminPageState extends ConsumerState<ModerationAdminPage> {
       targetText: profileId,
       status: 'rejected',
     );
-    ref.invalidate(pendingProfilesProvider);
+    _refreshModerationQueues(ref);
   }
 
   Future<String?> _askRejectReason(BuildContext context) {

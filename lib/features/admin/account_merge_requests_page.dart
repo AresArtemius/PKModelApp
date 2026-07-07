@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/app_error_mapper.dart';
 import '../../core/admin_action_log_service.dart';
+import '../../core/admin_dashboard_counts_provider.dart';
 import '../../core/router.dart';
 import '../../gen_l10n/app_localizations.dart';
 import '../../ui/brand/brand_admin_header.dart';
@@ -141,6 +142,7 @@ class AccountMergeRequestsPage extends ConsumerWidget {
         },
       );
       ref.invalidate(accountMergeRequestsProvider);
+      ref.invalidate(adminDashboardCountsProvider);
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
