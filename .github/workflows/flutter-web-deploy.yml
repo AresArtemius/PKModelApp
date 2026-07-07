@@ -80,8 +80,8 @@ jobs:
           flutter build web
           --release
           --pwa-strategy=none
-          --base-href=/PKModelApp/
-          --dart-define=PUBLIC_BASE_URL=https://aresartemius.github.io/PKModelApp/#
+          --base-href=/
+          --dart-define=PUBLIC_BASE_URL=https://app.pk.management/#
           --dart-define=SUPABASE_URL=$SUPABASE_URL
           --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY
           --dart-define=FIREBASE_WEB_API_KEY=$FIREBASE_WEB_API_KEY
@@ -92,6 +92,9 @@ jobs:
           --dart-define=FIREBASE_WEB_APP_ID=$FIREBASE_WEB_APP_ID
           --dart-define=FIREBASE_WEB_MEASUREMENT_ID=$FIREBASE_WEB_MEASUREMENT_ID
           --dart-define=FIREBASE_WEB_VAPID_KEY=$FIREBASE_WEB_VAPID_KEY
+
+      - name: Configure custom domain
+        run: printf 'app.pk.management\n' > build/web/CNAME
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
