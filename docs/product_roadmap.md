@@ -50,9 +50,11 @@
 - Поиск/экспорт audit log и глубокая фильтрация по источнику, типу, автору, анкете/связи и дате.
 - Серверное обновление статусов доставки/прочтения для email/push вне чата: `app_notifications` может быть связан с `profile_action_logs`, а SQL-триггер переносит `sent/delivered/read/failed` в историю действий профиля.
 - Production delivery worker `send-notifications`: единая Supabase Edge Function для push через FCM и email через Resend, с записью серверных статусов обратно в `app_notifications`.
+- Firebase/Resend secrets в Supabase частично заведены; домен отправителя для production email оставлен открытым до покупки и подключения домена.
 
 Не хватает:
-- Включенного production расписания/webhook для `send-notifications` и настроенных secrets Firebase/Resend в Supabase.
+- Включенного production расписания/webhook для `send-notifications`.
+- Production `EMAIL_FROM` на подтвержденном домене Resend. Сейчас этот пункт осознанно отложен до покупки домена.
 
 ## 3. Chats
 
@@ -60,11 +62,13 @@
 - Диалоги между аккаунтами.
 - Контекст анкеты/кастинга.
 - Media/file attachments.
-- Reactions, SQL-заготовки read/typing, pinned/archive состояния.
+- SQL-заготовки read/typing, pinned/archive состояния.
 - Desktop split-view.
+- Reply на сообщение через цитату в composer и bubble.
+- Выделение собственных сообщений, мультивыбор и удаление выбранных сообщений с подтверждением.
+- Отдельный quick emoji/reaction UI убран из активного чата, чтобы не дублировать системную клавиатуру и не перегружать MVP.
 
 Не хватает:
-- Reply на сообщение.
 - Голосовых сообщений.
 - Закрепленных сообщений внутри чата.
 - Поиска по сообщениям.

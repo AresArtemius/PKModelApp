@@ -26,8 +26,6 @@ import 'chat_providers.dart';
 
 const _chatMediaBucket = 'profile-media';
 const _chatRealtimeMessageLimit = 120;
-const _quickReactions = ['👍', '❤️', '🔥', '👀', '🙌', '😂'];
-const _quickEmoji = ['🙂', '👍', '❤️', '🔥', '🙌', '👏', '✨', '😊'];
 const _replyPrefix = '↩ ';
 const _replySeparator = '\n\n';
 
@@ -75,6 +73,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   bool _loadingOlderMessages = false;
   bool _hasOlderMessages = true;
   ChatMessage? _replyingTo;
+  final Set<String> _selectedMessageIds = <String>{};
   _PendingChatAttachment? _pendingAttachment;
   DateTime? _lastTypingSentAt;
   Timer? _typingStopTimer;
@@ -92,6 +91,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     _hasOlderMessages = true;
     _loadingOlderMessages = false;
     _replyingTo = null;
+    _selectedMessageIds.clear();
     _pendingAttachment = null;
     _lastTypingSentAt = null;
   }
@@ -490,18 +490,6 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     );
   }
 
-  void _insertEmoji(String emoji) {
-    final selection = _messageController.selection;
-    final text = _messageController.text;
-    final start = selection.start < 0 ? text.length : selection.start;
-    final end = selection.end < 0 ? text.length : selection.end;
-    final next = text.replaceRange(start, end, emoji);
-    _messageController.value = TextEditingValue(
-      text: next,
-      selection: TextSelection.collapsed(offset: start + emoji.length),
-    );
-  }
-
   Future<bool> _ensureCanUseChat() async {
     final entitlements = await ref.read(accountEntitlementsProvider.future);
     if (entitlements.canUseSelectionChat) return true;
@@ -584,40 +572,6 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     }
   }
 
-  Future<void> _showEmojiMenu() async {
-    await showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) => _ActionSheet(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
-            child: Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: [
-                for (final emoji in _quickEmoji)
-                  GestureDetector(
-                    onTap: () {
-                      Navigator.of(context).pop();
-                      _insertEmoji(emoji);
-                    },
-                    child: Container(
-                      width: 48,
-                      height: 48,
-                      alignment: Alignment.center,
-                      decoration: pillDecoration(isDark: false, radius: 16),
-                      child: Text(emoji, style: const TextStyle(fontSize: 24)),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Future<void> _showMessageActions({
     required ChatMessage message,
     required bool mine,
@@ -627,36 +581,6 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       backgroundColor: Colors.transparent,
       builder: (context) => _ActionSheet(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-            child: Wrap(
-              spacing: 10,
-              children: [
-                for (final emoji in _quickReactions)
-                  GestureDetector(
-                    onTap: () async {
-                      Navigator.of(context).pop();
-                      await ref
-                          .read(chatServiceProvider)
-                          .setReaction(
-                            chatId: widget.chatId,
-                            messageId: message.id,
-                            emoji: emoji,
-                          );
-                    },
-                    child: Text(emoji, style: const TextStyle(fontSize: 30)),
-                  ),
-              ],
-            ),
-          ),
-          _ActionSheetTile(
-            icon: Icons.close_rounded,
-            title: _isRussian ? 'Убрать мою реакцию' : 'Remove my reaction',
-            onTap: () async {
-              Navigator.of(context).pop();
-              await ref.read(chatServiceProvider).clearReaction(message.id);
-            },
-          ),
           _ActionSheetTile(
             icon: Icons.reply_rounded,
             title: _isRussian ? 'Ответить' : 'Reply',
@@ -667,19 +591,105 @@ class _ChatPageState extends ConsumerState<ChatPage> {
           ),
           if (mine)
             _ActionSheetTile(
+              icon: Icons.checklist_rounded,
+              title: _isRussian ? 'Выбрать' : 'Select',
+              onTap: () {
+                Navigator.of(context).pop();
+                _toggleMessageSelection(message, mine: mine);
+              },
+            ),
+          if (mine)
+            _ActionSheetTile(
               icon: Icons.delete_rounded,
               title: _isRussian ? 'Удалить сообщение' : 'Delete message',
               danger: true,
               onTap: () async {
                 Navigator.of(context).pop();
-                await ref
-                    .read(chatServiceProvider)
-                    .deleteMessageForEveryone(message.id);
+                await _deleteSelectedMessages({message.id});
               },
             ),
         ],
       ),
     );
+  }
+
+  bool get _selectionMode => _selectedMessageIds.isNotEmpty;
+
+  void _toggleMessageSelection(ChatMessage message, {required bool mine}) {
+    if (!mine || message.deletedAt != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _isRussian
+                ? 'Выбирать для удаления можно только свои сообщения.'
+                : 'Only your own messages can be selected for deletion.',
+          ),
+        ),
+      );
+      return;
+    }
+    setState(() {
+      if (_selectedMessageIds.contains(message.id)) {
+        _selectedMessageIds.remove(message.id);
+      } else {
+        _selectedMessageIds.add(message.id);
+      }
+    });
+  }
+
+  void _clearMessageSelection() {
+    if (_selectedMessageIds.isEmpty) return;
+    setState(_selectedMessageIds.clear);
+  }
+
+  Future<void> _deleteSelectedMessages(Set<String> ids) async {
+    final cleanIds = ids.where((id) => id.trim().isNotEmpty).toSet();
+    if (cleanIds.isEmpty) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(_isRussian ? 'Удалить сообщения?' : 'Delete messages?'),
+        content: Text(
+          cleanIds.length == 1
+              ? (_isRussian
+                    ? 'Сообщение будет удалено у всех участников чата.'
+                    : 'The message will be deleted for every chat participant.')
+              : (_isRussian
+                    ? 'Выбранные сообщения будут удалены у всех участников чата.'
+                    : 'Selected messages will be deleted for every chat participant.'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(_isRussian ? 'Отмена' : 'Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(
+              _isRussian ? 'Удалить' : 'Delete',
+              style: const TextStyle(color: BrandTheme.redTop),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      for (final id in cleanIds) {
+        await ref.read(chatServiceProvider).deleteMessageForEveryone(id);
+      }
+      if (!mounted) return;
+      setState(() => _selectedMessageIds.removeAll(cleanIds));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            AppErrorMapper.message(error, AppLocalizations.of(context)!),
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> _deleteChat() async {
@@ -722,16 +732,11 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     final t = AppLocalizations.of(context)!;
     final userId = ref.watch(currentUserIdProvider) ?? '';
     final messages = ref.watch(chatMessagesProvider(widget.chatId));
-    final reactions = ref.watch(chatReactionsProvider(widget.chatId));
     final typingStates = ref.watch(chatTypingStatesProvider(widget.chatId));
     final summary = ref.watch(chatSummaryProvider(widget.chatId));
     final contexts = ref.watch(chatContextsProvider(widget.chatId));
     final avatars = ref.watch(chatParticipantAvatarsProvider(widget.chatId));
     final avatarMap = avatars.valueOrNull ?? const <String, String>{};
-    final reactionMap = <String, List<ChatReaction>>{};
-    for (final reaction in reactions.valueOrNull ?? const <ChatReaction>[]) {
-      reactionMap.putIfAbsent(reaction.messageId, () => []).add(reaction);
-    }
     final headerData = summary.maybeWhen(
       data: (value) {
         final title = (value?.accountTitle ?? '').trim();
@@ -835,17 +840,28 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                                     message: item,
                                     mine: item.senderId == userId,
                                     avatarUrl: avatarMap[item.senderId] ?? '',
-                                    reactions:
-                                        reactionMap[item.id] ??
-                                        const <ChatReaction>[],
                                     showReadStatus:
                                         item.senderId == userId && index == 0,
                                     onMediaTap: () =>
                                         _openMediaViewer(context, item),
-                                    onLongPress: () => _showMessageActions(
-                                      message: item,
-                                      mine: item.senderId == userId,
+                                    selected: _selectedMessageIds.contains(
+                                      item.id,
                                     ),
+                                    onTap: _selectionMode
+                                        ? () => _toggleMessageSelection(
+                                            item,
+                                            mine: item.senderId == userId,
+                                          )
+                                        : null,
+                                    onLongPress: () => _selectionMode
+                                        ? _toggleMessageSelection(
+                                            item,
+                                            mine: item.senderId == userId,
+                                          )
+                                        : _showMessageActions(
+                                            message: item,
+                                            mine: item.senderId == userId,
+                                          ),
                                   );
                                 },
                               );
@@ -863,6 +879,16 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                   const _TypingIndicator(),
                   const SizedBox(height: 10),
                 ],
+                if (_selectionMode) ...[
+                  _MessageSelectionBar(
+                    count: _selectedMessageIds.length,
+                    onCancel: _clearMessageSelection,
+                    onDelete: () => _deleteSelectedMessages(
+                      Set<String>.from(_selectedMessageIds),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                ],
                 _Composer(
                   controller: _messageController,
                   hintText: t.messageHint,
@@ -876,7 +902,6 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                       setState(() => _pendingAttachment = null),
                   onSend: _send,
                   onAttach: _showAttachMenu,
-                  onEmoji: _showEmojiMenu,
                 ),
               ],
             ),
@@ -1376,23 +1401,76 @@ class _ContextIconButton extends StatelessWidget {
   }
 }
 
+class _MessageSelectionBar extends StatelessWidget {
+  const _MessageSelectionBar({
+    required this.count,
+    required this.onCancel,
+    required this.onDelete,
+  });
+
+  final int count;
+  final VoidCallback onCancel;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final isRussian =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ru';
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
+      decoration: BoxDecoration(
+        color: kTextDark,
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: BrandTheme.basePillShadow(isDark: true),
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            onPressed: onCancel,
+            icon: const Icon(Icons.close_rounded, color: Colors.white),
+          ),
+          Expanded(
+            child: Text(
+              isRussian ? 'ВЫБРАНО: $count' : 'SELECTED: $count',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 13,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1.2,
+              ),
+            ),
+          ),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            onPressed: onDelete,
+            icon: const Icon(Icons.delete_rounded, color: BrandTheme.redTop),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _MessageBubble extends StatelessWidget {
   const _MessageBubble({
     required this.message,
     required this.mine,
     required this.avatarUrl,
-    required this.reactions,
     required this.showReadStatus,
     required this.onMediaTap,
+    required this.selected,
+    required this.onTap,
     required this.onLongPress,
   });
 
   final ChatMessage message;
   final bool mine;
   final String avatarUrl;
-  final List<ChatReaction> reactions;
   final bool showReadStatus;
+  final bool selected;
   final VoidCallback onMediaTap;
+  final VoidCallback? onTap;
   final VoidCallback onLongPress;
 
   @override
@@ -1405,14 +1483,19 @@ class _MessageBubble extends StatelessWidget {
         ? ''
         : parsedBody.body.trim();
     final bubble = GestureDetector(
+      onTap: onTap,
       onLongPress: onLongPress,
-      child: Container(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
         constraints: const BoxConstraints(maxWidth: 244),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
           color: mine ? kTextDark : Colors.white.withValues(alpha: 0.82),
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: kBorderColor, width: 1),
+          border: Border.all(
+            color: selected ? BrandTheme.redTop : kBorderColor,
+            width: selected ? 2 : 1,
+          ),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1438,13 +1521,37 @@ class _MessageBubble extends StatelessWidget {
         ),
       ),
     );
-    final bubbleWithReactions = Column(
+    final bubbleContent = Column(
       crossAxisAlignment: mine
           ? CrossAxisAlignment.end
           : CrossAxisAlignment.start,
       children: [
-        bubble,
-        if (reactions.isNotEmpty) _ReactionStrip(reactions: reactions),
+        Stack(
+          clipBehavior: Clip.none,
+          children: [
+            bubble,
+            if (selected)
+              Positioned(
+                top: -7,
+                right: mine ? -7 : null,
+                left: mine ? null : -7,
+                child: Container(
+                  width: 24,
+                  height: 24,
+                  decoration: BoxDecoration(
+                    color: BrandTheme.redTop,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 2),
+                  ),
+                  child: const Icon(
+                    Icons.check_rounded,
+                    size: 15,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+          ],
+        ),
         if (showReadStatus) _MessageReadStatus(readAt: message.readAt),
       ],
     );
@@ -1458,14 +1565,14 @@ class _MessageBubble extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.end,
         children: mine
             ? [
-                bubbleWithReactions,
+                bubbleContent,
                 const SizedBox(width: 8),
                 _ChatAvatar(avatarUrl: avatarUrl),
               ]
             : [
                 _ChatAvatar(avatarUrl: avatarUrl),
                 const SizedBox(width: 8),
-                bubbleWithReactions,
+                bubbleContent,
               ],
       ),
     );
@@ -2007,42 +2114,6 @@ class _PendingChatAttachment {
   };
 }
 
-class _ReactionStrip extends StatelessWidget {
-  const _ReactionStrip({required this.reactions});
-
-  final List<ChatReaction> reactions;
-
-  @override
-  Widget build(BuildContext context) {
-    final counts = <String, int>{};
-    for (final reaction in reactions) {
-      counts[reaction.emoji] = (counts[reaction.emoji] ?? 0) + 1;
-    }
-    return Container(
-      margin: const EdgeInsets.only(top: 4),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.92),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: kBorderColor),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          for (final entry in counts.entries)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 2),
-              child: Text(
-                entry.value > 1 ? '${entry.key} ${entry.value}' : entry.key,
-                style: const TextStyle(fontWeight: FontWeight.w800),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
 class _ChatAvatar extends StatelessWidget {
   const _ChatAvatar({required this.avatarUrl});
 
@@ -2095,7 +2166,6 @@ class _Composer extends StatelessWidget {
     required this.onRemoveAttachment,
     required this.onSend,
     required this.onAttach,
-    required this.onEmoji,
   });
 
   final TextEditingController controller;
@@ -2107,7 +2177,6 @@ class _Composer extends StatelessWidget {
   final VoidCallback onRemoveAttachment;
   final VoidCallback onSend;
   final VoidCallback onAttach;
-  final VoidCallback onEmoji;
 
   @override
   Widget build(BuildContext context) {
@@ -2184,13 +2253,6 @@ class _Composer extends StatelessWidget {
                     hintText: hintText,
                     border: InputBorder.none,
                   ),
-                ),
-              ),
-              IconButton(
-                onPressed: sending ? null : onEmoji,
-                icon: const Icon(
-                  Icons.emoji_emotions_rounded,
-                  color: kTextMuted,
                 ),
               ),
               IconButton(
