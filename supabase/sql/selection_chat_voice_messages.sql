@@ -22,3 +22,10 @@ begin
     add constraint selection_chat_messages_media_type_check
     check (media_type in ('text', 'image', 'video', 'file', 'audio'));
 end $$;
+
+alter table public.selection_chat_messages
+  add column if not exists metadata jsonb not null default '{}'::jsonb;
+
+update public.selection_chat_messages
+set metadata = '{}'::jsonb
+where metadata is null;

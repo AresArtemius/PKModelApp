@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:file_picker/file_picker.dart';
@@ -674,6 +675,11 @@ class _ChatPageState extends ConsumerState<ChatPage> {
             fileMime: attachment.isFile || attachment.isAudio
                 ? contentType
                 : '',
+            metadata: attachment.isAudio && attachment.duration != null
+                ? <String, dynamic>{
+                    'duration_ms': attachment.duration!.inMilliseconds,
+                  }
+                : null,
           );
     } finally {
       if (mounted) setState(() => _uploadingMedia = false);
@@ -2515,10 +2521,15 @@ class _AudioMessagePlayerState extends State<_AudioMessagePlayer> {
 
   @override
   Widget build(BuildContext context) {
-    final total = _duration.inMilliseconds <= 0 ? 1 : _duration.inMilliseconds;
-    final progress = (_position.inMilliseconds / total).clamp(0.0, 1.0);
-    final displayDuration = _duration.inMilliseconds > 0
+    final knownDuration = _duration.inMilliseconds > 0
         ? _duration
+        : widget.message.audioDuration ?? Duration.zero;
+    final total = knownDuration.inMilliseconds <= 0
+        ? 1
+        : knownDuration.inMilliseconds;
+    final progress = (_position.inMilliseconds / total).clamp(0.0, 1.0);
+    final displayDuration = knownDuration.inMilliseconds > 0
+        ? knownDuration
         : _position;
     return Container(
       width: 220,
@@ -2572,14 +2583,10 @@ class _AudioMessagePlayerState extends State<_AudioMessagePlayer> {
                   ),
                 ),
                 const SizedBox(height: 6),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(999),
-                  child: LinearProgressIndicator(
-                    value: progress,
-                    minHeight: 5,
-                    color: BrandTheme.redTop,
-                    backgroundColor: kTextDark.withValues(alpha: 0.12),
-                  ),
+                _VoiceWaveform(
+                  seed: widget.message.id,
+                  progress: progress,
+                  active: _playing,
                 ),
               ],
             ),
@@ -2596,6 +2603,83 @@ class _AudioMessagePlayerState extends State<_AudioMessagePlayer> {
         ],
       ),
     );
+  }
+}
+
+class _VoiceWaveform extends StatelessWidget {
+  const _VoiceWaveform({
+    required this.seed,
+    required this.progress,
+    required this.active,
+  });
+
+  final String seed;
+  final double progress;
+  final bool active;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 24,
+      width: double.infinity,
+      child: CustomPaint(
+        painter: _VoiceWaveformPainter(
+          seed: seed,
+          progress: progress.clamp(0.0, 1.0),
+          active: active,
+        ),
+      ),
+    );
+  }
+}
+
+class _VoiceWaveformPainter extends CustomPainter {
+  const _VoiceWaveformPainter({
+    required this.seed,
+    required this.progress,
+    required this.active,
+  });
+
+  final String seed;
+  final double progress;
+  final bool active;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.width <= 0 || size.height <= 0) return;
+    final hash = seed.hashCode.abs();
+    final bars = math.max(18, (size.width / 5).floor());
+    final step = size.width / bars;
+    final barWidth = math.min(3.0, step * 0.56);
+    final radius = Radius.circular(barWidth);
+    final inactivePaint = Paint()
+      ..color = kTextDark.withValues(alpha: 0.18)
+      ..style = PaintingStyle.fill;
+    final activePaint = Paint()
+      ..color = active ? BrandTheme.redTop : kTextDark.withValues(alpha: 0.84)
+      ..style = PaintingStyle.fill;
+
+    for (var i = 0; i < bars; i++) {
+      final wave =
+          0.34 +
+          0.66 * ((math.sin((i + 1) * ((hash % 11) + 3) * 0.72) + 1) / 2);
+      final height = math.max(5.0, size.height * wave);
+      final x = i * step + (step - barWidth) / 2;
+      final y = (size.height - height) / 2;
+      final rect = Rect.fromLTWH(x, y, barWidth, height);
+      final isFilled = bars <= 1 ? progress > 0 : i / (bars - 1) <= progress;
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(rect, radius),
+        isFilled ? activePaint : inactivePaint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _VoiceWaveformPainter oldDelegate) {
+    return oldDelegate.seed != seed ||
+        oldDelegate.progress != progress ||
+        oldDelegate.active != active;
   }
 }
 
@@ -2956,6 +3040,7 @@ class _PendingChatAttachment {
     required this.fileSize,
     required this.mimeType,
     required this.previewBytes,
+    this.duration,
     this.file,
     this.bytes,
   });
@@ -2965,6 +3050,7 @@ class _PendingChatAttachment {
   final String fileName;
   final int? fileSize;
   final String mimeType;
+  final Duration? duration;
   final Uint8List? bytes;
   final Uint8List? previewBytes;
 
@@ -3190,6 +3276,7 @@ class _VoiceRecorderSheetState extends State<_VoiceRecorderSheet> {
         fileName: 'voice_$stamp.m4a',
         fileSize: bytes.length,
         mimeType: 'audio/mp4',
+        duration: _duration,
         bytes: bytes,
         previewBytes: null,
       ),

@@ -337,6 +337,7 @@ class ChatMessage {
     required this.fileName,
     required this.fileSize,
     required this.fileMime,
+    required this.metadata,
     required this.deletedAt,
     required this.readAt,
     required this.pinnedAt,
@@ -354,6 +355,7 @@ class ChatMessage {
   final String fileName;
   final int? fileSize;
   final String fileMime;
+  final Map<String, dynamic> metadata;
   final DateTime? deletedAt;
   final DateTime? readAt;
   final DateTime? pinnedAt;
@@ -367,6 +369,23 @@ class ChatMessage {
   bool get isVideo => mediaType == 'video';
   bool get isFile => mediaType == 'file';
   bool get isAudio => mediaType == 'audio';
+  Duration? get audioDuration {
+    final raw =
+        metadata['duration_ms'] ??
+        metadata['durationMs'] ??
+        metadata['duration_seconds'] ??
+        metadata['durationSeconds'];
+    if (raw == null) return null;
+    final number = raw is num ? raw : num.tryParse(raw.toString());
+    if (number == null || number <= 0) return null;
+    final isSeconds =
+        raw == metadata['duration_seconds'] ||
+        raw == metadata['durationSeconds'];
+    return isSeconds
+        ? Duration(milliseconds: (number * 1000).round())
+        : Duration(milliseconds: number.round());
+  }
+
   String get fileDisplayName {
     final explicit = fileName.trim();
     if (explicit.isNotEmpty) return explicit;
@@ -387,6 +406,7 @@ class ChatMessage {
       fileName: (map['file_name'] ?? '').toString().trim(),
       fileSize: _intOrNull(map['file_size']),
       fileMime: (map['file_mime'] ?? '').toString().trim(),
+      metadata: _mapOrEmpty(map['metadata']),
       deletedAt: DateTime.tryParse((map['deleted_at'] ?? '').toString()),
       readAt: DateTime.tryParse((map['read_at'] ?? '').toString()),
       pinnedAt: DateTime.tryParse((map['pinned_at'] ?? '').toString()),
@@ -394,6 +414,12 @@ class ChatMessage {
       createdAt: DateTime.tryParse((map['created_at'] ?? '').toString()),
     );
   }
+}
+
+Map<String, dynamic> _mapOrEmpty(dynamic raw) {
+  if (raw is Map<String, dynamic>) return raw;
+  if (raw is Map) return Map<String, dynamic>.from(raw);
+  return const <String, dynamic>{};
 }
 
 int? _intOrNull(dynamic raw) {

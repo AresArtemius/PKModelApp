@@ -26,6 +26,7 @@ class ChatService {
   static const String _baseMessageSelect =
       'id,chat_id,sender_id,body,media_type,media_url,media_thumbnail_url,deleted_at,created_at';
   static const String _fileMessageFields = ',file_name,file_size,file_mime';
+  static const String _metadataMessageFields = ',metadata';
 
   final SupabaseClient _sb;
 
@@ -33,11 +34,13 @@ class ChatService {
     bool includeReadAt = false,
     bool includeFileFields = true,
     bool includePinnedFields = false,
+    bool includeMetadata = true,
   }) {
     final readAt = includeReadAt ? ',read_at' : '';
     final fileFields = includeFileFields ? _fileMessageFields : '';
     final pinnedFields = includePinnedFields ? ',pinned_at,pinned_by' : '';
-    return '$_baseMessageSelect$readAt$fileFields$pinnedFields';
+    final metadataFields = includeMetadata ? _metadataMessageFields : '';
+    return '$_baseMessageSelect$readAt$fileFields$pinnedFields$metadataFields';
   }
 
   Future<List<CastingInvitation>> fetchMyInvitations(String userId) async {
@@ -251,6 +254,10 @@ class ChatService {
   bool _isMissingChatPinnedColumn(PostgrestException e) {
     return SupabaseCompat.isMissingColumn(e, 'pinned_at') ||
         SupabaseCompat.isMissingColumn(e, 'pinned_by');
+  }
+
+  bool _isMissingChatMetadataColumn(PostgrestException e) {
+    return SupabaseCompat.isMissingColumn(e, 'metadata');
   }
 
   Future<String> ensureSelectionChat({
@@ -744,6 +751,13 @@ class ChatService {
   }
 
   String _chatPreview(ChatMessage message) {
+    if (message.isAudio) {
+      final duration = message.audioDuration;
+      final suffix = duration == null
+          ? ''
+          : ' ${_formatAudioDuration(duration)}';
+      return 'Голосовое$suffix';
+    }
     final text = message.body.trim();
     if (text.isNotEmpty &&
         text != 'Фото' &&
@@ -759,6 +773,13 @@ class ChatService {
     return text;
   }
 
+  String _formatAudioDuration(Duration duration) {
+    final totalSeconds = duration.inSeconds.clamp(0, 24 * 60 * 60);
+    final minutes = (totalSeconds ~/ 60).toString().padLeft(2, '0');
+    final seconds = (totalSeconds % 60).toString().padLeft(2, '0');
+    return '$minutes:$seconds';
+  }
+
   String _chatCoverPhoto(dynamic rawCover, List<String> photoUrls) {
     final cover = (rawCover ?? '').toString().trim();
     if (cover.isNotEmpty) return cover;
@@ -766,10 +787,18 @@ class ChatService {
   }
 
   Future<ChatMessage?> _fetchLatestMessage(String chatId) async {
-    Future<List<dynamic>> run({required bool includeFileFields}) async {
+    Future<List<dynamic>> run({
+      required bool includeFileFields,
+      required bool includeMetadata,
+    }) async {
       return await _sb
           .from('selection_chat_messages')
-          .select(_messageSelect(includeFileFields: includeFileFields))
+          .select(
+            _messageSelect(
+              includeFileFields: includeFileFields,
+              includeMetadata: includeMetadata,
+            ),
+          )
           .eq('chat_id', chatId)
           .filter('deleted_at', 'is', null)
           .order('created_at', ascending: false)
@@ -778,10 +807,15 @@ class ChatService {
 
     List<dynamic> rows;
     try {
-      rows = await run(includeFileFields: true);
+      rows = await run(includeFileFields: true, includeMetadata: true);
     } on PostgrestException catch (e) {
-      if (!_isMissingChatFileColumn(e)) rethrow;
-      rows = await run(includeFileFields: false);
+      if (_isMissingChatFileColumn(e)) {
+        rows = await run(includeFileFields: false, includeMetadata: true);
+      } else if (_isMissingChatMetadataColumn(e)) {
+        rows = await run(includeFileFields: true, includeMetadata: false);
+      } else {
+        rethrow;
+      }
     }
     if (rows.isEmpty) return null;
     return ChatMessage.fromMap(Map<String, dynamic>.from(rows.first as Map));
@@ -862,10 +896,18 @@ class ChatService {
     required DateTime before,
     int limit = 60,
   }) async {
-    Future<List<dynamic>> run({required bool includeReadAt}) async {
+    Future<List<dynamic>> run({
+      required bool includeReadAt,
+      required bool includeMetadata,
+    }) async {
       return await _sb
           .from('selection_chat_messages')
-          .select(_messageSelect(includeReadAt: includeReadAt))
+          .select(
+            _messageSelect(
+              includeReadAt: includeReadAt,
+              includeMetadata: includeMetadata,
+            ),
+          )
           .eq('chat_id', chatId)
           .lt('created_at', before.toUtc().toIso8601String())
           .order('created_at', ascending: false)
@@ -874,24 +916,30 @@ class ChatService {
 
     List<dynamic> rows;
     try {
-      rows = await run(includeReadAt: true);
+      rows = await run(includeReadAt: true, includeMetadata: true);
     } on PostgrestException catch (e) {
       if (_isMissingChatFileColumn(e)) {
         rows = await _sb
             .from('selection_chat_messages')
             .select(
-              _messageSelect(includeReadAt: true, includeFileFields: false),
+              _messageSelect(
+                includeReadAt: true,
+                includeFileFields: false,
+                includeMetadata: true,
+              ),
             )
             .eq('chat_id', chatId)
             .lt('created_at', before.toUtc().toIso8601String())
             .order('created_at', ascending: false)
             .limit(limit);
+      } else if (_isMissingChatMetadataColumn(e)) {
+        rows = await run(includeReadAt: true, includeMetadata: false);
       } else if (_isMissingChatPinnedColumn(e)) {
-        rows = await run(includeReadAt: true);
+        rows = await run(includeReadAt: true, includeMetadata: true);
       } else if (!SupabaseCompat.isMissingColumn(e, 'read_at')) {
         rethrow;
       } else {
-        rows = await run(includeReadAt: false);
+        rows = await run(includeReadAt: false, includeMetadata: true);
       }
     }
 
@@ -906,13 +954,17 @@ class ChatService {
   Future<List<ChatMessage>> fetchPinnedMessages(String chatId) async {
     if (chatId.trim().isEmpty) return const <ChatMessage>[];
 
-    Future<List<dynamic>> run({required bool includePinnedFields}) async {
+    Future<List<dynamic>> run({
+      required bool includePinnedFields,
+      required bool includeMetadata,
+    }) async {
       return await _sb
           .from('selection_chat_messages')
           .select(
             _messageSelect(
               includeReadAt: true,
               includePinnedFields: includePinnedFields,
+              includeMetadata: includeMetadata,
             ),
           )
           .eq('chat_id', chatId)
@@ -923,13 +975,25 @@ class ChatService {
     }
 
     try {
-      final rows = await run(includePinnedFields: true);
+      final rows = await run(includePinnedFields: true, includeMetadata: true);
       return rows
           .map((e) => ChatMessage.fromMap(Map<String, dynamic>.from(e as Map)))
           .where((e) => !e.isDeleted && e.isPinned)
           .toList(growable: false);
     } on PostgrestException catch (e) {
       if (_isMissingChatPinnedColumn(e)) return const <ChatMessage>[];
+      if (_isMissingChatMetadataColumn(e)) {
+        final rows = await run(
+          includePinnedFields: true,
+          includeMetadata: false,
+        );
+        return rows
+            .map(
+              (e) => ChatMessage.fromMap(Map<String, dynamic>.from(e as Map)),
+            )
+            .where((e) => !e.isDeleted && e.isPinned)
+            .toList(growable: false);
+      }
       rethrow;
     }
   }
@@ -992,6 +1056,7 @@ class ChatService {
     String fileName = '',
     int? fileSize,
     String fileMime = '',
+    Map<String, dynamic>? metadata,
   }) async {
     final text = body.trim();
     final userId = _sb.auth.currentUser?.id;
@@ -1018,6 +1083,7 @@ class ChatService {
       'file_name': fileName.trim().isEmpty ? null : fileName.trim(),
       'file_size': fileSize,
       'file_mime': fileMime.trim().isEmpty ? null : fileMime.trim(),
+      if (metadata != null && metadata.isNotEmpty) 'metadata': metadata,
     };
 
     Map<String, dynamic>? inserted;
@@ -1045,6 +1111,14 @@ class ChatService {
             .from('selection_chat_messages')
             .insert(payload)
             .select('id')
+            .single();
+        inserted = Map<String, dynamic>.from(row);
+      } else if (_isMissingChatMetadataColumn(e)) {
+        payload.remove('metadata');
+        final row = await _sb
+            .from('selection_chat_messages')
+            .insert(payload)
+            .select('id,read_at')
             .single();
         inserted = Map<String, dynamic>.from(row);
       } else {
