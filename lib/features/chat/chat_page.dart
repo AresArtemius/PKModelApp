@@ -3118,14 +3118,18 @@ class _VoiceRecorderSheetState extends State<_VoiceRecorderSheet> {
   final _recorder = AudioRecorder();
   final _player = AudioPlayer();
   Timer? _timer;
+  StreamSubscription<Amplitude>? _amplitudeSub;
   StreamSubscription<PlayerState>? _playerStateSub;
   bool _recording = false;
   bool _saving = false;
   bool _playing = false;
+  bool _locked = false;
   Duration _duration = Duration.zero;
+  DateTime? _recordStartedAt;
   String? _recordedPath;
   Uint8List? _recordedBytes;
   String _error = '';
+  final List<double> _levels = List<double>.filled(34, 0.16);
 
   @override
   void initState() {
@@ -3143,6 +3147,7 @@ class _VoiceRecorderSheetState extends State<_VoiceRecorderSheet> {
   @override
   void dispose() {
     _timer?.cancel();
+    unawaited(_amplitudeSub?.cancel());
     unawaited(_playerStateSub?.cancel());
     unawaited(_recorder.cancel());
     unawaited(_recorder.dispose());
@@ -3182,13 +3187,21 @@ class _VoiceRecorderSheetState extends State<_VoiceRecorderSheet> {
         ),
         path: path,
       );
+      _amplitudeSub?.cancel();
+      _amplitudeSub = _recorder
+          .onAmplitudeChanged(const Duration(milliseconds: 90))
+          .listen(_handleAmplitude);
       _timer?.cancel();
-      _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      _recordStartedAt = DateTime.now();
+      _timer = Timer.periodic(const Duration(milliseconds: 250), (_) {
         if (!mounted) return;
-        setState(() => _duration += const Duration(seconds: 1));
+        final started = _recordStartedAt;
+        if (started == null) return;
+        setState(() => _duration = DateTime.now().difference(started));
       });
       setState(() {
         _recording = true;
+        _locked = false;
         _recordedPath = null;
         _recordedBytes = null;
         _duration = Duration.zero;
@@ -3199,6 +3212,17 @@ class _VoiceRecorderSheetState extends State<_VoiceRecorderSheet> {
     }
   }
 
+  void _handleAmplitude(Amplitude amplitude) {
+    if (!mounted || !_recording) return;
+    final current = amplitude.current.isFinite ? amplitude.current : -60.0;
+    final normalized = ((current + 55) / 55).clamp(0.08, 1.0).toDouble();
+    setState(() {
+      _levels
+        ..removeAt(0)
+        ..add(normalized);
+    });
+  }
+
   Future<void> _stop() async {
     setState(() {
       _saving = true;
@@ -3207,6 +3231,8 @@ class _VoiceRecorderSheetState extends State<_VoiceRecorderSheet> {
     try {
       final path = await _recorder.stop();
       _timer?.cancel();
+      await _amplitudeSub?.cancel();
+      _amplitudeSub = null;
       if (path == null || path.trim().isEmpty) {
         throw StateError('Файл записи не создан');
       }
@@ -3215,8 +3241,13 @@ class _VoiceRecorderSheetState extends State<_VoiceRecorderSheet> {
         throw StateError('Файл записи пустой');
       }
       if (!mounted) return;
+      final started = _recordStartedAt;
       setState(() {
         _recording = false;
+        _locked = false;
+        if (started != null) {
+          _duration = DateTime.now().difference(started);
+        }
         _recordedPath = path;
         _recordedBytes = bytes;
       });
@@ -3226,6 +3257,34 @@ class _VoiceRecorderSheetState extends State<_VoiceRecorderSheet> {
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  Future<void> _cancelRecording() async {
+    try {
+      _timer?.cancel();
+      await _amplitudeSub?.cancel();
+      _amplitudeSub = null;
+      if (_recording) {
+        await _recorder.cancel();
+      }
+    } catch (_) {
+      // Cancel is a user escape hatch; keep the UI responsive.
+    }
+    if (!mounted) return;
+    setState(() {
+      _recording = false;
+      _saving = false;
+      _playing = false;
+      _locked = false;
+      _duration = Duration.zero;
+      _recordStartedAt = null;
+      _recordedPath = null;
+      _recordedBytes = null;
+      _error = '';
+      for (var i = 0; i < _levels.length; i++) {
+        _levels[i] = 0.16;
+      }
+    });
   }
 
   Future<void> _togglePreview() async {
@@ -3252,12 +3311,16 @@ class _VoiceRecorderSheetState extends State<_VoiceRecorderSheet> {
 
   void _reset() {
     _timer?.cancel();
+    unawaited(_amplitudeSub?.cancel());
+    _amplitudeSub = null;
     unawaited(_player.stop());
     setState(() {
       _recording = false;
       _saving = false;
       _playing = false;
+      _locked = false;
       _duration = Duration.zero;
+      _recordStartedAt = null;
       _recordedPath = null;
       _recordedBytes = null;
       _error = '';
@@ -3286,14 +3349,11 @@ class _VoiceRecorderSheetState extends State<_VoiceRecorderSheet> {
   @override
   Widget build(BuildContext context) {
     final hasRecording = _recordedBytes != null && _recordedBytes!.isNotEmpty;
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     return Padding(
-      padding: EdgeInsets.only(
-        left: 14,
-        right: 14,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 14,
-      ),
+      padding: EdgeInsets.only(left: 14, right: 14, bottom: bottomInset + 14),
       child: Container(
-        padding: const EdgeInsets.fromLTRB(22, 22, 22, 18),
+        padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(32),
@@ -3306,35 +3366,116 @@ class _VoiceRecorderSheetState extends State<_VoiceRecorderSheet> {
               'ГОЛОСОВОЕ',
               style: TextStyle(
                 color: kTextDark,
-                fontSize: 22,
+                fontSize: 20,
                 fontWeight: FontWeight.w900,
                 letterSpacing: 4,
               ),
             ),
-            const SizedBox(height: 18),
-            Container(
-              width: 112,
-              height: 112,
-              decoration: BoxDecoration(
-                color: _recording ? BrandTheme.redTop : kTextDark,
-                shape: BoxShape.circle,
-                boxShadow: BrandTheme.basePillShadow(isDark: false),
-              ),
-              child: Icon(
-                _recording ? Icons.graphic_eq_rounded : Icons.mic_rounded,
-                color: Colors.white,
-                size: 46,
+            const SizedBox(height: 14),
+            GestureDetector(
+              onHorizontalDragEnd: (details) {
+                final velocity = details.primaryVelocity ?? 0;
+                if (_recording && !_saving && velocity < -420) {
+                  unawaited(_cancelRecording());
+                }
+              },
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF7F7F7),
+                  borderRadius: BorderRadius.circular(26),
+                  border: Border.all(color: kBorderColor),
+                  boxShadow: BrandTheme.basePillShadow(isDark: false),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 58,
+                      height: 58,
+                      decoration: BoxDecoration(
+                        color: _recording ? BrandTheme.redTop : kTextDark,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        _recording
+                            ? Icons.graphic_eq_rounded
+                            : hasRecording
+                            ? Icons.check_rounded
+                            : Icons.mic_rounded,
+                        color: Colors.white,
+                        size: 30,
+                      ),
+                    ),
+                    const SizedBox(width: 13),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _recording
+                                ? (_locked
+                                      ? 'ЗАПИСЬ ЗАФИКСИРОВАНА'
+                                      : 'ИДЕТ ЗАПИСЬ')
+                                : hasRecording
+                                ? 'ЗАПИСЬ ГОТОВА'
+                                : 'НАЖМИТЕ, ЧТОБЫ НАЧАТЬ',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: kTextDark,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 1.2,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          _LiveVoiceWaveform(
+                            levels: _levels,
+                            active: _recording || _playing,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      _formatVoiceDuration(_duration),
+                      style: const TextStyle(
+                        color: kTextDark,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-            const SizedBox(height: 14),
-            Text(
-              _formatVoiceDuration(_duration),
-              style: const TextStyle(
-                color: kTextDark,
-                fontSize: 28,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 1.4,
-              ),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 180),
+              child: _recording && !_locked
+                  ? const Padding(
+                      padding: EdgeInsets.only(top: 7),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.keyboard_arrow_left_rounded,
+                            color: kTextMuted,
+                            size: 18,
+                          ),
+                          SizedBox(width: 2),
+                          Text(
+                            'Свайп влево — отменить',
+                            style: TextStyle(
+                              color: kTextMuted,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : const SizedBox.shrink(),
             ),
             if (_error.isNotEmpty) ...[
               const SizedBox(height: 10),
@@ -3348,53 +3489,178 @@ class _VoiceRecorderSheetState extends State<_VoiceRecorderSheet> {
                 ),
               ),
             ],
-            const SizedBox(height: 18),
-            Row(
-              children: [
-                Expanded(
-                  child: _SheetPillButton(
-                    label: _recording ? 'СТОП' : 'ЗАПИСЬ',
-                    dark: true,
-                    loading: _saving,
+            const SizedBox(height: 12),
+            if (_recording)
+              Row(
+                children: [
+                  Expanded(
+                    child: _SheetPillButton(
+                      label: 'ОТМЕНИТЬ',
+                      onTap: _saving ? null : _cancelRecording,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  _VoiceLockButton(
+                    locked: _locked,
                     onTap: _saving
                         ? null
-                        : _recording
-                        ? _stop
-                        : _start,
+                        : () => setState(() => _locked = !_locked),
                   ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _SheetPillButton(
-                    label: _playing ? 'ПАУЗА' : 'ПРОСЛУШАТЬ',
-                    onTap: hasRecording && !_recording ? _togglePreview : null,
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _SheetPillButton(
+                      label: 'ГОТОВО',
+                      dark: true,
+                      loading: _saving,
+                      onTap: _saving ? null : _stop,
+                    ),
                   ),
-                ),
-              ],
-            ),
+                ],
+              )
+            else
+              Row(
+                children: [
+                  Expanded(
+                    child: _SheetPillButton(
+                      label: hasRecording
+                          ? (_playing ? 'ПАУЗА' : 'ПРОСЛУШАТЬ')
+                          : 'ЗАПИСЬ',
+                      dark: !hasRecording,
+                      loading: _saving,
+                      onTap: _saving
+                          ? null
+                          : hasRecording
+                          ? _togglePreview
+                          : _start,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _SheetPillButton(
+                      label: hasRecording ? 'ПРИКРЕПИТЬ' : 'ЗАКРЫТЬ',
+                      dark: hasRecording,
+                      onTap: hasRecording
+                          ? _attach
+                          : () => Navigator.of(context).pop(),
+                    ),
+                  ),
+                ],
+              ),
             const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: _SheetPillButton(
-                    label: 'УДАЛИТЬ',
-                    onTap: hasRecording || _recording ? _reset : null,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _SheetPillButton(
-                    label: 'ПРИКРЕПИТЬ',
-                    dark: true,
-                    onTap: hasRecording && !_recording ? _attach : null,
-                  ),
-                ),
-              ],
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 180),
+              child: _recording
+                  ? Text(
+                      _locked
+                          ? 'Можно отпустить экран — запись продолжается.'
+                          : 'Нажмите на замок, чтобы не удерживать запись.',
+                      key: ValueKey(_locked),
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: kTextMuted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    )
+                  : hasRecording
+                  ? _SheetPillButton(
+                      label: 'УДАЛИТЬ И ЗАПИСАТЬ ЗАНОВО',
+                      onTap: _reset,
+                    )
+                  : const SizedBox.shrink(),
             ),
           ],
         ),
       ),
     );
+  }
+}
+
+class _VoiceLockButton extends StatelessWidget {
+  const _VoiceLockButton({required this.locked, required this.onTap});
+
+  final bool locked;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onTap != null;
+    return Opacity(
+      opacity: enabled ? 1 : 0.42,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(999),
+          onTap: onTap,
+          child: Container(
+            width: 54,
+            height: 54,
+            decoration: BoxDecoration(
+              color: locked ? BrandTheme.redTop : Colors.white,
+              shape: BoxShape.circle,
+              border: Border.all(color: kBorderColor),
+              boxShadow: BrandTheme.basePillShadow(isDark: false),
+            ),
+            child: Icon(
+              locked ? Icons.lock_rounded : Icons.lock_open_rounded,
+              color: locked ? Colors.white : kTextDark,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LiveVoiceWaveform extends StatelessWidget {
+  const _LiveVoiceWaveform({required this.levels, required this.active});
+
+  final List<double> levels;
+  final bool active;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 26,
+      width: double.infinity,
+      child: CustomPaint(
+        painter: _LiveVoiceWaveformPainter(levels: levels, active: active),
+      ),
+    );
+  }
+}
+
+class _LiveVoiceWaveformPainter extends CustomPainter {
+  const _LiveVoiceWaveformPainter({required this.levels, required this.active});
+
+  final List<double> levels;
+  final bool active;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (levels.isEmpty || size.width <= 0 || size.height <= 0) return;
+    final bars = levels.length;
+    final step = size.width / bars;
+    final barWidth = math.min(4.0, step * 0.56);
+    final radius = Radius.circular(barWidth);
+    final paint = Paint()
+      ..color = active ? BrandTheme.redTop : kTextDark.withValues(alpha: 0.24)
+      ..style = PaintingStyle.fill;
+    for (var i = 0; i < bars; i++) {
+      final level = levels[i].clamp(0.08, 1.0);
+      final height = math.max(4.0, size.height * level);
+      final x = i * step + (step - barWidth) / 2;
+      final y = (size.height - height) / 2;
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(Rect.fromLTWH(x, y, barWidth, height), radius),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _LiveVoiceWaveformPainter oldDelegate) {
+    return true;
   }
 }
 
