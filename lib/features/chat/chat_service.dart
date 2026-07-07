@@ -1476,6 +1476,56 @@ class ChatService {
     );
   }
 
+  Future<void> forwardMessages({
+    required String targetChatId,
+    required List<ChatMessage> messages,
+  }) async {
+    final cleanTargetChatId = targetChatId.trim();
+    final userId = _sb.auth.currentUser?.id;
+    if (userId == null || cleanTargetChatId.isEmpty || messages.isEmpty) {
+      return;
+    }
+
+    final ordered =
+        messages
+            .where(
+              (message) => !message.isDeleted && message.id.trim().isNotEmpty,
+            )
+            .toList(growable: false)
+          ..sort((a, b) {
+            final aTime = a.createdAt;
+            final bTime = b.createdAt;
+            if (aTime == null && bTime == null) return a.id.compareTo(b.id);
+            if (aTime == null) return -1;
+            if (bTime == null) return 1;
+            return aTime.compareTo(bTime);
+          });
+
+    for (final message in ordered) {
+      final metadata = Map<String, dynamic>.from(message.metadata);
+      metadata['forwarded'] = true;
+      metadata['forwarded_from_message_id'] = message.id;
+      metadata['forwarded_from_chat_id'] = message.chatId;
+
+      await sendMessage(
+        chatId: cleanTargetChatId,
+        body: _forwardedBody(message.body),
+        mediaType: message.mediaType,
+        mediaUrl: message.mediaUrl,
+        mediaThumbnailUrl: message.mediaThumbnailUrl,
+        fileName: message.fileName,
+        fileSize: message.fileSize,
+        fileMime: message.fileMime,
+        metadata: metadata,
+      );
+    }
+  }
+
+  String _forwardedBody(String body) {
+    final text = body.trim();
+    return text.isEmpty ? 'Переслано' : text;
+  }
+
   Future<void> _logMessageProfileAction({
     required String chatId,
     required String messageId,

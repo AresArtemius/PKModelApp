@@ -486,12 +486,25 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   }
 
   ChatMessage? _singleSelectedMessage(List<ChatMessage> visibleMessages) {
-    if (_selectedMessageIds.length != 1) return null;
-    final id = _selectedMessageIds.first;
+    final selected = _selectedMessages(visibleMessages);
+    if (selected.length != 1) return null;
+    return selected.first;
+  }
+
+  List<ChatMessage> _selectedMessages(List<ChatMessage> visibleMessages) {
+    final selected = <ChatMessage>[];
     for (final message in visibleMessages) {
-      if (message.id == id) return message;
+      if (_selectedMessageIds.contains(message.id)) selected.add(message);
     }
-    return null;
+    selected.sort((a, b) {
+      final aTime = a.createdAt;
+      final bTime = b.createdAt;
+      if (aTime == null && bTime == null) return a.id.compareTo(b.id);
+      if (aTime == null) return -1;
+      if (bTime == null) return 1;
+      return aTime.compareTo(bTime);
+    });
+    return selected;
   }
 
   void _replyToSelectedMessage(ChatMessage message) {
@@ -505,6 +518,86 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     await _setMessagePinned(message, !message.isPinned);
     if (!mounted) return;
     _clearMessageSelection();
+  }
+
+  Future<void> _forwardSelectedMessages(List<ChatMessage> messages) async {
+    final cleanMessages = messages
+        .where((message) => !message.isDeleted && message.id.trim().isNotEmpty)
+        .toList(growable: false);
+    if (cleanMessages.isEmpty) return;
+
+    final userId = ref.read(currentUserIdProvider);
+    if (userId == null) return;
+
+    List<ChatListItem> chats;
+    try {
+      chats = await ref
+          .read(chatServiceProvider)
+          .fetchMyChats(userId: userId, archived: false);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            AppErrorMapper.message(error, AppLocalizations.of(context)!),
+          ),
+        ),
+      );
+      return;
+    }
+
+    final targets = chats
+        .where((chat) => chat.id != widget.chatId)
+        .toList(growable: false);
+    if (!mounted) return;
+    if (targets.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _isRussian
+                ? 'Нет другого диалога для пересылки.'
+                : 'No other chat to forward to.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    final target = await showModalBottomSheet<ChatListItem>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) =>
+          _ForwardChatPickerSheet(chats: targets, count: cleanMessages.length),
+    );
+    if (target == null || !mounted) return;
+
+    try {
+      await ref
+          .read(chatServiceProvider)
+          .forwardMessages(targetChatId: target.id, messages: cleanMessages);
+      if (!mounted) return;
+      _clearMessageSelection();
+      ref.invalidate(myChatsProvider(false));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _isRussian
+                ? 'Сообщения пересланы: ${target.title}'
+                : 'Messages forwarded to ${target.title}',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            AppErrorMapper.message(error, AppLocalizations.of(context)!),
+          ),
+        ),
+      );
+    }
   }
 
   bool get _isRussian =>
@@ -947,6 +1040,14 @@ class _ChatPageState extends ConsumerState<ChatPage> {
             },
           ),
           _ActionSheetTile(
+            icon: Icons.forward_rounded,
+            title: _isRussian ? 'Переслать' : 'Forward',
+            onTap: () async {
+              Navigator.of(context).pop();
+              await _forwardSelectedMessages([message]);
+            },
+          ),
+          _ActionSheetTile(
             icon: message.isPinned
                 ? Icons.push_pin_rounded
                 : Icons.push_pin_outlined,
@@ -958,15 +1059,14 @@ class _ChatPageState extends ConsumerState<ChatPage> {
               await _setMessagePinned(message, !message.isPinned);
             },
           ),
-          if (mine)
-            _ActionSheetTile(
-              icon: Icons.checklist_rounded,
-              title: _isRussian ? 'Выбрать' : 'Select',
-              onTap: () {
-                Navigator.of(context).pop();
-                _toggleMessageSelection(message, mine: mine);
-              },
-            ),
+          _ActionSheetTile(
+            icon: Icons.checklist_rounded,
+            title: _isRussian ? 'Выбрать' : 'Select',
+            onTap: () {
+              Navigator.of(context).pop();
+              _toggleMessageSelection(message);
+            },
+          ),
           if (mine)
             _ActionSheetTile(
               icon: Icons.delete_rounded,
@@ -984,14 +1084,14 @@ class _ChatPageState extends ConsumerState<ChatPage> {
 
   bool get _selectionMode => _selectedMessageIds.isNotEmpty;
 
-  void _toggleMessageSelection(ChatMessage message, {required bool mine}) {
-    if (!mine || message.deletedAt != null) {
+  void _toggleMessageSelection(ChatMessage message) {
+    if (message.deletedAt != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             _isRussian
-                ? 'Выбирать для удаления можно только свои сообщения.'
-                : 'Only your own messages can be selected for deletion.',
+                ? 'Это сообщение уже удалено.'
+                : 'This message is already deleted.',
           ),
         ),
       );
@@ -1110,6 +1210,10 @@ class _ChatPageState extends ConsumerState<ChatPage> {
         ? const <ChatMessage>[]
         : _mergedMessages(messages.valueOrNull!);
     final selectedMessage = _singleSelectedMessage(searchVisibleMessages);
+    final selectedMessages = _selectedMessages(searchVisibleMessages);
+    final selectedMessagesAllMine =
+        selectedMessages.isNotEmpty &&
+        selectedMessages.every((message) => message.senderId == userId);
     final searchHits = _searchHits(searchVisibleMessages);
     final pinnedPanelMessages = _pinnedMessagesForPanel(
       pinnedMessages.valueOrNull ?? const <ChatMessage>[],
@@ -1276,23 +1380,16 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                                     activeSearchResult:
                                         _activeSearchMessageId == item.id,
                                     onTap: _selectionMode
-                                        ? () => _toggleMessageSelection(
-                                            item,
-                                            mine: item.senderId == userId,
-                                          )
+                                        ? () => _toggleMessageSelection(item)
                                         : null,
                                     onLongPress: () {
-                                      final mine = item.senderId == userId;
-                                      if (_selectionMode || mine) {
-                                        _toggleMessageSelection(
-                                          item,
-                                          mine: mine,
-                                        );
+                                      if (_selectionMode) {
+                                        _toggleMessageSelection(item);
                                         return;
                                       }
                                       _showMessageActions(
                                         message: item,
-                                        mine: mine,
+                                        mine: item.senderId == userId,
                                       );
                                     },
                                     onSecondaryTap: () => _showMessageActions(
@@ -1324,12 +1421,17 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                     onReply: selectedMessage == null
                         ? null
                         : () => _replyToSelectedMessage(selectedMessage),
+                    onForward: selectedMessages.isEmpty
+                        ? null
+                        : () => _forwardSelectedMessages(selectedMessages),
                     onTogglePin: selectedMessage == null
                         ? null
                         : () => _toggleSelectedMessagePinned(selectedMessage),
-                    onDelete: () => _deleteSelectedMessages(
-                      Set<String>.from(_selectedMessageIds),
-                    ),
+                    onDelete: selectedMessagesAllMine
+                        ? () => _deleteSelectedMessages(
+                            Set<String>.from(_selectedMessageIds),
+                          )
+                        : null,
                   ),
                   const SizedBox(height: 10),
                 ],
@@ -2120,12 +2222,175 @@ class _ContextIconButton extends StatelessWidget {
   }
 }
 
+class _ForwardChatPickerSheet extends StatelessWidget {
+  const _ForwardChatPickerSheet({required this.chats, required this.count});
+
+  final List<ChatListItem> chats;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final isRussian =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ru';
+    final height = MediaQuery.sizeOf(context).height * 0.72;
+    return Container(
+      height: height,
+      margin: const EdgeInsets.all(12),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(color: kBorderColor),
+        boxShadow: BrandTheme.basePillShadow(isDark: false),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: const BoxDecoration(
+                  color: kTextDark,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.forward_rounded,
+                  color: Colors.white,
+                  size: 21,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      isRussian ? 'Переслать в чат' : 'Forward to chat',
+                      style: _chatSheetTitleStyle(),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      isRussian
+                          ? 'Сообщений: $count'
+                          : 'Messages selected: $count',
+                      style: const TextStyle(
+                        color: kTextMuted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                onPressed: () => Navigator.of(context).pop(),
+                icon: const Icon(Icons.close_rounded),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Expanded(
+            child: ListView.separated(
+              itemCount: chats.length,
+              separatorBuilder: (_, _) => const SizedBox(height: 8),
+              itemBuilder: (context, index) {
+                final chat = chats[index];
+                final preview = chat.lastMessage.trim().isEmpty
+                    ? (isRussian ? 'Диалог создан' : 'Chat created')
+                    : chat.lastMessage.trim();
+                return Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(18),
+                    onTap: () => Navigator.of(context).pop(chat),
+                    child: Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: catalogCardDecoration().copyWith(
+                        boxShadow: const [],
+                        border: Border.all(color: kBorderColor),
+                      ),
+                      child: Row(
+                        children: [
+                          _ChatAvatar(avatarUrl: chat.photoUrl),
+                          const SizedBox(width: 11),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  chat.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: kTextDark,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                                if (chat.contextLabel.trim().isNotEmpty) ...[
+                                  const SizedBox(height: 3),
+                                  Text(
+                                    chat.contextLabel,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: kTextMuted,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
+                                const SizedBox(height: 4),
+                                Text(
+                                  preview,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: kTextMuted,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          const Icon(
+                            Icons.chevron_right_rounded,
+                            color: kTextMuted,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+TextStyle _chatSheetTitleStyle() {
+  return const TextStyle(
+    color: kTextDark,
+    fontSize: 16,
+    fontWeight: FontWeight.w900,
+    letterSpacing: 0,
+  );
+}
+
 class _MessageSelectionBar extends StatelessWidget {
   const _MessageSelectionBar({
     required this.count,
     required this.singleMessage,
     required this.onCancel,
     required this.onReply,
+    required this.onForward,
     required this.onTogglePin,
     required this.onDelete,
   });
@@ -2134,8 +2399,9 @@ class _MessageSelectionBar extends StatelessWidget {
   final ChatMessage? singleMessage;
   final VoidCallback onCancel;
   final VoidCallback? onReply;
+  final VoidCallback? onForward;
   final VoidCallback? onTogglePin;
-  final VoidCallback onDelete;
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -2180,6 +2446,15 @@ class _MessageSelectionBar extends StatelessWidget {
                 icon: const Icon(Icons.reply_rounded, color: Colors.white),
               ),
             ),
+          if (onForward != null)
+            Tooltip(
+              message: isRussian ? 'Переслать' : 'Forward',
+              child: IconButton(
+                visualDensity: VisualDensity.compact,
+                onPressed: onForward,
+                icon: const Icon(Icons.forward_rounded, color: Colors.white),
+              ),
+            ),
           if (onTogglePin != null)
             Tooltip(
               message: pinTooltip,
@@ -2197,7 +2472,12 @@ class _MessageSelectionBar extends StatelessWidget {
           IconButton(
             visualDensity: VisualDensity.compact,
             onPressed: onDelete,
-            icon: const Icon(Icons.delete_rounded, color: BrandTheme.redTop),
+            icon: Icon(
+              Icons.delete_rounded,
+              color: onDelete == null
+                  ? Colors.white.withValues(alpha: 0.28)
+                  : BrandTheme.redTop,
+            ),
           ),
         ],
       ),
@@ -2270,6 +2550,10 @@ class _MessageBubble extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (message.metadata['forwarded'] == true) ...[
+              _ForwardedLabel(mine: mine),
+              const SizedBox(height: 6),
+            ],
             if (parsedBody.replyQuote.isNotEmpty) ...[
               _ReplyPreview(text: parsedBody.replyQuote, mine: mine),
               const SizedBox(height: 8),
@@ -2375,6 +2659,38 @@ class _MessageBubble extends StatelessWidget {
                 bubbleContent,
               ],
       ),
+    );
+  }
+}
+
+class _ForwardedLabel extends StatelessWidget {
+  const _ForwardedLabel({required this.mine});
+
+  final bool mine;
+
+  @override
+  Widget build(BuildContext context) {
+    final isRussian =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ru';
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          Icons.forward_rounded,
+          size: 13,
+          color: mine ? Colors.white.withValues(alpha: 0.72) : kTextMuted,
+        ),
+        const SizedBox(width: 4),
+        Text(
+          isRussian ? 'Переслано' : 'Forwarded',
+          style: TextStyle(
+            color: mine ? Colors.white.withValues(alpha: 0.72) : kTextMuted,
+            fontSize: 10,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 0.2,
+          ),
+        ),
+      ],
     );
   }
 }
