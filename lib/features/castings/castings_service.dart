@@ -2,6 +2,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/supabase_compat.dart';
 import 'casting_project_stage.dart';
+import 'casting_reference_media.dart';
 import 'casting_response_status.dart';
 import 'casting_model.dart';
 
@@ -24,7 +25,10 @@ class CastingsService {
     try {
       return await _fetchCastingsWithStage();
     } on PostgrestException catch (e) {
-      if (SupabaseCompat.isMissingColumn(e, 'project_stage')) {
+      if (SupabaseCompat.isMissingAnyColumn(e, [
+        'project_stage',
+        'reference_media',
+      ])) {
         return _fetchCastingsLegacy();
       }
       throw CastingsException('Failed to fetch castings', original: e);
@@ -37,7 +41,7 @@ class CastingsService {
     final rows = await _sb
         .from('castings')
         .select(
-          'id,title,description,rights,fee,dates,project_stage,created_at',
+          'id,title,description,rights,fee,dates,project_stage,reference_media,created_at',
         )
         .order('created_at', ascending: false)
         .limit(castingsPageLimit);
@@ -239,6 +243,45 @@ class CastingsService {
       }
     } catch (e) {
       throw CastingsException('Failed to update casting stage', original: e);
+    }
+  }
+
+  Future<void> setReferenceMedia({
+    required String castingId,
+    required List<CastingReferenceMedia> referenceMedia,
+  }) async {
+    final id = castingId.trim();
+    if (id.isEmpty) return;
+    final payload = referenceMedia.map((item) => item.toJson()).toList();
+
+    try {
+      await _sb.rpc(
+        'set_casting_reference_media',
+        params: {'p_casting_id': id, 'p_reference_media': payload},
+      );
+    } on PostgrestException catch (e) {
+      if (!SupabaseCompat.isMissingRpc(e, 'set_casting_reference_media')) {
+        throw CastingsException(
+          'Failed to update casting references',
+          original: e,
+        );
+      }
+      try {
+        await _sb
+            .from('castings')
+            .update({'reference_media': payload})
+            .eq('id', id);
+      } on PostgrestException catch (second) {
+        throw CastingsException(
+          'Failed to update casting references',
+          original: second,
+        );
+      }
+    } catch (e) {
+      throw CastingsException(
+        'Failed to update casting references',
+        original: e,
+      );
     }
   }
 

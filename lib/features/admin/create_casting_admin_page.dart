@@ -11,6 +11,7 @@ import '../../ui/brand/brand_admin_header.dart';
 import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
 import '../castings/casting_project_stage.dart';
+import '../castings/casting_reference_media.dart';
 import 'admin_style.dart';
 
 class CreateCastingAdminPage extends ConsumerStatefulWidget {
@@ -29,7 +30,10 @@ class _CreateCastingAdminPageState
   final _feeC = TextEditingController();
 
   final _selectedDates = <DateTime>{};
+  final _pendingReferences = <PendingCastingReferenceMedia>[];
   CastingProjectStage _stage = defaultCastingProjectStage;
+  bool _creating = false;
+  bool _pickingReferences = false;
 
   @override
   void dispose() {
@@ -41,6 +45,7 @@ class _CreateCastingAdminPageState
   }
 
   Future<void> _createCasting() async {
+    if (_creating || _pickingReferences) return;
     final sb = ref.read(supabaseProvider);
 
     final title = _titleC.text.trim();
@@ -51,40 +56,76 @@ class _CreateCastingAdminPageState
     // Минимальная валидация без лишнего UI: не создаём пустое
     if (title.isEmpty) return;
 
-    final dates = _selectedDates.toList()..sort((a, b) => a.compareTo(b));
-
-    // ВАЖНО: тут предполагается таблица "castings".
-    // Поля можно подстроить под твою схему.
-    final payload = {
-      'title': title,
-      'description': desc,
-      'rights': rights,
-      'fee': fee,
-      'project_stage': castingProjectStageToString(_stage),
-      // храню как список ISO-дат (YYYY-MM-DD)
-      'dates': dates.map((d) => _dateOnly(d).toIso8601String()).toList(),
-      'created_at': DateTime.now().toIso8601String(),
-    };
+    setState(() => _creating = true);
 
     try {
-      await sb.from('castings').insert(payload);
-    } on PostgrestException catch (e) {
-      if (!SupabaseCompat.isMissingColumn(e, 'project_stage')) rethrow;
-      final legacyPayload = Map<String, dynamic>.from(payload)
-        ..remove('project_stage');
-      await sb.from('castings').insert(legacyPayload);
-    }
-    await AdminActionLogService(sb).log(
-      actionType: 'casting_created',
-      title: 'Кастинг создан',
-      description: desc,
-      targetTable: 'castings',
-      targetText: title,
-      status: 'created',
-    );
+      final dates = _selectedDates.toList()..sort((a, b) => a.compareTo(b));
+      final userId = sb.auth.currentUser?.id.trim() ?? '';
+      final referenceMedia = await uploadCastingReferenceMedia(
+        supabase: sb,
+        ownerId: userId,
+        items: _pendingReferences,
+      );
 
-    if (!mounted) return;
-    context.go('/castings');
+      // ВАЖНО: тут предполагается таблица "castings".
+      // Поля можно подстроить под твою схему.
+      final payload = {
+        'title': title,
+        'description': desc,
+        'rights': rights,
+        'fee': fee,
+        'project_stage': castingProjectStageToString(_stage),
+        'reference_media': referenceMedia.map((item) => item.toJson()).toList(),
+        // храню как список ISO-дат (YYYY-MM-DD)
+        'dates': dates.map((d) => _dateOnly(d).toIso8601String()).toList(),
+        'created_at': DateTime.now().toIso8601String(),
+      };
+
+      try {
+        await sb.from('castings').insert(payload);
+      } on PostgrestException catch (e) {
+        if (!SupabaseCompat.isMissingAnyColumn(e, [
+          'project_stage',
+          'reference_media',
+        ])) {
+          rethrow;
+        }
+        final legacyPayload = Map<String, dynamic>.from(payload)
+          ..remove('project_stage')
+          ..remove('reference_media');
+        await sb.from('castings').insert(legacyPayload);
+      }
+      await AdminActionLogService(sb).log(
+        actionType: 'casting_created',
+        title: 'Кастинг создан',
+        description: desc,
+        targetTable: 'castings',
+        targetText: title,
+        status: 'created',
+      );
+
+      if (!mounted) return;
+      context.go('/castings');
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Не удалось создать кастинг: $e')));
+    } finally {
+      if (mounted) setState(() => _creating = false);
+    }
+  }
+
+  Future<void> _pickReferences() async {
+    if (_creating || _pickingReferences) return;
+    setState(() => _pickingReferences = true);
+    try {
+      final picked = await pickCastingReferenceMedia();
+      if (!mounted || picked.isEmpty) return;
+      setState(() => _pendingReferences.addAll(picked));
+    } finally {
+      if (mounted) setState(() => _pickingReferences = false);
+    }
   }
 
   @override
@@ -102,11 +143,17 @@ class _CreateCastingAdminPageState
                 title: t.adminCreateCastingUpper,
                 onBack: () => context.go('/admin'),
                 trailing: IconButton(
-                  onPressed: _createCasting,
-                  icon: const Icon(
-                    Icons.check_rounded,
-                    color: BrandTheme.redTop,
-                  ),
+                  onPressed: _creating ? null : _createCasting,
+                  icon: _creating
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(
+                          Icons.check_rounded,
+                          color: BrandTheme.redTop,
+                        ),
                   splashRadius: 22,
                 ),
               ),
@@ -158,6 +205,21 @@ class _CreateCastingAdminPageState
                           value: _stage,
                           onChanged: (stage) => setState(() => _stage = stage),
                         ),
+                        const SizedBox(height: 12),
+
+                        _SectionTitle(
+                          Localizations.localeOf(context).languageCode == 'ru'
+                              ? 'РЕФЕРЕНСЫ'
+                              : 'REFERENCES',
+                        ),
+                        _ReferencesPicker(
+                          items: _pendingReferences,
+                          picking: _pickingReferences,
+                          onPick: _pickReferences,
+                          onRemove: (index) {
+                            setState(() => _pendingReferences.removeAt(index));
+                          },
+                        ),
                       ],
                     ),
                   ),
@@ -166,6 +228,124 @@ class _CreateCastingAdminPageState
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _ReferencesPicker extends StatelessWidget {
+  const _ReferencesPicker({
+    required this.items,
+    required this.picking,
+    required this.onPick,
+    required this.onRemove,
+  });
+
+  final List<PendingCastingReferenceMedia> items;
+  final bool picking;
+  final VoidCallback onPick;
+  final ValueChanged<int> onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final isRu = Localizations.localeOf(context).languageCode == 'ru';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(
+          height: BrandTheme.pillHeight,
+          child: OutlinedButton.icon(
+            onPressed: picking ? null : onPick,
+            style: castingDialogOutlinedButtonStyle(),
+            icon: Icon(
+              picking ? Icons.hourglass_top_rounded : Icons.attach_file_rounded,
+              size: 18,
+            ),
+            label: Text(
+              picking
+                  ? (isRu ? 'ВЫБОР...' : 'PICKING...')
+                  : (isRu ? 'ДОБАВИТЬ ФАЙЛЫ' : 'ADD FILES'),
+              style: adminCommandStyle(size: 12, letterSpacing: 0.9),
+            ),
+          ),
+        ),
+        if (items.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          for (var i = 0; i < items.length; i++) ...[
+            _ReferenceDraftTile(item: items[i], onRemove: () => onRemove(i)),
+            if (i != items.length - 1) const SizedBox(height: 8),
+          ],
+        ],
+      ],
+    );
+  }
+}
+
+class _ReferenceDraftTile extends StatelessWidget {
+  const _ReferenceDraftTile({required this.item, required this.onRemove});
+
+  final PendingCastingReferenceMedia item;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final isRu = Localizations.localeOf(context).languageCode == 'ru';
+    final icon = switch (item.kind) {
+      CastingReferenceMediaKind.image => Icons.image_rounded,
+      CastingReferenceMediaKind.video => Icons.videocam_rounded,
+      CastingReferenceMediaKind.file => Icons.insert_drive_file_rounded,
+    };
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.62),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.black.withValues(alpha: 0.07)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: BrandTheme.redTop, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: adminBodyStyle(
+                    size: 13,
+                    color: kTextDark,
+                    weight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  [
+                    castingReferenceMediaKindLabel(item.kind, isRu: isRu),
+                    formatCastingReferenceSize(item.sizeBytes),
+                  ].where((part) => part.trim().isNotEmpty).join(' • '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: adminBodyStyle(
+                    size: 11,
+                    color: kTextMuted,
+                    weight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            onPressed: onRemove,
+            icon: const Icon(Icons.close_rounded),
+            color: kTextMuted,
+            visualDensity: VisualDensity.compact,
+            tooltip: isRu ? 'Удалить' : 'Remove',
+          ),
+        ],
       ),
     );
   }

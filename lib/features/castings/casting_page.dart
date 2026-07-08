@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -6,6 +7,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/app_error_mapper.dart';
 import '../../core/admin_action_log_service.dart';
 import '../../core/app_logger.dart';
+import '../../core/open_external_url_stub.dart'
+    if (dart.library.html) '../../core/open_external_url_web.dart';
 import '../../core/router.dart';
 import '../../core/roles_provider.dart';
 import '../../gen_l10n/app_localizations.dart';
@@ -17,6 +20,7 @@ import '../../ui/brand/brand_pill_button.dart';
 import '../../ui/brand/ui_constants.dart';
 import '../../core/auth_providers.dart';
 import 'casting_project_stage.dart';
+import 'casting_reference_media.dart';
 import 'casting_response_status.dart';
 import 'casting_model.dart';
 import 'castings_service.dart';
@@ -661,6 +665,74 @@ Future<void> _onSetCastingProjectStage({
   }
 }
 
+Future<void> _onAddCastingReferences({
+  required WidgetRef ref,
+  required BuildContext context,
+  required AppLocalizations t,
+  required CastingModel casting,
+}) async {
+  try {
+    final picked = await pickCastingReferenceMedia();
+    if (!context.mounted || picked.isEmpty) return;
+
+    _showSnack(
+      context,
+      _castingLocaleText(
+        context,
+        'Загружаю референсы...',
+        'Uploading references...',
+      ),
+    );
+
+    final sb = Supabase.instance.client;
+    final userId = sb.auth.currentUser?.id.trim() ?? '';
+    final uploaded = await uploadCastingReferenceMedia(
+      supabase: sb,
+      ownerId: userId,
+      items: picked,
+    );
+    if (!context.mounted || uploaded.isEmpty) return;
+
+    final next = <CastingReferenceMedia>[
+      ...casting.referenceMedia,
+      ...uploaded,
+    ];
+    await ref
+        .read(castingsServiceProvider)
+        .setReferenceMedia(castingId: casting.id, referenceMedia: next);
+    await AdminActionLogService(Supabase.instance.client).log(
+      actionType: 'casting_references_updated',
+      title: 'Референсы кастинга обновлены',
+      targetTable: 'castings',
+      targetId: casting.id,
+      targetText: casting.title,
+      status: '${next.length}',
+    );
+    ref.invalidate(castingsProvider);
+    if (!context.mounted) return;
+    _showSnack(
+      context,
+      _castingLocaleText(context, 'Референсы добавлены', 'References added'),
+    );
+  } on CastingsException catch (e, st) {
+    AppLogger.error(
+      'Casting references update failed',
+      error: e.original ?? e,
+      stackTrace: st,
+    );
+    if (!context.mounted) return;
+    _showSnack(context, _castingAdminErrorText(e, t));
+  } catch (e, st) {
+    AppLogger.error(
+      'Casting references update failed',
+      error: e,
+      stackTrace: st,
+    );
+    if (!context.mounted) return;
+    _showSnack(context, _castingAdminErrorText(e, t));
+  }
+}
+
 class CastingPage extends ConsumerStatefulWidget {
   const CastingPage({super.key});
 
@@ -727,6 +799,15 @@ class _CastingPageState extends ConsumerState<CastingPage> {
 
     void setCastingStage(CastingModel casting) {
       _onSetCastingProjectStage(
+        ref: ref,
+        context: context,
+        t: t,
+        casting: casting,
+      );
+    }
+
+    void addCastingReferences(CastingModel casting) {
+      _onAddCastingReferences(
         ref: ref,
         context: context,
         t: t,
@@ -893,6 +974,9 @@ class _CastingPageState extends ConsumerState<CastingPage> {
                             onRespondTap: respond,
                             onDeleteTap: isAdmin ? deleteCasting : null,
                             onStageTap: isAdmin ? setCastingStage : null,
+                            onReferencesTap: isAdmin
+                                ? addCastingReferences
+                                : null,
                             onRefresh: () async =>
                                 ref.refresh(castingsProvider.future),
                           );
@@ -949,6 +1033,7 @@ class _CastingsDesktopLayout extends StatelessWidget {
     required this.onRespondTap,
     required this.onDeleteTap,
     required this.onStageTap,
+    required this.onReferencesTap,
     required this.onRefresh,
   });
 
@@ -962,6 +1047,7 @@ class _CastingsDesktopLayout extends StatelessWidget {
   final ValueChanged<String> onRespondTap;
   final ValueChanged<String>? onDeleteTap;
   final ValueChanged<CastingModel>? onStageTap;
+  final ValueChanged<CastingModel>? onReferencesTap;
   final Future<void> Function() onRefresh;
 
   @override
@@ -998,6 +1084,9 @@ class _CastingsDesktopLayout extends StatelessWidget {
                 onStageTap: onStageTap == null
                     ? null
                     : () => onStageTap!(selected),
+                onReferencesTap: onReferencesTap == null
+                    ? null
+                    : () => onReferencesTap!(selected),
                 onDeleteTap: deleteTap == null
                     ? null
                     : () => deleteTap(selected.id),
@@ -1204,6 +1293,17 @@ class _CastingListTile extends StatelessWidget {
                 label: castingProjectStageLabel(context, casting.projectStage),
                 color: castingProjectStageColor(casting.projectStage),
               ),
+              if (casting.referenceMedia.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                _CastingMetaPill(
+                  icon: Icons.attach_file_rounded,
+                  label: _castingLocaleText(
+                    context,
+                    'Референсы: ${casting.referenceMedia.length}',
+                    'References: ${casting.referenceMedia.length}',
+                  ),
+                ),
+              ],
               const SizedBox(height: 8),
               Row(
                 children: [
@@ -1240,6 +1340,7 @@ class _CastingDesktopDetailPanel extends StatelessWidget {
     required this.isAdmin,
     required this.onRespondTap,
     required this.onStageTap,
+    required this.onReferencesTap,
     required this.onDeleteTap,
   });
 
@@ -1250,6 +1351,7 @@ class _CastingDesktopDetailPanel extends StatelessWidget {
   final bool isAdmin;
   final VoidCallback onRespondTap;
   final VoidCallback? onStageTap;
+  final VoidCallback? onReferencesTap;
   final VoidCallback? onDeleteTap;
 
   @override
@@ -1289,7 +1391,7 @@ class _CastingDesktopDetailPanel extends StatelessWidget {
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final adminActions = isAdmin && onDeleteTap != null;
-                final stacked = adminActions && constraints.maxWidth < 760;
+                final stacked = adminActions && constraints.maxWidth < 880;
                 final respondButton = SizedBox(
                   height: BrandTheme.pillHeight,
                   child: BrandPillButton(
@@ -1317,6 +1419,14 @@ class _CastingDesktopDetailPanel extends StatelessWidget {
                     onTap: onStageTap,
                   ),
                 );
+                final referencesButton = SizedBox(
+                  height: BrandTheme.pillHeight,
+                  child: BrandPillButton(
+                    label: _castingLocaleText(context, 'РЕФЫ', 'REFS'),
+                    style: BrandPillStyle.light,
+                    onTap: onReferencesTap,
+                  ),
+                );
                 final responsesButton = SizedBox(
                   height: BrandTheme.pillHeight,
                   child: BrandPillButton(
@@ -1340,11 +1450,13 @@ class _CastingDesktopDetailPanel extends StatelessWidget {
                       const SizedBox(height: 12),
                       Row(
                         children: [
-                          Expanded(child: responsesButton),
+                          Expanded(child: referencesButton),
                           const SizedBox(width: 12),
-                          Expanded(child: respondButton),
+                          Expanded(child: responsesButton),
                         ],
                       ),
+                      const SizedBox(height: 12),
+                      Row(children: [Expanded(child: respondButton)]),
                     ],
                   );
                 }
@@ -1353,7 +1465,9 @@ class _CastingDesktopDetailPanel extends StatelessWidget {
                   children: [
                     SizedBox(width: 172, child: deleteButton),
                     const SizedBox(width: 12),
-                    SizedBox(width: 150, child: stageButton),
+                    SizedBox(width: 118, child: stageButton),
+                    const SizedBox(width: 12),
+                    SizedBox(width: 118, child: referencesButton),
                     const SizedBox(width: 12),
                     SizedBox(width: 174, child: responsesButton),
                     const SizedBox(width: 12),
@@ -1461,6 +1575,15 @@ class _CastingDetailHeader extends StatelessWidget {
                 icon: Icons.check_circle_rounded,
                 label: castingResponseStatusLabel(t, status!),
               ),
+            if (casting.referenceMedia.isNotEmpty)
+              _CastingInfoChip(
+                icon: Icons.attach_file_rounded,
+                label: _castingLocaleText(
+                  context,
+                  'Референсы: ${casting.referenceMedia.length}',
+                  'References: ${casting.referenceMedia.length}',
+                ),
+              ),
           ],
         ),
       ],
@@ -1502,6 +1625,14 @@ class _CastingSummaryPanel extends StatelessWidget {
             icon: Icons.circle_rounded,
             label: _castingLocaleText(context, 'Отклик', 'Response'),
             value: statusText,
+          ),
+          const SizedBox(height: 12),
+          _CastingSummaryTile(
+            icon: Icons.attach_file_rounded,
+            label: _castingLocaleText(context, 'Референсы', 'References'),
+            value: casting.referenceMedia.isEmpty
+                ? _castingLocaleText(context, 'Нет', 'None')
+                : '${casting.referenceMedia.length}',
           ),
           if (casting.datesText.isNotEmpty) ...[
             const SizedBox(height: 12),
@@ -1635,7 +1766,158 @@ class _CastingDetailTextSections extends StatelessWidget {
             text: casting.fee,
           ),
         ],
+        if (casting.referenceMedia.isNotEmpty) ...[
+          const SizedBox(height: 18),
+          _CastingReferenceGallery(items: casting.referenceMedia),
+        ],
       ],
+    );
+  }
+}
+
+class _CastingReferenceGallery extends StatelessWidget {
+  const _CastingReferenceGallery({required this.items});
+
+  final List<CastingReferenceMedia> items;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          _castingLocaleText(context, 'Референсы', 'References').toUpperCase(),
+          style: BrandTheme.pillText.copyWith(
+            color: kTextDark,
+            fontSize: 13,
+            letterSpacing: 1.3,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 10),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final columns = constraints.maxWidth >= 720
+                ? 3
+                : (constraints.maxWidth >= 460 ? 2 : 1);
+            return GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: items.length,
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: columns,
+                crossAxisSpacing: 10,
+                mainAxisSpacing: 10,
+                childAspectRatio: 1.22,
+              ),
+              itemBuilder: (context, index) =>
+                  _CastingReferenceTile(item: items[index]),
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _CastingReferenceTile extends StatelessWidget {
+  const _CastingReferenceTile({required this.item});
+
+  final CastingReferenceMedia item;
+
+  @override
+  Widget build(BuildContext context) {
+    final isRu = Localizations.localeOf(context).languageCode == 'ru';
+    final label = item.name.trim().isEmpty
+        ? castingReferenceMediaKindLabel(item.kind, isRu: isRu)
+        : item.name.trim();
+    final icon = switch (item.kind) {
+      CastingReferenceMediaKind.image => Icons.image_rounded,
+      CastingReferenceMediaKind.video => Icons.videocam_rounded,
+      CastingReferenceMediaKind.file => Icons.insert_drive_file_rounded,
+    };
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: () async {
+          final opened = await openExternalUrl(item.url);
+          if (!opened && context.mounted) {
+            _showSnack(
+              context,
+              _castingLocaleText(
+                context,
+                'Открытие файлов доступно в web-версии',
+                'Opening files is available on web',
+              ),
+            );
+          }
+        },
+        child: Container(
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.72),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
+          ),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              if (item.kind == CastingReferenceMediaKind.image)
+                CachedNetworkImage(
+                  imageUrl: item.url,
+                  fit: BoxFit.cover,
+                  memCacheWidth: 420,
+                  maxWidthDiskCache: 840,
+                  placeholder: (_, _) =>
+                      Container(color: Colors.black.withValues(alpha: 0.04)),
+                  errorWidget: (_, _, _) => const Center(
+                    child: Icon(Icons.broken_image_rounded, color: kTextMuted),
+                  ),
+                )
+              else
+                Center(child: Icon(icon, size: 44, color: BrandTheme.redTop)),
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(10, 18, 10, 9),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.transparent,
+                        Colors.black.withValues(alpha: 0.58),
+                      ],
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(icon, size: 15, color: Colors.white),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: BrandTheme.pillText.copyWith(
+                            color: Colors.white,
+                            fontSize: 11,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

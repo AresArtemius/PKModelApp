@@ -1,4 +1,5 @@
 import 'casting_project_stage.dart';
+import 'casting_reference_media.dart';
 
 class CastingModel {
   const CastingModel({
@@ -9,6 +10,7 @@ class CastingModel {
     required this.fee,
     required this.datesText,
     required this.projectStage,
+    required this.referenceMedia,
   });
 
   final String id;
@@ -18,6 +20,7 @@ class CastingModel {
   final String fee;
   final String datesText;
   final CastingProjectStage projectStage;
+  final List<CastingReferenceMedia> referenceMedia;
 
   factory CastingModel.fromMap(Map<String, dynamic> map) {
     final id = (map['id'] ?? '').toString();
@@ -29,6 +32,7 @@ class CastingModel {
     final projectStage = castingProjectStageFromString(
       map['project_stage']?.toString(),
     );
+    final referenceMedia = _referenceMediaFromValue(map['reference_media']);
 
     return CastingModel(
       id: id,
@@ -38,8 +42,21 @@ class CastingModel {
       fee: fee,
       datesText: datesText,
       projectStage: projectStage,
+      referenceMedia: referenceMedia,
     );
   }
+}
+
+List<CastingReferenceMedia> _referenceMediaFromValue(dynamic value) {
+  if (value is! List) return const <CastingReferenceMedia>[];
+  return value
+      .whereType<Map>()
+      .map(
+        (item) =>
+            CastingReferenceMedia.fromJson(Map<String, dynamic>.from(item)),
+      )
+      .where((item) => item.url.trim().isNotEmpty)
+      .toList(growable: false);
 }
 
 String _datesToText(dynamic datesRaw) {

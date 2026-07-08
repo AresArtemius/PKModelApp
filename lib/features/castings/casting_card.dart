@@ -96,6 +96,10 @@ class CastingCard extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           _CastingStagePill(stage: casting.projectStage),
+          if (casting.referenceMedia.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            _CastingReferenceCountPill(count: casting.referenceMedia.length),
+          ],
           if (casting.description.isNotEmpty) ...[
             const SizedBox(height: 8),
             Text(casting.description, style: kCastingBodyStyle),
@@ -120,6 +124,41 @@ class CastingCard extends StatelessWidget {
 
 String _castingActionLocaleText(BuildContext context, String ru, String en) {
   return Localizations.localeOf(context).languageCode == 'ru' ? ru : en;
+}
+
+class _CastingReferenceCountPill extends StatelessWidget {
+  const _CastingReferenceCountPill({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final isRu = Localizations.localeOf(context).languageCode == 'ru';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.76),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.black.withValues(alpha: 0.08)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.attach_file_rounded, size: 15, color: kTextDark),
+          const SizedBox(width: 6),
+          Text(
+            isRu ? 'РЕФЕРЕНСЫ: $count' : 'REFERENCES: $count',
+            style: BrandTheme.pillText.copyWith(
+              color: kTextDark,
+              fontSize: 11,
+              letterSpacing: 0.75,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _CastingStagePill extends StatelessWidget {
