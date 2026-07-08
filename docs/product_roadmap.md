@@ -12,6 +12,7 @@
 
 ## Журнал изменений
 
+- 2026-07-08: сохраненные поиски каталога усилены после production QA: remote/local списки теперь merge-ятся, а сохраненный пресет зеркалится локально, чтобы не исчезать при пустом remote refresh; по скринам подтверждено применение `send_notifications_production_delivery.sql` — Vault secret уже существовал, pg_cron schedule создан с id `2`; commit `e382ef5`.
 - 2026-07-08: исправлен production-сценарий сохраненных поисков каталога после применения SQL: insert явно передает `user_id`, после save/rename/delete список перечитывается из Supabase, а ошибки сохранения показываются пользователю; `send_notifications_production_delivery.sql` проверен как следующий production SQL для запуска после Vault-secret; commit `24bb2cb`.
 - 2026-07-08: сохраненные поиски каталога перенесены с локального storage на Supabase-backed storage с account-scoped таблицей, RLS, миграцией старых локальных пресетов и fallback до применения SQL; референсы кастингов открываются как lightbox/zoom внутри приложения, видимые стрелки сортировки референсов убраны; commit `6525cda`.
 - 2026-07-08: уточнен UX откликов и референсов кастингов: выбранные анкеты в board теперь можно удалить из откликов кастинга, пустые колонки больше не обещают drag-and-drop, а референсы в карточке кастинга открываются крупным viewer с zoom; commit `d4596ec`.
@@ -87,10 +88,11 @@
 - Production delivery worker `send-notifications`: единая Supabase Edge Function для push через FCM и email через Resend, с записью серверных статусов обратно в `app_notifications`.
 - Firebase/Resend secrets в Supabase заведены частично; production `EMAIL_FROM` выставлен как `PK Management <noreply@pk.management>`, `PUBLIC_APP_URL` выставлен как `https://app.pk.management/`, функция `send-notifications` redeploy сделан.
 - SQL `send_notifications_production_delivery.sql` готов к production-применению: ставит authenticated `pg_net` webhook на insert в `app_notifications` и `pg_cron` fallback каждую минуту, но требует Vault-secret `send_notifications_service_role_key`.
+- Production delivery schedule/webhook для `send-notifications` применен в Supabase: Vault secret уже существовал, `send-notifications-every-minute` создан/обновлен через `cron.schedule`.
 
 Не хватает:
-- Применить `supabase/sql/catalog_saved_searches.sql` на production, если таблица `catalog_saved_searches` еще не создана; до этого приложение сохранит локальный fallback.
-- Применить `supabase/sql/send_notifications_production_delivery.sql` после внесения service-role key в Supabase Vault, чтобы включить authenticated pg_net webhook и pg_cron fallback для `send-notifications`.
+- QA Supabase saved searches после production SQL: сохранить пресет, увидеть его в блоке сразу после сохранения и проверить появление под тем же аккаунтом на другом браузере/устройстве.
+- QA production-доставки `send-notifications`: создать тестовое событие, проверить вызов Edge Function, статусы `sent/delivered/failed` в `app_notifications` и отсутствие ошибок cron/webhook.
 
 ## 3. Chats
 
