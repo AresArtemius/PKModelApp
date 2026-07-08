@@ -92,6 +92,9 @@ class _SavedSearchRail extends StatelessWidget {
     required this.onDelete,
     required this.saveLabel,
     required this.canSaveCurrent,
+    required this.isLoading,
+    required this.error,
+    required this.onRefresh,
     this.isVertical = false,
   });
 
@@ -103,11 +106,24 @@ class _SavedSearchRail extends StatelessWidget {
   final ValueChanged<CatalogSavedSearch> onDelete;
   final String saveLabel;
   final bool canSaveCurrent;
+  final bool isLoading;
+  final Object? error;
+  final Future<void> Function()? onRefresh;
   final bool isVertical;
 
   @override
   Widget build(BuildContext context) {
-    if (!canSaveCurrent && searches.isEmpty) return const SizedBox.shrink();
+    final status = _SavedSearchStatus(
+      isLoading: isLoading,
+      error: error,
+      onRefresh: onRefresh,
+      isVertical: isVertical,
+    );
+    final hasStatus = isLoading || error != null;
+
+    if (!canSaveCurrent && searches.isEmpty && !hasStatus) {
+      return const SizedBox.shrink();
+    }
 
     if (isVertical) {
       return Column(
@@ -121,6 +137,7 @@ class _SavedSearchRail extends StatelessWidget {
             ),
             const SizedBox(height: kGap8),
           ],
+          if (hasStatus) ...[status, const SizedBox(height: kGap8)],
           for (final search in searches) ...[
             _SavedSearchChip(
               search: search,
@@ -141,14 +158,20 @@ class _SavedSearchRail extends StatelessWidget {
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
-        itemCount: searches.length + (canSaveCurrent ? 1 : 0),
+        itemCount:
+            searches.length + (canSaveCurrent ? 1 : 0) + (hasStatus ? 1 : 0),
         separatorBuilder: (_, _) => const SizedBox(width: kGap8),
         itemBuilder: (context, index) {
           if (canSaveCurrent && index == 0) {
             return _SavedSearchSaveChip(label: saveLabel, onTap: onSaveCurrent);
           }
 
-          final search = searches[index - (canSaveCurrent ? 1 : 0)];
+          final searchIndex = index - (canSaveCurrent ? 1 : 0);
+          if (hasStatus && searchIndex == 0) {
+            return status;
+          }
+
+          final search = searches[searchIndex - (hasStatus ? 1 : 0)];
           return _SavedSearchChip(
             search: search,
             selected: search.filters == activeFilters,
@@ -157,6 +180,91 @@ class _SavedSearchRail extends StatelessWidget {
             onDelete: search.isBuiltin ? null : () => onDelete(search),
           );
         },
+      ),
+    );
+  }
+}
+
+class _SavedSearchStatus extends StatelessWidget {
+  const _SavedSearchStatus({
+    required this.isLoading,
+    required this.error,
+    required this.onRefresh,
+    required this.isVertical,
+  });
+
+  final bool isLoading;
+  final Object? error;
+  final Future<void> Function()? onRefresh;
+  final bool isVertical;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+    final isError = error != null;
+    final label = isLoading
+        ? (t.localeName.toLowerCase().startsWith('ru') ? 'ЗАГРУЗКА' : 'LOADING')
+        : AppErrorMapper.message(error!, t);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(kPillRadius),
+        onTap: isLoading ? null : onRefresh,
+        child: Container(
+          height: isVertical ? 48 : 42,
+          width: isVertical ? double.infinity : null,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.9),
+            borderRadius: BorderRadius.circular(kPillRadius),
+            border: Border.all(
+              color: isError ? BrandTheme.redTop : kBorderColor,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: isVertical ? MainAxisSize.max : MainAxisSize.min,
+            children: [
+              if (isLoading)
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else
+                Icon(
+                  Icons.refresh_rounded,
+                  color: isError ? BrandTheme.redTop : kTextDark,
+                  size: 18,
+                ),
+              const SizedBox(width: 8),
+              if (isVertical)
+                Expanded(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: BrandTheme.pillText.copyWith(
+                      color: isError ? BrandTheme.redTop : kTextMid,
+                      fontSize: 11,
+                      letterSpacing: 0.55,
+                    ),
+                  ),
+                )
+              else
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: BrandTheme.pillText.copyWith(
+                    color: isError ? BrandTheme.redTop : kTextMid,
+                    fontSize: 11,
+                    letterSpacing: 0.55,
+                  ),
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }

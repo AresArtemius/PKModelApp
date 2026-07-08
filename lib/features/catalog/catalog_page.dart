@@ -94,6 +94,7 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
+      unawaited(ref.read(catalogSavedSearchesProvider).load());
       await controller.loadBounds();
       if (!mounted) return;
       await controller.reload();
@@ -311,6 +312,7 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
       await ref
           .read(catalogSavedSearchesProvider)
           .save(title: title, filters: _c.filterSnapshot);
+      await ref.read(catalogSavedSearchesProvider).refresh();
     } catch (e) {
       if (!mounted) return;
       _showSnack(AppErrorMapper.message(e, t));
@@ -861,7 +863,10 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
     final canSaveCurrentSearch =
         c.hasActiveFilters && !currentSearchAlreadySaved;
     final hasSavedSearchRail =
-        canSaveCurrentSearch || savedSearchItems.isNotEmpty;
+        canSaveCurrentSearch ||
+        savedSearchItems.isNotEmpty ||
+        savedSearches.isLoading ||
+        savedSearches.lastError != null;
     final resetFiltersLabel =
         Localizations.localeOf(context).languageCode.toLowerCase() == 'ru'
         ? 'СБРОСИТЬ ФИЛЬТРЫ'
@@ -938,6 +943,11 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                                   onDelete: _deleteSavedSearch,
                                   saveLabel: t.savedSearchSaveCurrent,
                                   canSaveCurrent: canSaveCurrentSearch,
+                                  isLoading: savedSearches.isLoading,
+                                  error: savedSearches.lastError,
+                                  onRefresh: () => ref
+                                      .read(catalogSavedSearchesProvider)
+                                      .refresh(),
                                   isVertical: true,
                                 )
                               : null,
@@ -1025,6 +1035,11 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                                       onDelete: _deleteSavedSearch,
                                       saveLabel: t.savedSearchSaveCurrent,
                                       canSaveCurrent: canSaveCurrentSearch,
+                                      isLoading: savedSearches.isLoading,
+                                      error: savedSearches.lastError,
+                                      onRefresh: () => ref
+                                          .read(catalogSavedSearchesProvider)
+                                          .refresh(),
                                     ),
                                   ),
                                   const SizedBox(width: kGap8),
