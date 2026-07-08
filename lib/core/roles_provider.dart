@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app_logger.dart';
 import 'supabase_provider.dart';
+import 'supabase_compat.dart';
 
 const _adminRole = 'admin';
 const _castingAgentRole = 'casting_agent';
@@ -179,12 +180,14 @@ class AccountStatusSnapshot {
     required this.role,
     this.pending,
     this.rejected,
+    this.rejectedApplicationId,
   });
 
   final RegistrationAccountType current;
   final AccountRole role;
   final RegistrationAccountType? pending;
   final RegistrationAccountType? rejected;
+  final String? rejectedApplicationId;
 
   bool get hasPending => pending != null;
   bool get isApprovedClient => role == AccountRole.castingAgent;
@@ -219,7 +222,13 @@ final accountStatusProvider = FutureProvider<AccountStatusSnapshot>((
       current: visibleCurrent,
       role: role,
       pending: application.status == 'pending' ? application.type : null,
-      rejected: application.status == 'rejected' ? application.type : null,
+      rejected: application.status == 'rejected' && !application.rejectionSeen
+          ? application.type
+          : null,
+      rejectedApplicationId:
+          application.status == 'rejected' && !application.rejectionSeen
+          ? application.id
+          : null,
     );
   } on PostgrestException catch (e) {
     AppLogger.warning('Account status DB fallback', error: e);
@@ -239,10 +248,17 @@ final accountStatusProvider = FutureProvider<AccountStatusSnapshot>((
 });
 
 class _StatusApplicationSnapshot {
-  const _StatusApplicationSnapshot({this.status, this.type});
+  const _StatusApplicationSnapshot({
+    this.id,
+    this.status,
+    this.type,
+    this.rejectionSeen = false,
+  });
 
+  final String? id;
   final String? status;
   final RegistrationAccountType? type;
+  final bool rejectionSeen;
 }
 
 Future<_StatusApplicationSnapshot> _fetchLatestStatusApplication(
@@ -254,22 +270,32 @@ Future<_StatusApplicationSnapshot> _fetchLatestStatusApplication(
     try {
       row = await sb
           .from('casting_agent_applications')
-          .select('status,requested_account_type,comment')
+          .select('id,status,requested_account_type,comment,rejection_seen_at')
           .eq('user_id', userId)
           .order('created_at', ascending: false)
           .limit(1)
           .maybeSingle();
     } on PostgrestException catch (e) {
-      if (!e.message.toLowerCase().contains('requested_account_type')) {
+      final message = e.message.toLowerCase();
+      if (message.contains('requested_account_type')) {
+        row = await sb
+            .from('casting_agent_applications')
+            .select('id,status,comment')
+            .eq('user_id', userId)
+            .order('created_at', ascending: false)
+            .limit(1)
+            .maybeSingle();
+      } else if (message.contains('rejection_seen_at')) {
+        row = await sb
+            .from('casting_agent_applications')
+            .select('id,status,requested_account_type,comment')
+            .eq('user_id', userId)
+            .order('created_at', ascending: false)
+            .limit(1)
+            .maybeSingle();
+      } else {
         rethrow;
       }
-      row = await sb
-          .from('casting_agent_applications')
-          .select('status,comment')
-          .eq('user_id', userId)
-          .order('created_at', ascending: false)
-          .limit(1)
-          .maybeSingle();
     }
     if (row == null) return const _StatusApplicationSnapshot();
     final requestedRaw = row['requested_account_type']?.toString().trim();
@@ -282,8 +308,13 @@ Future<_StatusApplicationSnapshot> _fetchLatestStatusApplication(
         ? commentRaw
         : requestedRaw ?? commentRaw;
     return _StatusApplicationSnapshot(
+      id: row['id']?.toString().trim(),
       status: row['status']?.toString().toLowerCase().trim(),
       type: registrationAccountTypeFromStorage(typeRaw),
+      rejectionSeen: (row['rejection_seen_at'] ?? '')
+          .toString()
+          .trim()
+          .isNotEmpty,
     );
   } on PostgrestException {
     return const _StatusApplicationSnapshot();
@@ -420,6 +451,32 @@ class AccountStatusService {
     return e.code == '23505' ||
         message.contains('duplicate') ||
         message.contains('unique');
+  }
+
+  Future<void> markRejectedApplicationSeen(String applicationId) async {
+    final cleanId = applicationId.trim();
+    if (cleanId.isEmpty) return;
+
+    try {
+      await _sb.rpc(
+        'mark_casting_agent_application_rejection_seen',
+        params: {'p_application_id': cleanId},
+      );
+      return;
+    } on PostgrestException catch (e) {
+      if (!SupabaseCompat.isMissingRpc(
+        e,
+        'mark_casting_agent_application_rejection_seen',
+      )) {
+        rethrow;
+      }
+    }
+
+    await _sb
+        .from('casting_agent_applications')
+        .update({'rejection_seen_at': DateTime.now().toUtc().toIso8601String()})
+        .eq('id', cleanId)
+        .eq('user_id', _sb.auth.currentUser?.id ?? '');
   }
 
   Future<void> _updateAuthMetadata(RegistrationAccountType type) async {

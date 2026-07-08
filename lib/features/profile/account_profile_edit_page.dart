@@ -87,6 +87,7 @@ class _AccountProfileEditPageState
   final _fullNameC = TextEditingController();
   final _companyC = TextEditingController();
   final _positionC = TextEditingController();
+  final _accountTagC = TextEditingController();
   final _emailC = TextEditingController();
   final _phoneNumberC = TextEditingController();
   final _cityC = TextEditingController();
@@ -126,6 +127,7 @@ class _AccountProfileEditPageState
     _fullNameC.dispose();
     _companyC.dispose();
     _positionC.dispose();
+    _accountTagC.dispose();
     _emailC.dispose();
     _phoneNumberC.dispose();
     _cityC.dispose();
@@ -144,6 +146,7 @@ class _AccountProfileEditPageState
     _fullNameC.text = profile.fullName;
     _companyC.text = profile.companyName;
     _positionC.text = profile.position;
+    _accountTagC.text = profile.normalizedAccountTag;
     _emailC.text = profile.email;
     _lastConfirmedEmail = profile.email;
     _avatarUrl = profile.avatarUrl;
@@ -166,6 +169,7 @@ class _AccountProfileEditPageState
     final profile = AccountOwnerProfile(
       email: _confirmedEmailForSave(user),
       phone: _confirmedPhoneForSave(user),
+      accountTag: _accountTagC.text,
       avatarUrl: _avatarUrl,
       fullName: _fullNameC.text,
       companyName: _companyC.text,
@@ -198,10 +202,18 @@ class _AccountProfileEditPageState
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       if (!mounted) return;
+      final message = e.toString().toLowerCase();
+      final tagTaken =
+          message.contains('user_profiles_account_tag_lower_idx') ||
+          (message.contains('duplicate') && message.contains('account_tag'));
       setState(() {
-        _error = _isRussian
-            ? 'Не удалось сохранить профиль аккаунта.\n$e'
-            : 'Could not save account profile.\n$e';
+        _error = tagTaken
+            ? (_isRussian
+                  ? 'Этот тэг аккаунта уже занят.'
+                  : 'This account tag is already taken.')
+            : (_isRussian
+                  ? 'Не удалось сохранить профиль аккаунта.\n$e'
+                  : 'Could not save account profile.\n$e');
       });
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -267,6 +279,7 @@ class _AccountProfileEditPageState
             AccountOwnerProfile(
               email: _confirmedEmailForSave(updatedUser),
               phone: _confirmedPhoneForSave(updatedUser),
+              accountTag: _accountTagC.text,
               avatarUrl: _avatarUrl,
               fullName: _fullNameC.text,
               companyName: _companyC.text,
@@ -486,6 +499,7 @@ class _AccountProfileEditPageState
             profile: AccountOwnerProfile(
               email: _confirmedEmailForSave(user),
               phone: _confirmedPhoneForSave(user),
+              accountTag: _accountTagC.text,
               avatarUrl: _avatarUrl,
               fullName: _fullNameC.text,
               companyName: _companyC.text,
@@ -558,6 +572,7 @@ class _AccountProfileEditPageState
             AccountOwnerProfile(
               email: _confirmedEmailForSave(updatedUser),
               phone: phone,
+              accountTag: _accountTagC.text,
               avatarUrl: _avatarUrl,
               fullName: _fullNameC.text,
               companyName: _companyC.text,
@@ -758,6 +773,7 @@ class _AccountProfileEditPageState
       final profile = AccountOwnerProfile(
         email: _confirmedEmailForSave(user),
         phone: _confirmedPhoneForSave(user),
+        accountTag: _accountTagC.text,
         avatarUrl: url,
         fullName: _fullNameC.text,
         companyName: _companyC.text,
@@ -861,6 +877,19 @@ class _AccountProfileEditPageState
                             _positionC,
                             _isRussian ? 'Должность' : 'Position',
                           ),
+                          _field(
+                            _accountTagC,
+                            _isRussian
+                                ? 'Тэг аккаунта, например @artemkukhar'
+                                : 'Account tag, e.g. @artemkukhar',
+                            prefixText: '@',
+                            inputFormatters: [
+                              FilteringTextInputFormatter.allow(
+                                RegExp(r'[a-zA-Z0-9._-]'),
+                              ),
+                              LengthLimitingTextInputFormatter(32),
+                            ],
+                          ),
                           _EmailRecoveryHintCard(
                             user: ref.watch(currentUserProvider),
                             isRussian: _isRussian,
@@ -953,13 +982,18 @@ class _AccountProfileEditPageState
     TextEditingController controller,
     String label, {
     int maxLines = 1,
+    String? prefixText,
+    List<TextInputFormatter>? inputFormatters,
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: kGap12),
       child: TextField(
         controller: controller,
         maxLines: maxLines,
-        decoration: profileFieldDecoration(label: label),
+        inputFormatters: inputFormatters,
+        decoration: profileFieldDecoration(
+          label: label,
+        ).copyWith(prefixText: prefixText),
       ),
     );
   }

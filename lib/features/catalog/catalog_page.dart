@@ -9,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/app_error_mapper.dart';
 import '../../core/app_logger.dart';
+import '../../core/account_profile_service.dart';
 import '../../core/entitlements_provider.dart';
 import '../../core/roles_provider.dart';
 import '../../core/router.dart';
@@ -768,8 +769,11 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
     final filteredItems = c.applyLocalFilters(c.loaded);
 
     final session = Supabase.instance.client.auth.currentSession;
+    final accountProfile = ref.watch(accountOwnerProfileProvider).valueOrNull;
     final accountLabel = session == null
         ? t.guestUpper
+        : (accountProfile?.publicHandleLabel.trim().isNotEmpty ?? false)
+        ? accountProfile!.publicHandleLabel.trim()
         : (session.user.email ?? session.user.phone ?? t.accountUpper);
     final isAdmin = ref
         .watch(isAdminProvider)

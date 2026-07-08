@@ -156,6 +156,7 @@ class ChatListItem {
     required this.selectionTitle,
     required this.profileName,
     required this.photoUrl,
+    required this.accountTag,
     required this.contextLabel,
     required this.participantRole,
     required this.lastMessage,
@@ -176,6 +177,7 @@ class ChatListItem {
   final String selectionTitle;
   final String profileName;
   final String photoUrl;
+  final String accountTag;
   final String contextLabel;
   final ChatParticipantRole participantRole;
   final String lastMessage;
@@ -200,6 +202,7 @@ class ChatListItem {
     String? selectionTitle,
     String? profileName,
     String? photoUrl,
+    String? accountTag,
     String? contextLabel,
     ChatParticipantRole? participantRole,
     String? lastMessage,
@@ -220,6 +223,7 @@ class ChatListItem {
       selectionTitle: selectionTitle ?? this.selectionTitle,
       profileName: profileName ?? this.profileName,
       photoUrl: photoUrl ?? this.photoUrl,
+      accountTag: accountTag ?? this.accountTag,
       contextLabel: contextLabel ?? this.contextLabel,
       participantRole: participantRole ?? this.participantRole,
       lastMessage: lastMessage ?? this.lastMessage,
@@ -251,6 +255,7 @@ class ChatListItem {
     if (q.isEmpty) return true;
     return title.toLowerCase().contains(q) ||
         contextLabel.toLowerCase().contains(q) ||
+        accountTag.toLowerCase().contains(q) ||
         participantRole.label.toLowerCase().contains(q) ||
         lastMessage.toLowerCase().contains(q) ||
         (hasMediaMessages && 'медиа media фото video видео'.contains(q)) ||

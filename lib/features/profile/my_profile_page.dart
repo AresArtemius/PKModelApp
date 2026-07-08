@@ -575,8 +575,9 @@ class _AccountStatusEntryCardState
     }
 
     final userId = ref.read(supabaseProvider).auth.currentUser?.id ?? 'local';
+    final applicationId = status.rejectedApplicationId?.trim() ?? '';
     final key =
-        'account_status_rejected_seen_${userId}_${rejected.storageValue}';
+        'account_status_rejected_seen_${userId}_${applicationId.isEmpty ? rejected.storageValue : applicationId}';
     if (_shownRejectedDialogs.contains(key)) return;
     _shownRejectedDialogs.add(key);
 
@@ -630,6 +631,12 @@ class _AccountStatusEntryCardState
           ),
         ),
       );
+      if (applicationId.isNotEmpty) {
+        await ref
+            .read(accountStatusServiceProvider)
+            .markRejectedApplicationSeen(applicationId);
+        ref.invalidate(accountStatusProvider);
+      }
     });
   }
 

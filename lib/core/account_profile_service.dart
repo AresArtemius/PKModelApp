@@ -28,6 +28,7 @@ class AccountOwnerProfile {
   const AccountOwnerProfile({
     required this.email,
     required this.phone,
+    required this.accountTag,
     required this.avatarUrl,
     required this.fullName,
     required this.companyName,
@@ -41,6 +42,7 @@ class AccountOwnerProfile {
 
   final String email;
   final String phone;
+  final String accountTag;
   final String avatarUrl;
   final String fullName;
   final String companyName;
@@ -67,9 +69,18 @@ class AccountOwnerProfile {
     return '';
   }
 
+  String get normalizedAccountTag => normalizeAccountTag(accountTag);
+
+  String get publicHandleLabel {
+    final tag = normalizedAccountTag;
+    if (tag.isNotEmpty) return tag;
+    return email.trim();
+  }
+
   AccountOwnerProfile copyWith({
     String? email,
     String? phone,
+    String? accountTag,
     String? avatarUrl,
     String? fullName,
     String? companyName,
@@ -83,6 +94,7 @@ class AccountOwnerProfile {
     return AccountOwnerProfile(
       email: email ?? this.email,
       phone: phone ?? this.phone,
+      accountTag: accountTag ?? this.accountTag,
       avatarUrl: avatarUrl ?? this.avatarUrl,
       fullName: fullName ?? this.fullName,
       companyName: companyName ?? this.companyName,
@@ -99,6 +111,7 @@ class AccountOwnerProfile {
     return const AccountOwnerProfile(
       email: '',
       phone: '',
+      accountTag: '',
       avatarUrl: '',
       fullName: '',
       companyName: '',
@@ -122,6 +135,7 @@ class AccountOwnerProfile {
     return AccountOwnerProfile(
       email: value('email').isNotEmpty ? value('email') : user.email ?? '',
       phone: value('phone').isNotEmpty ? value('phone') : user.phone ?? '',
+      accountTag: value('account_tag'),
       avatarUrl: storedAvatarUrl.isNotEmpty
           ? storedAvatarUrl
           : metadataAvatarUrl ?? '',
@@ -141,6 +155,7 @@ class AccountOwnerProfile {
       'user_id': user.id,
       'email': email.trim().isNotEmpty ? email.trim() : user.email,
       'phone': phone.trim().isNotEmpty ? phone.trim() : user.phone,
+      'account_tag': normalizedAccountTag,
       'avatar_url': avatarUrl.trim(),
       'full_name': fullName.trim(),
       'company_name': companyName.trim(),
@@ -153,6 +168,13 @@ class AccountOwnerProfile {
       'updated_at': DateTime.now().toUtc().toIso8601String(),
     };
   }
+}
+
+String normalizeAccountTag(String value) {
+  final lower = value.trim().toLowerCase();
+  final withoutAt = lower.startsWith('@') ? lower.substring(1) : lower;
+  final cleaned = withoutAt.replaceAll(RegExp(r'[^a-z0-9._-]'), '');
+  return cleaned.replaceAll(RegExp(r'^[._-]+|[._-]+$'), '');
 }
 
 String? _firstNonEmptyValue(Iterable<Object?> values) {
@@ -198,16 +220,16 @@ class AccountProfileService {
 
   Future<AccountOwnerProfile> loadOwnerProfile(User user) async {
     try {
-      final row = await _sb
-          .from('user_profiles')
-          .select(
-            'email,phone,avatar_url,full_name,company_name,position,city,country,website,social_url,bio',
-          )
-          .eq('user_id', user.id)
-          .limit(1)
-          .maybeSingle();
+      final row = await _loadOwnerProfileRow(user.id, includeAccountTag: true);
       return AccountOwnerProfile.fromMap(row, user);
     } on PostgrestException catch (e) {
+      if (SupabaseCompat.isMissingColumn(e, 'account_tag')) {
+        final row = await _loadOwnerProfileRow(
+          user.id,
+          includeAccountTag: false,
+        );
+        return AccountOwnerProfile.fromMap(row, user);
+      }
       if (_isMissingUserProfilesTable(e) || _isMissingOwnerProfileColumn(e)) {
         AppLogger.warning(
           'Account owner profile load skipped until SQL is applied',
@@ -217,6 +239,32 @@ class AccountProfileService {
       }
       rethrow;
     }
+  }
+
+  Future<Map<String, dynamic>?> _loadOwnerProfileRow(
+    String userId, {
+    required bool includeAccountTag,
+  }) async {
+    final columns = [
+      'email',
+      'phone',
+      if (includeAccountTag) 'account_tag',
+      'avatar_url',
+      'full_name',
+      'company_name',
+      'position',
+      'city',
+      'country',
+      'website',
+      'social_url',
+      'bio',
+    ].join(',');
+    return _sb
+        .from('user_profiles')
+        .select(columns)
+        .eq('user_id', userId)
+        .limit(1)
+        .maybeSingle();
   }
 
   Future<void> saveOwnerProfile(User user, AccountOwnerProfile profile) async {
@@ -232,7 +280,17 @@ class AccountProfileService {
       if (!SupabaseCompat.isMissingRpc(e, 'save_account_profile')) rethrow;
     }
 
-    await _sb.from('user_profiles').upsert(payload, onConflict: 'user_id');
+    try {
+      await _sb.from('user_profiles').upsert(payload, onConflict: 'user_id');
+    } on PostgrestException catch (e) {
+      if (!SupabaseCompat.isMissingColumn(e, 'account_tag')) rethrow;
+      await _sb
+          .from('user_profiles')
+          .upsert(
+            Map<String, dynamic>.from(payload)..remove('account_tag'),
+            onConflict: 'user_id',
+          );
+    }
     if (avatarUrl.isNotEmpty) {
       await _persistAvatarUrl(user.id, avatarUrl);
     }
@@ -333,6 +391,7 @@ class AccountProfileService {
 
   bool _isMissingOwnerProfileColumn(PostgrestException e) {
     return SupabaseCompat.isMissingColumn(e, 'company_name') ||
+        SupabaseCompat.isMissingColumn(e, 'account_tag') ||
         SupabaseCompat.isMissingColumn(e, 'avatar_url') ||
         SupabaseCompat.isMissingColumn(e, 'position') ||
         SupabaseCompat.isMissingColumn(e, 'website') ||
