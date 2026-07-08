@@ -227,7 +227,12 @@ Future<void> _chooseProfilesAndRespond({
   required CastingsService service,
   required String userId,
   required String castingId,
+  required Set<String> alreadyRespondedProfileIds,
 }) async {
+  final availableProfiles = profiles
+      .where((p) => !alreadyRespondedProfileIds.contains(p.id.trim()))
+      .toList(growable: false);
+
   if (profiles.isEmpty) {
     await showDialog<void>(
       context: context,
@@ -282,8 +287,20 @@ Future<void> _chooseProfilesAndRespond({
     return;
   }
 
-  if (profiles.length == 1) {
-    final p = profiles.first;
+  if (availableProfiles.isEmpty) {
+    _showSnack(
+      context,
+      _castingLocaleText(
+        context,
+        'Все ваши анкеты уже добавлены в этот кастинг',
+        'All your profiles are already added to this casting',
+      ),
+    );
+    return;
+  }
+
+  if (availableProfiles.length == 1) {
+    final p = availableProfiles.first;
     final pid = p.id.trim();
     if (pid.isNotEmpty) {
       await service.respond(
@@ -330,10 +347,10 @@ Future<void> _chooseProfilesAndRespond({
                   Flexible(
                     child: ListView.separated(
                       shrinkWrap: true,
-                      itemCount: profiles.length,
+                      itemCount: availableProfiles.length,
                       separatorBuilder: (_, _) => const SizedBox(height: 6),
                       itemBuilder: (context, i) {
-                        final p = profiles[i];
+                        final p = availableProfiles[i];
                         final id = p.id.trim();
                         final title = p.fullName.trim().isNotEmpty
                             ? p.fullName.trim()
@@ -472,6 +489,11 @@ Future<void> _onRespondTap({
 
   try {
     final service = ref.read(castingsServiceProvider);
+    final alreadyRespondedProfileIds = await service.fetchMyRespondedProfileIds(
+      castingId: castingId,
+      userId: userId,
+    );
+    if (!context.mounted) return;
     await _chooseProfilesAndRespond(
       context: context,
       t: t,
@@ -479,6 +501,7 @@ Future<void> _onRespondTap({
       service: service,
       userId: userId,
       castingId: castingId,
+      alreadyRespondedProfileIds: alreadyRespondedProfileIds,
     );
   } on CastingsException catch (e) {
     AppLogger.error('Casting response failed', error: e.original ?? e);
@@ -1232,13 +1255,16 @@ class _CastingDesktopDetailPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
-    final hasResponded = status != null;
-    final canRespond = !hasResponded && !isResponding && !isDisabled;
+    final canRespond = !isResponding && !isDisabled;
     final responseLabel = isResponding
         ? t.loadingDots
         : (status == null
               ? t.respondUpper
-              : castingResponseStatusLabel(t, status!));
+              : _castingLocaleText(
+                  context,
+                  'ДОБАВИТЬ УЧАСТНИКА',
+                  'ADD PARTICIPANT',
+                ));
 
     return Container(
       decoration: castingCardDecoration(),
@@ -1263,7 +1289,7 @@ class _CastingDesktopDetailPanel extends StatelessWidget {
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final adminActions = isAdmin && onDeleteTap != null;
-                final stacked = adminActions && constraints.maxWidth < 560;
+                final stacked = adminActions && constraints.maxWidth < 760;
                 final respondButton = SizedBox(
                   height: BrandTheme.pillHeight,
                   child: BrandPillButton(
@@ -1331,7 +1357,7 @@ class _CastingDesktopDetailPanel extends StatelessWidget {
                     const SizedBox(width: 12),
                     SizedBox(width: 174, child: responsesButton),
                     const SizedBox(width: 12),
-                    Expanded(child: respondButton),
+                    SizedBox(width: 226, child: respondButton),
                   ],
                 );
               },

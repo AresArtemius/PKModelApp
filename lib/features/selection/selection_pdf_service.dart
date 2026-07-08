@@ -5,6 +5,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
+import '../../core/public_links.dart';
 import 'selection_export_item.dart';
 import 'selection_pdf_options.dart';
 
@@ -14,7 +15,7 @@ class SelectionPdfService {
   String buildModelUrl(String modelId) {
     final id = modelId.trim();
     if (id.isEmpty) return '';
-    return 'modelapp:///model/$id';
+    return publicProfileLink(id);
   }
 
   Future<void> previewSelectionPdf({

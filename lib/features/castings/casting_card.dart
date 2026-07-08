@@ -28,8 +28,7 @@ class CastingCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
-    final hasResponded = responseStatus != null;
-    final canTap = !hasResponded && !isResponding && !isDisabled;
+    final canTap = !isResponding && !isDisabled;
     final dates = casting.datesText;
     final status = responseStatus;
 
@@ -85,7 +84,11 @@ class CastingCard extends StatelessWidget {
                       ? t.loadingDots
                       : (status == null
                             ? t.respondUpper
-                            : castingResponseStatusLabel(t, status)),
+                            : _castingActionLocaleText(
+                                context,
+                                'ДОБАВИТЬ',
+                                'ADD MORE',
+                              )),
                   onTap: canTap ? () => onRespondTap(casting.id) : null,
                 ),
               ),
@@ -113,6 +116,10 @@ class CastingCard extends StatelessWidget {
       ),
     );
   }
+}
+
+String _castingActionLocaleText(BuildContext context, String ru, String en) {
+  return Localizations.localeOf(context).languageCode == 'ru' ? ru : en;
 }
 
 class _CastingStagePill extends StatelessWidget {

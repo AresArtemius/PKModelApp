@@ -116,6 +116,41 @@ class CastingsService {
     }
   }
 
+  Future<Set<String>> fetchMyRespondedProfileIds({
+    required String castingId,
+    required String userId,
+  }) async {
+    final cleanCastingId = castingId.trim();
+    final cleanUserId = userId.trim();
+    if (cleanCastingId.isEmpty || cleanUserId.isEmpty) {
+      return const <String>{};
+    }
+
+    try {
+      final rows = await _sb
+          .from('casting_responses')
+          .select('profile_id')
+          .eq('casting_id', cleanCastingId)
+          .eq('user_id', cleanUserId)
+          .limit(200);
+
+      return (rows as List)
+          .map((row) => ((row as Map)['profile_id'] ?? '').toString().trim())
+          .where((id) => id.isNotEmpty)
+          .toSet();
+    } on PostgrestException catch (e) {
+      throw CastingsException(
+        'Failed to fetch casting response profiles',
+        original: e,
+      );
+    } catch (e) {
+      throw CastingsException(
+        'Failed to fetch casting response profiles',
+        original: e,
+      );
+    }
+  }
+
   Future<Map<String, CastingResponseStatus>> fetchMyCastingStatuses({
     required String userId,
   }) async {
