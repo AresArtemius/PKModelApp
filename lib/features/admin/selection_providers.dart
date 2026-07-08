@@ -68,5 +68,5 @@ final adminSelectionCountProvider = FutureProvider.autoDispose<int>((
   ref,
 ) async {
   final items = await ref.watch(adminSelectionListProvider.future);
-  return items.where((item) => item['_kind'] == 'selection').length;
+  return items.length;
 });

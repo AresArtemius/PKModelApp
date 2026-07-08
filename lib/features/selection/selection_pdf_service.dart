@@ -15,7 +15,7 @@ class SelectionPdfService {
   String buildModelUrl(String modelId) {
     final id = modelId.trim();
     if (id.isEmpty) return '';
-    return publicProfileLink(id);
+    return '${publicProfileLink(id)}?from=admin';
   }
 
   Future<void> previewSelectionPdf({
@@ -129,23 +129,6 @@ class SelectionPdfService {
                   fontSize: 10,
                   color: PdfColors.blue700,
                 ),
-              ),
-            ),
-          ),
-        ),
-      );
-      info.add(
-        pw.Padding(
-          padding: const pw.EdgeInsets.only(bottom: 2),
-          child: pw.UrlLink(
-            destination: trimmed,
-            child: pw.Text(
-              trimmed,
-              style: pw.TextStyle(
-                font: baseFont,
-                fontSize: 8,
-                color: PdfColors.blue700,
-                decoration: pw.TextDecoration.underline,
               ),
             ),
           ),

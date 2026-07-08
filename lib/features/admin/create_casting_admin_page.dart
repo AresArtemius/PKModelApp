@@ -11,8 +11,10 @@ import '../../gen_l10n/app_localizations.dart';
 import '../../ui/brand/brand_admin_header.dart';
 import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
+import '../castings/castings_provider.dart';
 import '../castings/casting_project_stage.dart';
 import '../castings/casting_reference_media.dart';
+import 'selection_providers.dart';
 import 'admin_style.dart';
 
 class CreateCastingAdminPage extends ConsumerStatefulWidget {
@@ -104,6 +106,12 @@ class _CreateCastingAdminPageState
         targetText: title,
         status: 'created',
       );
+      ref
+        ..invalidate(castingsProvider)
+        ..invalidate(myCastingResponseStatusesProvider)
+        ..invalidate(actionableCastingsCountProvider)
+        ..invalidate(adminSelectionListProvider)
+        ..invalidate(adminSelectionCountProvider);
 
       if (!mounted) return;
       context.go(_returnRoute(context));
@@ -143,19 +151,36 @@ class _CreateCastingAdminPageState
               BrandAdminHeader(
                 title: t.adminCreateCastingUpper,
                 onBack: () => context.go(_returnRoute(context)),
-                trailing: IconButton(
+                sideWidth: 172,
+                trailing: TextButton(
                   onPressed: _creating ? null : _createCasting,
-                  icon: _creating
+                  style: TextButton.styleFrom(
+                    foregroundColor: BrandTheme.redTop,
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    minimumSize: const Size(0, 40),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: _creating
                       ? const SizedBox(
                           width: 20,
                           height: 20,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Icon(
-                          Icons.check_rounded,
-                          color: BrandTheme.redTop,
+                      : FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            Localizations.localeOf(context).languageCode == 'ru'
+                                ? 'ОПУБЛИКОВАТЬ'
+                                : 'PUBLISH',
+                            maxLines: 1,
+                            style: BrandTheme.pillText.copyWith(
+                              color: BrandTheme.redTop,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 1.1,
+                            ),
+                          ),
                         ),
-                  splashRadius: 22,
                 ),
               ),
               const SizedBox(height: 12),
