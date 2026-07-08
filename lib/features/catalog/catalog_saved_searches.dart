@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -11,6 +12,7 @@ import '../auth/auth_controller.dart';
 import 'catalog_controller.dart';
 
 const String _savedSearchesKeyPrefix = 'catalog_saved_searches_v1';
+const Duration _savedSearchesLoadTimeout = Duration(seconds: 8);
 
 class CatalogSavedSearch {
   const CatalogSavedSearch({
@@ -68,6 +70,9 @@ class CatalogSavedSearchesController extends ChangeNotifier {
   List<CatalogSavedSearch> get items => List.unmodifiable(_items);
 
   Future<void> load() {
+    final existing = _loadFuture;
+    if (existing != null) return existing;
+
     final future = _load();
     _loadFuture = future;
     return future.whenComplete(() {
@@ -83,14 +88,15 @@ class CatalogSavedSearchesController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final next = isRemoteEnabled ? await _loadMerged() : await _loadLocal();
+      final next = await (isRemoteEnabled ? _loadMerged() : _loadLocal())
+          .timeout(_savedSearchesLoadTimeout);
 
       _items
         ..clear()
         ..addAll(next);
 
       if (isRemoteEnabled) {
-        await _migrateLocalSearches();
+        unawaited(_migrateLocalSearchesInBackground());
       }
     } catch (e, st) {
       lastError = e;
@@ -118,6 +124,21 @@ class CatalogSavedSearchesController extends ChangeNotifier {
   Future<void> _ensureLoaded() async {
     if (!isLoading) return;
     await (_loadFuture ?? load());
+  }
+
+  Future<void> _migrateLocalSearchesInBackground() async {
+    try {
+      await _migrateLocalSearches().timeout(_savedSearchesLoadTimeout);
+    } catch (e, st) {
+      assert(() {
+        AppLogger.error(
+          'Catalog saved searches migration failed',
+          error: e,
+          stackTrace: st,
+        );
+        return true;
+      }());
+    }
   }
 
   Future<void> save({
