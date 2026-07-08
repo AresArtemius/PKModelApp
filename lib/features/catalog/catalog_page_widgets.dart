@@ -382,6 +382,7 @@ class _CatalogDesktopLayout extends StatelessWidget {
     required this.topBar,
     required this.onAdvancedSearch,
     required this.advancedSearchEnabled,
+    required this.roleTabs,
     required this.search,
     required this.grid,
     required this.detail,
@@ -391,6 +392,7 @@ class _CatalogDesktopLayout extends StatelessWidget {
   final Widget topBar;
   final VoidCallback onAdvancedSearch;
   final bool advancedSearchEnabled;
+  final Widget roleTabs;
   final Widget search;
   final Widget? savedSearches;
   final Widget grid;
@@ -412,6 +414,7 @@ class _CatalogDesktopLayout extends StatelessWidget {
                   search: search,
                   onAdvancedSearch: onAdvancedSearch,
                   advancedSearchEnabled: advancedSearchEnabled,
+                  roleTabs: roleTabs,
                   savedSearches: savedSearches,
                 ),
               ),
@@ -432,12 +435,14 @@ class _CatalogDesktopFilterPanel extends StatelessWidget {
     required this.search,
     required this.onAdvancedSearch,
     required this.advancedSearchEnabled,
+    required this.roleTabs,
     this.savedSearches,
   });
 
   final Widget search;
   final VoidCallback onAdvancedSearch;
   final bool advancedSearchEnabled;
+  final Widget roleTabs;
   final Widget? savedSearches;
 
   @override
@@ -460,6 +465,8 @@ class _CatalogDesktopFilterPanel extends StatelessWidget {
           ),
           const SizedBox(height: 14),
           search,
+          const SizedBox(height: 12),
+          roleTabs,
           const SizedBox(height: 6),
           _DesktopFilterAction(
             icon: Icons.tune_rounded,
@@ -529,6 +536,131 @@ class _DesktopFilterAction extends StatelessWidget {
       ),
     );
   }
+}
+
+class _CatalogRoleTabs extends StatelessWidget {
+  const _CatalogRoleTabs({required this.selectedRole, required this.onChanged});
+
+  final ProfessionalProfileType? selectedRole;
+  final ValueChanged<ProfessionalProfileType?> onChanged;
+
+  static const _roles = <ProfessionalProfileType>[
+    ProfessionalProfileType.model,
+    ProfessionalProfileType.actor,
+    ProfessionalProfileType.photographer,
+    ProfessionalProfileType.videographer,
+    ProfessionalProfileType.stylist,
+    ProfessionalProfileType.makeupArtist,
+    ProfessionalProfileType.hairStylist,
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+    final isRussian =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ru';
+    final chips = <Widget>[
+      _CatalogRoleChip(
+        label: isRussian ? 'ВСЕ' : 'ALL',
+        icon: Icons.grid_view_rounded,
+        selected: selectedRole == null,
+        onTap: () => onChanged(null),
+      ),
+      for (final role in _roles)
+        _CatalogRoleChip(
+          label: _catalogProfileTypeLabel(t, role).toUpperCase(),
+          icon: _catalogRoleIcon(role),
+          selected: selectedRole == role,
+          onTap: () => onChanged(role),
+        ),
+    ];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 360;
+        if (compact) {
+          return SizedBox(
+            height: 42,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              itemCount: chips.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
+              itemBuilder: (context, index) => chips[index],
+            ),
+          );
+        }
+
+        return Wrap(spacing: 8, runSpacing: 8, children: chips);
+      },
+    );
+  }
+}
+
+class _CatalogRoleChip extends StatelessWidget {
+  const _CatalogRoleChip({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final decoration = selected
+        ? pillDecoration(isDark: true, radius: kPillRadius)
+        : pillDecoration(isDark: false, radius: kPillRadius);
+    final color = selected ? Colors.white : kTextDark;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(kPillRadius),
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          height: 40,
+          padding: const EdgeInsets.symmetric(horizontal: 13),
+          decoration: decoration,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 16, color: color),
+              const SizedBox(width: 7),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: BrandTheme.pillText.copyWith(
+                  color: color,
+                  fontSize: 11,
+                  letterSpacing: 0.8,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+IconData _catalogRoleIcon(ProfessionalProfileType role) {
+  return switch (role) {
+    ProfessionalProfileType.model => Icons.person_rounded,
+    ProfessionalProfileType.actor => Icons.theater_comedy_rounded,
+    ProfessionalProfileType.photographer => Icons.photo_camera_rounded,
+    ProfessionalProfileType.videographer => Icons.videocam_rounded,
+    ProfessionalProfileType.stylist => Icons.checkroom_rounded,
+    ProfessionalProfileType.makeupArtist => Icons.brush_rounded,
+    ProfessionalProfileType.hairStylist => Icons.content_cut_rounded,
+  };
 }
 
 class _CatalogResultsBody extends StatelessWidget {

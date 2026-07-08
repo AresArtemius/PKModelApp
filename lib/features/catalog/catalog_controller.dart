@@ -4,6 +4,7 @@ import '../../core/app_logger.dart';
 import 'model_data.dart';
 import 'catalog_repository.dart';
 import 'catalog_filter_bounds.dart';
+import '../profile/profile_model.dart';
 
 class CatalogFilterSnapshot {
   const CatalogFilterSnapshot({
@@ -29,6 +30,7 @@ class CatalogFilterSnapshot {
     this.country = '',
     this.city = '',
     this.needDate,
+    this.profileRole,
   });
 
   factory CatalogFilterSnapshot.fromJson(Map<String, dynamic> json) {
@@ -73,6 +75,7 @@ class CatalogFilterSnapshot {
       country: stringValue('country'),
       city: stringValue('city'),
       needDate: dateValue('needDate'),
+      profileRole: _profileRoleValue(json['profileRole']),
     );
   }
 
@@ -98,6 +101,7 @@ class CatalogFilterSnapshot {
   final String country;
   final String city;
   final DateTime? needDate;
+  final ProfessionalProfileType? profileRole;
 
   Map<String, dynamic> toJson() {
     return {
@@ -123,6 +127,7 @@ class CatalogFilterSnapshot {
       'country': country,
       'city': city,
       'needDate': needDate?.toIso8601String().split('T').first,
+      'profileRole': profileRole?.storageValue,
     };
   }
 
@@ -150,7 +155,8 @@ class CatalogFilterSnapshot {
         hairColor == other.hairColor &&
         country == other.country &&
         city == other.city &&
-        _dateKey(needDate) == _dateKey(other.needDate);
+        _dateKey(needDate) == _dateKey(other.needDate) &&
+        profileRole == other.profileRole;
   }
 
   @override
@@ -177,6 +183,7 @@ class CatalogFilterSnapshot {
     country,
     city,
     _dateKey(needDate),
+    profileRole,
   ]);
 
   static String? _dateKey(DateTime? value) {
@@ -186,6 +193,12 @@ class CatalogFilterSnapshot {
       value.month,
       value.day,
     ).toIso8601String().split('T').first;
+  }
+
+  static ProfessionalProfileType? _profileRoleValue(Object? value) {
+    final text = value?.toString().trim() ?? '';
+    if (text.isEmpty) return null;
+    return profileTypeFromString(text);
   }
 }
 
@@ -238,6 +251,7 @@ class CatalogController extends ChangeNotifier {
   String country = '';
   String city = '';
   DateTime? needDate;
+  ProfessionalProfileType? profileRole;
 
   CatalogFilterSnapshot get filterSnapshot {
     return CatalogFilterSnapshot(
@@ -263,6 +277,7 @@ class CatalogController extends ChangeNotifier {
       country: country,
       city: city,
       needDate: needDate,
+      profileRole: profileRole,
     );
   }
 
@@ -298,6 +313,12 @@ class CatalogController extends ChangeNotifier {
 
   void setQuery(String value) {
     query = value.trim();
+    notifyListeners();
+  }
+
+  void setProfileRole(ProfessionalProfileType? value) {
+    if (profileRole == value) return;
+    profileRole = value;
     notifyListeners();
   }
 
@@ -355,6 +376,7 @@ class CatalogController extends ChangeNotifier {
 
   void clearAllFilters() {
     query = '';
+    profileRole = null;
     _resetAdvancedFiltersOnly();
     notifyListeners();
   }
@@ -382,6 +404,7 @@ class CatalogController extends ChangeNotifier {
     country = snapshot.country.trim();
     city = snapshot.city.trim();
     needDate = snapshot.needDate;
+    profileRole = snapshot.profileRole;
     notifyListeners();
   }
 
@@ -491,12 +514,15 @@ class CatalogController extends ChangeNotifier {
     final eyeQ = eyeColor.trim().toLowerCase();
     final hairQ = hairColor.trim().toLowerCase();
     final countryQ = country.trim().toLowerCase();
+    final role = profileRole;
 
     final need = needDate == null
         ? null
         : DateTime(needDate!.year, needDate!.month, needDate!.day);
 
     bool matches(ModelVm m) {
+      if (role != null && !m.hasProfileRole(role)) return false;
+
       if (ageFrom != null && m.age < ageFrom!) return false;
       if (ageTo != null && m.age > ageTo!) return false;
 

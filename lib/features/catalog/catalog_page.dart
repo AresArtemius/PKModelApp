@@ -807,6 +807,13 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
             orElse: () => filteredItems.first,
           )
         : null;
+    final roleTabs = _CatalogRoleTabs(
+      selectedRole: c.profileRole,
+      onChanged: (role) {
+        _unfocus();
+        c.setProfileRole(role);
+      },
+    );
 
     return Scaffold(
       body: Stack(
@@ -839,6 +846,7 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                           ),
                           onAdvancedSearch: _openAdvancedSearch,
                           advancedSearchEnabled: !c.isInitialLoading,
+                          roleTabs: roleTabs,
                           search: _CatalogSearchRow(
                             controller: _searchC,
                             onChanged: _onSearchChanged,
@@ -948,6 +956,8 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                               ),
                               const SizedBox(height: kGap12),
                             ],
+                            const SizedBox(height: kGap12),
+                            roleTabs,
                             const SizedBox(height: kGap12),
                             Expanded(
                               child: _CatalogResultsBody(
