@@ -559,46 +559,177 @@ class _CatalogRoleTabs extends StatelessWidget {
     final t = AppLocalizations.of(context)!;
     final isRussian =
         Localizations.localeOf(context).languageCode.toLowerCase() == 'ru';
-    final chips = <Widget>[
-      _CatalogRoleChip(
-        label: isRussian ? 'ВСЕ' : 'ALL',
-        icon: Icons.grid_view_rounded,
-        selected: selectedRole == null,
-        onTap: () => onChanged(null),
-      ),
-      for (final role in _roles)
-        _CatalogRoleChip(
-          label: _catalogProfileTypeLabel(t, role).toUpperCase(),
-          icon: _catalogRoleIcon(role),
-          selected: selectedRole == role,
-          onTap: () => onChanged(role),
-        ),
-    ];
+    final label = selectedRole == null
+        ? (isRussian ? 'ВСЕ' : 'ALL')
+        : _catalogProfileTypeLabel(t, selectedRole!).toUpperCase();
+    final icon = selectedRole == null
+        ? Icons.grid_view_rounded
+        : _catalogRoleIcon(selectedRole!);
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final compact = constraints.maxWidth < 360;
-        if (compact) {
-          return SizedBox(
-            height: 42,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              physics: const BouncingScrollPhysics(),
-              itemCount: chips.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 8),
-              itemBuilder: (context, index) => chips[index],
-            ),
-          );
-        }
-
-        return Wrap(spacing: 8, runSpacing: 8, children: chips);
+    return _CatalogRoleSelectorButton(
+      label: label,
+      icon: icon,
+      onTap: () async {
+        final choice = await showModalBottomSheet<_CatalogRoleChoice>(
+          context: context,
+          backgroundColor: Colors.transparent,
+          builder: (context) => _CatalogRolePickerSheet(
+            roles: _roles,
+            selectedRole: selectedRole,
+          ),
+        );
+        if (!context.mounted) return;
+        if (choice == null) return;
+        onChanged(choice.role);
       },
     );
   }
 }
 
-class _CatalogRoleChip extends StatelessWidget {
-  const _CatalogRoleChip({
+class _CatalogRoleChoice {
+  const _CatalogRoleChoice(this.role);
+
+  final ProfessionalProfileType? role;
+}
+
+class _CatalogRoleSelectorButton extends StatelessWidget {
+  const _CatalogRoleSelectorButton({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(kPillRadius),
+        onTap: onTap,
+        child: Container(
+          height: 40,
+          constraints: const BoxConstraints(minWidth: 118),
+          padding: const EdgeInsets.symmetric(horizontal: 13),
+          decoration: pillDecoration(isDark: false, radius: kPillRadius),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 16, color: kTextDark),
+              const SizedBox(width: 7),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: BrandTheme.pillText.copyWith(
+                    color: kTextDark,
+                    fontSize: 11,
+                    letterSpacing: 0.8,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+              const Icon(
+                Icons.keyboard_arrow_down_rounded,
+                size: 18,
+                color: kTextDark,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CatalogRolePickerSheet extends StatelessWidget {
+  const _CatalogRolePickerSheet({
+    required this.roles,
+    required this.selectedRole,
+  });
+
+  final List<ProfessionalProfileType> roles;
+  final ProfessionalProfileType? selectedRole;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+    final isRussian =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ru';
+    final items =
+        <({ProfessionalProfileType? role, String label, IconData icon})>[
+          (
+            role: null,
+            label: isRussian ? 'ВСЕ' : 'ALL',
+            icon: Icons.grid_view_rounded,
+          ),
+          for (final role in roles)
+            (
+              role: role,
+              label: _catalogProfileTypeLabel(t, role).toUpperCase(),
+              icon: _catalogRoleIcon(role),
+            ),
+        ];
+
+    return Container(
+      margin: const EdgeInsets.all(12),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: kBorderColor),
+        boxShadow: BrandTheme.basePillShadow(isDark: false),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    isRussian ? 'РОЛЬ В КАТАЛОГЕ' : 'CATALOG ROLE',
+                    style: BrandTheme.pillText.copyWith(
+                      color: kTextDark,
+                      fontSize: 16,
+                      letterSpacing: 1.5,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            for (final item in items) ...[
+              _CatalogRoleSheetTile(
+                label: item.label,
+                icon: item.icon,
+                selected: selectedRole == item.role,
+                onTap: () =>
+                    Navigator.of(context).pop(_CatalogRoleChoice(item.role)),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CatalogRoleSheetTile extends StatelessWidget {
+  const _CatalogRoleSheetTile({
     required this.label,
     required this.icon,
     required this.selected,
@@ -612,37 +743,37 @@ class _CatalogRoleChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final decoration = selected
-        ? pillDecoration(isDark: true, radius: kPillRadius)
-        : pillDecoration(isDark: false, radius: kPillRadius);
     final color = selected ? Colors.white : kTextDark;
-
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(kPillRadius),
+        borderRadius: BorderRadius.circular(20),
         onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          height: 40,
-          padding: const EdgeInsets.symmetric(horizontal: 13),
-          decoration: decoration,
+        child: Container(
+          height: 54,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: selected
+              ? pillDecoration(isDark: true, radius: 20)
+              : pillDecoration(isDark: false, radius: 20),
           child: Row(
-            mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 16, color: color),
-              const SizedBox(width: 7),
-              Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: BrandTheme.pillText.copyWith(
-                  color: color,
-                  fontSize: 11,
-                  letterSpacing: 0.8,
-                  fontWeight: FontWeight.w700,
+              Icon(icon, color: color, size: 19),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: BrandTheme.pillText.copyWith(
+                    color: color,
+                    fontSize: 13,
+                    letterSpacing: 1.0,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ),
+              if (selected)
+                const Icon(Icons.check_rounded, color: Colors.white, size: 20),
             ],
           ),
         ),

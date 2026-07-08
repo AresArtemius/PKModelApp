@@ -944,21 +944,29 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                               },
                             ),
                             if (canCreateSelections) ...[
-                              _SavedSearchRail(
-                                searches: savedSearchItems,
-                                activeFilters: c.filterSnapshot,
-                                onApply: _applySavedSearch,
-                                onSaveCurrent: savedSearches.isLoading
-                                    ? null
-                                    : _saveCurrentSearch,
-                                onDelete: _deleteSavedSearch,
-                                saveLabel: t.savedSearchSaveCurrent,
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _SavedSearchRail(
+                                      searches: savedSearchItems,
+                                      activeFilters: c.filterSnapshot,
+                                      onApply: _applySavedSearch,
+                                      onSaveCurrent: savedSearches.isLoading
+                                          ? null
+                                          : _saveCurrentSearch,
+                                      onDelete: _deleteSavedSearch,
+                                      saveLabel: t.savedSearchSaveCurrent,
+                                    ),
+                                  ),
+                                  const SizedBox(width: kGap8),
+                                  roleTabs,
+                                ],
                               ),
                               const SizedBox(height: kGap12),
+                            ] else ...[
+                              roleTabs,
+                              const SizedBox(height: kGap12),
                             ],
-                            const SizedBox(height: kGap12),
-                            roleTabs,
-                            const SizedBox(height: kGap12),
                             Expanded(
                               child: _CatalogResultsBody(
                                 controller: c,
