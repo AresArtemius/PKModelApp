@@ -12,6 +12,7 @@
 
 ## Журнал изменений
 
+- 2026-07-08: исправлен production-сценарий сохраненных поисков каталога после применения SQL: insert явно передает `user_id`, после save/rename/delete список перечитывается из Supabase, а ошибки сохранения показываются пользователю; `send_notifications_production_delivery.sql` проверен как следующий production SQL для запуска после Vault-secret; commit `24bb2cb`.
 - 2026-07-08: сохраненные поиски каталога перенесены с локального storage на Supabase-backed storage с account-scoped таблицей, RLS, миграцией старых локальных пресетов и fallback до применения SQL; референсы кастингов открываются как lightbox/zoom внутри приложения, видимые стрелки сортировки референсов убраны; commit `6525cda`.
 - 2026-07-08: уточнен UX откликов и референсов кастингов: выбранные анкеты в board теперь можно удалить из откликов кастинга, пустые колонки больше не обещают drag-and-drop, а референсы в карточке кастинга открываются крупным viewer с zoom; commit `d4596ec`.
 - 2026-07-08: исправлена SQL-ошибка moderation hygiene для enum `profile_status`; экран откликов кастинга упрощен до практичной воронки “Отклики / Шортлист / Утвержденные” с мобильным selector вместо широкого канбана, PDF можно выгружать отдельно по всем откликам, шортлисту и утвержденным, референсы видны превью в карточке кастинга, auth-ошибка invalid credentials локализована; commit `6173823`.
@@ -85,6 +86,7 @@
 - Серверное обновление статусов доставки/прочтения для email/push вне чата: `app_notifications` может быть связан с `profile_action_logs`, а SQL-триггер переносит `sent/delivered/read/failed` в историю действий профиля.
 - Production delivery worker `send-notifications`: единая Supabase Edge Function для push через FCM и email через Resend, с записью серверных статусов обратно в `app_notifications`.
 - Firebase/Resend secrets в Supabase заведены частично; production `EMAIL_FROM` выставлен как `PK Management <noreply@pk.management>`, `PUBLIC_APP_URL` выставлен как `https://app.pk.management/`, функция `send-notifications` redeploy сделан.
+- SQL `send_notifications_production_delivery.sql` готов к production-применению: ставит authenticated `pg_net` webhook на insert в `app_notifications` и `pg_cron` fallback каждую минуту, но требует Vault-secret `send_notifications_service_role_key`.
 
 Не хватает:
 - Применить `supabase/sql/catalog_saved_searches.sql` на production, если таблица `catalog_saved_searches` еще не создана; до этого приложение сохранит локальный fallback.
