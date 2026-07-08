@@ -63,3 +63,10 @@ final adminSelectionListProvider =
       all.sort((a, b) => parseCreatedAt(b).compareTo(parseCreatedAt(a)));
       return all.take(limit).toList(growable: false);
     });
+
+final adminSelectionCountProvider = FutureProvider.autoDispose<int>((
+  ref,
+) async {
+  final items = await ref.watch(adminSelectionListProvider.future);
+  return items.where((item) => item['_kind'] == 'selection').length;
+});

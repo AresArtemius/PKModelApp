@@ -40,9 +40,11 @@ class SelectionPdfService {
     final imageBytes = <String, Uint8List?>{};
     if (options.includePhoto) {
       for (final item in items) {
-        final url = item.photoUrl.trim();
-        if (url.isEmpty || imageBytes.containsKey(url)) continue;
-        imageBytes[url] = await _loadImageBytes(url);
+        for (final url in item.photoUrls.take(3)) {
+          final cleanUrl = url.trim();
+          if (cleanUrl.isEmpty || imageBytes.containsKey(cleanUrl)) continue;
+          imageBytes[cleanUrl] = await _loadImageBytes(cleanUrl);
+        }
       }
     }
 
@@ -65,9 +67,7 @@ class SelectionPdfService {
             (item) => _buildCard(
               item: item,
               options: options,
-              imageData: options.includePhoto
-                  ? imageBytes[item.photoUrl.trim()]
-                  : null,
+              imageData: imageBytes,
               baseFont: baseFont,
               boldFont: boldFont,
             ),
@@ -82,7 +82,7 @@ class SelectionPdfService {
   pw.Widget _buildCard({
     required SelectionExportItem item,
     required SelectionPdfOptions options,
-    required Uint8List? imageData,
+    required Map<String, Uint8List?> imageData,
     required pw.Font baseFont,
     required pw.Font boldFont,
   }) {
@@ -129,6 +129,23 @@ class SelectionPdfService {
                   fontSize: 10,
                   color: PdfColors.blue700,
                 ),
+              ),
+            ),
+          ),
+        ),
+      );
+      info.add(
+        pw.Padding(
+          padding: const pw.EdgeInsets.only(bottom: 2),
+          child: pw.UrlLink(
+            destination: trimmed,
+            child: pw.Text(
+              trimmed,
+              style: pw.TextStyle(
+                font: baseFont,
+                fontSize: 8,
+                color: PdfColors.blue700,
+                decoration: pw.TextDecoration.underline,
               ),
             ),
           ),
@@ -196,21 +213,10 @@ class SelectionPdfService {
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
           if (options.includePhoto)
-            pw.Container(
-              width: 110,
-              height: 140,
-              decoration: pw.BoxDecoration(
-                color: PdfColors.grey200,
-                borderRadius: pw.BorderRadius.circular(8),
-              ),
-              child: imageData != null
-                  ? pw.Image(pw.MemoryImage(imageData), fit: pw.BoxFit.cover)
-                  : pw.Center(
-                      child: pw.Text(
-                        'NO PHOTO',
-                        style: pw.TextStyle(font: baseFont, fontSize: 10),
-                      ),
-                    ),
+            _buildPhotoStrip(
+              item: item,
+              imageData: imageData,
+              baseFont: baseFont,
             ),
           if (options.includePhoto) pw.SizedBox(width: 12),
           pw.Expanded(
@@ -228,6 +234,62 @@ class SelectionPdfService {
           ),
         ],
       ),
+    );
+  }
+
+  pw.Widget _buildPhotoStrip({
+    required SelectionExportItem item,
+    required Map<String, Uint8List?> imageData,
+    required pw.Font baseFont,
+  }) {
+    final urls = item.photoUrls.take(3).toList(growable: false);
+    if (urls.isEmpty) {
+      return pw.Container(
+        width: 110,
+        height: 140,
+        decoration: pw.BoxDecoration(
+          color: PdfColors.grey200,
+          borderRadius: pw.BorderRadius.circular(8),
+        ),
+        child: pw.Center(
+          child: pw.Text(
+            'NO PHOTO',
+            style: pw.TextStyle(font: baseFont, fontSize: 10),
+          ),
+        ),
+      );
+    }
+
+    final tileWidth = urls.length == 1 ? 110.0 : 74.0;
+    return pw.Row(
+      children: [
+        for (var i = 0; i < urls.length; i++) ...[
+          pw.Container(
+            width: tileWidth,
+            height: 140,
+            decoration: pw.BoxDecoration(
+              color: PdfColors.grey200,
+              borderRadius: pw.BorderRadius.circular(8),
+            ),
+            child: imageData[urls[i].trim()] != null
+                ? pw.ClipRRect(
+                    horizontalRadius: 8,
+                    verticalRadius: 8,
+                    child: pw.Image(
+                      pw.MemoryImage(imageData[urls[i].trim()]!),
+                      fit: pw.BoxFit.cover,
+                    ),
+                  )
+                : pw.Center(
+                    child: pw.Text(
+                      'NO PHOTO',
+                      style: pw.TextStyle(font: baseFont, fontSize: 9),
+                    ),
+                  ),
+          ),
+          if (i != urls.length - 1) pw.SizedBox(width: 6),
+        ],
+      ],
     );
   }
 

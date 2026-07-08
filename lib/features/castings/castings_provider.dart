@@ -30,3 +30,11 @@ final myCastingResponseStatusesProvider =
       final service = ref.watch(castingsServiceProvider);
       return service.fetchMyCastingStatuses(userId: userId);
     });
+
+final actionableCastingsCountProvider = FutureProvider.autoDispose<int>((
+  ref,
+) async {
+  final castings = await ref.watch(castingsProvider.future);
+  final statuses = await ref.watch(myCastingResponseStatusesProvider.future);
+  return castings.where((casting) => statuses[casting.id] == null).length;
+});

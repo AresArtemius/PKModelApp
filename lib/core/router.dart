@@ -21,6 +21,7 @@ import '../features/auth/auth_required_page.dart';
 import '../features/auth/register_page.dart';
 import '../features/billing/billing_page.dart';
 import '../features/castings/casting_page.dart';
+import '../features/castings/castings_provider.dart';
 import '../features/chat/chat_page.dart';
 import '../features/chat/chats_page.dart';
 import '../features/chat/chat_providers.dart';
@@ -174,12 +175,15 @@ class AppDesktopNav extends ConsumerWidget {
     final adminBadge = ref
         .watch(adminDashboardCountsProvider)
         .maybeWhen(data: (value) => value.total, orElse: () => 0);
+    final castingsBadge = ref
+        .watch(actionableCastingsCountProvider)
+        .maybeWhen(data: (value) => value, orElse: () => 0);
     final items = [
       (
         icon: Icons.videocam,
         label: t.castingsTab,
         route: Routes.castings,
-        badge: 0,
+        badge: castingsBadge,
       ),
       (icon: Icons.search, label: t.catalogTab, route: Routes.search, badge: 0),
       (
@@ -387,12 +391,15 @@ class AppBottomNav extends ConsumerWidget {
     final adminBadge = ref
         .watch(adminDashboardCountsProvider)
         .maybeWhen(data: (value) => value.total, orElse: () => 0);
+    final castingsBadge = ref
+        .watch(actionableCastingsCountProvider)
+        .maybeWhen(data: (value) => value, orElse: () => 0);
     final items = [
       (
         icon: Icons.videocam,
         label: t.castingsTab,
         route: Routes.castings,
-        badge: 0,
+        badge: castingsBadge,
       ),
       (icon: Icons.search, label: t.catalogTab, route: Routes.search, badge: 0),
       (
@@ -669,7 +676,10 @@ final List<RouteBase> appRoutes = [
         path: '${Routes.adminSelection}/:$_routeParamId',
         builder: (context, state) {
           final id = state.pathParameters[_routeParamId] ?? '';
-          return SelectionCastingPage(castingId: id);
+          return SelectionCastingPage(
+            castingId: id,
+            from: state.uri.queryParameters['from'],
+          );
         },
       ),
       GoRoute(

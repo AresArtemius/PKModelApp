@@ -14,6 +14,7 @@ class SelectionExportItem {
   final int minHourlyRate;
   final int minDailyFee;
   final String photoUrl;
+  final List<String> photoUrls;
 
   const SelectionExportItem({
     required this.id,
@@ -31,6 +32,7 @@ class SelectionExportItem {
     required this.minHourlyRate,
     required this.minDailyFee,
     required this.photoUrl,
+    this.photoUrls = const <String>[],
   });
 
   factory SelectionExportItem.fromProfileMap(Map<String, dynamic> profile) {
@@ -42,6 +44,10 @@ class SelectionExportItem {
               .toList(growable: false)
         : const <String>[];
     final coverPhotoUrl = (profile['cover_photo_url'] ?? '').toString().trim();
+    final orderedPhotoUrls = [
+      if (coverPhotoUrl.isNotEmpty) coverPhotoUrl,
+      ...photoUrls.where((url) => url.trim() != coverPhotoUrl),
+    ].take(3).toList(growable: false);
 
     return SelectionExportItem(
       id: (profile['id'] ?? '').toString(),
@@ -58,9 +64,8 @@ class SelectionExportItem {
       shoeSize: _toInt(profile['shoe_size']),
       minHourlyRate: _toInt(profile['min_hourly_rate']),
       minDailyFee: _toInt(profile['min_daily_fee']),
-      photoUrl: coverPhotoUrl.isNotEmpty
-          ? coverPhotoUrl
-          : (photoUrls.isNotEmpty ? photoUrls.first : ''),
+      photoUrl: orderedPhotoUrls.isNotEmpty ? orderedPhotoUrls.first : '',
+      photoUrls: orderedPhotoUrls,
     );
   }
 

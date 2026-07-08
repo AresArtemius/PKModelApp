@@ -16,6 +16,7 @@ import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
 import 'account_merge_requests_page.dart';
 import 'admin_style.dart';
+import 'selection_providers.dart';
 import 'casting_agent_applications_page.dart';
 import 'moderation_admin_page.dart';
 import '../profile/profile_model.dart';
@@ -157,6 +158,9 @@ class AdminPage extends ConsumerWidget {
               }
 
               final countsAsync = ref.watch(adminDashboardCountsProvider);
+              final selectionCount = ref
+                  .watch(adminSelectionCountProvider)
+                  .maybeWhen(data: (value) => value, orElse: () => 0);
               return _AdminHome(
                 exitLabel: t.adminExitUpper,
                 counts: countsAsync.maybeWhen(
@@ -169,7 +173,8 @@ class AdminPage extends ConsumerWidget {
                     description: ru ? 'Новый проект' : 'New project',
                     icon: Icons.videocam_rounded,
                     group: _AdminActionGroup.operations,
-                    onTap: () => context.go(Routes.createCastingAdmin),
+                    onTap: () =>
+                        context.go('${Routes.createCastingAdmin}?from=admin'),
                   ),
                   _AdminAction(
                     label: t.selectionUpper,
@@ -178,6 +183,7 @@ class AdminPage extends ConsumerWidget {
                         : 'Selections and castings',
                     icon: Icons.dashboard_customize_rounded,
                     group: _AdminActionGroup.operations,
+                    badge: selectionCount,
                     onTap: () => context.go(Routes.adminSelection),
                   ),
                   _AdminAction(

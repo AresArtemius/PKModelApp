@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/supabase_compat.dart';
 import '../../core/supabase_provider.dart';
 import '../../core/admin_action_log_service.dart';
+import '../../core/router.dart';
 import '../../gen_l10n/app_localizations.dart';
 import '../../ui/brand/brand_admin_header.dart';
 import '../../ui/brand/brand_theme.dart';
@@ -105,7 +106,7 @@ class _CreateCastingAdminPageState
       );
 
       if (!mounted) return;
-      context.go('/castings');
+      context.go(_returnRoute(context));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -141,7 +142,7 @@ class _CreateCastingAdminPageState
             children: [
               BrandAdminHeader(
                 title: t.adminCreateCastingUpper,
-                onBack: () => context.go('/admin'),
+                onBack: () => context.go(_returnRoute(context)),
                 trailing: IconButton(
                   onPressed: _creating ? null : _createCasting,
                   icon: _creating
@@ -180,6 +181,27 @@ class _CreateCastingAdminPageState
                         _TextField(controller: _feeC),
                         const SizedBox(height: 12),
 
+                        _SectionTitle(
+                          Localizations.localeOf(context).languageCode == 'ru'
+                              ? 'РЕФЕРЕНСЫ'
+                              : 'REFERENCES',
+                        ),
+                        _ReferencesPicker(
+                          items: _pendingReferences,
+                          picking: _pickingReferences,
+                          onPick: _pickReferences,
+                          onMove: (from, to) {
+                            setState(() {
+                              final item = _pendingReferences.removeAt(from);
+                              _pendingReferences.insert(to, item);
+                            });
+                          },
+                          onRemove: (index) {
+                            setState(() => _pendingReferences.removeAt(index));
+                          },
+                        ),
+                        const SizedBox(height: 12),
+
                         _SectionTitle(t.dates),
                         _MultiMonthCalendar(
                           initialSelected: _selectedDates,
@@ -205,21 +227,6 @@ class _CreateCastingAdminPageState
                           value: _stage,
                           onChanged: (stage) => setState(() => _stage = stage),
                         ),
-                        const SizedBox(height: 12),
-
-                        _SectionTitle(
-                          Localizations.localeOf(context).languageCode == 'ru'
-                              ? 'РЕФЕРЕНСЫ'
-                              : 'REFERENCES',
-                        ),
-                        _ReferencesPicker(
-                          items: _pendingReferences,
-                          picking: _pickingReferences,
-                          onPick: _pickReferences,
-                          onRemove: (index) {
-                            setState(() => _pendingReferences.removeAt(index));
-                          },
-                        ),
                       ],
                     ),
                   ),
@@ -231,6 +238,11 @@ class _CreateCastingAdminPageState
       ),
     );
   }
+
+  String _returnRoute(BuildContext context) {
+    final from = GoRouterState.of(context).uri.queryParameters['from'];
+    return from == 'admin' ? Routes.admin : Routes.castings;
+  }
 }
 
 class _ReferencesPicker extends StatelessWidget {
@@ -238,12 +250,14 @@ class _ReferencesPicker extends StatelessWidget {
     required this.items,
     required this.picking,
     required this.onPick,
+    required this.onMove,
     required this.onRemove,
   });
 
   final List<PendingCastingReferenceMedia> items;
   final bool picking;
   final VoidCallback onPick;
+  final void Function(int from, int to) onMove;
   final ValueChanged<int> onRemove;
 
   @override
@@ -272,7 +286,14 @@ class _ReferencesPicker extends StatelessWidget {
         if (items.isNotEmpty) ...[
           const SizedBox(height: 10),
           for (var i = 0; i < items.length; i++) ...[
-            _ReferenceDraftTile(item: items[i], onRemove: () => onRemove(i)),
+            _ReferenceDraftTile(
+              item: items[i],
+              canMoveUp: i > 0,
+              canMoveDown: i < items.length - 1,
+              onMoveUp: () => onMove(i, i - 1),
+              onMoveDown: () => onMove(i, i + 1),
+              onRemove: () => onRemove(i),
+            ),
             if (i != items.length - 1) const SizedBox(height: 8),
           ],
         ],
@@ -282,9 +303,20 @@ class _ReferencesPicker extends StatelessWidget {
 }
 
 class _ReferenceDraftTile extends StatelessWidget {
-  const _ReferenceDraftTile({required this.item, required this.onRemove});
+  const _ReferenceDraftTile({
+    required this.item,
+    required this.canMoveUp,
+    required this.canMoveDown,
+    required this.onMoveUp,
+    required this.onMoveDown,
+    required this.onRemove,
+  });
 
   final PendingCastingReferenceMedia item;
+  final bool canMoveUp;
+  final bool canMoveDown;
+  final VoidCallback onMoveUp;
+  final VoidCallback onMoveDown;
   final VoidCallback onRemove;
 
   @override
@@ -337,6 +369,20 @@ class _ReferenceDraftTile extends StatelessWidget {
                 ),
               ],
             ),
+          ),
+          IconButton(
+            onPressed: canMoveUp ? onMoveUp : null,
+            icon: const Icon(Icons.arrow_upward_rounded),
+            color: BrandTheme.redTop,
+            visualDensity: VisualDensity.compact,
+            tooltip: isRu ? 'Выше' : 'Move up',
+          ),
+          IconButton(
+            onPressed: canMoveDown ? onMoveDown : null,
+            icon: const Icon(Icons.arrow_downward_rounded),
+            color: BrandTheme.redTop,
+            visualDensity: VisualDensity.compact,
+            tooltip: isRu ? 'Ниже' : 'Move down',
           ),
           IconButton(
             onPressed: onRemove,

@@ -85,9 +85,10 @@ final castingResponsesProvider = FutureProvider.autoDispose
     });
 
 class SelectionCastingPage extends ConsumerWidget {
-  const SelectionCastingPage({super.key, required this.castingId});
+  const SelectionCastingPage({super.key, required this.castingId, this.from});
 
   final String castingId;
+  final String? from;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -145,7 +146,11 @@ class SelectionCastingPage extends ConsumerWidget {
                 children: [
                   BrandAdminHeader(
                     title: t.responsesUpper,
-                    onBack: () => context.go(Routes.adminSelection),
+                    onBack: () => context.go(
+                      from == 'castings'
+                          ? Routes.castings
+                          : Routes.adminSelection,
+                    ),
                     sideWidth: 104,
                     trailing: Row(
                       mainAxisAlignment: MainAxisAlignment.center,

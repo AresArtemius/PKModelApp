@@ -32,6 +32,11 @@ const double _castingsDesktopMaxWidth = 1480;
 const double _castingsDesktopListWidth = 440;
 const double _castingsDesktopDetailBreakpoint = 1040;
 const EdgeInsets _castingsDesktopPadding = EdgeInsets.fromLTRB(32, 24, 32, 28);
+typedef _ReferenceMediaChanged =
+    Future<void> Function(
+      CastingModel casting,
+      List<CastingReferenceMedia> next,
+    );
 
 String _castingLocaleText(BuildContext context, String ru, String en) {
   return Localizations.localeOf(context).languageCode == 'ru' ? ru : en;
@@ -815,6 +820,42 @@ class _CastingPageState extends ConsumerState<CastingPage> {
       );
     }
 
+    Future<void> updateCastingReferences(
+      CastingModel casting,
+      List<CastingReferenceMedia> next,
+    ) async {
+      try {
+        await ref
+            .read(castingsServiceProvider)
+            .setReferenceMedia(castingId: casting.id, referenceMedia: next);
+        await AdminActionLogService(Supabase.instance.client).log(
+          actionType: 'casting_references_updated',
+          title: 'Референсы кастинга обновлены',
+          targetTable: 'castings',
+          targetId: casting.id,
+          targetText: casting.title,
+          status: '${next.length}',
+        );
+        ref.invalidate(castingsProvider);
+      } on CastingsException catch (e, st) {
+        AppLogger.error(
+          'Casting references update failed',
+          error: e.original ?? e,
+          stackTrace: st,
+        );
+        if (!context.mounted) return;
+        _showSnack(context, _castingAdminErrorText(e, t));
+      } catch (e, st) {
+        AppLogger.error(
+          'Casting references update failed',
+          error: e,
+          stackTrace: st,
+        );
+        if (!context.mounted) return;
+        _showSnack(context, _castingAdminErrorText(e, t));
+      }
+    }
+
     return Scaffold(
       body: Stack(
         children: [
@@ -977,6 +1018,9 @@ class _CastingPageState extends ConsumerState<CastingPage> {
                             onReferencesTap: isAdmin
                                 ? addCastingReferences
                                 : null,
+                            onReferenceMediaChanged: isAdmin
+                                ? updateCastingReferences
+                                : null,
                             onRefresh: () async =>
                                 ref.refresh(castingsProvider.future),
                           );
@@ -1034,6 +1078,7 @@ class _CastingsDesktopLayout extends StatelessWidget {
     required this.onDeleteTap,
     required this.onStageTap,
     required this.onReferencesTap,
+    required this.onReferenceMediaChanged,
     required this.onRefresh,
   });
 
@@ -1048,6 +1093,7 @@ class _CastingsDesktopLayout extends StatelessWidget {
   final ValueChanged<String>? onDeleteTap;
   final ValueChanged<CastingModel>? onStageTap;
   final ValueChanged<CastingModel>? onReferencesTap;
+  final _ReferenceMediaChanged? onReferenceMediaChanged;
   final Future<void> Function() onRefresh;
 
   @override
@@ -1087,6 +1133,7 @@ class _CastingsDesktopLayout extends StatelessWidget {
                 onReferencesTap: onReferencesTap == null
                     ? null
                     : () => onReferencesTap!(selected),
+                onReferenceMediaChanged: onReferenceMediaChanged,
                 onDeleteTap: deleteTap == null
                     ? null
                     : () => deleteTap(selected.id),
@@ -1185,7 +1232,9 @@ class _CastingsDesktopQueuePanel extends StatelessWidget {
                   Tooltip(
                     message: ru ? 'Создать кастинг' : 'Create casting',
                     child: IconButton.filled(
-                      onPressed: () => context.go(Routes.createCastingAdmin),
+                      onPressed: () => context.go(
+                        '${Routes.createCastingAdmin}?from=castings',
+                      ),
                       icon: const Icon(Icons.add_rounded),
                       style: IconButton.styleFrom(
                         backgroundColor: kTextDark,
@@ -1341,6 +1390,7 @@ class _CastingDesktopDetailPanel extends StatelessWidget {
     required this.onRespondTap,
     required this.onStageTap,
     required this.onReferencesTap,
+    required this.onReferenceMediaChanged,
     required this.onDeleteTap,
   });
 
@@ -1352,6 +1402,7 @@ class _CastingDesktopDetailPanel extends StatelessWidget {
   final VoidCallback onRespondTap;
   final VoidCallback? onStageTap;
   final VoidCallback? onReferencesTap;
+  final _ReferenceMediaChanged? onReferenceMediaChanged;
   final VoidCallback? onDeleteTap;
 
   @override
@@ -1382,6 +1433,7 @@ class _CastingDesktopDetailPanel extends StatelessWidget {
                   status: status,
                   wide:
                       constraints.maxWidth >= _castingsDesktopDetailBreakpoint,
+                  onReferenceMediaChanged: onReferenceMediaChanged,
                 );
               },
             ),
@@ -1432,8 +1484,9 @@ class _CastingDesktopDetailPanel extends StatelessWidget {
                   child: BrandPillButton(
                     label: _castingLocaleText(context, 'ОТКЛИКИ', 'RESPONSES'),
                     style: BrandPillStyle.light,
-                    onTap: () =>
-                        context.go('${Routes.adminSelection}/${casting.id}'),
+                    onTap: () => context.go(
+                      '${Routes.adminSelection}/${casting.id}?from=castings',
+                    ),
                   ),
                 );
 
@@ -1488,11 +1541,13 @@ class _CastingDesktopDetailBody extends StatelessWidget {
     required this.casting,
     required this.status,
     required this.wide,
+    required this.onReferenceMediaChanged,
   });
 
   final CastingModel casting;
   final CastingResponseStatus? status;
   final bool wide;
+  final _ReferenceMediaChanged? onReferenceMediaChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -1502,7 +1557,10 @@ class _CastingDesktopDetailBody extends StatelessWidget {
         children: [
           _CastingDetailHeader(casting: casting, status: status),
           const SizedBox(height: 22),
-          _CastingDetailTextSections(casting: casting),
+          _CastingDetailTextSections(
+            casting: casting,
+            onReferenceMediaChanged: onReferenceMediaChanged,
+          ),
         ],
       );
     }
@@ -1523,7 +1581,10 @@ class _CastingDesktopDetailBody extends StatelessWidget {
               children: [
                 _CastingDetailHeader(casting: casting, status: status),
                 const SizedBox(height: 22),
-                _CastingDetailTextSections(casting: casting),
+                _CastingDetailTextSections(
+                  casting: casting,
+                  onReferenceMediaChanged: onReferenceMediaChanged,
+                ),
               ],
             ),
           ),
@@ -1738,9 +1799,13 @@ class _CastingSummaryTile extends StatelessWidget {
 }
 
 class _CastingDetailTextSections extends StatelessWidget {
-  const _CastingDetailTextSections({required this.casting});
+  const _CastingDetailTextSections({
+    required this.casting,
+    required this.onReferenceMediaChanged,
+  });
 
   final CastingModel casting;
+  final _ReferenceMediaChanged? onReferenceMediaChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -1768,7 +1833,11 @@ class _CastingDetailTextSections extends StatelessWidget {
         ],
         if (casting.referenceMedia.isNotEmpty) ...[
           const SizedBox(height: 18),
-          _CastingReferenceGallery(items: casting.referenceMedia),
+          _CastingReferenceGallery(
+            casting: casting,
+            items: casting.referenceMedia,
+            onChanged: onReferenceMediaChanged,
+          ),
         ],
       ],
     );
@@ -1776,12 +1845,33 @@ class _CastingDetailTextSections extends StatelessWidget {
 }
 
 class _CastingReferenceGallery extends StatelessWidget {
-  const _CastingReferenceGallery({required this.items});
+  const _CastingReferenceGallery({
+    required this.casting,
+    required this.items,
+    required this.onChanged,
+  });
 
+  final CastingModel casting;
   final List<CastingReferenceMedia> items;
+  final _ReferenceMediaChanged? onChanged;
+
+  Future<void> _save(
+    BuildContext context,
+    List<CastingReferenceMedia> next,
+  ) async {
+    final handler = onChanged;
+    if (handler == null) return;
+    await handler(casting, next);
+    if (!context.mounted) return;
+    _showSnack(
+      context,
+      _castingLocaleText(context, 'Референсы обновлены', 'References updated'),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    final canEdit = onChanged != null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1810,8 +1900,29 @@ class _CastingReferenceGallery extends StatelessWidget {
                 mainAxisSpacing: 10,
                 childAspectRatio: 1.22,
               ),
-              itemBuilder: (context, index) =>
-                  _CastingReferenceTile(item: items[index]),
+              itemBuilder: (context, index) => _CastingReferenceTile(
+                item: items[index],
+                canEdit: canEdit,
+                canMoveUp: index > 0,
+                canMoveDown: index < items.length - 1,
+                onMoveUp: () {
+                  final next = List<CastingReferenceMedia>.from(items);
+                  final item = next.removeAt(index);
+                  next.insert(index - 1, item);
+                  _save(context, next);
+                },
+                onMoveDown: () {
+                  final next = List<CastingReferenceMedia>.from(items);
+                  final item = next.removeAt(index);
+                  next.insert(index + 1, item);
+                  _save(context, next);
+                },
+                onDelete: () {
+                  final next = List<CastingReferenceMedia>.from(items)
+                    ..removeAt(index);
+                  _save(context, next);
+                },
+              ),
             );
           },
         ),
@@ -1821,9 +1932,23 @@ class _CastingReferenceGallery extends StatelessWidget {
 }
 
 class _CastingReferenceTile extends StatelessWidget {
-  const _CastingReferenceTile({required this.item});
+  const _CastingReferenceTile({
+    required this.item,
+    required this.canEdit,
+    required this.canMoveUp,
+    required this.canMoveDown,
+    required this.onMoveUp,
+    required this.onMoveDown,
+    required this.onDelete,
+  });
 
   final CastingReferenceMedia item;
+  final bool canEdit;
+  final bool canMoveUp;
+  final bool canMoveDown;
+  final VoidCallback onMoveUp;
+  final VoidCallback onMoveDown;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -1914,7 +2039,72 @@ class _CastingReferenceTile extends StatelessWidget {
                   ),
                 ),
               ),
+              if (canEdit)
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _ReferenceTileButton(
+                        icon: Icons.arrow_upward_rounded,
+                        enabled: canMoveUp,
+                        onTap: onMoveUp,
+                      ),
+                      const SizedBox(width: 5),
+                      _ReferenceTileButton(
+                        icon: Icons.arrow_downward_rounded,
+                        enabled: canMoveDown,
+                        onTap: onMoveDown,
+                      ),
+                      const SizedBox(width: 5),
+                      _ReferenceTileButton(
+                        icon: Icons.close_rounded,
+                        enabled: true,
+                        onTap: onDelete,
+                      ),
+                    ],
+                  ),
+                ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ReferenceTileButton extends StatelessWidget {
+  const _ReferenceTileButton({
+    required this.icon,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: enabled ? onTap : null,
+        child: AnimatedOpacity(
+          duration: const Duration(milliseconds: 120),
+          opacity: enabled ? 1 : 0.35,
+          child: Container(
+            width: 30,
+            height: 30,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.92),
+              shape: BoxShape.circle,
+              boxShadow: BrandTheme.basePillShadow(isDark: false),
+            ),
+            child: Icon(icon, size: 16, color: BrandTheme.redTop),
           ),
         ),
       ),
