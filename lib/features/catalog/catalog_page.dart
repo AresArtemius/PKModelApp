@@ -40,6 +40,7 @@ const double _catalogDesktopBreakpoint = 900;
 const double _catalogDesktopMaxWidth = 1680;
 const double _catalogDesktopSidePanelWidth = 320;
 const double _catalogDesktopDetailWidth = 360;
+const bool _catalogSavedSearchesEnabled = false;
 const EdgeInsets _catalogDesktopPadding = EdgeInsets.fromLTRB(32, 28, 32, 28);
 
 Alignment _catalogCoverAlignmentFor(ModelVm m) {
@@ -94,7 +95,9 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
-      unawaited(ref.read(catalogSavedSearchesProvider).load());
+      if (_catalogSavedSearchesEnabled) {
+        unawaited(ref.read(catalogSavedSearchesProvider).load());
+      }
       await controller.loadBounds();
       if (!mounted) return;
       await controller.reload();
@@ -820,7 +823,9 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
 
     final c = ref.watch(catalogControllerProvider);
     final selectedIds = ref.watch(selectedCatalogModelIdsProvider);
-    final savedSearches = ref.watch(catalogSavedSearchesProvider);
+    final savedSearches = _catalogSavedSearchesEnabled
+        ? ref.watch(catalogSavedSearchesProvider)
+        : null;
     final t = AppLocalizations.of(context)!;
     final filteredItems = c.applyLocalFilters(c.loaded);
 
@@ -855,7 +860,7 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
           );
     final savedSearchItems = [
       ..._builtInSavedSearches(t),
-      ...savedSearches.items,
+      ...?savedSearches?.items,
     ];
     final currentSearchAlreadySaved = savedSearchItems.any(
       (search) => search.filters == c.filterSnapshot,
@@ -863,10 +868,11 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
     final canSaveCurrentSearch =
         c.hasActiveFilters && !currentSearchAlreadySaved;
     final hasSavedSearchRail =
-        canSaveCurrentSearch ||
-        savedSearchItems.isNotEmpty ||
-        savedSearches.isLoading ||
-        savedSearches.lastError != null;
+        _catalogSavedSearchesEnabled &&
+        (canSaveCurrentSearch ||
+            savedSearchItems.isNotEmpty ||
+            (savedSearches?.isLoading ?? false) ||
+            savedSearches?.lastError != null);
     final resetFiltersLabel =
         Localizations.localeOf(context).languageCode.toLowerCase() == 'ru'
         ? 'СБРОСИТЬ ФИЛЬТРЫ'
@@ -943,8 +949,8 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                                   onDelete: _deleteSavedSearch,
                                   saveLabel: t.savedSearchSaveCurrent,
                                   canSaveCurrent: canSaveCurrentSearch,
-                                  isLoading: savedSearches.isLoading,
-                                  error: savedSearches.lastError,
+                                  isLoading: savedSearches?.isLoading ?? false,
+                                  error: savedSearches?.lastError,
                                   onRefresh: () => ref
                                       .read(catalogSavedSearchesProvider)
                                       .refresh(),
@@ -1035,8 +1041,9 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                                       onDelete: _deleteSavedSearch,
                                       saveLabel: t.savedSearchSaveCurrent,
                                       canSaveCurrent: canSaveCurrentSearch,
-                                      isLoading: savedSearches.isLoading,
-                                      error: savedSearches.lastError,
+                                      isLoading:
+                                          savedSearches?.isLoading ?? false,
+                                      error: savedSearches?.lastError,
                                       onRefresh: () => ref
                                           .read(catalogSavedSearchesProvider)
                                           .refresh(),

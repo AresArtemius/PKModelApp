@@ -165,7 +165,8 @@ class _ProfileActionAuditPageState
   String _profileQuery = '';
   DateTime? _dateFrom;
   DateTime? _dateTo;
-  bool _isClearingAudit = false;
+  bool _isDeletingSelectedAudit = false;
+  final Set<String> _selectedAuditIds = {};
 
   @override
   Widget build(BuildContext context) {
@@ -224,6 +225,9 @@ class _ProfileActionAuditPageState
                           );
                         }
                         final logs = _filtered(data.items);
+                        final visibleIds = logs.map((log) => log.id).toSet();
+                        final selectedVisibleIds = _selectedAuditIds
+                            .intersection(visibleIds);
                         final selected = _selected(logs);
                         if (logs.isEmpty) {
                           return _AuditPanel(
@@ -250,9 +254,7 @@ class _ProfileActionAuditPageState
                                   onPickDateFrom: () => _pickDate(isFrom: true),
                                   onPickDateTo: () => _pickDate(isFrom: false),
                                   onClear: _clearFilters,
-                                  onClearLogs: _isClearingAudit
-                                      ? null
-                                      : () => _clearAuditLogs(isRu),
+                                  onClearLogs: null,
                                   onExport: logs.isEmpty
                                       ? null
                                       : () => _copyCsv(logs, isRu),
@@ -298,20 +300,42 @@ class _ProfileActionAuditPageState
                                         onPickDateTo: () =>
                                             _pickDate(isFrom: false),
                                         onClear: _clearFilters,
-                                        onClearLogs: _isClearingAudit
-                                            ? null
-                                            : () => _clearAuditLogs(isRu),
+                                        onClearLogs: null,
                                         onExport: () => _copyCsv(logs, isRu),
+                                      ),
+                                      const SizedBox(height: 10),
+                                      _AuditBulkBar(
+                                        isRu: isRu,
+                                        selectedCount:
+                                            selectedVisibleIds.length,
+                                        allSelected:
+                                            logs.isNotEmpty &&
+                                            selectedVisibleIds.length ==
+                                                logs.length,
+                                        isDeleting: _isDeletingSelectedAudit,
+                                        onSelectAll: () =>
+                                            _selectVisibleAuditLogs(logs),
+                                        onClearSelection: _clearAuditSelection,
+                                        onDeleteSelected:
+                                            selectedVisibleIds.isEmpty ||
+                                                _isDeletingSelectedAudit
+                                            ? null
+                                            : () => _deleteSelectedAuditLogs(
+                                                selectedVisibleIds,
+                                                isRu,
+                                              ),
                                       ),
                                       const SizedBox(height: 12),
                                       Expanded(
                                         child: _AuditList(
                                           logs: logs,
                                           selectedId: selected?.id ?? '',
+                                          selectedIds: _selectedAuditIds,
                                           isRu: isRu,
                                           onSelect: (entry) => setState(
                                             () => _selectedId = entry.id,
                                           ),
+                                          onToggle: _toggleAuditLogSelection,
                                         ),
                                       ),
                                     ],
@@ -356,19 +380,39 @@ class _ProfileActionAuditPageState
                                 onPickDateFrom: () => _pickDate(isFrom: true),
                                 onPickDateTo: () => _pickDate(isFrom: false),
                                 onClear: _clearFilters,
-                                onClearLogs: _isClearingAudit
-                                    ? null
-                                    : () => _clearAuditLogs(isRu),
+                                onClearLogs: null,
                                 onExport: () => _copyCsv(logs, isRu),
+                              ),
+                              const SizedBox(height: 10),
+                              _AuditBulkBar(
+                                isRu: isRu,
+                                selectedCount: selectedVisibleIds.length,
+                                allSelected:
+                                    logs.isNotEmpty &&
+                                    selectedVisibleIds.length == logs.length,
+                                isDeleting: _isDeletingSelectedAudit,
+                                onSelectAll: () =>
+                                    _selectVisibleAuditLogs(logs),
+                                onClearSelection: _clearAuditSelection,
+                                onDeleteSelected:
+                                    selectedVisibleIds.isEmpty ||
+                                        _isDeletingSelectedAudit
+                                    ? null
+                                    : () => _deleteSelectedAuditLogs(
+                                        selectedVisibleIds,
+                                        isRu,
+                                      ),
                               ),
                               const SizedBox(height: 12),
                               Expanded(
                                 child: _AuditList(
                                   logs: logs,
                                   selectedId: selected?.id ?? '',
+                                  selectedIds: _selectedAuditIds,
                                   isRu: isRu,
                                   onSelect: (entry) =>
                                       _showDetails(entry, isRu),
+                                  onToggle: _toggleAuditLogSelection,
                                 ),
                               ),
                             ],
@@ -448,6 +492,7 @@ class _ProfileActionAuditPageState
     setState(() {
       _filter = type;
       _selectedId = '';
+      _selectedAuditIds.clear();
     });
   }
 
@@ -455,6 +500,7 @@ class _ProfileActionAuditPageState
     setState(() {
       _scope = scope;
       _selectedId = '';
+      _selectedAuditIds.clear();
       if (scope == AuditLogScope.admin) _filter = ProfileActionLogType.all;
     });
   }
@@ -469,7 +515,33 @@ class _ProfileActionAuditPageState
       _dateFrom = null;
       _dateTo = null;
       _selectedId = '';
+      _selectedAuditIds.clear();
     });
+  }
+
+  void _toggleAuditLogSelection(AuditLogItem item) {
+    setState(() {
+      if (!_selectedAuditIds.add(item.id)) {
+        _selectedAuditIds.remove(item.id);
+      }
+      _selectedId = item.id;
+    });
+  }
+
+  void _selectVisibleAuditLogs(List<AuditLogItem> logs) {
+    setState(() {
+      final visibleIds = logs.map((log) => log.id).toSet();
+      final selectedVisibleIds = _selectedAuditIds.intersection(visibleIds);
+      if (logs.isNotEmpty && selectedVisibleIds.length == logs.length) {
+        _selectedAuditIds.removeAll(visibleIds);
+      } else {
+        _selectedAuditIds.addAll(visibleIds);
+      }
+    });
+  }
+
+  void _clearAuditSelection() {
+    setState(_selectedAuditIds.clear);
   }
 
   Future<void> _pickDate({required bool isFrom}) async {
@@ -534,15 +606,21 @@ class _ProfileActionAuditPageState
       );
   }
 
-  Future<void> _clearAuditLogs(bool isRu) async {
+  Future<void> _deleteSelectedAuditLogs(
+    Set<String> selectedIds,
+    bool isRu,
+  ) async {
+    final ids = selectedIds.where((id) => id.trim().isNotEmpty).toSet();
+    if (ids.isEmpty) return;
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(isRu ? 'Очистить журнал?' : 'Clear audit log?'),
+        title: Text(isRu ? 'Удалить выбранные?' : 'Delete selected?'),
         content: Text(
           isRu
-              ? 'Будут удалены все записи журнала действий: профильные события и действия админки. Это действие нельзя отменить.'
-              : 'All action audit records will be deleted: profile events and back-office actions. This cannot be undone.',
+              ? 'Будут удалены выбранные записи журнала действий: ${ids.length}. Это действие нельзя отменить.'
+              : '${ids.length} selected action log records will be deleted. This cannot be undone.',
         ),
         actions: [
           TextButton(
@@ -552,7 +630,7 @@ class _ProfileActionAuditPageState
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
             child: Text(
-              isRu ? 'ОЧИСТИТЬ' : 'CLEAR',
+              isRu ? 'УДАЛИТЬ' : 'DELETE',
               style: const TextStyle(color: BrandTheme.redTop),
             ),
           ),
@@ -561,31 +639,33 @@ class _ProfileActionAuditPageState
     );
     if (confirmed != true || !mounted) return;
 
-    setState(() => _isClearingAudit = true);
+    final profileIds = <String>[];
+    final adminIds = <String>[];
+    for (final id in ids) {
+      if (id.startsWith('profile:')) {
+        profileIds.add(id.substring('profile:'.length));
+      } else if (id.startsWith('admin:')) {
+        adminIds.add(id.substring('admin:'.length));
+      }
+    }
+
+    setState(() => _isDeletingSelectedAudit = true);
     try {
-      await AdminActionLogService(Supabase.instance.client).clearAllAuditLogs();
+      final sb = Supabase.instance.client;
+      await ProfileActionLogService(sb).deleteByIds(profileIds);
+      await AdminActionLogService(sb).deleteByIds(adminIds);
       if (!mounted) return;
-      _selectedId = '';
+      setState(() {
+        _selectedAuditIds.removeAll(ids);
+        if (ids.contains(_selectedId)) _selectedId = '';
+      });
       ref.invalidate(_profileActionAuditProvider);
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(
           SnackBar(
             content: Text(
-              isRu ? 'Журнал действий очищен' : 'Action audit log cleared',
-            ),
-          ),
-        );
-    } on AdminActionLogSetupRequiredException {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(
-            content: Text(
-              isRu
-                  ? 'Примените SQL clear_action_audit_logs.sql в Supabase.'
-                  : 'Apply clear_action_audit_logs.sql in Supabase.',
+              isRu ? 'Выбранные записи удалены' : 'Selected records deleted',
             ),
           ),
         );
@@ -597,13 +677,13 @@ class _ProfileActionAuditPageState
           SnackBar(
             content: Text(
               isRu
-                  ? 'Не удалось очистить журнал. Попробуйте еще раз.'
-                  : 'Could not clear the audit log. Please try again.',
+                  ? 'Не удалось удалить выбранные записи.'
+                  : 'Could not delete selected records.',
             ),
           ),
         );
     } finally {
-      if (mounted) setState(() => _isClearingAudit = false);
+      if (mounted) setState(() => _isDeletingSelectedAudit = false);
     }
   }
 
@@ -712,13 +792,15 @@ class _AuditToolbar extends StatelessWidget {
               tooltip: isRu ? 'Скопировать CSV' : 'Copy CSV',
               onTap: onExport,
             ),
-            const SizedBox(width: 8),
-            _AuditIconButton(
-              icon: Icons.delete_sweep_rounded,
-              tooltip: isRu ? 'Очистить журнал' : 'Clear audit log',
-              onTap: onClearLogs,
-              isDanger: true,
-            ),
+            if (onClearLogs != null) ...[
+              const SizedBox(width: 8),
+              _AuditIconButton(
+                icon: Icons.delete_sweep_rounded,
+                tooltip: isRu ? 'Очистить журнал' : 'Clear audit log',
+                onTap: onClearLogs,
+                isDanger: true,
+              ),
+            ],
             const SizedBox(width: 8),
             _AuditIconButton(
               icon: Icons.close_rounded,
@@ -898,6 +980,128 @@ class _AuditTextFieldState extends State<_AuditTextField> {
   }
 }
 
+class _AuditBulkBar extends StatelessWidget {
+  const _AuditBulkBar({
+    required this.isRu,
+    required this.selectedCount,
+    required this.allSelected,
+    required this.isDeleting,
+    required this.onSelectAll,
+    required this.onClearSelection,
+    required this.onDeleteSelected,
+  });
+
+  final bool isRu;
+  final int selectedCount;
+  final bool allSelected;
+  final bool isDeleting;
+  final VoidCallback onSelectAll;
+  final VoidCallback onClearSelection;
+  final VoidCallback? onDeleteSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.74),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: kBorderColor),
+      ),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          Text(
+            isRu ? 'Выбрано: $selectedCount' : 'Selected: $selectedCount',
+            style: adminCommandStyle(
+              size: 12,
+              color: kTextDark,
+              letterSpacing: 0.5,
+            ),
+          ),
+          _AuditMiniButton(
+            icon: allSelected
+                ? Icons.check_box_rounded
+                : Icons.check_box_outline_blank_rounded,
+            label: allSelected
+                ? (isRu ? 'Снять все' : 'Unselect all')
+                : (isRu ? 'Выбрать все' : 'Select all'),
+            onTap: onSelectAll,
+          ),
+          _AuditMiniButton(
+            icon: Icons.clear_rounded,
+            label: isRu ? 'Снять выбор' : 'Clear selection',
+            onTap: selectedCount == 0 ? null : onClearSelection,
+          ),
+          _AuditMiniButton(
+            icon: isDeleting
+                ? Icons.hourglass_top_rounded
+                : Icons.delete_sweep_rounded,
+            label: isRu ? 'Удалить выбранные' : 'Delete selected',
+            onTap: onDeleteSelected,
+            isDanger: true,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AuditMiniButton extends StatelessWidget {
+  const _AuditMiniButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.isDanger = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback? onTap;
+  final bool isDanger;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onTap != null;
+    final color = !enabled
+        ? kTextMuted
+        : isDanger
+        ? BrandTheme.redTop
+        : kTextDark;
+    return InkWell(
+      borderRadius: BorderRadius.circular(999),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: BoxDecoration(
+          color: enabled
+              ? Colors.white.withValues(alpha: 0.88)
+              : Colors.white.withValues(alpha: 0.46),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: kBorderColor),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: color),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: adminBodyStyle(
+                size: 12,
+                color: color,
+                weight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _DateFilters extends StatelessWidget {
   const _DateFilters({
     required this.isRu,
@@ -1044,14 +1248,18 @@ class _AuditList extends StatelessWidget {
   const _AuditList({
     required this.logs,
     required this.selectedId,
+    required this.selectedIds,
     required this.isRu,
     required this.onSelect,
+    required this.onToggle,
   });
 
   final List<AuditLogItem> logs;
   final String selectedId;
+  final Set<String> selectedIds;
   final bool isRu;
   final ValueChanged<AuditLogItem> onSelect;
+  final ValueChanged<AuditLogItem> onToggle;
 
   @override
   Widget build(BuildContext context) {
@@ -1061,6 +1269,7 @@ class _AuditList extends StatelessWidget {
       itemBuilder: (context, index) {
         final log = logs[index];
         final selected = log.id == selectedId;
+        final checked = selectedIds.contains(log.id);
         return InkWell(
           borderRadius: BorderRadius.circular(16),
           onTap: () => onSelect(log),
@@ -1079,6 +1288,12 @@ class _AuditList extends StatelessWidget {
             ),
             child: Row(
               children: [
+                Checkbox(
+                  value: checked,
+                  activeColor: BrandTheme.redTop,
+                  onChanged: (_) => onToggle(log),
+                ),
+                const SizedBox(width: 4),
                 Icon(
                   log.isAdminAction
                       ? Icons.admin_panel_settings_rounded

@@ -108,6 +108,16 @@ class AdminActionLogService {
     }
   }
 
+  Future<void> deleteByIds(Iterable<String> ids) async {
+    final cleanIds = ids
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    if (cleanIds.isEmpty) return;
+    await _sb.from('admin_action_logs').delete().inFilter('id', cleanIds);
+  }
+
   Future<void> log({
     required String actionType,
     required String title,
