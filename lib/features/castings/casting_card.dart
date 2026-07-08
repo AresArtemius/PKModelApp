@@ -315,68 +315,96 @@ class _CastingReferencePreviewDialogState
         ? item.name.trim()
         : castingReferenceMediaKindLabel(item.kind, isRu: isRu);
 
-    return Dialog(
+    return Dialog.fullscreen(
       backgroundColor: Colors.transparent,
-      insetPadding: const EdgeInsets.all(18),
-      child: Container(
-        width: size.width,
-        constraints: BoxConstraints(
-          maxWidth: 720,
-          maxHeight: size.height * 0.78,
-        ),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          gradient: BrandTheme.lightPillGradient,
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: kBorderColor),
-          boxShadow: BrandTheme.basePillShadow(isDark: false),
-        ),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: BrandTheme.pillText.copyWith(
-                      color: kTextDark,
-                      fontSize: 13,
-                      letterSpacing: 0.8,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => Navigator.of(context).pop(),
+              child: ColoredBox(color: Colors.black.withValues(alpha: 0.86)),
+            ),
+          ),
+          Center(
+            child: SizedBox(
+              width: size.width,
+              height: size.height,
+              child: SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 64, 18, 34),
+                  child: PageView.builder(
+                    controller: _controller,
+                    itemCount: widget.items.length,
+                    onPageChanged: (value) => setState(() => _index = value),
+                    itemBuilder: (context, index) =>
+                        _ReferenceLargePreview(item: widget.items[index]),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            top: 18,
+            left: 18,
+            right: 18,
+            child: SafeArea(
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: BrandTheme.pillText.copyWith(
+                        color: Colors.white,
+                        fontSize: 13,
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                  ),
+                  IconButton.filled(
+                    tooltip: isRu ? 'Закрыть' : 'Close',
+                    style: IconButton.styleFrom(
+                      backgroundColor: Colors.white.withValues(alpha: 0.92),
+                      foregroundColor: kTextDark,
+                    ),
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (widget.items.length > 1)
+            Positioned(
+              bottom: 18,
+              left: 18,
+              right: 18,
+              child: SafeArea(
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 7,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.42),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      '${_index + 1}/${widget.items.length}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1.1,
+                      ),
                     ),
                   ),
                 ),
-                IconButton(
-                  tooltip: isRu ? 'Закрыть' : 'Close',
-                  onPressed: () => Navigator.of(context).pop(),
-                  icon: const Icon(Icons.close_rounded, color: kTextDark),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Expanded(
-              child: PageView.builder(
-                controller: _controller,
-                itemCount: widget.items.length,
-                onPageChanged: (value) => setState(() => _index = value),
-                itemBuilder: (context, index) =>
-                    _ReferenceLargePreview(item: widget.items[index]),
               ),
             ),
-            if (widget.items.length > 1) ...[
-              const SizedBox(height: 10),
-              Text(
-                '${_index + 1}/${widget.items.length}',
-                style: const TextStyle(
-                  color: kTextMuted,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 1.1,
-                ),
-              ),
-            ],
-          ],
-        ),
+        ],
       ),
     );
   }
@@ -398,7 +426,7 @@ class _ReferenceLargePreview extends StatelessWidget {
     return ClipRRect(
       borderRadius: BorderRadius.circular(18),
       child: ColoredBox(
-        color: const Color(0x10000000),
+        color: Colors.transparent,
         child: InteractiveViewer(
           minScale: 1,
           maxScale: 4,

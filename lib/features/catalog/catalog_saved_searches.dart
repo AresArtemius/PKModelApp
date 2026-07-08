@@ -42,10 +42,21 @@ class CatalogSavedSearch {
 }
 
 class CatalogSavedSearchesController extends ChangeNotifier {
-  CatalogSavedSearchesController({required String userKey})
-    : _storageKey = '$_savedSearchesKeyPrefix:$userKey';
+  CatalogSavedSearchesController({
+    required String userKey,
+    required SupabaseClient supabase,
+    required String? userId,
+  }) : _storageKey = '$_savedSearchesKeyPrefix:$userKey',
+       _supabase = supabase,
+       _userId = userId?.trim();
 
   final String _storageKey;
+  final SupabaseClient _supabase;
+  final String? _userId;
+  bool _remoteUnavailable = false;
+
+  bool get isRemoteEnabled =>
+      !_remoteUnavailable && (_userId?.isNotEmpty ?? false);
 
   bool isLoading = true;
   Object? lastError;
@@ -70,27 +81,15 @@ class CatalogSavedSearchesController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_storageKey);
-      final decoded = raw == null ? const [] : jsonDecode(raw);
-      final next = <CatalogSavedSearch>[];
-
-      if (decoded is List) {
-        for (final item in decoded) {
-          if (item is! Map) continue;
-          final search = CatalogSavedSearch.fromJson(
-            Map<String, dynamic>.from(item),
-          );
-          if (search.id.trim().isEmpty || search.title.trim().isEmpty) {
-            continue;
-          }
-          next.add(search);
-        }
-      }
+      final next = isRemoteEnabled ? await _loadRemote() : await _loadLocal();
 
       _items
         ..clear()
         ..addAll(next);
+
+      if (isRemoteEnabled) {
+        await _migrateLocalSearches();
+      }
     } catch (e, st) {
       lastError = e;
       assert(() {
@@ -101,6 +100,13 @@ class CatalogSavedSearchesController extends ChangeNotifier {
         );
         return true;
       }());
+      if (isRemoteEnabled && _isMissingRemoteTable(e)) {
+        _remoteUnavailable = true;
+        final next = await _loadLocal();
+        _items
+          ..clear()
+          ..addAll(next);
+      }
     } finally {
       isLoading = false;
       notifyListeners();
@@ -121,15 +127,19 @@ class CatalogSavedSearchesController extends ChangeNotifier {
     final trimmedTitle = title.trim();
     if (trimmedTitle.isEmpty) return;
 
-    final search = CatalogSavedSearch(
-      id: DateTime.now().microsecondsSinceEpoch.toString(),
-      title: trimmedTitle,
-      filters: filters,
-    );
+    final search = isRemoteEnabled
+        ? await _insertRemote(title: trimmedTitle, filters: filters)
+        : CatalogSavedSearch(
+            id: DateTime.now().microsecondsSinceEpoch.toString(),
+            title: trimmedTitle,
+            filters: filters,
+          );
 
     _items.add(search);
     notifyListeners();
-    await _persist();
+    if (!isRemoteEnabled) {
+      await _persistLocal();
+    }
   }
 
   Future<void> rename({required String id, required String title}) async {
@@ -144,26 +154,141 @@ class CatalogSavedSearchesController extends ChangeNotifier {
     final current = _items[index];
     if (current.title == trimmedTitle) return;
 
+    if (isRemoteEnabled) {
+      await _supabase
+          .from('catalog_saved_searches')
+          .update({'title': trimmedTitle})
+          .eq('id', id);
+    }
+
     _items[index] = CatalogSavedSearch(
       id: current.id,
       title: trimmedTitle,
       filters: current.filters,
     );
     notifyListeners();
-    await _persist();
+    if (!isRemoteEnabled) {
+      await _persistLocal();
+    }
   }
 
   Future<void> delete(String id) async {
     await _ensureLoaded();
 
     final before = _items.length;
+    if (isRemoteEnabled) {
+      await _supabase.from('catalog_saved_searches').delete().eq('id', id);
+    }
     _items.removeWhere((item) => item.id == id && !item.isBuiltin);
     if (_items.length == before) return;
     notifyListeners();
-    await _persist();
+    if (!isRemoteEnabled) {
+      await _persistLocal();
+    }
   }
 
-  Future<void> _persist() async {
+  Future<List<CatalogSavedSearch>> _loadRemote() async {
+    final rows = await _supabase
+        .from('catalog_saved_searches')
+        .select('id,title,filters')
+        .order('position', ascending: true)
+        .order('created_at', ascending: false);
+
+    return rows
+        .map((row) => _fromRemoteRow(Map<String, dynamic>.from(row as Map)))
+        .where(
+          (search) =>
+              search.id.trim().isNotEmpty && search.title.trim().isNotEmpty,
+        )
+        .toList(growable: false);
+  }
+
+  Future<CatalogSavedSearch> _insertRemote({
+    required String title,
+    required CatalogFilterSnapshot filters,
+  }) async {
+    final row = await _supabase
+        .from('catalog_saved_searches')
+        .insert({
+          'title': title,
+          'filters': filters.toJson(),
+          'position': _items.length,
+        })
+        .select('id,title,filters')
+        .single();
+    return _fromRemoteRow(Map<String, dynamic>.from(row));
+  }
+
+  CatalogSavedSearch _fromRemoteRow(Map<String, dynamic> row) {
+    final filtersJson = row['filters'];
+    return CatalogSavedSearch(
+      id: (row['id'] ?? '').toString(),
+      title: (row['title'] ?? '').toString(),
+      filters: filtersJson is Map
+          ? CatalogFilterSnapshot.fromJson(
+              Map<String, dynamic>.from(filtersJson),
+            )
+          : const CatalogFilterSnapshot(),
+    );
+  }
+
+  Future<List<CatalogSavedSearch>> _loadLocal() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_storageKey);
+    final decoded = raw == null ? const [] : jsonDecode(raw);
+    final next = <CatalogSavedSearch>[];
+
+    if (decoded is List) {
+      for (final item in decoded) {
+        if (item is! Map) continue;
+        final search = CatalogSavedSearch.fromJson(
+          Map<String, dynamic>.from(item),
+        );
+        if (search.id.trim().isEmpty || search.title.trim().isEmpty) {
+          continue;
+        }
+        next.add(search);
+      }
+    }
+
+    return next;
+  }
+
+  Future<void> _migrateLocalSearches() async {
+    final localItems = await _loadLocal();
+    if (localItems.isEmpty) return;
+    final existingKeys = _items.map(_dedupeKey).toSet();
+    final migrated = <CatalogSavedSearch>[];
+
+    for (final item in localItems) {
+      if (item.isBuiltin || existingKeys.contains(_dedupeKey(item))) continue;
+      final saved = await _insertRemote(
+        title: item.title,
+        filters: item.filters,
+      );
+      migrated.add(saved);
+      existingKeys.add(_dedupeKey(saved));
+    }
+
+    if (migrated.isEmpty) return;
+    _items.addAll(migrated);
+    await _persistLocal();
+  }
+
+  String _dedupeKey(CatalogSavedSearch item) {
+    return '${item.title.trim().toLowerCase()}::${jsonEncode(item.filters.toJson())}';
+  }
+
+  bool _isMissingRemoteTable(Object error) {
+    if (error is! PostgrestException) return false;
+    final msg = '${error.message} ${error.details ?? ''} ${error.hint ?? ''}'
+        .toLowerCase();
+    return msg.contains('catalog_saved_searches') ||
+        msg.contains('schema cache') ||
+        msg.contains('does not exist');
+  }
+
+  Future<void> _persistLocal() async {
     final prefs = await SharedPreferences.getInstance();
     final data = _items.map((item) => item.toJson()).toList(growable: false);
     await prefs.setString(_storageKey, jsonEncode(data));
@@ -173,8 +298,12 @@ class CatalogSavedSearchesController extends ChangeNotifier {
 final catalogSavedSearchesProvider =
     ChangeNotifierProvider<CatalogSavedSearchesController>((ref) {
       final sb = Supabase.instance.client;
-      final userKey = sb.auth.currentUser?.id ?? 'guest';
-      final controller = CatalogSavedSearchesController(userKey: userKey);
+      final userId = sb.auth.currentUser?.id;
+      final controller = CatalogSavedSearchesController(
+        userKey: userId ?? 'guest',
+        supabase: sb,
+        userId: userId,
+      );
 
       controller.load();
 

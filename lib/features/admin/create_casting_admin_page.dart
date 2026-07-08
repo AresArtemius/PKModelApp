@@ -215,12 +215,6 @@ class _CreateCastingAdminPageState
                           items: _pendingReferences,
                           picking: _pickingReferences,
                           onPick: _pickReferences,
-                          onMove: (from, to) {
-                            setState(() {
-                              final item = _pendingReferences.removeAt(from);
-                              _pendingReferences.insert(to, item);
-                            });
-                          },
                           onRemove: (index) {
                             setState(() => _pendingReferences.removeAt(index));
                           },
@@ -275,14 +269,12 @@ class _ReferencesPicker extends StatelessWidget {
     required this.items,
     required this.picking,
     required this.onPick,
-    required this.onMove,
     required this.onRemove,
   });
 
   final List<PendingCastingReferenceMedia> items;
   final bool picking;
   final VoidCallback onPick;
-  final void Function(int from, int to) onMove;
   final ValueChanged<int> onRemove;
 
   @override
@@ -311,14 +303,7 @@ class _ReferencesPicker extends StatelessWidget {
         if (items.isNotEmpty) ...[
           const SizedBox(height: 10),
           for (var i = 0; i < items.length; i++) ...[
-            _ReferenceDraftTile(
-              item: items[i],
-              canMoveUp: i > 0,
-              canMoveDown: i < items.length - 1,
-              onMoveUp: () => onMove(i, i - 1),
-              onMoveDown: () => onMove(i, i + 1),
-              onRemove: () => onRemove(i),
-            ),
+            _ReferenceDraftTile(item: items[i], onRemove: () => onRemove(i)),
             if (i != items.length - 1) const SizedBox(height: 8),
           ],
         ],
@@ -328,20 +313,9 @@ class _ReferencesPicker extends StatelessWidget {
 }
 
 class _ReferenceDraftTile extends StatelessWidget {
-  const _ReferenceDraftTile({
-    required this.item,
-    required this.canMoveUp,
-    required this.canMoveDown,
-    required this.onMoveUp,
-    required this.onMoveDown,
-    required this.onRemove,
-  });
+  const _ReferenceDraftTile({required this.item, required this.onRemove});
 
   final PendingCastingReferenceMedia item;
-  final bool canMoveUp;
-  final bool canMoveDown;
-  final VoidCallback onMoveUp;
-  final VoidCallback onMoveDown;
   final VoidCallback onRemove;
 
   @override
@@ -394,20 +368,6 @@ class _ReferenceDraftTile extends StatelessWidget {
                 ),
               ],
             ),
-          ),
-          IconButton(
-            onPressed: canMoveUp ? onMoveUp : null,
-            icon: const Icon(Icons.arrow_upward_rounded),
-            color: BrandTheme.redTop,
-            visualDensity: VisualDensity.compact,
-            tooltip: isRu ? 'Выше' : 'Move up',
-          ),
-          IconButton(
-            onPressed: canMoveDown ? onMoveDown : null,
-            icon: const Icon(Icons.arrow_downward_rounded),
-            color: BrandTheme.redTop,
-            visualDensity: VisualDensity.compact,
-            tooltip: isRu ? 'Ниже' : 'Move down',
           ),
           IconButton(
             onPressed: onRemove,

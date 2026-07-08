@@ -1903,20 +1903,6 @@ class _CastingReferenceGallery extends StatelessWidget {
               itemBuilder: (context, index) => _CastingReferenceTile(
                 item: items[index],
                 canEdit: canEdit,
-                canMoveUp: index > 0,
-                canMoveDown: index < items.length - 1,
-                onMoveUp: () {
-                  final next = List<CastingReferenceMedia>.from(items);
-                  final item = next.removeAt(index);
-                  next.insert(index - 1, item);
-                  _save(context, next);
-                },
-                onMoveDown: () {
-                  final next = List<CastingReferenceMedia>.from(items);
-                  final item = next.removeAt(index);
-                  next.insert(index + 1, item);
-                  _save(context, next);
-                },
                 onDelete: () {
                   final next = List<CastingReferenceMedia>.from(items)
                     ..removeAt(index);
@@ -1935,19 +1921,11 @@ class _CastingReferenceTile extends StatelessWidget {
   const _CastingReferenceTile({
     required this.item,
     required this.canEdit,
-    required this.canMoveUp,
-    required this.canMoveDown,
-    required this.onMoveUp,
-    required this.onMoveDown,
     required this.onDelete,
   });
 
   final CastingReferenceMedia item;
   final bool canEdit;
-  final bool canMoveUp;
-  final bool canMoveDown;
-  final VoidCallback onMoveUp;
-  final VoidCallback onMoveDown;
   final VoidCallback onDelete;
 
   @override
@@ -1967,6 +1945,10 @@ class _CastingReferenceTile extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(18),
         onTap: () async {
+          if (item.kind == CastingReferenceMediaKind.image) {
+            _showCastingReferenceLightbox(context, item);
+            return;
+          }
           final opened = await openExternalUrl(item.url);
           if (!opened && context.mounted) {
             _showSnack(
@@ -2047,18 +2029,6 @@ class _CastingReferenceTile extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       _ReferenceTileButton(
-                        icon: Icons.arrow_upward_rounded,
-                        enabled: canMoveUp,
-                        onTap: onMoveUp,
-                      ),
-                      const SizedBox(width: 5),
-                      _ReferenceTileButton(
-                        icon: Icons.arrow_downward_rounded,
-                        enabled: canMoveDown,
-                        onTap: onMoveDown,
-                      ),
-                      const SizedBox(width: 5),
-                      _ReferenceTileButton(
                         icon: Icons.close_rounded,
                         enabled: true,
                         onTap: onDelete,
@@ -2072,6 +2042,73 @@ class _CastingReferenceTile extends StatelessWidget {
       ),
     );
   }
+}
+
+void _showCastingReferenceLightbox(
+  BuildContext context,
+  CastingReferenceMedia item,
+) {
+  showDialog<void>(
+    context: context,
+    barrierColor: Colors.black.withValues(alpha: 0.86),
+    builder: (context) {
+      return Dialog.fullscreen(
+        backgroundColor: Colors.transparent,
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => Navigator.of(context).pop(),
+                child: const ColoredBox(color: Colors.transparent),
+              ),
+            ),
+            Positioned.fill(
+              child: SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.all(18),
+                  child: InteractiveViewer(
+                    minScale: 1,
+                    maxScale: 4,
+                    child: Center(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(20),
+                        child: CachedNetworkImage(
+                          imageUrl: item.url,
+                          fit: BoxFit.contain,
+                          placeholder: (_, _) =>
+                              const ColoredBox(color: Color(0x22000000)),
+                          errorWidget: (_, _, _) => const Icon(
+                            Icons.broken_image_rounded,
+                            color: Colors.white,
+                            size: 44,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 18,
+              right: 18,
+              child: SafeArea(
+                child: IconButton.filled(
+                  style: IconButton.styleFrom(
+                    backgroundColor: Colors.white.withValues(alpha: 0.92),
+                    foregroundColor: kTextDark,
+                  ),
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    },
+  );
 }
 
 class _ReferenceTileButton extends StatelessWidget {
