@@ -28,7 +28,7 @@ class _SelectionPdfOptionsDialogState extends State<SelectionPdfOptionsDialog> {
   bool includeShoeSize = false;
   bool includeHourlyRate = false;
   bool includeDailyFee = false;
-  bool includeModelLink = false;
+  bool includeModelLink = true;
 
   void _submit() {
     Navigator.of(context).pop(

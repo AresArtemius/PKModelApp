@@ -86,6 +86,35 @@ final castingResponsesProvider = FutureProvider.autoDispose
       return {'items': items, 'exportItems': exportItems};
     });
 
+final castingResponseHistoryProvider = FutureProvider.autoDispose
+    .family<List<Map<String, dynamic>>, String>((ref, castingId) async {
+      ref.watch(authStateProvider);
+      final sb = ref.read(supabaseProvider);
+
+      try {
+        final rows = await sb
+            .from('casting_response_status_history')
+            .select(
+              'old_status,new_status,note,created_at,profile:profiles(id,full_name)',
+            )
+            .eq('casting_id', castingId)
+            .order('created_at', ascending: false)
+            .limit(40);
+        return rows
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList(growable: false);
+      } on PostgrestException catch (e) {
+        final msg = '${e.message} ${e.details ?? ''} ${e.hint ?? ''}'
+            .toLowerCase();
+        if (msg.contains('casting_response_status_history') ||
+            msg.contains('schema cache') ||
+            msg.contains('does not exist')) {
+          return const <Map<String, dynamic>>[];
+        }
+        rethrow;
+      }
+    });
+
 class SelectionCastingPage extends ConsumerWidget {
   const SelectionCastingPage({super.key, required this.castingId, this.from});
 
@@ -149,13 +178,75 @@ class SelectionCastingPage extends ConsumerWidget {
                 required CastingResponseStatus status,
               }) async {
                 if (profileId.trim().isEmpty) return;
-                await ref
-                    .read(supabaseProvider)
-                    .from('casting_responses')
-                    .update({'status': castingResponseStatusToString(status)})
-                    .eq('casting_id', castingId)
-                    .eq('profile_id', profileId);
+                final sb = ref.read(supabaseProvider);
+                try {
+                  await sb.rpc(
+                    'set_casting_response_status',
+                    params: {
+                      'p_casting_id': castingId,
+                      'p_profile_id': profileId,
+                      'p_status': castingResponseStatusToString(status),
+                    },
+                  );
+                } on PostgrestException catch (e) {
+                  final msg = '${e.message} ${e.details ?? ''} ${e.hint ?? ''}'
+                      .toLowerCase();
+                  final missingRpc =
+                      msg.contains('set_casting_response_status') ||
+                      msg.contains('schema cache') ||
+                      msg.contains('function');
+                  if (!missingRpc) rethrow;
+                  await sb
+                      .from('casting_responses')
+                      .update({'status': castingResponseStatusToString(status)})
+                      .eq('casting_id', castingId)
+                      .eq('profile_id', profileId);
+                }
                 ref.invalidate(castingResponsesProvider(castingId));
+                ref.invalidate(castingResponseHistoryProvider(castingId));
+              }
+
+              Future<void> updateBulkStatus({
+                required List<String> profileIds,
+                required CastingResponseStatus status,
+              }) async {
+                final ids = profileIds
+                    .map((e) => e.trim())
+                    .where((e) => e.isNotEmpty)
+                    .toList(growable: false);
+                if (ids.isEmpty) return;
+                final sb = ref.read(supabaseProvider);
+                for (final profileId in ids) {
+                  try {
+                    await sb.rpc(
+                      'set_casting_response_status',
+                      params: {
+                        'p_casting_id': castingId,
+                        'p_profile_id': profileId,
+                        'p_status': castingResponseStatusToString(status),
+                        'p_note': 'bulk',
+                      },
+                    );
+                  } on PostgrestException catch (e) {
+                    final msg =
+                        '${e.message} ${e.details ?? ''} ${e.hint ?? ''}'
+                            .toLowerCase();
+                    final missingRpc =
+                        msg.contains('set_casting_response_status') ||
+                        msg.contains('schema cache') ||
+                        msg.contains('function');
+                    if (!missingRpc) rethrow;
+                    await sb
+                        .from('casting_responses')
+                        .update({
+                          'status': castingResponseStatusToString(status),
+                        })
+                        .eq('casting_id', castingId)
+                        .eq('profile_id', profileId);
+                  }
+                }
+                ref.invalidate(castingResponsesProvider(castingId));
+                ref.invalidate(castingResponseHistoryProvider(castingId));
               }
 
               return Column(
@@ -217,6 +308,10 @@ class SelectionCastingPage extends ConsumerWidget {
                             items: items,
                             castingId: castingId,
                             onStatusChanged: updateStatus,
+                            onBulkStatusChanged: updateBulkStatus,
+                            history: ref.watch(
+                              castingResponseHistoryProvider(castingId),
+                            ),
                           ),
                   ),
                 ],
@@ -250,11 +345,13 @@ class _CardPill extends StatelessWidget {
   }
 }
 
-class _CastingShortlistBoard extends StatelessWidget {
+class _CastingShortlistBoard extends StatefulWidget {
   const _CastingShortlistBoard({
     required this.items,
     required this.castingId,
     required this.onStatusChanged,
+    required this.onBulkStatusChanged,
+    required this.history,
   });
 
   final List<Map<String, dynamic>> items;
@@ -264,58 +361,114 @@ class _CastingShortlistBoard extends StatelessWidget {
     required CastingResponseStatus status,
   })
   onStatusChanged;
+  final Future<void> Function({
+    required List<String> profileIds,
+    required CastingResponseStatus status,
+  })
+  onBulkStatusChanged;
+  final AsyncValue<List<Map<String, dynamic>>> history;
+
+  @override
+  State<_CastingShortlistBoard> createState() => _CastingShortlistBoardState();
+}
+
+class _CastingShortlistBoardState extends State<_CastingShortlistBoard> {
+  final Set<String> _selectedProfileIds = <String>{};
+
+  List<_BoardColumnSpec> _columns(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    return [
+      _BoardColumnSpec(
+        title: ru ? 'НОВЫЕ' : 'NEW',
+        status: CastingResponseStatus.submitted,
+        aliases: const {},
+        icon: Icons.inbox_rounded,
+      ),
+      _BoardColumnSpec(
+        title: ru ? 'ШОРТЛИСТ' : 'SHORTLIST',
+        status: CastingResponseStatus.shortlist,
+        aliases: const {CastingResponseStatus.viewed},
+        icon: Icons.playlist_add_check_rounded,
+      ),
+      _BoardColumnSpec(
+        title: ru ? 'CALLBACK' : 'CALLBACK',
+        status: CastingResponseStatus.callback,
+        aliases: const {CastingResponseStatus.invited},
+        icon: Icons.record_voice_over_rounded,
+      ),
+      _BoardColumnSpec(
+        title: ru ? 'APPROVED' : 'APPROVED',
+        status: CastingResponseStatus.approved,
+        aliases: const {},
+        icon: Icons.verified_rounded,
+      ),
+      _BoardColumnSpec(
+        title: ru ? 'РЕЗЕРВ' : 'RESERVE',
+        status: CastingResponseStatus.reserve,
+        aliases: const {},
+        icon: Icons.bookmark_added_rounded,
+      ),
+      _BoardColumnSpec(
+        title: ru ? 'ОТКАЗ' : 'REJECTED',
+        status: CastingResponseStatus.rejected,
+        aliases: const {},
+        icon: Icons.block_rounded,
+      ),
+    ];
+  }
+
+  void _toggleSelection(String profileId, bool selected) {
+    setState(() {
+      if (selected) {
+        _selectedProfileIds.add(profileId);
+      } else {
+        _selectedProfileIds.remove(profileId);
+      }
+    });
+  }
+
+  Future<void> _bulkMove(CastingResponseStatus status) async {
+    final ids = _selectedProfileIds.toList(growable: false);
+    if (ids.isEmpty) return;
+    await widget.onBulkStatusChanged(profileIds: ids, status: status);
+    if (!mounted) return;
+    setState(_selectedProfileIds.clear);
+  }
+
+  Future<void> _moveOne({
+    required String profileId,
+    required CastingResponseStatus status,
+  }) async {
+    await widget.onStatusChanged(profileId: profileId, status: status);
+    if (!mounted) return;
+    setState(() => _selectedProfileIds.remove(profileId));
+  }
 
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
-    final columns = [
-      _BoardColumnSpec(
-        title: Localizations.localeOf(context).languageCode == 'ru'
-            ? 'НОВЫЕ'
-            : 'NEW',
-        status: CastingResponseStatus.submitted,
-        icon: Icons.inbox_rounded,
-      ),
-      _BoardColumnSpec(
-        title: Localizations.localeOf(context).languageCode == 'ru'
-            ? 'ШОРТЛИСТ'
-            : 'SHORTLIST',
-        status: CastingResponseStatus.viewed,
-        icon: Icons.playlist_add_check_rounded,
-      ),
-      _BoardColumnSpec(
-        title: Localizations.localeOf(context).languageCode == 'ru'
-            ? 'ПРИГЛАШЕНЫ'
-            : 'INVITED',
-        status: CastingResponseStatus.invited,
-        icon: Icons.star_rounded,
-      ),
-      _BoardColumnSpec(
-        title: Localizations.localeOf(context).languageCode == 'ru'
-            ? 'ОТКАЗ'
-            : 'REJECTED',
-        status: CastingResponseStatus.rejected,
-        icon: Icons.block_rounded,
-      ),
-    ];
+    final columns = _columns(context);
 
     return LayoutBuilder(
       builder: (context, constraints) {
         final compact = constraints.maxWidth < 820;
+        final boardWidth = compact ? 1540.0 : constraints.maxWidth;
         final board = SizedBox(
-          width: compact ? 980 : constraints.maxWidth,
+          width: boardWidth,
           child: compact
               ? Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     for (final column in columns) ...[
                       SizedBox(
-                        width: 235,
+                        width: 245,
                         child: _CastingBoardColumn(
                           spec: column,
                           items: _itemsFor(column.status),
-                          castingId: castingId,
-                          onStatusChanged: onStatusChanged,
+                          castingId: widget.castingId,
+                          selectedProfileIds: _selectedProfileIds,
+                          onSelectionChanged: _toggleSelection,
+                          onStatusChanged: _moveOne,
                           allStatuses: columns.map((e) => e.status).toList(),
                           t: t,
                         ),
@@ -332,8 +485,10 @@ class _CastingShortlistBoard extends StatelessWidget {
                         child: _CastingBoardColumn(
                           spec: column,
                           items: _itemsFor(column.status),
-                          castingId: castingId,
-                          onStatusChanged: onStatusChanged,
+                          castingId: widget.castingId,
+                          selectedProfileIds: _selectedProfileIds,
+                          onSelectionChanged: _toggleSelection,
+                          onStatusChanged: _moveOne,
                           allStatuses: columns.map((e) => e.status).toList(),
                           t: t,
                         ),
@@ -344,27 +499,41 @@ class _CastingShortlistBoard extends StatelessWidget {
                 ),
         );
 
-        if (compact) {
-          return SingleChildScrollView(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: board,
+        final content = Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _BulkToolbar(
+              selectedCount: _selectedProfileIds.length,
+              statuses: columns.map((e) => e.status).toList(growable: false),
+              onMove: _bulkMove,
+              onClear: () => setState(_selectedProfileIds.clear),
+              t: t,
             ),
-          );
+            if (_selectedProfileIds.isNotEmpty) const SizedBox(height: 10),
+            compact
+                ? SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: board,
+                  )
+                : board,
+            const SizedBox(height: 12),
+            _HistoryPanel(history: widget.history),
+          ],
+        );
+
+        if (compact) {
+          return SingleChildScrollView(child: content);
         }
 
-        return SingleChildScrollView(child: board);
+        return SingleChildScrollView(child: content);
       },
     );
   }
 
   List<Map<String, dynamic>> _itemsFor(CastingResponseStatus status) {
-    return items
-        .where(
-          (row) =>
-              castingResponseStatusFromString(row['status']?.toString()) ==
-              status,
-        )
+    final spec = _columns(context).firstWhere((e) => e.status == status);
+    return widget.items
+        .where((row) => spec.matches(row['status']?.toString()))
         .toList(growable: false);
   }
 }
@@ -373,12 +542,19 @@ class _BoardColumnSpec {
   const _BoardColumnSpec({
     required this.title,
     required this.status,
+    required this.aliases,
     required this.icon,
   });
 
   final String title;
   final CastingResponseStatus status;
+  final Set<CastingResponseStatus> aliases;
   final IconData icon;
+
+  bool matches(String? value) {
+    final parsed = castingResponseStatusFromString(value);
+    return parsed == status || aliases.contains(parsed);
+  }
 }
 
 class _CastingBoardColumn extends StatelessWidget {
@@ -386,6 +562,8 @@ class _CastingBoardColumn extends StatelessWidget {
     required this.spec,
     required this.items,
     required this.castingId,
+    required this.selectedProfileIds,
+    required this.onSelectionChanged,
     required this.onStatusChanged,
     required this.allStatuses,
     required this.t,
@@ -394,6 +572,8 @@ class _CastingBoardColumn extends StatelessWidget {
   final _BoardColumnSpec spec;
   final List<Map<String, dynamic>> items;
   final String castingId;
+  final Set<String> selectedProfileIds;
+  final void Function(String profileId, bool selected) onSelectionChanged;
   final Future<void> Function({
     required String profileId,
     required CastingResponseStatus status,
@@ -404,78 +584,235 @@ class _CastingBoardColumn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _CardPill(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Icon(spec.icon, color: BrandTheme.redTop, size: 18),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  spec.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 1.3,
-                    color: _text,
-                  ),
+    return DragTarget<_BoardDragData>(
+      onWillAcceptWithDetails: (details) =>
+          details.data.status != spec.status &&
+          details.data.profileId.isNotEmpty,
+      onAcceptWithDetails: (details) {
+        onStatusChanged(profileId: details.data.profileId, status: spec.status);
+      },
+      builder: (context, candidateData, _) {
+        final highlighted = candidateData.isNotEmpty;
+        return _CardPill(
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            padding: highlighted ? const EdgeInsets.all(6) : EdgeInsets.zero,
+            decoration: highlighted
+                ? BoxDecoration(
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: BrandTheme.redTop, width: 1.5),
+                  )
+                : null,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Icon(spec.icon, color: BrandTheme.redTop, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        spec.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1.3,
+                          color: _text,
+                        ),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: BrandTheme.redTop,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        '${items.length}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w900,
+                          height: 1,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-                decoration: BoxDecoration(
-                  color: BrandTheme.redTop,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  '${items.length}',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w900,
-                    height: 1,
-                  ),
-                ),
-              ),
-            ],
+                const SizedBox(height: 10),
+                if (items.isEmpty)
+                  Container(
+                    height: 72,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      color: Colors.white.withValues(alpha: 0.28),
+                      border: Border.all(color: kBorderColor),
+                    ),
+                    child: Text(
+                      Localizations.localeOf(context).languageCode == 'ru'
+                          ? 'ПЕРЕТАЩИТЬ СЮДА'
+                          : 'DROP HERE',
+                      style: const TextStyle(
+                        color: kTextMuted,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                  )
+                else
+                  for (var i = 0; i < items.length; i++) ...[
+                    _CastingBoardCard(
+                      row: items[i],
+                      castingId: castingId,
+                      currentStatus: spec.status,
+                      allStatuses: allStatuses,
+                      selectedProfileIds: selectedProfileIds,
+                      onSelectionChanged: onSelectionChanged,
+                      onStatusChanged: onStatusChanged,
+                      t: t,
+                    ),
+                    if (i != items.length - 1) const SizedBox(height: 10),
+                  ],
+              ],
+            ),
           ),
-          const SizedBox(height: 10),
-          if (items.isEmpty)
-            Container(
-              height: 72,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                color: Colors.white.withValues(alpha: 0.28),
-                border: Border.all(color: kBorderColor),
-              ),
-              child: Text(
-                Localizations.localeOf(context).languageCode == 'ru'
-                    ? 'ПУСТО'
-                    : 'EMPTY',
+        );
+      },
+    );
+  }
+}
+
+class _BoardDragData {
+  const _BoardDragData({required this.profileId, required this.status});
+
+  final String profileId;
+  final CastingResponseStatus status;
+}
+
+class _BulkToolbar extends StatelessWidget {
+  const _BulkToolbar({
+    required this.selectedCount,
+    required this.statuses,
+    required this.onMove,
+    required this.onClear,
+    required this.t,
+  });
+
+  final int selectedCount;
+  final List<CastingResponseStatus> statuses;
+  final Future<void> Function(CastingResponseStatus status) onMove;
+  final VoidCallback onClear;
+  final AppLocalizations t;
+
+  @override
+  Widget build(BuildContext context) {
+    if (selectedCount == 0) return const SizedBox.shrink();
+
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    return _CardPill(
+      child: Wrap(
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          Text(
+            ru ? 'ВЫБРАНО: $selectedCount' : 'SELECTED: $selectedCount',
+            style: const TextStyle(
+              fontWeight: FontWeight.w900,
+              letterSpacing: 1.1,
+              color: _text,
+            ),
+          ),
+          for (final status in statuses)
+            _StatusMoveChip(
+              label: castingResponseStatusLabel(t, status).toUpperCase(),
+              onTap: () => onMove(status),
+            ),
+          _StatusMoveChip(label: ru ? 'СБРОС' : 'CLEAR', onTap: onClear),
+        ],
+      ),
+    );
+  }
+}
+
+class _HistoryPanel extends StatelessWidget {
+  const _HistoryPanel({required this.history});
+
+  final AsyncValue<List<Map<String, dynamic>>> history;
+
+  @override
+  Widget build(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    return history.maybeWhen(
+      data: (rows) {
+        if (rows.isEmpty) return const SizedBox.shrink();
+        return _CardPill(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                ru ? 'ИСТОРИЯ ПЕРЕМЕЩЕНИЙ' : 'MOVE HISTORY',
                 style: const TextStyle(
-                  color: kTextMuted,
                   fontWeight: FontWeight.w900,
                   letterSpacing: 1.2,
+                  color: _text,
                 ),
               ),
-            )
-          else
-            for (var i = 0; i < items.length; i++) ...[
-              _CastingBoardCard(
-                row: items[i],
-                castingId: castingId,
-                currentStatus: spec.status,
-                allStatuses: allStatuses,
-                onStatusChanged: onStatusChanged,
-                t: t,
-              ),
-              if (i != items.length - 1) const SizedBox(height: 10),
+              const SizedBox(height: 8),
+              for (final row in rows.take(8)) ...[
+                _HistoryRow(row: row),
+                if (row != rows.take(8).last) const SizedBox(height: 6),
+              ],
             ],
-        ],
+          ),
+        );
+      },
+      orElse: () => const SizedBox.shrink(),
+    );
+  }
+}
+
+class _HistoryRow extends StatelessWidget {
+  const _HistoryRow({required this.row});
+
+  final Map<String, dynamic> row;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+    final profile = Map<String, dynamic>.from((row['profile'] as Map?) ?? {});
+    final name = (profile['full_name'] ?? '').toString().trim();
+    final oldStatus = castingResponseStatusFromString(
+      row['old_status']?.toString(),
+    );
+    final newStatus = castingResponseStatusFromString(
+      row['new_status']?.toString(),
+    );
+    final createdAt = (row['created_at'] ?? '').toString();
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        color: Colors.white.withValues(alpha: 0.36),
+        border: Border.all(color: kBorderColor),
+      ),
+      child: Text(
+        '${name.isEmpty ? t.profileUpper : name}: '
+        '${castingResponseStatusLabel(t, oldStatus)} → '
+        '${castingResponseStatusLabel(t, newStatus)}'
+        '${createdAt.isEmpty ? '' : ' · ${createdAt.split('.').first}'}',
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          color: _text,
+          fontWeight: FontWeight.w800,
+          fontSize: 12,
+        ),
       ),
     );
   }
@@ -487,6 +824,8 @@ class _CastingBoardCard extends StatelessWidget {
     required this.castingId,
     required this.currentStatus,
     required this.allStatuses,
+    required this.selectedProfileIds,
+    required this.onSelectionChanged,
     required this.onStatusChanged,
     required this.t,
   });
@@ -495,6 +834,8 @@ class _CastingBoardCard extends StatelessWidget {
   final String castingId;
   final CastingResponseStatus currentStatus;
   final List<CastingResponseStatus> allStatuses;
+  final Set<String> selectedProfileIds;
+  final void Function(String profileId, bool selected) onSelectionChanged;
   final Future<void> Function({
     required String profileId,
     required CastingResponseStatus status,
@@ -527,12 +868,16 @@ class _CastingBoardCard extends StatelessWidget {
     final thumbUrl = coverUrl.isNotEmpty
         ? coverUrl
         : (photoUrls.isNotEmpty ? photoUrls.first : '');
+    final selected = selectedProfileIds.contains(profileId);
 
-    return Container(
+    final card = Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
         color: Colors.white.withValues(alpha: 0.34),
-        border: Border.all(color: kBorderColor, width: 1),
+        border: Border.all(
+          color: selected ? BrandTheme.redTop : kBorderColor,
+          width: selected ? 1.4 : 1,
+        ),
       ),
       child: Padding(
         padding: const EdgeInsets.all(10),
@@ -548,6 +893,16 @@ class _CastingBoardCard extends StatelessWidget {
                     ),
               child: Row(
                 children: [
+                  Checkbox(
+                    value: selected,
+                    onChanged: profileId.isEmpty
+                        ? null
+                        : (value) =>
+                              onSelectionChanged(profileId, value ?? false),
+                    activeColor: BrandTheme.redTop,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    visualDensity: VisualDensity.compact,
+                  ),
                   _SelectionProfileThumb(url: thumbUrl),
                   const SizedBox(width: 10),
                   Expanded(
@@ -604,6 +959,18 @@ class _CastingBoardCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+
+    if (profileId.isEmpty) return card;
+
+    return LongPressDraggable<_BoardDragData>(
+      data: _BoardDragData(profileId: profileId, status: currentStatus),
+      feedback: Material(
+        color: Colors.transparent,
+        child: SizedBox(width: 230, child: Opacity(opacity: 0.9, child: card)),
+      ),
+      childWhenDragging: Opacity(opacity: 0.45, child: card),
+      child: card,
     );
   }
 }

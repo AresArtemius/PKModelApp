@@ -42,5 +42,5 @@ class SelectionPdfOptions {
       includeShoeSize = false,
       includeHourlyRate = false,
       includeDailyFee = false,
-      includeModelLink = false;
+      includeModelLink = true;
 }

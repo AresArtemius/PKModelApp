@@ -23,10 +23,15 @@ class SelectionPdfService {
     required List<SelectionExportItem> items,
     required SelectionPdfOptions options,
   }) async {
-    await Printing.layoutPdf(
-      onLayout: (_) =>
-          buildSelectionPdf(title: title, items: items, options: options),
-      name: title.trim().isEmpty ? 'selection.pdf' : '$title.pdf',
+    final filename = title.trim().isEmpty ? 'selection.pdf' : '$title.pdf';
+    final bytes = await buildSelectionPdf(
+      title: title,
+      items: items,
+      options: options,
+    );
+    await Printing.sharePdf(
+      bytes: bytes,
+      filename: filename.replaceAll(RegExp(r'[\\/:*?"<>|]+'), '_'),
     );
   }
 
@@ -185,7 +190,9 @@ class SelectionPdfService {
     if (options.includeDailyFee) {
       addInt('Мин. в день', item.minDailyFee);
     }
-    addLink(buildModelUrl(item.id));
+    if (options.includeModelLink) {
+      addLink(buildModelUrl(item.id));
+    }
 
     return pw.Container(
       margin: const pw.EdgeInsets.only(bottom: 16),
