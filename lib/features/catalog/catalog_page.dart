@@ -861,8 +861,7 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
     final canSaveCurrentSearch =
         c.hasActiveFilters && !currentSearchAlreadySaved;
     final hasSavedSearchRail =
-        canCreateSelections &&
-        (canSaveCurrentSearch || savedSearchItems.isNotEmpty);
+        canSaveCurrentSearch || savedSearchItems.isNotEmpty;
     final resetFiltersLabel =
         Localizations.localeOf(context).languageCode.toLowerCase() == 'ru'
         ? 'СБРОСИТЬ ФИЛЬТРЫ'

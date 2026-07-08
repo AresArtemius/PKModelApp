@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/app_logger.dart';
+import '../auth/auth_controller.dart';
 import 'catalog_controller.dart';
 
 const String _savedSearchesKeyPrefix = 'catalog_saved_searches_v1';
@@ -204,9 +205,15 @@ class CatalogSavedSearchesController extends ChangeNotifier {
   }
 
   Future<List<CatalogSavedSearch>> _loadRemote() async {
+    final userId = _userId;
+    if (userId == null || userId.isEmpty) {
+      return const [];
+    }
+
     final rows = await _supabase
         .from('catalog_saved_searches')
         .select('id,title,filters')
+        .eq('user_id', userId)
         .order('position', ascending: true)
         .order('created_at', ascending: false);
 
@@ -343,6 +350,8 @@ class CatalogSavedSearchesController extends ChangeNotifier {
 
 final catalogSavedSearchesProvider =
     ChangeNotifierProvider<CatalogSavedSearchesController>((ref) {
+      ref.watch(authStateProvider);
+
       final sb = Supabase.instance.client;
       final userId = sb.auth.currentUser?.id;
       final controller = CatalogSavedSearchesController(
