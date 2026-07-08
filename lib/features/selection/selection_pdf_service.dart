@@ -6,6 +6,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
 import '../../core/public_links.dart';
+import '../castings/casting_reference_media.dart';
 import 'selection_export_item.dart';
 import 'selection_pdf_options.dart';
 
@@ -22,12 +23,14 @@ class SelectionPdfService {
     required String title,
     required List<SelectionExportItem> items,
     required SelectionPdfOptions options,
+    List<CastingReferenceMedia> references = const <CastingReferenceMedia>[],
   }) async {
     final filename = title.trim().isEmpty ? 'selection.pdf' : '$title.pdf';
     final bytes = await buildSelectionPdf(
       title: title,
       items: items,
       options: options,
+      references: references,
     );
     await Printing.sharePdf(
       bytes: bytes,
@@ -39,10 +42,16 @@ class SelectionPdfService {
     required String title,
     required List<SelectionExportItem> items,
     required SelectionPdfOptions options,
+    List<CastingReferenceMedia> references = const <CastingReferenceMedia>[],
   }) async {
     final doc = pw.Document();
 
     final imageBytes = <String, Uint8List?>{};
+    for (final reference in references) {
+      final url = _referencePreviewUrl(reference);
+      if (url.isEmpty || imageBytes.containsKey(url)) continue;
+      imageBytes[url] = await _loadImageBytes(url);
+    }
     if (options.includePhoto) {
       for (final item in items) {
         for (final url in item.photoUrls.take(3)) {
@@ -68,6 +77,15 @@ class SelectionPdfService {
             style: pw.TextStyle(font: boldFont, fontSize: 22),
           ),
           pw.SizedBox(height: 14),
+          if (references.isNotEmpty) ...[
+            _buildReferencesBlock(
+              references: references,
+              imageData: imageBytes,
+              baseFont: baseFont,
+              boldFont: boldFont,
+            ),
+            pw.SizedBox(height: 14),
+          ],
           ...items.map(
             (item) => _buildCard(
               item: item,
@@ -82,6 +100,124 @@ class SelectionPdfService {
     );
 
     return doc.save();
+  }
+
+  pw.Widget _buildReferencesBlock({
+    required List<CastingReferenceMedia> references,
+    required Map<String, Uint8List?> imageData,
+    required pw.Font baseFont,
+    required pw.Font boldFont,
+  }) {
+    return pw.Container(
+      width: double.infinity,
+      padding: const pw.EdgeInsets.all(12),
+      decoration: pw.BoxDecoration(
+        color: PdfColors.grey100,
+        border: pw.Border.all(color: PdfColors.grey300),
+        borderRadius: pw.BorderRadius.circular(10),
+      ),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Text(
+            'РЕФЕРЕНСЫ КАСТИНГА',
+            style: pw.TextStyle(font: boldFont, fontSize: 12),
+          ),
+          pw.SizedBox(height: 10),
+          pw.Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: references
+                .map(
+                  (reference) => _buildReferenceTile(
+                    reference: reference,
+                    imageData: imageData,
+                    baseFont: baseFont,
+                    boldFont: boldFont,
+                  ),
+                )
+                .toList(growable: false),
+          ),
+        ],
+      ),
+    );
+  }
+
+  pw.Widget _buildReferenceTile({
+    required CastingReferenceMedia reference,
+    required Map<String, Uint8List?> imageData,
+    required pw.Font baseFont,
+    required pw.Font boldFont,
+  }) {
+    final previewUrl = _referencePreviewUrl(reference);
+    final preview = imageData[previewUrl];
+    final label = reference.name.trim().isEmpty
+        ? _referenceKindLabel(reference.kind)
+        : reference.name.trim();
+    final body = pw.Container(
+      width: 132,
+      height: 116,
+      decoration: pw.BoxDecoration(
+        color: PdfColors.white,
+        border: pw.Border.all(color: PdfColors.grey300),
+        borderRadius: pw.BorderRadius.circular(8),
+      ),
+      child: pw.ClipRRect(
+        horizontalRadius: 8,
+        verticalRadius: 8,
+        child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+          children: [
+            pw.Container(
+              height: 78,
+              color: PdfColors.grey200,
+              child: preview != null
+                  ? pw.Image(pw.MemoryImage(preview), fit: pw.BoxFit.cover)
+                  : pw.Center(
+                      child: pw.Text(
+                        _referenceKindLabel(reference.kind).toUpperCase(),
+                        style: pw.TextStyle(font: boldFont, fontSize: 9),
+                      ),
+                    ),
+            ),
+            pw.Padding(
+              padding: const pw.EdgeInsets.all(7),
+              child: pw.Text(
+                label,
+                maxLines: 2,
+                overflow: pw.TextOverflow.clip,
+                style: pw.TextStyle(font: baseFont, fontSize: 8.5),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    final url = reference.url.trim();
+    if (url.isEmpty) return body;
+    return pw.UrlLink(destination: url, child: body);
+  }
+
+  String _referencePreviewUrl(CastingReferenceMedia reference) {
+    if (reference.kind == CastingReferenceMediaKind.video &&
+        reference.previewUrl.trim().isNotEmpty) {
+      return reference.previewUrl.trim();
+    }
+    if (reference.kind == CastingReferenceMediaKind.image) {
+      return reference.url.trim();
+    }
+    return '';
+  }
+
+  String _referenceKindLabel(CastingReferenceMediaKind kind) {
+    switch (kind) {
+      case CastingReferenceMediaKind.image:
+        return 'Фото';
+      case CastingReferenceMediaKind.video:
+        return 'Видео';
+      case CastingReferenceMediaKind.file:
+        return 'Файл';
+    }
   }
 
   pw.Widget _buildCard({

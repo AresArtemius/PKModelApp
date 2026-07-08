@@ -1343,15 +1343,8 @@ class _CastingListTile extends StatelessWidget {
                 color: castingProjectStageColor(casting.projectStage),
               ),
               if (casting.referenceMedia.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                _CastingMetaPill(
-                  icon: Icons.attach_file_rounded,
-                  label: _castingLocaleText(
-                    context,
-                    'Референсы: ${casting.referenceMedia.length}',
-                    'References: ${casting.referenceMedia.length}',
-                  ),
-                ),
+                const SizedBox(height: 10),
+                _CastingReferencePreviewStrip(items: casting.referenceMedia),
               ],
               const SizedBox(height: 8),
               Row(
@@ -1913,6 +1906,98 @@ class _CastingReferenceGallery extends StatelessWidget {
           },
         ),
       ],
+    );
+  }
+}
+
+class _CastingReferencePreviewStrip extends StatelessWidget {
+  const _CastingReferencePreviewStrip({required this.items});
+
+  final List<CastingReferenceMedia> items;
+
+  @override
+  Widget build(BuildContext context) {
+    final visible = items.take(3).toList(growable: false);
+    final extra = items.length - visible.length;
+    return Row(
+      children: [
+        for (final item in visible) ...[
+          _CastingReferencePreviewThumb(item: item),
+          const SizedBox(width: 8),
+        ],
+        if (extra > 0)
+          Container(
+            width: 54,
+            height: 54,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.72),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
+            ),
+            child: Text(
+              '+$extra',
+              style: BrandTheme.pillText.copyWith(
+                color: kTextDark,
+                fontSize: 13,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _CastingReferencePreviewThumb extends StatelessWidget {
+  const _CastingReferencePreviewThumb({required this.item});
+
+  final CastingReferenceMedia item;
+
+  @override
+  Widget build(BuildContext context) {
+    final previewUrl = item.kind == CastingReferenceMediaKind.video
+        ? item.previewUrl.trim()
+        : item.url.trim();
+    final icon = switch (item.kind) {
+      CastingReferenceMediaKind.image => Icons.image_rounded,
+      CastingReferenceMediaKind.video => Icons.videocam_rounded,
+      CastingReferenceMediaKind.file => Icons.insert_drive_file_rounded,
+    };
+    return Container(
+      width: 54,
+      height: 54,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
+      ),
+      child:
+          previewUrl.isNotEmpty && item.kind != CastingReferenceMediaKind.file
+          ? Stack(
+              fit: StackFit.expand,
+              children: [
+                CachedNetworkImage(
+                  imageUrl: previewUrl,
+                  fit: BoxFit.cover,
+                  memCacheWidth: 180,
+                  maxWidthDiskCache: 360,
+                  placeholder: (_, _) =>
+                      Container(color: Colors.black.withValues(alpha: 0.04)),
+                  errorWidget: (_, _, _) => Icon(icon, color: kTextMuted),
+                ),
+                if (item.kind == CastingReferenceMediaKind.video)
+                  const Center(
+                    child: Icon(
+                      Icons.play_circle_fill_rounded,
+                      color: Colors.white,
+                      size: 26,
+                    ),
+                  ),
+              ],
+            )
+          : Icon(icon, color: BrandTheme.redTop),
     );
   }
 }

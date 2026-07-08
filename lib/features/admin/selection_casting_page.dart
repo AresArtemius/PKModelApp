@@ -18,6 +18,7 @@ import '../selection/selection_pdf_options.dart';
 import '../selection/selection_pdf_options_dialog.dart';
 import '../selection/selection_pdf_service.dart';
 import '../catalog/model_data.dart';
+import '../castings/casting_reference_media.dart';
 import '../castings/casting_response_status.dart';
 
 const _bg = BrandTheme.greyMid;
@@ -66,6 +67,32 @@ final castingResponsesProvider = FutureProvider.autoDispose
             .eq('casting_id', castingId)
             .order('created_at', ascending: false)
             .limit(400);
+      }
+
+      Future<List<CastingReferenceMedia>> loadCastingReferences() async {
+        try {
+          final row = await sb
+              .from('castings')
+              .select('reference_media')
+              .eq('id', castingId)
+              .maybeSingle();
+          final raw = row?['reference_media'];
+          if (raw is! List) return const <CastingReferenceMedia>[];
+          return raw
+              .whereType<Map>()
+              .map((e) => CastingReferenceMedia.fromJson(Map.from(e)))
+              .where((e) => e.url.trim().isNotEmpty)
+              .toList(growable: false);
+        } on PostgrestException catch (e) {
+          final msg = '${e.message} ${e.details ?? ''} ${e.hint ?? ''}'
+              .toLowerCase();
+          if (msg.contains('reference_media') ||
+              msg.contains('schema cache') ||
+              msg.contains('does not exist')) {
+            return const <CastingReferenceMedia>[];
+          }
+          rethrow;
+        }
       }
 
       const profileSelect = '''
@@ -120,8 +147,13 @@ final castingResponsesProvider = FutureProvider.autoDispose
           )
           .map(SelectionExportItem.fromProfileMap)
           .toList(growable: false);
+      final references = await loadCastingReferences();
 
-      return {'items': items, 'exportItems': exportItems};
+      return {
+        'items': items,
+        'exportItems': exportItems,
+        'references': references,
+      };
     });
 
 final castingResponseHistoryProvider = FutureProvider.autoDispose
@@ -194,6 +226,11 @@ class SelectionCastingPage extends ConsumerWidget {
               final exportItems = List<SelectionExportItem>.from(
                 data['exportItems'] as List<dynamic>,
               );
+              final references =
+                  (data['references'] as List?)
+                      ?.whereType<CastingReferenceMedia>()
+                      .toList(growable: false) ??
+                  const <CastingReferenceMedia>[];
 
               List<Map<String, dynamic>> rowsForStatus(
                 CastingResponseStatus status,
@@ -255,6 +292,7 @@ class SelectionCastingPage extends ConsumerWidget {
                   title: title,
                   items: scopedItems,
                   options: options,
+                  references: references,
                 );
               }
 
