@@ -69,7 +69,7 @@ String castingResponseStatusLabel(
     case CastingResponseStatus.callback:
       return t.localeName == 'ru' ? 'Коллбек' : 'Callback';
     case CastingResponseStatus.approved:
-      return t.localeName == 'ru' ? 'Утвержден' : 'Approved';
+      return t.localeName == 'ru' ? 'Утвержденные' : 'Approved';
     case CastingResponseStatus.reserve:
       return t.localeName == 'ru' ? 'Резерв' : 'Reserve';
     case CastingResponseStatus.viewed:

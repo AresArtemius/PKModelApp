@@ -252,7 +252,7 @@ class SelectionPdfService {
       );
     }
 
-    final tileWidth = urls.length == 1 ? 110.0 : 74.0;
+    const tileWidth = 110.0;
     return pw.Row(
       children: [
         for (var i = 0; i < urls.length; i++) ...[

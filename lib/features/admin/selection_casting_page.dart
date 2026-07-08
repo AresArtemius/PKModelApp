@@ -22,6 +22,37 @@ import '../castings/casting_response_status.dart';
 const _bg = BrandTheme.greyMid;
 const _text = kTextDark;
 
+enum _PdfExportScope { all, shortlist, approved }
+
+List<_BoardColumnSpec> _boardColumns(BuildContext context) {
+  final ru = Localizations.localeOf(context).languageCode == 'ru';
+  return [
+    _BoardColumnSpec(
+      title: ru ? 'ОТКЛИКИ' : 'RESPONSES',
+      status: CastingResponseStatus.submitted,
+      aliases: const {
+        CastingResponseStatus.callback,
+        CastingResponseStatus.invited,
+        CastingResponseStatus.reserve,
+        CastingResponseStatus.rejected,
+      },
+      icon: Icons.inbox_rounded,
+    ),
+    _BoardColumnSpec(
+      title: ru ? 'ШОРТЛИСТ' : 'SHORTLIST',
+      status: CastingResponseStatus.shortlist,
+      aliases: const {CastingResponseStatus.viewed},
+      icon: Icons.playlist_add_check_rounded,
+    ),
+    _BoardColumnSpec(
+      title: ru ? 'УТВЕРЖДЕННЫЕ' : 'APPROVED',
+      status: CastingResponseStatus.approved,
+      aliases: const {},
+      icon: Icons.verified_rounded,
+    ),
+  ];
+}
+
 final castingResponsesProvider = FutureProvider.autoDispose
     .family<Map<String, dynamic>, String>((ref, castingId) async {
       ref.watch(authStateProvider);
@@ -157,7 +188,47 @@ class SelectionCastingPage extends ConsumerWidget {
                 data['exportItems'] as List<dynamic>,
               );
 
-              Future<void> openPdf() async {
+              List<Map<String, dynamic>> rowsForStatus(
+                CastingResponseStatus status,
+              ) {
+                final columns = _boardColumns(context);
+                final spec = columns.firstWhere((e) => e.status == status);
+                return items
+                    .where((row) => spec.matches(row['status']?.toString()))
+                    .toList(growable: false);
+              }
+
+              List<SelectionExportItem> exportItemsFor(
+                CastingResponseStatus? status,
+              ) {
+                if (status == null) return exportItems;
+                return rowsForStatus(status)
+                    .map((row) => (row['profile'] as Map?) ?? const {})
+                    .map((profile) => Map<String, dynamic>.from(profile))
+                    .where(
+                      (profile) =>
+                          (profile['id'] ?? '').toString().trim().isNotEmpty,
+                    )
+                    .map(SelectionExportItem.fromProfileMap)
+                    .toList(growable: false);
+              }
+
+              Future<void> openPdf({
+                required String title,
+                required List<SelectionExportItem> scopedItems,
+              }) async {
+                if (scopedItems.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        Localizations.localeOf(context).languageCode == 'ru'
+                            ? 'В этой подборке пока нет анкет.'
+                            : 'There are no profiles in this set yet.',
+                      ),
+                    ),
+                  );
+                  return;
+                }
                 final options = await showDialog<SelectionPdfOptions>(
                   context: context,
                   barrierDismissible: true,
@@ -167,10 +238,44 @@ class SelectionCastingPage extends ConsumerWidget {
 
                 final service = SelectionPdfService();
                 await service.previewSelectionPdf(
-                  title: t.responsesUpper,
-                  items: exportItems,
+                  title: title,
+                  items: scopedItems,
                   options: options,
                 );
+              }
+
+              Future<void> choosePdfExport() async {
+                final ru = Localizations.localeOf(context).languageCode == 'ru';
+                final scope = await showModalBottomSheet<_PdfExportScope>(
+                  context: context,
+                  backgroundColor: Colors.transparent,
+                  builder: (_) => const _PdfExportScopeSheet(),
+                );
+                if (scope == null) return;
+                switch (scope) {
+                  case _PdfExportScope.all:
+                    await openPdf(
+                      title: t.responsesUpper,
+                      scopedItems: exportItems,
+                    );
+                    break;
+                  case _PdfExportScope.shortlist:
+                    await openPdf(
+                      title: ru ? 'Шортлист' : 'Shortlist',
+                      scopedItems: exportItemsFor(
+                        CastingResponseStatus.shortlist,
+                      ),
+                    );
+                    break;
+                  case _PdfExportScope.approved:
+                    await openPdf(
+                      title: ru ? 'Утвержденные' : 'Approved',
+                      scopedItems: exportItemsFor(
+                        CastingResponseStatus.approved,
+                      ),
+                    );
+                    break;
+                }
               }
 
               Future<void> updateStatus({
@@ -273,7 +378,9 @@ class SelectionCastingPage extends ConsumerWidget {
                           splashRadius: 22,
                         ),
                         IconButton(
-                          onPressed: exportItems.isEmpty ? null : openPdf,
+                          onPressed: exportItems.isEmpty
+                              ? null
+                              : choosePdfExport,
                           icon: const Icon(
                             Icons.picture_as_pdf_rounded,
                             color: BrandTheme.redTop,
@@ -345,6 +452,111 @@ class _CardPill extends StatelessWidget {
   }
 }
 
+class _PdfExportScopeSheet extends StatelessWidget {
+  const _PdfExportScopeSheet();
+
+  @override
+  Widget build(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            gradient: BrandTheme.lightPillGradient,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: kBorderColor),
+            boxShadow: BrandTheme.basePillShadow(isDark: false),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                ru ? 'PDF-ПОДБОРКА' : 'PDF SELECTION',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: _text,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.4,
+                  fontSize: 16,
+                ),
+              ),
+              const SizedBox(height: 12),
+              _PdfScopeTile(
+                icon: Icons.inbox_rounded,
+                label: ru ? 'Все отклики' : 'All responses',
+                onTap: () => Navigator.of(context).pop(_PdfExportScope.all),
+              ),
+              const SizedBox(height: 8),
+              _PdfScopeTile(
+                icon: Icons.playlist_add_check_rounded,
+                label: ru ? 'Шортлист' : 'Shortlist',
+                onTap: () =>
+                    Navigator.of(context).pop(_PdfExportScope.shortlist),
+              ),
+              const SizedBox(height: 8),
+              _PdfScopeTile(
+                icon: Icons.verified_rounded,
+                label: ru ? 'Утвержденные' : 'Approved',
+                onTap: () =>
+                    Navigator.of(context).pop(_PdfExportScope.approved),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PdfScopeTile extends StatelessWidget {
+  const _PdfScopeTile({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(18),
+      onTap: onTap,
+      child: Container(
+        height: 56,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.56),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: kBorderColor),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: BrandTheme.redTop),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                label.toUpperCase(),
+                style: const TextStyle(
+                  color: _text,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.1,
+                ),
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded, color: kTextMuted),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _CastingShortlistBoard extends StatefulWidget {
   const _CastingShortlistBoard({
     required this.items,
@@ -374,48 +586,7 @@ class _CastingShortlistBoard extends StatefulWidget {
 
 class _CastingShortlistBoardState extends State<_CastingShortlistBoard> {
   final Set<String> _selectedProfileIds = <String>{};
-
-  List<_BoardColumnSpec> _columns(BuildContext context) {
-    final ru = Localizations.localeOf(context).languageCode == 'ru';
-    return [
-      _BoardColumnSpec(
-        title: ru ? 'НОВЫЕ' : 'NEW',
-        status: CastingResponseStatus.submitted,
-        aliases: const {},
-        icon: Icons.inbox_rounded,
-      ),
-      _BoardColumnSpec(
-        title: ru ? 'ШОРТЛИСТ' : 'SHORTLIST',
-        status: CastingResponseStatus.shortlist,
-        aliases: const {CastingResponseStatus.viewed},
-        icon: Icons.playlist_add_check_rounded,
-      ),
-      _BoardColumnSpec(
-        title: ru ? 'CALLBACK' : 'CALLBACK',
-        status: CastingResponseStatus.callback,
-        aliases: const {CastingResponseStatus.invited},
-        icon: Icons.record_voice_over_rounded,
-      ),
-      _BoardColumnSpec(
-        title: ru ? 'APPROVED' : 'APPROVED',
-        status: CastingResponseStatus.approved,
-        aliases: const {},
-        icon: Icons.verified_rounded,
-      ),
-      _BoardColumnSpec(
-        title: ru ? 'РЕЗЕРВ' : 'RESERVE',
-        status: CastingResponseStatus.reserve,
-        aliases: const {},
-        icon: Icons.bookmark_added_rounded,
-      ),
-      _BoardColumnSpec(
-        title: ru ? 'ОТКАЗ' : 'REJECTED',
-        status: CastingResponseStatus.rejected,
-        aliases: const {},
-        icon: Icons.block_rounded,
-      ),
-    ];
-  }
+  CastingResponseStatus _compactStatus = CastingResponseStatus.submitted;
 
   void _toggleSelection(String profileId, bool selected) {
     setState(() {
@@ -447,35 +618,28 @@ class _CastingShortlistBoardState extends State<_CastingShortlistBoard> {
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
-    final columns = _columns(context);
+    final columns = _boardColumns(context);
 
     return LayoutBuilder(
       builder: (context, constraints) {
         final compact = constraints.maxWidth < 820;
-        final boardWidth = compact ? 1540.0 : constraints.maxWidth;
+        final statuses = columns.map((e) => e.status).toList(growable: false);
+        final compactColumn = columns.firstWhere(
+          (e) => e.status == _compactStatus,
+          orElse: () => columns.first,
+        );
         final board = SizedBox(
-          width: boardWidth,
+          width: constraints.maxWidth,
           child: compact
-              ? Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    for (final column in columns) ...[
-                      SizedBox(
-                        width: 245,
-                        child: _CastingBoardColumn(
-                          spec: column,
-                          items: _itemsFor(column.status),
-                          castingId: widget.castingId,
-                          selectedProfileIds: _selectedProfileIds,
-                          onSelectionChanged: _toggleSelection,
-                          onStatusChanged: _moveOne,
-                          allStatuses: columns.map((e) => e.status).toList(),
-                          t: t,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                    ],
-                  ],
+              ? _CastingBoardColumn(
+                  spec: compactColumn,
+                  items: _itemsFor(compactColumn.status),
+                  castingId: widget.castingId,
+                  selectedProfileIds: _selectedProfileIds,
+                  onSelectionChanged: _toggleSelection,
+                  onStatusChanged: _moveOne,
+                  allStatuses: statuses,
+                  t: t,
                 )
               : Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -489,7 +653,7 @@ class _CastingShortlistBoardState extends State<_CastingShortlistBoard> {
                           selectedProfileIds: _selectedProfileIds,
                           onSelectionChanged: _toggleSelection,
                           onStatusChanged: _moveOne,
-                          allStatuses: columns.map((e) => e.status).toList(),
+                          allStatuses: statuses,
                           t: t,
                         ),
                       ),
@@ -510,12 +674,21 @@ class _CastingShortlistBoardState extends State<_CastingShortlistBoard> {
               t: t,
             ),
             if (_selectedProfileIds.isNotEmpty) const SizedBox(height: 10),
-            compact
-                ? SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: board,
-                  )
-                : board,
+            if (compact) ...[
+              _StatusSelector(
+                columns: columns,
+                selected: compactColumn.status,
+                counts: {
+                  for (final column in columns)
+                    column.status: _itemsFor(column.status).length,
+                },
+                onChanged: (status) => setState(() {
+                  _compactStatus = status;
+                }),
+              ),
+              const SizedBox(height: 10),
+            ],
+            board,
             const SizedBox(height: 12),
             _HistoryPanel(history: widget.history),
           ],
@@ -531,7 +704,7 @@ class _CastingShortlistBoardState extends State<_CastingShortlistBoard> {
   }
 
   List<Map<String, dynamic>> _itemsFor(CastingResponseStatus status) {
-    final spec = _columns(context).firstWhere((e) => e.status == status);
+    final spec = _boardColumns(context).firstWhere((e) => e.status == status);
     return widget.items
         .where((row) => spec.matches(row['status']?.toString()))
         .toList(growable: false);
@@ -554,6 +727,95 @@ class _BoardColumnSpec {
   bool matches(String? value) {
     final parsed = castingResponseStatusFromString(value);
     return parsed == status || aliases.contains(parsed);
+  }
+}
+
+class _StatusSelector extends StatelessWidget {
+  const _StatusSelector({
+    required this.columns,
+    required this.selected,
+    required this.counts,
+    required this.onChanged,
+  });
+
+  final List<_BoardColumnSpec> columns;
+  final CastingResponseStatus selected;
+  final Map<CastingResponseStatus, int> counts;
+  final ValueChanged<CastingResponseStatus> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 46,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: columns.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final column = columns[index];
+          final active = column.status == selected;
+          return InkWell(
+            borderRadius: BorderRadius.circular(999),
+            onTap: () => onChanged(column.status),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              decoration: BoxDecoration(
+                color: active ? BrandTheme.redTop : Colors.white,
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(
+                  color: active ? BrandTheme.redTop : kBorderColor,
+                ),
+                boxShadow: active
+                    ? BrandTheme.basePillShadow(isDark: false)
+                    : null,
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    column.icon,
+                    color: active ? Colors.white : BrandTheme.redTop,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    column.title,
+                    style: TextStyle(
+                      color: active ? Colors.white : _text,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1,
+                      fontSize: 12,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 7,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: active
+                          ? Colors.white.withValues(alpha: 0.22)
+                          : BrandTheme.redTop,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      '${counts[column.status] ?? 0}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w900,
+                        height: 1,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
 }
 

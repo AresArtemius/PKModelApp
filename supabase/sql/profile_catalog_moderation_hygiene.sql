@@ -19,7 +19,7 @@ as $$
   select
     p.id,
     p.full_name,
-    p.status,
+    p.status::text as status,
     p.user_id,
     (
       coalesce(p.cover_photo_url, '') <> ''
@@ -28,7 +28,7 @@ as $$
     p.updated_at
   from public.profiles p
   where public.current_user_is_admin()
-    and coalesce(p.status, '') <> 'approved'
+    and coalesce(p.status::text, '') <> 'approved'
     and (
       coalesce(p.cover_photo_url, '') <> ''
       or coalesce(array_length(p.photo_urls, 1), 0) > 0
@@ -62,7 +62,7 @@ begin
       'Returned to moderation because the profile existed before the current approval workflow.'
     )
   where id = any(coalesce(p_profile_ids, array[]::uuid[]))
-    and coalesce(status, '') <> 'approved';
+    and coalesce(status::text, '') <> 'approved';
 
   get diagnostics v_count = row_count;
   return v_count;

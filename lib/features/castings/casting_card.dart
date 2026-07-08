@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
@@ -6,6 +7,7 @@ import '../../gen_l10n/app_localizations.dart';
 import 'casting_model.dart';
 import 'casting_project_stage.dart';
 import 'casting_response_status.dart';
+import 'casting_reference_media.dart';
 
 class CastingCard extends StatelessWidget {
   const CastingCard({
@@ -98,7 +100,7 @@ class CastingCard extends StatelessWidget {
           _CastingStagePill(stage: casting.projectStage),
           if (casting.referenceMedia.isNotEmpty) ...[
             const SizedBox(height: 8),
-            _CastingReferenceCountPill(count: casting.referenceMedia.length),
+            _CastingReferencePreviewStrip(items: casting.referenceMedia),
           ],
           if (casting.description.isNotEmpty) ...[
             const SizedBox(height: 8),
@@ -126,37 +128,140 @@ String _castingActionLocaleText(BuildContext context, String ru, String en) {
   return Localizations.localeOf(context).languageCode == 'ru' ? ru : en;
 }
 
-class _CastingReferenceCountPill extends StatelessWidget {
-  const _CastingReferenceCountPill({required this.count});
+class _CastingReferencePreviewStrip extends StatelessWidget {
+  const _CastingReferencePreviewStrip({required this.items});
 
-  final int count;
+  final List<CastingReferenceMedia> items;
 
   @override
   Widget build(BuildContext context) {
     final isRu = Localizations.localeOf(context).languageCode == 'ru';
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.76),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.black.withValues(alpha: 0.08)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.attach_file_rounded, size: 15, color: kTextDark),
-          const SizedBox(width: 6),
-          Text(
-            isRu ? 'РЕФЕРЕНСЫ: $count' : 'REFERENCES: $count',
-            style: BrandTheme.pillText.copyWith(
-              color: kTextDark,
-              fontSize: 11,
-              letterSpacing: 0.75,
-              fontWeight: FontWeight.w800,
+    final visible = items.take(4).toList(growable: false);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          isRu ? 'РЕФЕРЕНСЫ' : 'REFERENCES',
+          style: BrandTheme.pillText.copyWith(
+            color: kTextMuted,
+            fontSize: 10,
+            letterSpacing: 0.9,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        const SizedBox(height: 6),
+        SizedBox(
+          height: 74,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            itemCount: visible.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 8),
+            itemBuilder: (context, index) => _CastingReferencePreviewTile(
+              item: visible[index],
+              overflowCount: index == visible.length - 1
+                  ? items.length - visible.length
+                  : 0,
             ),
           ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CastingReferencePreviewTile extends StatelessWidget {
+  const _CastingReferencePreviewTile({
+    required this.item,
+    required this.overflowCount,
+  });
+
+  final CastingReferenceMedia item;
+  final int overflowCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final mediaUrl = item.kind == CastingReferenceMediaKind.image
+        ? item.url
+        : item.previewUrl;
+    return Container(
+      width: 74,
+      height: 74,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.78),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
+      ),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (mediaUrl.trim().isNotEmpty)
+            CachedNetworkImage(
+              imageUrl: mediaUrl,
+              fit: BoxFit.cover,
+              memCacheWidth: 180,
+              maxWidthDiskCache: 360,
+              placeholder: (_, _) => const ColoredBox(color: Color(0x12000000)),
+              errorWidget: (_, _, _) => _ReferenceIcon(kind: item.kind),
+            )
+          else
+            _ReferenceIcon(kind: item.kind),
+          if (item.kind != CastingReferenceMediaKind.image)
+            Positioned(
+              left: 6,
+              bottom: 6,
+              child: Container(
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.62),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Icon(
+                  item.kind == CastingReferenceMediaKind.video
+                      ? Icons.play_arrow_rounded
+                      : Icons.insert_drive_file_rounded,
+                  color: Colors.white,
+                  size: 16,
+                ),
+              ),
+            ),
+          if (overflowCount > 0)
+            Container(
+              color: Colors.black.withValues(alpha: 0.48),
+              alignment: Alignment.center,
+              child: Text(
+                '+$overflowCount',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
         ],
       ),
+    );
+  }
+}
+
+class _ReferenceIcon extends StatelessWidget {
+  const _ReferenceIcon({required this.kind});
+
+  final CastingReferenceMediaKind kind;
+
+  @override
+  Widget build(BuildContext context) {
+    final icon = switch (kind) {
+      CastingReferenceMediaKind.image => Icons.image_rounded,
+      CastingReferenceMediaKind.video => Icons.videocam_rounded,
+      CastingReferenceMediaKind.file => Icons.insert_drive_file_rounded,
+    };
+    return Container(
+      color: const Color(0x10000000),
+      alignment: Alignment.center,
+      child: Icon(icon, color: BrandTheme.redTop, size: 28),
     );
   }
 }

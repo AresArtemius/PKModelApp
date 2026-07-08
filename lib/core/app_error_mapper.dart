@@ -80,6 +80,13 @@ class AppErrorMapper {
 
     if (providerDisabled) return t.oauthProviderDisabled;
 
+    if (lower.contains('invalid login credentials') ||
+        lower.contains('invalid credentials')) {
+      return t.localeName == 'ru'
+          ? 'Неверный email, телефон или пароль.'
+          : 'Invalid email, phone, or password.';
+    }
+
     if (lower.contains('email rate limit') ||
         (lower.contains('rate limit') && lower.contains('email')) ||
         lower.contains('over email send rate limit')) {
