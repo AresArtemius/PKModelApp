@@ -11,6 +11,7 @@ import '../../core/router.dart';
 import '../../core/supabase_provider.dart';
 import '../../gen_l10n/app_localizations.dart';
 import '../../ui/brand/brand_admin_header.dart';
+import '../../ui/brand/brand_pill_button.dart';
 import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
 import '../chat/chat_providers.dart';
@@ -490,6 +491,15 @@ class SelectionProjectPage extends ConsumerWidget {
                               ),
                             ),
                           )
+                        : isPublic
+                        ? _PublicSelectionPresentationView(
+                            selectionId: selectionId,
+                            title: title.isNotEmpty ? title : t.selectionUpper,
+                            campaignRows: campaignRows,
+                            items: items,
+                            clientKey: clientKey,
+                            clientFeedback: clientFeedback,
+                          )
                         : _CardPill(
                             child: ListView.separated(
                               shrinkWrap: true,
@@ -497,62 +507,22 @@ class SelectionProjectPage extends ConsumerWidget {
                               separatorBuilder: (_, _) =>
                                   const SizedBox(height: 10),
                               itemBuilder: (context, i) {
-                                final row = items[i];
-                                final profile = (row['profile'] as Map?) ?? {};
-                                final name = (profile['full_name'] ?? '')
-                                    .toString();
-                                final city = (profile['city'] ?? '').toString();
-
-                                final subtitleParts = <String>[];
-                                final age = ModelVm.displayAgeFromMap(
-                                  Map<String, dynamic>.from(profile),
+                                final vm = _selectionProfileVmFromRow(
+                                  context,
+                                  items[i],
                                 );
-                                final height = profile['height'];
-                                if (age > 0) {
-                                  subtitleParts.add('${t.ageShort}: $age');
-                                }
-                                if (height != null) {
-                                  subtitleParts.add(
-                                    '${t.heightShort}: $height',
-                                  );
-                                }
-                                if (city.isNotEmpty) subtitleParts.add(city);
-
-                                final profileId = (profile['id'] ?? '')
-                                    .toString();
-                                final modelUserId = (profile['user_id'] ?? '')
-                                    .toString();
-                                final photoUrlsRaw = profile['photo_urls'];
-                                final photoUrls = photoUrlsRaw is List
-                                    ? photoUrlsRaw
-                                          .map((e) => e.toString())
-                                          .where((e) => e.trim().isNotEmpty)
-                                          .toList()
-                                    : <String>[];
-                                final coverUrl =
-                                    (profile['cover_photo_url'] ?? '')
-                                        .toString()
-                                        .trim()
-                                        .isNotEmpty
-                                    ? (profile['cover_photo_url'] ?? '')
-                                          .toString()
-                                          .trim()
-                                    : (photoUrls.isNotEmpty
-                                          ? photoUrls.first
-                                          : '');
-
                                 return _SelectionProfileCard(
                                   selectionId: selectionId,
-                                  profileId: profileId,
-                                  modelUserId: modelUserId,
+                                  profileId: vm.profileId,
+                                  modelUserId: vm.modelUserId,
                                   clientKey: clientKey,
-                                  clientFeedback: clientFeedback[profileId],
+                                  clientFeedback: clientFeedback[vm.profileId],
                                   agentFeedback:
-                                      agentFeedbackByProfile[profileId],
+                                      agentFeedbackByProfile[vm.profileId],
                                   isPublic: isPublic,
-                                  name: name.isNotEmpty ? name : t.profileUpper,
-                                  subtitle: subtitleParts.join(' • '),
-                                  coverUrl: coverUrl,
+                                  name: vm.name,
+                                  subtitle: vm.subtitle,
+                                  coverUrl: vm.coverUrl,
                                 );
                               },
                             ),
@@ -657,6 +627,690 @@ class _AgentFeedbackSummary {
   }
 
   bool get isEmpty => likes == 0 && rejects == 0 && comments.isEmpty;
+}
+
+class _SelectionPresentationProfile {
+  const _SelectionPresentationProfile({
+    required this.profileId,
+    required this.modelUserId,
+    required this.name,
+    required this.subtitle,
+    required this.city,
+    required this.coverUrl,
+    required this.photoUrls,
+    required this.age,
+    required this.height,
+  });
+
+  final String profileId;
+  final String modelUserId;
+  final String name;
+  final String subtitle;
+  final String city;
+  final String coverUrl;
+  final List<String> photoUrls;
+  final int age;
+  final int height;
+}
+
+_SelectionPresentationProfile _selectionProfileVmFromRow(
+  BuildContext context,
+  Map<String, dynamic> row,
+) {
+  final t = AppLocalizations.of(context)!;
+  final profile = Map<String, dynamic>.from((row['profile'] as Map?) ?? {});
+  final name = (profile['full_name'] ?? '').toString().trim();
+  final city = (profile['city'] ?? '').toString().trim();
+  final age = ModelVm.displayAgeFromMap(profile);
+  final height = int.tryParse((profile['height'] ?? '').toString()) ?? 0;
+  final subtitleParts = <String>[];
+  if (age > 0) subtitleParts.add('${t.ageShort}: $age');
+  if (height > 0) subtitleParts.add('${t.heightShort}: $height');
+  if (city.isNotEmpty) subtitleParts.add(city);
+
+  final photoUrlsRaw = profile['photo_urls'];
+  final photoUrls = photoUrlsRaw is List
+      ? photoUrlsRaw
+            .map((e) => e.toString().trim())
+            .where((e) => e.isNotEmpty)
+            .toList(growable: false)
+      : <String>[];
+  final coverPhoto = (profile['cover_photo_url'] ?? '').toString().trim();
+  final coverUrl = coverPhoto.isNotEmpty
+      ? coverPhoto
+      : (photoUrls.isNotEmpty ? photoUrls.first : '');
+
+  return _SelectionPresentationProfile(
+    profileId: (profile['id'] ?? '').toString().trim(),
+    modelUserId: (profile['user_id'] ?? '').toString().trim(),
+    name: name.isNotEmpty ? name : t.profileUpper,
+    subtitle: subtitleParts.join(' • '),
+    city: city,
+    coverUrl: coverUrl,
+    photoUrls: [
+      if (coverUrl.isNotEmpty) coverUrl,
+      ...photoUrls.where((e) => e != coverUrl),
+    ],
+    age: age,
+    height: height,
+  );
+}
+
+class _PublicSelectionPresentationView extends StatefulWidget {
+  const _PublicSelectionPresentationView({
+    required this.selectionId,
+    required this.title,
+    required this.campaignRows,
+    required this.items,
+    required this.clientKey,
+    required this.clientFeedback,
+  });
+
+  final String selectionId;
+  final String title;
+  final List<MapEntry<String, String>> campaignRows;
+  final List<Map<String, dynamic>> items;
+  final String clientKey;
+  final Map<String, SelectionClientFeedback> clientFeedback;
+
+  @override
+  State<_PublicSelectionPresentationView> createState() =>
+      _PublicSelectionPresentationViewState();
+}
+
+class _PublicSelectionPresentationViewState
+    extends State<_PublicSelectionPresentationView> {
+  int _selectedIndex = 0;
+
+  @override
+  void didUpdateWidget(covariant _PublicSelectionPresentationView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_selectedIndex >= widget.items.length) {
+      _selectedIndex = 0;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final profiles = widget.items
+        .map((e) => _selectionProfileVmFromRow(context, e))
+        .where((e) => e.profileId.isNotEmpty)
+        .toList(growable: false);
+    if (profiles.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final selected = profiles[_selectedIndex.clamp(0, profiles.length - 1)];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final desktop = constraints.maxWidth >= 920;
+        final content = desktop
+            ? Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SizedBox(
+                    width: 360,
+                    child: _PublicSelectionRail(
+                      profiles: profiles,
+                      selectedIndex: _selectedIndex,
+                      feedback: widget.clientFeedback,
+                      onSelect: (index) => setState(() {
+                        _selectedIndex = index;
+                      }),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: _PublicSelectionFeaturedProfile(
+                      selectionId: widget.selectionId,
+                      profile: selected,
+                      clientKey: widget.clientKey,
+                      feedback: widget.clientFeedback[selected.profileId],
+                    ),
+                  ),
+                ],
+              )
+            : ListView(
+                padding: EdgeInsets.zero,
+                children: [
+                  _PublicSelectionFeaturedProfile(
+                    selectionId: widget.selectionId,
+                    profile: selected,
+                    clientKey: widget.clientKey,
+                    feedback: widget.clientFeedback[selected.profileId],
+                  ),
+                  const SizedBox(height: 12),
+                  _PublicSelectionRail(
+                    profiles: profiles,
+                    selectedIndex: _selectedIndex,
+                    feedback: widget.clientFeedback,
+                    onSelect: (index) => setState(() {
+                      _selectedIndex = index;
+                    }),
+                  ),
+                ],
+              );
+
+        return Column(
+          children: [
+            _PublicPresentationHero(
+              title: widget.title,
+              count: profiles.length,
+              feedback: widget.clientFeedback,
+              campaignRows: widget.campaignRows,
+            ),
+            const SizedBox(height: 12),
+            Expanded(child: content),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _PublicPresentationHero extends StatelessWidget {
+  const _PublicPresentationHero({
+    required this.title,
+    required this.count,
+    required this.feedback,
+    required this.campaignRows,
+  });
+
+  final String title;
+  final int count;
+  final Map<String, SelectionClientFeedback> feedback;
+  final List<MapEntry<String, String>> campaignRows;
+
+  @override
+  Widget build(BuildContext context) {
+    final isRu = Localizations.localeOf(context).languageCode == 'ru';
+    final liked = feedback.values
+        .where((e) => e.vote == SelectionClientVote.liked)
+        .length;
+    final rejected = feedback.values
+        .where((e) => e.vote == SelectionClientVote.rejected)
+        .length;
+    return _PresentationPanel(
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 680;
+          final stats = Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _PresentationStatPill(
+                icon: Icons.groups_rounded,
+                label: isRu ? 'Анкет' : 'Profiles',
+                value: '$count',
+              ),
+              _PresentationStatPill(
+                icon: Icons.thumb_up_alt_rounded,
+                label: isRu ? 'Нравится' : 'Liked',
+                value: '$liked',
+              ),
+              _PresentationStatPill(
+                icon: Icons.thumb_down_alt_rounded,
+                label: isRu ? 'Отказ' : 'Rejected',
+                value: '$rejected',
+              ),
+            ],
+          );
+          final copy = Column(
+            crossAxisAlignment: compact
+                ? CrossAxisAlignment.center
+                : CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                textAlign: compact ? TextAlign.center : TextAlign.left,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: _text,
+                  fontSize: 26,
+                  height: 1.05,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0.2,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                isRu
+                    ? 'Просмотрите кандидатов, отметьте понравившихся и оставьте комментарии.'
+                    : 'Review candidates, mark favorites, and leave comments.',
+                textAlign: compact ? TextAlign.center : TextAlign.left,
+                style: const TextStyle(
+                  color: kTextMuted,
+                  fontWeight: FontWeight.w800,
+                  height: 1.25,
+                ),
+              ),
+              if (campaignRows.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Text(
+                  campaignRows.take(2).map((e) => e.value).join(' • '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: compact ? TextAlign.center : TextAlign.left,
+                  style: const TextStyle(
+                    color: _text,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ],
+          );
+          if (compact) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [copy, const SizedBox(height: 14), stats],
+            );
+          }
+          return Row(
+            children: [
+              Expanded(child: copy),
+              const SizedBox(width: 18),
+              stats,
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _PublicSelectionFeaturedProfile extends StatelessWidget {
+  const _PublicSelectionFeaturedProfile({
+    required this.selectionId,
+    required this.profile,
+    required this.clientKey,
+    required this.feedback,
+  });
+
+  final String selectionId;
+  final _SelectionPresentationProfile profile;
+  final String clientKey;
+  final SelectionClientFeedback? feedback;
+
+  @override
+  Widget build(BuildContext context) {
+    final isRu = Localizations.localeOf(context).languageCode == 'ru';
+    return _PresentationPanel(
+      padding: EdgeInsets.zero,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final desktop = constraints.maxWidth >= 620;
+          final gallery = _PublicProfileImageGallery(profile: profile);
+          final details = Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  profile.name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: _text,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 28,
+                    height: 1.04,
+                  ),
+                ),
+                if (profile.subtitle.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    profile.subtitle,
+                    style: const TextStyle(
+                      color: kTextMuted,
+                      fontWeight: FontWeight.w900,
+                      height: 1.25,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 14),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    if (profile.age > 0)
+                      _PresentationInfoChip(
+                        icon: Icons.cake_rounded,
+                        label: isRu ? '${profile.age} лет' : '${profile.age}',
+                      ),
+                    if (profile.height > 0)
+                      _PresentationInfoChip(
+                        icon: Icons.straighten_rounded,
+                        label: '${profile.height} см',
+                      ),
+                    if (profile.city.isNotEmpty)
+                      _PresentationInfoChip(
+                        icon: Icons.location_on_rounded,
+                        label: profile.city,
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                SizedBox(
+                  height: 48,
+                  child: BrandPillButton(
+                    label: isRu ? 'АНКЕТА' : 'PROFILE',
+                    style: BrandPillStyle.dark,
+                    onTap: profile.profileId.isEmpty
+                        ? null
+                        : () => context.go(
+                            '${Routes.publicModelPrefix}${profile.profileId}',
+                          ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                _ClientFeedbackControls(
+                  selectionId: selectionId,
+                  profileId: profile.profileId,
+                  clientKey: clientKey,
+                  initial: feedback,
+                ),
+              ],
+            ),
+          );
+          if (desktop) {
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SizedBox(width: 360, child: gallery),
+                Expanded(child: details),
+              ],
+            );
+          }
+          return ListView(
+            padding: EdgeInsets.zero,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            children: [gallery, details],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _PublicProfileImageGallery extends StatelessWidget {
+  const _PublicProfileImageGallery({required this.profile});
+
+  final _SelectionPresentationProfile profile;
+
+  @override
+  Widget build(BuildContext context) {
+    final images = profile.photoUrls.take(4).toList(growable: false);
+    final main = profile.coverUrl;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AspectRatio(
+          aspectRatio: 0.82,
+          child: _PresentationImage(url: main, radius: 24),
+        ),
+        if (images.length > 1) ...[
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 72,
+            child: Row(
+              children: [
+                for (final image in images.skip(1)) ...[
+                  Expanded(child: _PresentationImage(url: image, radius: 16)),
+                  if (image != images.last) const SizedBox(width: 8),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _PublicSelectionRail extends StatelessWidget {
+  const _PublicSelectionRail({
+    required this.profiles,
+    required this.selectedIndex,
+    required this.feedback,
+    required this.onSelect,
+  });
+
+  final List<_SelectionPresentationProfile> profiles;
+  final int selectedIndex;
+  final Map<String, SelectionClientFeedback> feedback;
+  final ValueChanged<int> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    return _PresentationPanel(
+      padding: const EdgeInsets.all(10),
+      child: ListView.separated(
+        padding: EdgeInsets.zero,
+        itemCount: profiles.length,
+        separatorBuilder: (_, _) => const SizedBox(height: 8),
+        itemBuilder: (context, index) {
+          final profile = profiles[index];
+          final vote = feedback[profile.profileId]?.vote;
+          final selected = index == selectedIndex;
+          final voteIcon = vote == SelectionClientVote.liked
+              ? Icons.thumb_up_alt_rounded
+              : vote == SelectionClientVote.rejected
+              ? Icons.thumb_down_alt_rounded
+              : Icons.radio_button_unchecked_rounded;
+          return Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(18),
+              onTap: () => onSelect(index),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 140),
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: selected
+                      ? Colors.white.withValues(alpha: 0.88)
+                      : Colors.white.withValues(alpha: 0.44),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: selected
+                        ? BrandTheme.redTop.withValues(alpha: 0.7)
+                        : Colors.black.withValues(alpha: 0.05),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 64,
+                      height: 76,
+                      child: _PresentationImage(
+                        url: profile.coverUrl,
+                        radius: 14,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            profile.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: _text,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          if (profile.subtitle.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              profile.subtitle,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: kTextMuted,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 12,
+                                height: 1.2,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Icon(voteIcon, color: BrandTheme.redTop, size: 20),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _PresentationPanel extends StatelessWidget {
+  const _PresentationPanel({required this.child, required this.padding});
+
+  final Widget child;
+  final EdgeInsets padding;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: padding,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(26),
+        gradient: BrandTheme.lightPillGradient,
+        border: Border.all(color: kBorderColor),
+        boxShadow: BrandTheme.basePillShadow(isDark: false),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: child,
+    );
+  }
+}
+
+class _PresentationImage extends StatelessWidget {
+  const _PresentationImage({required this.url, required this.radius});
+
+  final String url;
+  final double radius;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(radius),
+      child: url.trim().isEmpty
+          ? Container(
+              color: Colors.black.withValues(alpha: 0.05),
+              alignment: Alignment.center,
+              child: const Icon(Icons.person_rounded, color: kTextMuted),
+            )
+          : CachedNetworkImage(
+              imageUrl: url,
+              fit: BoxFit.cover,
+              memCacheWidth: 900,
+              maxWidthDiskCache: 1400,
+              placeholder: (_, _) =>
+                  Container(color: Colors.black.withValues(alpha: 0.04)),
+              errorWidget: (_, _, _) => Container(
+                color: Colors.black.withValues(alpha: 0.05),
+                alignment: Alignment.center,
+                child: const Icon(
+                  Icons.broken_image_rounded,
+                  color: kTextMuted,
+                ),
+              ),
+            ),
+    );
+  }
+}
+
+class _PresentationStatPill extends StatelessWidget {
+  const _PresentationStatPill({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      decoration: pillDecoration(isDark: false, radius: 999).copyWith(
+        border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: BrandTheme.redTop, size: 18),
+          const SizedBox(width: 8),
+          Text(
+            value,
+            style: const TextStyle(
+              color: _text,
+              fontWeight: FontWeight.w900,
+              fontSize: 15,
+            ),
+          ),
+          const SizedBox(width: 5),
+          Text(
+            label.toUpperCase(),
+            style: const TextStyle(
+              color: kTextMuted,
+              fontWeight: FontWeight.w900,
+              fontSize: 10,
+              letterSpacing: 0.6,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PresentationInfoChip extends StatelessWidget {
+  const _PresentationInfoChip({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: pillDecoration(
+        isDark: false,
+        radius: 999,
+      ).copyWith(border: Border.all(color: kBorderColor)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: BrandTheme.redTop),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: const TextStyle(
+              color: _text,
+              fontWeight: FontWeight.w900,
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _SelectionProfileCard extends StatelessWidget {
