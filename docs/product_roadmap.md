@@ -12,7 +12,7 @@
 
 ## Журнал изменений
 
-- 2026-07-08: Supabase saved searches зафиксированы как отложенный шаг, а production delivery для `send-notifications` подготовлен через authenticated pg_net webhook и pg_cron fallback; production `EMAIL_FROM` переведен на `noreply@pk.management`; commit `pending`.
+- 2026-07-08: Supabase saved searches зафиксированы как отложенный шаг, а production delivery для `send-notifications` подготовлен через authenticated pg_net webhook и pg_cron fallback; production `EMAIL_FROM` переведен на `noreply@pk.management`; commit `9fec249`.
 - 2026-07-08: исправлена кнопка сохранения поиска в каталоге: видимая кнопка больше не остается без обработчика во время загрузки пресетов, а сохранение дожидается готовности storage; commit `1cfc127`.
 - 2026-07-08: улучшен UX сохраненных поисков каталога: сохранение показывается только для нового активного набора фильтров, пресеты получили быстрые действия переименовать/удалить и понятный subtitle по фильтрам; commit `1710d95`.
 - 2026-07-08: отполирован UX фильтров каталога: role-picker больше не overflow на iPhone, добавлен быстрый сброс фильтров вне расширенного поиска, стабилизирована рамка строки поиска; commit `9e5772f`.
