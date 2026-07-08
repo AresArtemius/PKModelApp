@@ -12,7 +12,7 @@
 
 ## Журнал изменений
 
-- 2026-07-08: усилено чтение сохраненных поисков после hard refresh: provider теперь берет `user_id` из восстановленной Supabase auth-сессии, а не только из `currentUser`; в журнал действий добавлена админская кнопка очистки с подтверждением и SQL `clear_action_audit_logs.sql`; commit pending.
+- 2026-07-08: усилено чтение сохраненных поисков после hard refresh: provider теперь берет `user_id` из восстановленной Supabase auth-сессии, а не только из `currentUser`; в журнал действий добавлена админская кнопка очистки с подтверждением и SQL `clear_action_audit_logs.sql`; commit 9e1501f.
 - 2026-07-08: по production SQL подтверждено, что `catalog_saved_searches` сохраняет пресеты в Supabase под правильным `user_id`; исправлен клиентский слой отображения — provider сохраненных поисков теперь реагирует на восстановление auth-сессии, remote-загрузка явно фильтрует текущего пользователя, а блок пресетов больше не зависит от права создавать подборки; commit 56f58f9.
 - 2026-07-08: сохраненные поиски каталога усилены после production QA: remote/local списки теперь merge-ятся, а сохраненный пресет зеркалится локально, чтобы не исчезать при пустом remote refresh; по скринам подтверждено применение `send_notifications_production_delivery.sql` — Vault secret уже существовал, pg_cron schedule создан с id `2`; commit `e382ef5`.
 - 2026-07-08: исправлен production-сценарий сохраненных поисков каталога после применения SQL: insert явно передает `user_id`, после save/rename/delete список перечитывается из Supabase, а ошибки сохранения показываются пользователю; `send_notifications_production_delivery.sql` проверен как следующий production SQL для запуска после Vault-secret; commit `24bb2cb`.
