@@ -67,8 +67,8 @@ For email delivery the production worker uses Resend:
 
 ```bash
 supabase secrets set RESEND_API_KEY="re_..."
-supabase secrets set EMAIL_FROM="PK Management <noreply@your-domain.com>"
-supabase secrets set PUBLIC_APP_URL="https://aresartemius.github.io/PKModelApp/"
+supabase secrets set EMAIL_FROM="PK Management <noreply@pk.management>"
+supabase secrets set PUBLIC_APP_URL="https://app.pk.management/"
 ```
 
 Email is not sent for every notification by default. It is queued only when
@@ -89,12 +89,25 @@ and email status updates.
 
 ## 5. Trigger delivery
 
-Use one of these options:
+Production uses both immediate and fallback delivery:
 
-- Database Webhook on `public.app_notifications` insert that calls
-  `/functions/v1/send-notifications` with the inserted record.
-- Scheduled Function/Cron every minute that calls
-  `/functions/v1/send-notifications` without a body, so it processes all
-  pending notifications.
+- Store the service-role key in Supabase Vault as
+  `send_notifications_service_role_key`. This key is used only by database
+  webhook/cron calls to authenticate against the Edge Function.
+
+  ```sql
+  select vault.create_secret(
+    '<SERVICE_ROLE_KEY>',
+    'send_notifications_service_role_key',
+    'Authorization token for the send-notifications worker cron/webhook'
+  );
+  ```
+
+- Run `supabase/sql/send_notifications_production_delivery.sql`.
+- The SQL installs a pg_net webhook trigger on `public.app_notifications`
+  insert. It calls `/functions/v1/send-notifications` with the inserted record.
+- The same SQL installs a pg_cron fallback every minute. It calls
+  `/functions/v1/send-notifications` without a body, so the worker processes
+  any pending queue items that were missed or left in `failed/pending`.
 
 The function supports both modes.

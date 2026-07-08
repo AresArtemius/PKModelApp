@@ -12,6 +12,7 @@
 
 ## Журнал изменений
 
+- 2026-07-08: Supabase saved searches зафиксированы как отложенный шаг, а production delivery для `send-notifications` подготовлен через authenticated pg_net webhook и pg_cron fallback; production `EMAIL_FROM` переведен на `noreply@pk.management`; commit `pending`.
 - 2026-07-08: исправлена кнопка сохранения поиска в каталоге: видимая кнопка больше не остается без обработчика во время загрузки пресетов, а сохранение дожидается готовности storage; commit `1cfc127`.
 - 2026-07-08: улучшен UX сохраненных поисков каталога: сохранение показывается только для нового активного набора фильтров, пресеты получили быстрые действия переименовать/удалить и понятный subtitle по фильтрам; commit `1710d95`.
 - 2026-07-08: отполирован UX фильтров каталога: role-picker больше не overflow на iPhone, добавлен быстрый сброс фильтров вне расширенного поиска, стабилизирована рамка строки поиска; commit `9e5772f`.
@@ -72,11 +73,11 @@
 - Поиск/экспорт audit log и глубокая фильтрация по источнику, типу, автору, анкете/связи и дате.
 - Серверное обновление статусов доставки/прочтения для email/push вне чата: `app_notifications` может быть связан с `profile_action_logs`, а SQL-триггер переносит `sent/delivered/read/failed` в историю действий профиля.
 - Production delivery worker `send-notifications`: единая Supabase Edge Function для push через FCM и email через Resend, с записью серверных статусов обратно в `app_notifications`.
-- Firebase/Resend secrets в Supabase частично заведены; домен отправителя для production email оставлен открытым до покупки и подключения домена.
+- Firebase/Resend secrets в Supabase заведены частично; production `EMAIL_FROM` выставлен как `PK Management <noreply@pk.management>`, `PUBLIC_APP_URL` выставлен как `https://app.pk.management/`, функция `send-notifications` redeploy сделан.
 
 Не хватает:
-- Включенного production расписания/webhook для `send-notifications`.
-- Production `EMAIL_FROM` на подтвержденном домене Resend. Сейчас этот пункт осознанно отложен до покупки домена.
+- Перенести сохраненные поиски каталога из local storage в Supabase, чтобы пресеты были привязаны к аккаунту и синхронизировались между устройствами.
+- Применить `supabase/sql/send_notifications_production_delivery.sql` после внесения service-role key в Supabase Vault, чтобы включить authenticated pg_net webhook и pg_cron fallback для `send-notifications`.
 
 ## 3. Chats
 
@@ -148,6 +149,7 @@
 - Внутренние уведомления.
 - SQL/push-заготовки.
 - Firebase/Web Push client code.
+- Production `send-notifications` задеплоен с `EMAIL_FROM=PK Management <noreply@pk.management>` и `PUBLIC_APP_URL=https://app.pk.management/`; SQL для authenticated pg_net webhook на insert и pg_cron fallback каждую минуту подготовлен.
 
 Не хватает:
 - Стабильно подключенной production push-доставки.
