@@ -17,6 +17,7 @@ import '../selection/selection_pdf_options.dart';
 import '../selection/selection_pdf_options_dialog.dart';
 import '../selection/selection_pdf_service.dart';
 import '../catalog/model_data.dart';
+import '../castings/casting_response_status.dart';
 
 const _bg = BrandTheme.greyMid;
 const _text = kTextDark;
@@ -36,6 +37,7 @@ final castingResponsesProvider = FutureProvider.autoDispose
       }
 
       const profileSelect = '''
+        status,
         created_at,
         profile:profiles(
           id,
@@ -142,6 +144,20 @@ class SelectionCastingPage extends ConsumerWidget {
                 );
               }
 
+              Future<void> updateStatus({
+                required String profileId,
+                required CastingResponseStatus status,
+              }) async {
+                if (profileId.trim().isEmpty) return;
+                await ref
+                    .read(supabaseProvider)
+                    .from('casting_responses')
+                    .update({'status': castingResponseStatusToString(status)})
+                    .eq('casting_id', castingId)
+                    .eq('profile_id', profileId);
+                ref.invalidate(castingResponsesProvider(castingId));
+              }
+
               return Column(
                 children: [
                   BrandAdminHeader(
@@ -197,126 +213,10 @@ class SelectionCastingPage extends ConsumerWidget {
                               ),
                             ),
                           )
-                        : _CardPill(
-                            child: ListView.separated(
-                              shrinkWrap: true,
-                              itemCount: items.length,
-                              separatorBuilder: (_, _) =>
-                                  const SizedBox(height: 10),
-                              itemBuilder: (context, i) {
-                                final row = items[i];
-                                final profile = (row['profile'] as Map?) ?? {};
-                                final name = (profile['full_name'] ?? '')
-                                    .toString();
-                                final city = (profile['city'] ?? '').toString();
-
-                                final subtitleParts = <String>[];
-                                final age = ModelVm.displayAgeFromMap(
-                                  Map<String, dynamic>.from(profile),
-                                );
-                                final height = profile['height'];
-                                if (age > 0) {
-                                  subtitleParts.add('${t.ageShort}: $age');
-                                }
-                                if (height != null) {
-                                  subtitleParts.add(
-                                    '${t.heightShort}: $height',
-                                  );
-                                }
-                                if (city.isNotEmpty) subtitleParts.add(city);
-
-                                final profileId = (profile['id'] ?? '')
-                                    .toString();
-                                final photoUrlsRaw = profile['photo_urls'];
-                                final photoUrls = photoUrlsRaw is List
-                                    ? photoUrlsRaw
-                                          .map((e) => e.toString())
-                                          .where((e) => e.trim().isNotEmpty)
-                                          .toList()
-                                    : <String>[];
-                                final coverUrl =
-                                    (profile['cover_photo_url'] ?? '')
-                                        .toString()
-                                        .trim()
-                                        .isNotEmpty
-                                    ? (profile['cover_photo_url'] ?? '')
-                                          .toString()
-                                          .trim()
-                                    : (photoUrls.isNotEmpty
-                                          ? photoUrls.first
-                                          : '');
-
-                                return Container(
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(16),
-                                    color: Colors.white.withValues(alpha: 0.30),
-                                    border: Border.all(
-                                      color: kBorderColor,
-                                      width: 1,
-                                    ),
-                                  ),
-                                  child: InkWell(
-                                    borderRadius: BorderRadius.circular(16),
-                                    onTap: profileId.isEmpty
-                                        ? null
-                                        : () => context.go(
-                                            '${Routes.modelPrefix}$profileId?from=casting&castingId=$castingId',
-                                          ),
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(12),
-                                      child: Row(
-                                        children: [
-                                          _SelectionProfileThumb(url: coverUrl),
-                                          const SizedBox(width: 12),
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                Text(
-                                                  name.isNotEmpty
-                                                      ? name
-                                                      : t.profileUpper,
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style: const TextStyle(
-                                                    fontWeight: FontWeight.w900,
-                                                    letterSpacing: 0.4,
-                                                    color: _text,
-                                                    fontSize: 16,
-                                                  ),
-                                                ),
-                                                if (subtitleParts
-                                                    .isNotEmpty) ...[
-                                                  const SizedBox(height: 4),
-                                                  Text(
-                                                    subtitleParts.join(' • '),
-                                                    maxLines: 2,
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                    style: const TextStyle(
-                                                      color: kTextMuted,
-                                                      fontWeight:
-                                                          FontWeight.w700,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ],
-                                            ),
-                                          ),
-                                          const SizedBox(width: 8),
-                                          const Icon(
-                                            Icons.chevron_right_rounded,
-                                            color: BrandTheme.redTop,
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
+                        : _CastingShortlistBoard(
+                            items: items,
+                            castingId: castingId,
+                            onStatusChanged: updateStatus,
                           ),
                   ),
                 ],
@@ -346,6 +246,395 @@ class _CardPill extends StatelessWidget {
         boxShadow: BrandTheme.basePillShadow(isDark: false),
       ),
       child: child,
+    );
+  }
+}
+
+class _CastingShortlistBoard extends StatelessWidget {
+  const _CastingShortlistBoard({
+    required this.items,
+    required this.castingId,
+    required this.onStatusChanged,
+  });
+
+  final List<Map<String, dynamic>> items;
+  final String castingId;
+  final Future<void> Function({
+    required String profileId,
+    required CastingResponseStatus status,
+  })
+  onStatusChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+    final columns = [
+      _BoardColumnSpec(
+        title: Localizations.localeOf(context).languageCode == 'ru'
+            ? 'НОВЫЕ'
+            : 'NEW',
+        status: CastingResponseStatus.submitted,
+        icon: Icons.inbox_rounded,
+      ),
+      _BoardColumnSpec(
+        title: Localizations.localeOf(context).languageCode == 'ru'
+            ? 'ШОРТЛИСТ'
+            : 'SHORTLIST',
+        status: CastingResponseStatus.viewed,
+        icon: Icons.playlist_add_check_rounded,
+      ),
+      _BoardColumnSpec(
+        title: Localizations.localeOf(context).languageCode == 'ru'
+            ? 'ПРИГЛАШЕНЫ'
+            : 'INVITED',
+        status: CastingResponseStatus.invited,
+        icon: Icons.star_rounded,
+      ),
+      _BoardColumnSpec(
+        title: Localizations.localeOf(context).languageCode == 'ru'
+            ? 'ОТКАЗ'
+            : 'REJECTED',
+        status: CastingResponseStatus.rejected,
+        icon: Icons.block_rounded,
+      ),
+    ];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 820;
+        final board = SizedBox(
+          width: compact ? 980 : constraints.maxWidth,
+          child: compact
+              ? Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (final column in columns) ...[
+                      SizedBox(
+                        width: 235,
+                        child: _CastingBoardColumn(
+                          spec: column,
+                          items: _itemsFor(column.status),
+                          castingId: castingId,
+                          onStatusChanged: onStatusChanged,
+                          allStatuses: columns.map((e) => e.status).toList(),
+                          t: t,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                    ],
+                  ],
+                )
+              : Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (final column in columns) ...[
+                      Expanded(
+                        child: _CastingBoardColumn(
+                          spec: column,
+                          items: _itemsFor(column.status),
+                          castingId: castingId,
+                          onStatusChanged: onStatusChanged,
+                          allStatuses: columns.map((e) => e.status).toList(),
+                          t: t,
+                        ),
+                      ),
+                      if (column != columns.last) const SizedBox(width: 10),
+                    ],
+                  ],
+                ),
+        );
+
+        if (compact) {
+          return SingleChildScrollView(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: board,
+            ),
+          );
+        }
+
+        return SingleChildScrollView(child: board);
+      },
+    );
+  }
+
+  List<Map<String, dynamic>> _itemsFor(CastingResponseStatus status) {
+    return items
+        .where(
+          (row) =>
+              castingResponseStatusFromString(row['status']?.toString()) ==
+              status,
+        )
+        .toList(growable: false);
+  }
+}
+
+class _BoardColumnSpec {
+  const _BoardColumnSpec({
+    required this.title,
+    required this.status,
+    required this.icon,
+  });
+
+  final String title;
+  final CastingResponseStatus status;
+  final IconData icon;
+}
+
+class _CastingBoardColumn extends StatelessWidget {
+  const _CastingBoardColumn({
+    required this.spec,
+    required this.items,
+    required this.castingId,
+    required this.onStatusChanged,
+    required this.allStatuses,
+    required this.t,
+  });
+
+  final _BoardColumnSpec spec;
+  final List<Map<String, dynamic>> items;
+  final String castingId;
+  final Future<void> Function({
+    required String profileId,
+    required CastingResponseStatus status,
+  })
+  onStatusChanged;
+  final List<CastingResponseStatus> allStatuses;
+  final AppLocalizations t;
+
+  @override
+  Widget build(BuildContext context) {
+    return _CardPill(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(spec.icon, color: BrandTheme.redTop, size: 18),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  spec.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.3,
+                    color: _text,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                decoration: BoxDecoration(
+                  color: BrandTheme.redTop,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  '${items.length}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w900,
+                    height: 1,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (items.isEmpty)
+            Container(
+              height: 72,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                color: Colors.white.withValues(alpha: 0.28),
+                border: Border.all(color: kBorderColor),
+              ),
+              child: Text(
+                Localizations.localeOf(context).languageCode == 'ru'
+                    ? 'ПУСТО'
+                    : 'EMPTY',
+                style: const TextStyle(
+                  color: kTextMuted,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.2,
+                ),
+              ),
+            )
+          else
+            for (var i = 0; i < items.length; i++) ...[
+              _CastingBoardCard(
+                row: items[i],
+                castingId: castingId,
+                currentStatus: spec.status,
+                allStatuses: allStatuses,
+                onStatusChanged: onStatusChanged,
+                t: t,
+              ),
+              if (i != items.length - 1) const SizedBox(height: 10),
+            ],
+        ],
+      ),
+    );
+  }
+}
+
+class _CastingBoardCard extends StatelessWidget {
+  const _CastingBoardCard({
+    required this.row,
+    required this.castingId,
+    required this.currentStatus,
+    required this.allStatuses,
+    required this.onStatusChanged,
+    required this.t,
+  });
+
+  final Map<String, dynamic> row;
+  final String castingId;
+  final CastingResponseStatus currentStatus;
+  final List<CastingResponseStatus> allStatuses;
+  final Future<void> Function({
+    required String profileId,
+    required CastingResponseStatus status,
+  })
+  onStatusChanged;
+  final AppLocalizations t;
+
+  @override
+  Widget build(BuildContext context) {
+    final profile = (row['profile'] as Map?) ?? {};
+    final profileMap = Map<String, dynamic>.from(profile);
+    final profileId = (profileMap['id'] ?? '').toString();
+    final name = (profileMap['full_name'] ?? '').toString();
+    final city = (profileMap['city'] ?? '').toString();
+    final subtitleParts = <String>[];
+    final age = ModelVm.displayAgeFromMap(profileMap);
+    final height = profileMap['height'];
+    if (age > 0) subtitleParts.add('${t.ageShort}: $age');
+    if (height != null) subtitleParts.add('${t.heightShort}: $height');
+    if (city.isNotEmpty) subtitleParts.add(city);
+
+    final photoUrlsRaw = profileMap['photo_urls'];
+    final photoUrls = photoUrlsRaw is List
+        ? photoUrlsRaw
+              .map((e) => e.toString())
+              .where((e) => e.trim().isNotEmpty)
+              .toList()
+        : <String>[];
+    final coverUrl = (profileMap['cover_photo_url'] ?? '').toString().trim();
+    final thumbUrl = coverUrl.isNotEmpty
+        ? coverUrl
+        : (photoUrls.isNotEmpty ? photoUrls.first : '');
+
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        color: Colors.white.withValues(alpha: 0.34),
+        border: Border.all(color: kBorderColor, width: 1),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            InkWell(
+              borderRadius: BorderRadius.circular(14),
+              onTap: profileId.isEmpty
+                  ? null
+                  : () => context.go(
+                      '${Routes.modelPrefix}$profileId?from=casting&castingId=$castingId',
+                    ),
+              child: Row(
+                children: [
+                  _SelectionProfileThumb(url: thumbUrl),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          name.isNotEmpty ? name : t.profileUpper,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w900,
+                            color: _text,
+                            fontSize: 14,
+                          ),
+                        ),
+                        if (subtitleParts.isNotEmpty) ...[
+                          const SizedBox(height: 3),
+                          Text(
+                            subtitleParts.join(' • '),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: kTextMuted,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (final status in allStatuses)
+                  if (status != currentStatus)
+                    _StatusMoveChip(
+                      label: castingResponseStatusLabel(t, status),
+                      onTap: profileId.isEmpty
+                          ? null
+                          : () => onStatusChanged(
+                              profileId: profileId,
+                              status: status,
+                            ),
+                    ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StatusMoveChip extends StatelessWidget {
+  const _StatusMoveChip({required this.label, required this.onTap});
+
+  final String label;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(999),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(999),
+          color: Colors.white.withValues(alpha: 0.58),
+          border: Border.all(color: kBorderColor),
+        ),
+        child: Text(
+          label,
+          style: const TextStyle(
+            color: _text,
+            fontSize: 11,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ),
     );
   }
 }
