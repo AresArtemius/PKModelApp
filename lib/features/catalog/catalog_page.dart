@@ -917,9 +917,7 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                                   activeFilters: c.filterSnapshot,
                                   onApply: _applySavedSearch,
                                   onRename: _renameSavedSearch,
-                                  onSaveCurrent: savedSearches.isLoading
-                                      ? null
-                                      : _saveCurrentSearch,
+                                  onSaveCurrent: _saveCurrentSearch,
                                   onDelete: _deleteSavedSearch,
                                   saveLabel: t.savedSearchSaveCurrent,
                                   canSaveCurrent: canSaveCurrentSearch,
@@ -1006,9 +1004,7 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                                       activeFilters: c.filterSnapshot,
                                       onApply: _applySavedSearch,
                                       onRename: _renameSavedSearch,
-                                      onSaveCurrent: savedSearches.isLoading
-                                          ? null
-                                          : _saveCurrentSearch,
+                                      onSaveCurrent: _saveCurrentSearch,
                                       onDelete: _deleteSavedSearch,
                                       saveLabel: t.savedSearchSaveCurrent,
                                       canSaveCurrent: canSaveCurrentSearch,

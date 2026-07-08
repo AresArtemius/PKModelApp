@@ -49,11 +49,22 @@ class CatalogSavedSearchesController extends ChangeNotifier {
 
   bool isLoading = true;
   Object? lastError;
+  Future<void>? _loadFuture;
 
   final List<CatalogSavedSearch> _items = [];
   List<CatalogSavedSearch> get items => List.unmodifiable(_items);
 
-  Future<void> load() async {
+  Future<void> load() {
+    final future = _load();
+    _loadFuture = future;
+    return future.whenComplete(() {
+      if (identical(_loadFuture, future)) {
+        _loadFuture = null;
+      }
+    });
+  }
+
+  Future<void> _load() async {
     isLoading = true;
     lastError = null;
     notifyListeners();
@@ -96,10 +107,17 @@ class CatalogSavedSearchesController extends ChangeNotifier {
     }
   }
 
+  Future<void> _ensureLoaded() async {
+    if (!isLoading) return;
+    await (_loadFuture ?? load());
+  }
+
   Future<void> save({
     required String title,
     required CatalogFilterSnapshot filters,
   }) async {
+    await _ensureLoaded();
+
     final trimmedTitle = title.trim();
     if (trimmedTitle.isEmpty) return;
 
@@ -115,6 +133,8 @@ class CatalogSavedSearchesController extends ChangeNotifier {
   }
 
   Future<void> rename({required String id, required String title}) async {
+    await _ensureLoaded();
+
     final trimmedTitle = title.trim();
     if (trimmedTitle.isEmpty) return;
 
@@ -134,6 +154,8 @@ class CatalogSavedSearchesController extends ChangeNotifier {
   }
 
   Future<void> delete(String id) async {
+    await _ensureLoaded();
+
     final before = _items.length;
     _items.removeWhere((item) => item.id == id && !item.isBuiltin);
     if (_items.length == before) return;
