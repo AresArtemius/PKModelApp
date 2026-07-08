@@ -165,6 +165,7 @@ class _ProfileActionAuditPageState
   String _profileQuery = '';
   DateTime? _dateFrom;
   DateTime? _dateTo;
+  bool _isClearingAudit = false;
 
   @override
   Widget build(BuildContext context) {
@@ -249,6 +250,9 @@ class _ProfileActionAuditPageState
                                   onPickDateFrom: () => _pickDate(isFrom: true),
                                   onPickDateTo: () => _pickDate(isFrom: false),
                                   onClear: _clearFilters,
+                                  onClearLogs: _isClearingAudit
+                                      ? null
+                                      : () => _clearAuditLogs(isRu),
                                   onExport: logs.isEmpty
                                       ? null
                                       : () => _copyCsv(logs, isRu),
@@ -294,6 +298,9 @@ class _ProfileActionAuditPageState
                                         onPickDateTo: () =>
                                             _pickDate(isFrom: false),
                                         onClear: _clearFilters,
+                                        onClearLogs: _isClearingAudit
+                                            ? null
+                                            : () => _clearAuditLogs(isRu),
                                         onExport: () => _copyCsv(logs, isRu),
                                       ),
                                       const SizedBox(height: 12),
@@ -349,6 +356,9 @@ class _ProfileActionAuditPageState
                                 onPickDateFrom: () => _pickDate(isFrom: true),
                                 onPickDateTo: () => _pickDate(isFrom: false),
                                 onClear: _clearFilters,
+                                onClearLogs: _isClearingAudit
+                                    ? null
+                                    : () => _clearAuditLogs(isRu),
                                 onExport: () => _copyCsv(logs, isRu),
                               ),
                               const SizedBox(height: 12),
@@ -524,6 +534,79 @@ class _ProfileActionAuditPageState
       );
   }
 
+  Future<void> _clearAuditLogs(bool isRu) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(isRu ? 'Очистить журнал?' : 'Clear audit log?'),
+        content: Text(
+          isRu
+              ? 'Будут удалены все записи журнала действий: профильные события и действия админки. Это действие нельзя отменить.'
+              : 'All action audit records will be deleted: profile events and back-office actions. This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(isRu ? 'ОТМЕНА' : 'CANCEL'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(
+              isRu ? 'ОЧИСТИТЬ' : 'CLEAR',
+              style: const TextStyle(color: BrandTheme.redTop),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isClearingAudit = true);
+    try {
+      await AdminActionLogService(Supabase.instance.client).clearAllAuditLogs();
+      if (!mounted) return;
+      _selectedId = '';
+      ref.invalidate(_profileActionAuditProvider);
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              isRu ? 'Журнал действий очищен' : 'Action audit log cleared',
+            ),
+          ),
+        );
+    } on AdminActionLogSetupRequiredException {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              isRu
+                  ? 'Примените SQL clear_action_audit_logs.sql в Supabase.'
+                  : 'Apply clear_action_audit_logs.sql in Supabase.',
+            ),
+          ),
+        );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              isRu
+                  ? 'Не удалось очистить журнал. Попробуйте еще раз.'
+                  : 'Could not clear the audit log. Please try again.',
+            ),
+          ),
+        );
+    } finally {
+      if (mounted) setState(() => _isClearingAudit = false);
+    }
+  }
+
   String _csvCell(String value) {
     final escaped = value.replaceAll('"', '""');
     return '"$escaped"';
@@ -584,6 +667,7 @@ class _AuditToolbar extends StatelessWidget {
     required this.onPickDateFrom,
     required this.onPickDateTo,
     required this.onClear,
+    required this.onClearLogs,
     required this.onExport,
   });
 
@@ -603,6 +687,7 @@ class _AuditToolbar extends StatelessWidget {
   final VoidCallback onPickDateFrom;
   final VoidCallback onPickDateTo;
   final VoidCallback onClear;
+  final VoidCallback? onClearLogs;
   final VoidCallback? onExport;
 
   @override
@@ -626,6 +711,13 @@ class _AuditToolbar extends StatelessWidget {
               icon: Icons.content_copy_rounded,
               tooltip: isRu ? 'Скопировать CSV' : 'Copy CSV',
               onTap: onExport,
+            ),
+            const SizedBox(width: 8),
+            _AuditIconButton(
+              icon: Icons.delete_sweep_rounded,
+              tooltip: isRu ? 'Очистить журнал' : 'Clear audit log',
+              onTap: onClearLogs,
+              isDanger: true,
             ),
             const SizedBox(width: 8),
             _AuditIconButton(
@@ -873,11 +965,13 @@ class _AuditIconButton extends StatelessWidget {
     required this.icon,
     required this.tooltip,
     required this.onTap,
+    this.isDanger = false,
   });
 
   final IconData icon;
   final String tooltip;
   final VoidCallback? onTap;
+  final bool isDanger;
 
   @override
   Widget build(BuildContext context) {
@@ -896,7 +990,14 @@ class _AuditIconButton extends StatelessWidget {
             borderRadius: BorderRadius.circular(999),
             border: Border.all(color: kBorderColor),
           ),
-          child: Icon(icon, color: onTap == null ? kTextMuted : kTextDark),
+          child: Icon(
+            icon,
+            color: onTap == null
+                ? kTextMuted
+                : isDanger
+                ? BrandTheme.redTop
+                : kTextDark,
+          ),
         ),
       ),
     );

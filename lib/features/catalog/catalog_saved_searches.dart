@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/app_logger.dart';
+import '../../core/supabase_provider.dart';
 import '../auth/auth_controller.dart';
 import 'catalog_controller.dart';
 
@@ -350,10 +351,10 @@ class CatalogSavedSearchesController extends ChangeNotifier {
 
 final catalogSavedSearchesProvider =
     ChangeNotifierProvider<CatalogSavedSearchesController>((ref) {
-      ref.watch(authStateProvider);
+      final authState = ref.watch(authStateProvider).valueOrNull;
+      final sb = ref.watch(supabaseProvider);
 
-      final sb = Supabase.instance.client;
-      final userId = sb.auth.currentUser?.id;
+      final userId = authState?.session?.user.id ?? sb.auth.currentUser?.id;
       final controller = CatalogSavedSearchesController(
         userKey: userId ?? 'guest',
         supabase: sb,

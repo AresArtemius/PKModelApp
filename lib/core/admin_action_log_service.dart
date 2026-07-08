@@ -97,6 +97,17 @@ class AdminActionLogService {
     }
   }
 
+  Future<void> clearAllAuditLogs() async {
+    try {
+      await _sb.rpc('clear_action_audit_logs');
+    } on PostgrestException catch (e) {
+      if (SupabaseCompat.isMissingRpc(e, 'clear_action_audit_logs')) {
+        throw const AdminActionLogSetupRequiredException();
+      }
+      rethrow;
+    }
+  }
+
   Future<void> log({
     required String actionType,
     required String title,
@@ -153,6 +164,10 @@ class AdminActionLogService {
     final clean = value.trim();
     return clean.isEmpty ? null : clean;
   }
+}
+
+class AdminActionLogSetupRequiredException implements Exception {
+  const AdminActionLogSetupRequiredException();
 }
 
 class _AdminActionActorSnapshot {
