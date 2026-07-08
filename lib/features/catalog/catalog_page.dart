@@ -329,6 +329,35 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
       ..showSnackBar(SnackBar(content: Text(t.savedSearchDeleted)));
   }
 
+  Future<void> _renameSavedSearch(CatalogSavedSearch search) async {
+    if (search.isBuiltin) return;
+    _unfocus();
+    final t = AppLocalizations.of(context)!;
+    final title = await showDialog<String>(
+      context: context,
+      barrierDismissible: true,
+      builder: (_) => _SaveSearchDialog(
+        title: t.savedSearchRenameTitle,
+        hint: t.savedSearchNameHint,
+        emptyError: t.savedSearchNameRequired,
+        cancelLabel: t.cancelUpper,
+        saveLabel: t.saveUpper,
+        initialValue: search.title,
+      ),
+    );
+
+    if (!mounted || title == null) return;
+
+    await ref
+        .read(catalogSavedSearchesProvider)
+        .rename(id: search.id, title: title);
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(t.savedSearchRenamed)));
+  }
+
   void _showOverlayPhoto(String heroTag, String url) {
     if (_photoOverlay != null) return;
 
@@ -808,6 +837,14 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
       ..._builtInSavedSearches(t),
       ...savedSearches.items,
     ];
+    final currentSearchAlreadySaved = savedSearchItems.any(
+      (search) => search.filters == c.filterSnapshot,
+    );
+    final canSaveCurrentSearch =
+        c.hasActiveFilters && !currentSearchAlreadySaved;
+    final hasSavedSearchRail =
+        canCreateSelections &&
+        (canSaveCurrentSearch || savedSearchItems.isNotEmpty);
     final resetFiltersLabel =
         Localizations.localeOf(context).languageCode.toLowerCase() == 'ru'
         ? 'СБРОСИТЬ ФИЛЬТРЫ'
@@ -874,16 +911,18 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                               _toggleSelectAllVisible(items);
                             },
                           ),
-                          savedSearches: canCreateSelections
+                          savedSearches: hasSavedSearchRail
                               ? _SavedSearchRail(
                                   searches: savedSearchItems,
                                   activeFilters: c.filterSnapshot,
                                   onApply: _applySavedSearch,
+                                  onRename: _renameSavedSearch,
                                   onSaveCurrent: savedSearches.isLoading
                                       ? null
                                       : _saveCurrentSearch,
                                   onDelete: _deleteSavedSearch,
                                   saveLabel: t.savedSearchSaveCurrent,
+                                  canSaveCurrent: canSaveCurrentSearch,
                                   isVertical: true,
                                 )
                               : null,
@@ -958,7 +997,7 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                                 _toggleSelectAllVisible(items);
                               },
                             ),
-                            if (canCreateSelections) ...[
+                            if (hasSavedSearchRail) ...[
                               Row(
                                 children: [
                                   Expanded(
@@ -966,11 +1005,13 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                                       searches: savedSearchItems,
                                       activeFilters: c.filterSnapshot,
                                       onApply: _applySavedSearch,
+                                      onRename: _renameSavedSearch,
                                       onSaveCurrent: savedSearches.isLoading
                                           ? null
                                           : _saveCurrentSearch,
                                       onDelete: _deleteSavedSearch,
                                       saveLabel: t.savedSearchSaveCurrent,
+                                      canSaveCurrent: canSaveCurrentSearch,
                                     ),
                                   ),
                                   const SizedBox(width: kGap8),

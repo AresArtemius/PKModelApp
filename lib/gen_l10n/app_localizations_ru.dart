@@ -230,6 +230,18 @@ class AppLocalizationsRu extends AppLocalizations {
   String get savedSearchSaved => 'Поиск сохранен';
 
   @override
+  String get savedSearchRenameTitle => 'ПЕРЕИМЕНОВАТЬ ПОИСК';
+
+  @override
+  String get savedSearchRenameAction => 'Переименовать';
+
+  @override
+  String get savedSearchDeleteAction => 'Удалить';
+
+  @override
+  String get savedSearchRenamed => 'Поиск переименован';
+
+  @override
   String get savedSearchDeleted => 'Поиск удален';
 
   @override

@@ -229,6 +229,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get savedSearchSaved => 'Search saved';
 
   @override
+  String get savedSearchRenameTitle => 'RENAME SEARCH';
+
+  @override
+  String get savedSearchRenameAction => 'Rename';
+
+  @override
+  String get savedSearchDeleteAction => 'Delete';
+
+  @override
+  String get savedSearchRenamed => 'Search renamed';
+
+  @override
   String get savedSearchDeleted => 'Search deleted';
 
   @override

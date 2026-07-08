@@ -87,37 +87,46 @@ class _SavedSearchRail extends StatelessWidget {
     required this.searches,
     required this.activeFilters,
     required this.onApply,
+    required this.onRename,
     required this.onSaveCurrent,
     required this.onDelete,
     required this.saveLabel,
+    required this.canSaveCurrent,
     this.isVertical = false,
   });
 
   final List<CatalogSavedSearch> searches;
   final CatalogFilterSnapshot activeFilters;
   final ValueChanged<CatalogSavedSearch> onApply;
+  final ValueChanged<CatalogSavedSearch> onRename;
   final VoidCallback? onSaveCurrent;
   final ValueChanged<CatalogSavedSearch> onDelete;
   final String saveLabel;
+  final bool canSaveCurrent;
   final bool isVertical;
 
   @override
   Widget build(BuildContext context) {
+    if (!canSaveCurrent && searches.isEmpty) return const SizedBox.shrink();
+
     if (isVertical) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _SavedSearchSaveChip(
-            label: saveLabel,
-            onTap: onSaveCurrent,
-            isExpanded: true,
-          ),
-          const SizedBox(height: kGap8),
+          if (canSaveCurrent) ...[
+            _SavedSearchSaveChip(
+              label: saveLabel,
+              onTap: onSaveCurrent,
+              isExpanded: true,
+            ),
+            const SizedBox(height: kGap8),
+          ],
           for (final search in searches) ...[
             _SavedSearchChip(
               search: search,
               selected: search.filters == activeFilters,
               onTap: () => onApply(search),
+              onRename: search.isBuiltin ? null : () => onRename(search),
               onDelete: search.isBuiltin ? null : () => onDelete(search),
               isExpanded: true,
             ),
@@ -132,18 +141,19 @@ class _SavedSearchRail extends StatelessWidget {
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
-        itemCount: searches.length + 1,
+        itemCount: searches.length + (canSaveCurrent ? 1 : 0),
         separatorBuilder: (_, _) => const SizedBox(width: kGap8),
         itemBuilder: (context, index) {
-          if (index == 0) {
+          if (canSaveCurrent && index == 0) {
             return _SavedSearchSaveChip(label: saveLabel, onTap: onSaveCurrent);
           }
 
-          final search = searches[index - 1];
+          final search = searches[index - (canSaveCurrent ? 1 : 0)];
           return _SavedSearchChip(
             search: search,
             selected: search.filters == activeFilters,
             onTap: () => onApply(search),
+            onRename: search.isBuiltin ? null : () => onRename(search),
             onDelete: search.isBuiltin ? null : () => onDelete(search),
           );
         },
@@ -221,6 +231,7 @@ class _SavedSearchChip extends StatelessWidget {
     required this.search,
     required this.selected,
     required this.onTap,
+    required this.onRename,
     required this.onDelete,
     this.isExpanded = false,
   });
@@ -228,6 +239,7 @@ class _SavedSearchChip extends StatelessWidget {
   final CatalogSavedSearch search;
   final bool selected;
   final VoidCallback onTap;
+  final VoidCallback? onRename;
   final VoidCallback? onDelete;
   final bool isExpanded;
 
@@ -237,6 +249,7 @@ class _SavedSearchChip extends StatelessWidget {
         ? BrandTheme.redTop
         : Colors.white.withValues(alpha: 0.92);
     final fg = selected ? Colors.white : kTextDark;
+    final subtitle = _savedSearchSubtitle(context, search.filters);
 
     return Material(
       color: Colors.transparent,
@@ -244,7 +257,7 @@ class _SavedSearchChip extends StatelessWidget {
         borderRadius: BorderRadius.circular(kPillRadius),
         onTap: onTap,
         child: Container(
-          height: 42,
+          height: isExpanded ? 56 : 42,
           width: isExpanded ? double.infinity : null,
           padding: EdgeInsets.only(left: 14, right: onDelete == null ? 14 : 7),
           decoration: BoxDecoration(
@@ -267,15 +280,36 @@ class _SavedSearchChip extends StatelessWidget {
               const SizedBox(width: 7),
               if (isExpanded)
                 Expanded(
-                  child: Text(
-                    search.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: BrandTheme.pillText.copyWith(
-                      color: fg,
-                      fontSize: 12,
-                      letterSpacing: 0.55,
-                    ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        search.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: BrandTheme.pillText.copyWith(
+                          color: fg,
+                          fontSize: 12,
+                          letterSpacing: 0.55,
+                        ),
+                      ),
+                      if (subtitle.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: fg.withValues(alpha: selected ? 0.74 : 0.62),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            height: 1.0,
+                            letterSpacing: 0,
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 )
               else
@@ -289,16 +323,12 @@ class _SavedSearchChip extends StatelessWidget {
                     letterSpacing: 0.55,
                   ),
                 ),
-              if (onDelete != null) ...[
+              if (onRename != null || onDelete != null) ...[
                 const SizedBox(width: 3),
-                SizedBox(
-                  width: 30,
-                  height: 30,
-                  child: IconButton(
-                    padding: EdgeInsets.zero,
-                    icon: Icon(Icons.close_rounded, size: 17, color: fg),
-                    onPressed: onDelete,
-                  ),
+                _SavedSearchMenuButton(
+                  color: fg,
+                  onRename: onRename,
+                  onDelete: onDelete,
                 ),
               ],
             ],
@@ -307,6 +337,144 @@ class _SavedSearchChip extends StatelessWidget {
       ),
     );
   }
+}
+
+class _SavedSearchMenuButton extends StatelessWidget {
+  const _SavedSearchMenuButton({
+    required this.color,
+    required this.onRename,
+    required this.onDelete,
+  });
+
+  final Color color;
+  final VoidCallback? onRename;
+  final VoidCallback? onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+
+    return SizedBox(
+      width: 32,
+      height: 32,
+      child: PopupMenuButton<_SavedSearchAction>(
+        padding: EdgeInsets.zero,
+        tooltip: '',
+        icon: Icon(Icons.more_horiz_rounded, size: 19, color: color),
+        color: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        onSelected: (action) {
+          switch (action) {
+            case _SavedSearchAction.rename:
+              onRename?.call();
+              break;
+            case _SavedSearchAction.delete:
+              onDelete?.call();
+              break;
+          }
+        },
+        itemBuilder: (context) => [
+          if (onRename != null)
+            PopupMenuItem(
+              value: _SavedSearchAction.rename,
+              child: _SavedSearchMenuItem(
+                icon: Icons.edit_rounded,
+                label: t.savedSearchRenameAction,
+              ),
+            ),
+          if (onDelete != null)
+            PopupMenuItem(
+              value: _SavedSearchAction.delete,
+              child: _SavedSearchMenuItem(
+                icon: Icons.delete_outline_rounded,
+                label: t.savedSearchDeleteAction,
+                isDanger: true,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+enum _SavedSearchAction { rename, delete }
+
+class _SavedSearchMenuItem extends StatelessWidget {
+  const _SavedSearchMenuItem({
+    required this.icon,
+    required this.label,
+    this.isDanger = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool isDanger;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isDanger ? kTextDanger : kTextDark;
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: color),
+        const SizedBox(width: 10),
+        Text(
+          label,
+          style: TextStyle(
+            color: color,
+            fontSize: 13,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+String _savedSearchSubtitle(
+  BuildContext context,
+  CatalogFilterSnapshot filters,
+) {
+  final t = AppLocalizations.of(context)!;
+  final isRussian =
+      Localizations.localeOf(context).languageCode.toLowerCase() == 'ru';
+  final parts = <String>[];
+
+  if (filters.query.trim().isNotEmpty) {
+    parts.add(filters.query.trim());
+  }
+  if (filters.profileRole != null) {
+    parts.add(_catalogProfileTypeLabel(t, filters.profileRole!));
+  }
+  if (_hasAdvancedCatalogFilters(filters)) {
+    parts.add(isRussian ? 'параметры' : 'filters');
+  }
+
+  return parts.take(3).join(' • ');
+}
+
+bool _hasAdvancedCatalogFilters(CatalogFilterSnapshot filters) {
+  return filters.ageFrom != null ||
+      filters.ageTo != null ||
+      filters.heightFrom != null ||
+      filters.heightTo != null ||
+      filters.shoeFrom != null ||
+      filters.shoeTo != null ||
+      filters.bustFrom != null ||
+      filters.bustTo != null ||
+      filters.waistFrom != null ||
+      filters.waistTo != null ||
+      filters.hipsFrom != null ||
+      filters.hipsTo != null ||
+      filters.minHourlyRateFrom != null ||
+      filters.minHourlyRateTo != null ||
+      filters.minDailyFeeFrom != null ||
+      filters.minDailyFeeTo != null ||
+      filters.eyeColor.trim().isNotEmpty ||
+      filters.hairColor.trim().isNotEmpty ||
+      filters.country.trim().isNotEmpty ||
+      filters.city.trim().isNotEmpty ||
+      filters.needDate != null;
 }
 
 class _CatalogEmptyState extends StatelessWidget {
@@ -2073,6 +2241,7 @@ class _SaveSearchDialog extends StatefulWidget {
     required this.emptyError,
     required this.cancelLabel,
     required this.saveLabel,
+    this.initialValue = '',
   });
 
   final String title;
@@ -2080,6 +2249,7 @@ class _SaveSearchDialog extends StatefulWidget {
   final String emptyError;
   final String cancelLabel;
   final String saveLabel;
+  final String initialValue;
 
   @override
   State<_SaveSearchDialog> createState() => _SaveSearchDialogState();
@@ -2092,7 +2262,7 @@ class _SaveSearchDialogState extends State<_SaveSearchDialog> {
   @override
   void initState() {
     super.initState();
-    _controller = TextEditingController();
+    _controller = TextEditingController(text: widget.initialValue);
   }
 
   @override

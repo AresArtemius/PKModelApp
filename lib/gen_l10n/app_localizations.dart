@@ -512,6 +512,30 @@ abstract class AppLocalizations {
   /// **'Search saved'**
   String get savedSearchSaved;
 
+  /// No description provided for @savedSearchRenameTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'RENAME SEARCH'**
+  String get savedSearchRenameTitle;
+
+  /// No description provided for @savedSearchRenameAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Rename'**
+  String get savedSearchRenameAction;
+
+  /// No description provided for @savedSearchDeleteAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get savedSearchDeleteAction;
+
+  /// No description provided for @savedSearchRenamed.
+  ///
+  /// In en, this message translates to:
+  /// **'Search renamed'**
+  String get savedSearchRenamed;
+
   /// No description provided for @savedSearchDeleted.
   ///
   /// In en, this message translates to:

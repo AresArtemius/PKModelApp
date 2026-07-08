@@ -114,6 +114,25 @@ class CatalogSavedSearchesController extends ChangeNotifier {
     await _persist();
   }
 
+  Future<void> rename({required String id, required String title}) async {
+    final trimmedTitle = title.trim();
+    if (trimmedTitle.isEmpty) return;
+
+    final index = _items.indexWhere((item) => item.id == id && !item.isBuiltin);
+    if (index < 0) return;
+
+    final current = _items[index];
+    if (current.title == trimmedTitle) return;
+
+    _items[index] = CatalogSavedSearch(
+      id: current.id,
+      title: trimmedTitle,
+      filters: current.filters,
+    );
+    notifyListeners();
+    await _persist();
+  }
+
   Future<void> delete(String id) async {
     final before = _items.length;
     _items.removeWhere((item) => item.id == id && !item.isBuiltin);
