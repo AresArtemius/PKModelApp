@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -219,6 +220,13 @@ class SelectionCastingPage extends ConsumerWidget {
                     .toList(growable: false);
               }
 
+              List<Map<String, dynamic>> rowsForCsvScope(
+                CastingResponseStatus? status,
+              ) {
+                if (status == null) return items;
+                return rowsForStatus(status);
+              }
+
               Future<void> openPdf({
                 required String title,
                 required List<SelectionExportItem> scopedItems,
@@ -255,7 +263,9 @@ class SelectionCastingPage extends ConsumerWidget {
                 final scope = await showModalBottomSheet<_PdfExportScope>(
                   context: context,
                   backgroundColor: Colors.transparent,
-                  builder: (_) => const _PdfExportScopeSheet(),
+                  builder: (_) => _ExportScopeSheet(
+                    title: ru ? 'PDF-ПОДБОРКА' : 'PDF SELECTION',
+                  ),
                 );
                 if (scope == null) return;
                 switch (scope) {
@@ -282,6 +292,54 @@ class SelectionCastingPage extends ConsumerWidget {
                     );
                     break;
                 }
+              }
+
+              Future<void> copyCsvExport() async {
+                final ru = Localizations.localeOf(context).languageCode == 'ru';
+                final scope = await showModalBottomSheet<_PdfExportScope>(
+                  context: context,
+                  backgroundColor: Colors.transparent,
+                  builder: (_) => _ExportScopeSheet(
+                    title: ru ? 'CSV-ЭКСПОРТ' : 'CSV EXPORT',
+                  ),
+                );
+                if (scope == null) return;
+                if (!context.mounted) return;
+                final scopedRows = switch (scope) {
+                  _PdfExportScope.all => rowsForCsvScope(null),
+                  _PdfExportScope.shortlist => rowsForCsvScope(
+                    CastingResponseStatus.shortlist,
+                  ),
+                  _PdfExportScope.approved => rowsForCsvScope(
+                    CastingResponseStatus.approved,
+                  ),
+                };
+                if (scopedRows.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        ru
+                            ? 'В этой выгрузке пока нет анкет.'
+                            : 'There are no profiles in this export yet.',
+                      ),
+                    ),
+                  );
+                  return;
+                }
+                final csv = _castingResponsesToCsv(scopedRows, t);
+                final messenger = ScaffoldMessenger.of(context);
+                await Clipboard.setData(ClipboardData(text: csv));
+                messenger
+                  ..hideCurrentSnackBar()
+                  ..showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        ru
+                            ? 'CSV скопирован: ${scopedRows.length} строк'
+                            : 'CSV copied: ${scopedRows.length} rows',
+                      ),
+                    ),
+                  );
               }
 
               Future<void> updateStatus({
@@ -445,6 +503,14 @@ class SelectionCastingPage extends ConsumerWidget {
                           ),
                           splashRadius: 22,
                         ),
+                        IconButton(
+                          onPressed: items.isEmpty ? null : copyCsvExport,
+                          icon: const Icon(
+                            Icons.table_chart_rounded,
+                            color: BrandTheme.redTop,
+                          ),
+                          splashRadius: 22,
+                        ),
                       ],
                     ),
                   ),
@@ -512,8 +578,10 @@ class _CardPill extends StatelessWidget {
   }
 }
 
-class _PdfExportScopeSheet extends StatelessWidget {
-  const _PdfExportScopeSheet();
+class _ExportScopeSheet extends StatelessWidget {
+  const _ExportScopeSheet({required this.title});
+
+  final String title;
 
   @override
   Widget build(BuildContext context) {
@@ -534,7 +602,7 @@ class _PdfExportScopeSheet extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                ru ? 'PDF-ПОДБОРКА' : 'PDF SELECTION',
+                title,
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   color: _text,
@@ -615,6 +683,62 @@ class _PdfScopeTile extends StatelessWidget {
       ),
     );
   }
+}
+
+String _castingResponsesToCsv(
+  List<Map<String, dynamic>> rows,
+  AppLocalizations t,
+) {
+  final ru = t.localeName == 'ru';
+  final headers = ru
+      ? [
+          'ФИО',
+          'Возраст',
+          'Рост',
+          'Город',
+          'Страна',
+          'Статус',
+          'Заметка',
+          'Дата отклика',
+          'ID анкеты',
+        ]
+      : [
+          'Name',
+          'Age',
+          'Height',
+          'City',
+          'Country',
+          'Status',
+          'Note',
+          'Response date',
+          'Profile ID',
+        ];
+  final buffer = StringBuffer('${headers.map(_csvCell).join(',')}\n');
+  for (final row in rows) {
+    final profile = Map<String, dynamic>.from((row['profile'] as Map?) ?? {});
+    final profileId = (profile['id'] ?? '').toString();
+    final status = castingResponseStatusFromString(row['status']?.toString());
+    final age = ModelVm.displayAgeFromMap(profile);
+    final height = (profile['height'] ?? '').toString();
+    final cells = <String>[
+      (profile['full_name'] ?? '').toString(),
+      age > 0 ? '$age' : '',
+      height == 'null' ? '' : height,
+      (profile['city'] ?? '').toString(),
+      (profile['country'] ?? '').toString(),
+      castingResponseStatusLabel(t, status),
+      (row['admin_note'] ?? '').toString(),
+      (row['created_at'] ?? '').toString(),
+      profileId,
+    ];
+    buffer.writeln(cells.map(_csvCell).join(','));
+  }
+  return buffer.toString();
+}
+
+String _csvCell(String value) {
+  final escaped = value.replaceAll('"', '""');
+  return '"$escaped"';
 }
 
 class _CastingShortlistBoard extends StatefulWidget {
