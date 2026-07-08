@@ -272,6 +272,13 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
     await _c.reload();
   }
 
+  Future<void> _clearCatalogFilters() async {
+    _unfocus();
+    _searchDebounce?.cancel();
+    _c.clearAllFilters();
+    await _c.reload();
+  }
+
   List<CatalogSavedSearch> _builtInSavedSearches(AppLocalizations t) {
     return const <CatalogSavedSearch>[];
   }
@@ -801,6 +808,10 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
       ..._builtInSavedSearches(t),
       ...savedSearches.items,
     ];
+    final resetFiltersLabel =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ru'
+        ? 'СБРОСИТЬ ФИЛЬТРЫ'
+        : 'RESET FILTERS';
     final previewModel = isDesktop && filteredItems.isNotEmpty
         ? filteredItems.firstWhere(
             (model) => model.id == _desktopPreviewModelId,
@@ -846,6 +857,10 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                           ),
                           onAdvancedSearch: _openAdvancedSearch,
                           advancedSearchEnabled: !c.isInitialLoading,
+                          onResetFilters: c.hasActiveFilters
+                              ? _clearCatalogFilters
+                              : null,
+                          resetFiltersLabel: resetFiltersLabel,
                           roleTabs: roleTabs,
                           search: _CatalogSearchRow(
                             controller: _searchC,
@@ -962,9 +977,25 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                                   roleTabs,
                                 ],
                               ),
+                              if (c.hasActiveFilters) ...[
+                                const SizedBox(height: kGap8),
+                                _DesktopFilterAction(
+                                  icon: Icons.restart_alt_rounded,
+                                  label: resetFiltersLabel,
+                                  onTap: _clearCatalogFilters,
+                                ),
+                              ],
                               const SizedBox(height: kGap12),
                             ] else ...[
                               roleTabs,
+                              if (c.hasActiveFilters) ...[
+                                const SizedBox(height: kGap8),
+                                _DesktopFilterAction(
+                                  icon: Icons.restart_alt_rounded,
+                                  label: resetFiltersLabel,
+                                  onTap: _clearCatalogFilters,
+                                ),
+                              ],
                               const SizedBox(height: kGap12),
                             ],
                             Expanded(

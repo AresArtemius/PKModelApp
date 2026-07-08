@@ -281,6 +281,10 @@ class CatalogController extends ChangeNotifier {
     );
   }
 
+  bool get hasActiveFilters {
+    return filterSnapshot != const CatalogFilterSnapshot();
+  }
+
   void _resetAdvancedFiltersOnly() {
     ageFrom = null;
     ageTo = null;

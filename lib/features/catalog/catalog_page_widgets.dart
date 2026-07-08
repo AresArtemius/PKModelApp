@@ -382,6 +382,8 @@ class _CatalogDesktopLayout extends StatelessWidget {
     required this.topBar,
     required this.onAdvancedSearch,
     required this.advancedSearchEnabled,
+    required this.onResetFilters,
+    required this.resetFiltersLabel,
     required this.roleTabs,
     required this.search,
     required this.grid,
@@ -392,6 +394,8 @@ class _CatalogDesktopLayout extends StatelessWidget {
   final Widget topBar;
   final VoidCallback onAdvancedSearch;
   final bool advancedSearchEnabled;
+  final Future<void> Function()? onResetFilters;
+  final String resetFiltersLabel;
   final Widget roleTabs;
   final Widget search;
   final Widget? savedSearches;
@@ -414,6 +418,8 @@ class _CatalogDesktopLayout extends StatelessWidget {
                   search: search,
                   onAdvancedSearch: onAdvancedSearch,
                   advancedSearchEnabled: advancedSearchEnabled,
+                  onResetFilters: onResetFilters,
+                  resetFiltersLabel: resetFiltersLabel,
                   roleTabs: roleTabs,
                   savedSearches: savedSearches,
                 ),
@@ -435,6 +441,8 @@ class _CatalogDesktopFilterPanel extends StatelessWidget {
     required this.search,
     required this.onAdvancedSearch,
     required this.advancedSearchEnabled,
+    required this.onResetFilters,
+    required this.resetFiltersLabel,
     required this.roleTabs,
     this.savedSearches,
   });
@@ -442,6 +450,8 @@ class _CatalogDesktopFilterPanel extends StatelessWidget {
   final Widget search;
   final VoidCallback onAdvancedSearch;
   final bool advancedSearchEnabled;
+  final Future<void> Function()? onResetFilters;
+  final String resetFiltersLabel;
   final Widget roleTabs;
   final Widget? savedSearches;
 
@@ -473,6 +483,14 @@ class _CatalogDesktopFilterPanel extends StatelessWidget {
             label: t.advancedSearchUpper,
             onTap: advancedSearchEnabled ? onAdvancedSearch : null,
           ),
+          if (onResetFilters != null) ...[
+            const SizedBox(height: 8),
+            _DesktopFilterAction(
+              icon: Icons.restart_alt_rounded,
+              label: resetFiltersLabel,
+              onTap: onResetFilters,
+            ),
+          ],
           if (savedSearches != null) ...[
             const SizedBox(height: 18),
             Text(
@@ -573,6 +591,7 @@ class _CatalogRoleTabs extends StatelessWidget {
         final choice = await showModalBottomSheet<_CatalogRoleChoice>(
           context: context,
           backgroundColor: Colors.transparent,
+          isScrollControlled: true,
           builder: (context) => _CatalogRolePickerSheet(
             roles: _roles,
             selectedRole: selectedRole,
@@ -676,19 +695,21 @@ class _CatalogRolePickerSheet extends StatelessWidget {
             ),
         ];
 
-    return Container(
-      margin: const EdgeInsets.all(12),
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: kBorderColor),
-        boxShadow: BrandTheme.basePillShadow(isDark: false),
-      ),
-      child: SafeArea(
-        top: false,
+    final maxHeight = MediaQuery.sizeOf(context).height * 0.72;
+
+    return SafeArea(
+      top: false,
+      child: Container(
+        constraints: BoxConstraints(maxHeight: maxHeight),
+        margin: const EdgeInsets.all(12),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(color: kBorderColor),
+          boxShadow: BrandTheme.basePillShadow(isDark: false),
+        ),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Row(
@@ -711,16 +732,25 @@ class _CatalogRolePickerSheet extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 8),
-            for (final item in items) ...[
-              _CatalogRoleSheetTile(
-                label: item.label,
-                icon: item.icon,
-                selected: selectedRole == item.role,
-                onTap: () =>
-                    Navigator.of(context).pop(_CatalogRoleChoice(item.role)),
+            Expanded(
+              child: ListView.separated(
+                physics: const BouncingScrollPhysics(),
+                padding: EdgeInsets.zero,
+                itemCount: items.length,
+                separatorBuilder: (_, _) => const SizedBox(height: 8),
+                itemBuilder: (context, index) {
+                  final item = items[index];
+                  return _CatalogRoleSheetTile(
+                    label: item.label,
+                    icon: item.icon,
+                    selected: selectedRole == item.role,
+                    onTap: () => Navigator.of(
+                      context,
+                    ).pop(_CatalogRoleChoice(item.role)),
+                  );
+                },
               ),
-              const SizedBox(height: 8),
-            ],
+            ),
           ],
         ),
       ),
@@ -1273,55 +1303,61 @@ class _SearchBarState extends State<_SearchBar> {
     final hasText = widget.controller.text.trim().isNotEmpty;
     final hasFocus = _focusNode.hasFocus;
 
+    final radius = BorderRadius.circular(BrandTheme.pillRadius);
+
     return AnimatedContainer(
       duration: kAnim160,
       height: 58,
-      clipBehavior: Clip.antiAlias,
       decoration: catalogSearchDecoration(
         borderColor: hasFocus
             ? BrandTheme.redTop
             : Colors.white.withValues(alpha: 0.72),
         borderWidth: hasFocus ? 1.4 : 1,
       ),
-      child: TextField(
-        controller: widget.controller,
-        focusNode: _focusNode,
-        onChanged: widget.onChanged,
-        textInputAction: TextInputAction.search,
-        autocorrect: false,
-        enableSuggestions: false,
-        style: const TextStyle(
-          color: kTextDark,
-          fontSize: 17,
-          fontWeight: FontWeight.w500,
-          letterSpacing: 0,
-        ),
-        decoration: InputDecoration(
-          isDense: true,
-          hintText: widget.hintText,
-          hintStyle: BrandTheme.pillText.copyWith(
-            color: kTextMuted,
-            fontSize: 15,
-            letterSpacing: 1.15,
+      child: Material(
+        color: Colors.transparent,
+        clipBehavior: Clip.antiAlias,
+        borderRadius: radius,
+        child: TextField(
+          controller: widget.controller,
+          focusNode: _focusNode,
+          onChanged: widget.onChanged,
+          textInputAction: TextInputAction.search,
+          autocorrect: false,
+          enableSuggestions: false,
+          style: const TextStyle(
+            color: kTextDark,
+            fontSize: 17,
+            fontWeight: FontWeight.w500,
+            letterSpacing: 0,
           ),
-          prefixIcon: const Icon(Icons.search, color: kTextMid, size: 28),
-          suffixIcon: !hasText
-              ? null
-              : IconButton(
-                  icon: const Icon(Icons.close_rounded, color: kTextMuted),
-                  onPressed: () {
-                    widget.controller.clear();
-                    widget.onChanged('');
-                    FocusManager.instance.primaryFocus?.unfocus();
-                  },
-                ),
-          border: InputBorder.none,
-          enabledBorder: InputBorder.none,
-          focusedBorder: InputBorder.none,
-          disabledBorder: InputBorder.none,
-          errorBorder: InputBorder.none,
-          focusedErrorBorder: InputBorder.none,
-          contentPadding: kSearchContentPad,
+          decoration: InputDecoration(
+            isDense: true,
+            hintText: widget.hintText,
+            hintStyle: BrandTheme.pillText.copyWith(
+              color: kTextMuted,
+              fontSize: 15,
+              letterSpacing: 1.15,
+            ),
+            prefixIcon: const Icon(Icons.search, color: kTextMid, size: 28),
+            suffixIcon: !hasText
+                ? null
+                : IconButton(
+                    icon: const Icon(Icons.close_rounded, color: kTextMuted),
+                    onPressed: () {
+                      widget.controller.clear();
+                      widget.onChanged('');
+                      FocusManager.instance.primaryFocus?.unfocus();
+                    },
+                  ),
+            border: InputBorder.none,
+            enabledBorder: InputBorder.none,
+            focusedBorder: InputBorder.none,
+            disabledBorder: InputBorder.none,
+            errorBorder: InputBorder.none,
+            focusedErrorBorder: InputBorder.none,
+            contentPadding: kSearchContentPad,
+          ),
         ),
       ),
     );
