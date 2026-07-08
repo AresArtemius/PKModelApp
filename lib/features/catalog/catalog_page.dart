@@ -307,9 +307,15 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
 
     if (!mounted || title == null) return;
 
-    await ref
-        .read(catalogSavedSearchesProvider)
-        .save(title: title, filters: _c.filterSnapshot);
+    try {
+      await ref
+          .read(catalogSavedSearchesProvider)
+          .save(title: title, filters: _c.filterSnapshot);
+    } catch (e) {
+      if (!mounted) return;
+      _showSnack(AppErrorMapper.message(e, t));
+      return;
+    }
 
     if (!mounted) return;
     ScaffoldMessenger.of(context)
@@ -321,7 +327,13 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
     if (search.isBuiltin) return;
     final t = AppLocalizations.of(context)!;
 
-    await ref.read(catalogSavedSearchesProvider).delete(search.id);
+    try {
+      await ref.read(catalogSavedSearchesProvider).delete(search.id);
+    } catch (e) {
+      if (!mounted) return;
+      _showSnack(AppErrorMapper.message(e, t));
+      return;
+    }
 
     if (!mounted) return;
     ScaffoldMessenger.of(context)
@@ -348,9 +360,15 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
 
     if (!mounted || title == null) return;
 
-    await ref
-        .read(catalogSavedSearchesProvider)
-        .rename(id: search.id, title: title);
+    try {
+      await ref
+          .read(catalogSavedSearchesProvider)
+          .rename(id: search.id, title: title);
+    } catch (e) {
+      if (!mounted) return;
+      _showSnack(AppErrorMapper.message(e, t));
+      return;
+    }
 
     if (!mounted) return;
     ScaffoldMessenger.of(context)

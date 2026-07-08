@@ -139,7 +139,22 @@ class CatalogSavedSearchesController extends ChangeNotifier {
     notifyListeners();
     if (!isRemoteEnabled) {
       await _persistLocal();
+    } else {
+      await refresh();
     }
+  }
+
+  Future<void> refresh() async {
+    if (!isRemoteEnabled) {
+      await load();
+      return;
+    }
+
+    final next = await _loadRemote();
+    _items
+      ..clear()
+      ..addAll(next);
+    notifyListeners();
   }
 
   Future<void> rename({required String id, required String title}) async {
@@ -169,6 +184,8 @@ class CatalogSavedSearchesController extends ChangeNotifier {
     notifyListeners();
     if (!isRemoteEnabled) {
       await _persistLocal();
+    } else {
+      await refresh();
     }
   }
 
@@ -184,6 +201,8 @@ class CatalogSavedSearchesController extends ChangeNotifier {
     notifyListeners();
     if (!isRemoteEnabled) {
       await _persistLocal();
+    } else {
+      await refresh();
     }
   }
 
@@ -210,6 +229,7 @@ class CatalogSavedSearchesController extends ChangeNotifier {
     final row = await _supabase
         .from('catalog_saved_searches')
         .insert({
+          'user_id': _userId,
           'title': title,
           'filters': filters.toJson(),
           'position': _items.length,
