@@ -151,7 +151,7 @@ class _CastingReferencePreviewStrip extends StatelessWidget {
         ),
         const SizedBox(height: 6),
         SizedBox(
-          height: 74,
+          height: 104,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             physics: const BouncingScrollPhysics(),
@@ -162,6 +162,14 @@ class _CastingReferencePreviewStrip extends StatelessWidget {
               overflowCount: index == visible.length - 1
                   ? items.length - visible.length
                   : 0,
+              onTap: () => showDialog<void>(
+                context: context,
+                barrierColor: Colors.black.withValues(alpha: 0.58),
+                builder: (_) => _CastingReferencePreviewDialog(
+                  items: items,
+                  initialIndex: index,
+                ),
+              ),
             ),
           ),
         ),
@@ -174,72 +182,270 @@ class _CastingReferencePreviewTile extends StatelessWidget {
   const _CastingReferencePreviewTile({
     required this.item,
     required this.overflowCount,
+    required this.onTap,
   });
 
   final CastingReferenceMedia item;
   final int overflowCount;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final mediaUrl = item.kind == CastingReferenceMediaKind.image
         ? item.url
         : item.previewUrl;
-    return Container(
-      width: 74,
-      height: 74,
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.78),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
-      ),
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          if (mediaUrl.trim().isNotEmpty)
-            CachedNetworkImage(
-              imageUrl: mediaUrl,
-              fit: BoxFit.cover,
-              memCacheWidth: 180,
-              maxWidthDiskCache: 360,
-              placeholder: (_, _) => const ColoredBox(color: Color(0x12000000)),
-              errorWidget: (_, _, _) => _ReferenceIcon(kind: item.kind),
-            )
-          else
-            _ReferenceIcon(kind: item.kind),
-          if (item.kind != CastingReferenceMediaKind.image)
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        width: 104,
+        height: 104,
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.78),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
+          boxShadow: BrandTheme.basePillShadow(isDark: false),
+        ),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (mediaUrl.trim().isNotEmpty)
+              CachedNetworkImage(
+                imageUrl: mediaUrl,
+                fit: BoxFit.cover,
+                memCacheWidth: 280,
+                maxWidthDiskCache: 560,
+                placeholder: (_, _) =>
+                    const ColoredBox(color: Color(0x12000000)),
+                errorWidget: (_, _, _) => _ReferenceIcon(kind: item.kind),
+              )
+            else
+              _ReferenceIcon(kind: item.kind),
+            if (item.kind != CastingReferenceMediaKind.image)
+              Positioned(
+                left: 8,
+                bottom: 8,
+                child: Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.62),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Icon(
+                    item.kind == CastingReferenceMediaKind.video
+                        ? Icons.play_arrow_rounded
+                        : Icons.insert_drive_file_rounded,
+                    color: Colors.white,
+                    size: 18,
+                  ),
+                ),
+              ),
             Positioned(
-              left: 6,
-              bottom: 6,
+              right: 7,
+              top: 7,
               child: Container(
-                width: 24,
-                height: 24,
+                width: 26,
+                height: 26,
                 decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.62),
+                  color: Colors.black.withValues(alpha: 0.46),
                   borderRadius: BorderRadius.circular(999),
                 ),
-                child: Icon(
-                  item.kind == CastingReferenceMediaKind.video
-                      ? Icons.play_arrow_rounded
-                      : Icons.insert_drive_file_rounded,
+                child: const Icon(
+                  Icons.open_in_full_rounded,
                   color: Colors.white,
-                  size: 16,
+                  size: 15,
                 ),
               ),
             ),
-          if (overflowCount > 0)
-            Container(
-              color: Colors.black.withValues(alpha: 0.48),
-              alignment: Alignment.center,
-              child: Text(
-                '+$overflowCount',
+            if (overflowCount > 0)
+              Container(
+                color: Colors.black.withValues(alpha: 0.48),
+                alignment: Alignment.center,
+                child: Text(
+                  '+$overflowCount',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CastingReferencePreviewDialog extends StatefulWidget {
+  const _CastingReferencePreviewDialog({
+    required this.items,
+    required this.initialIndex,
+  });
+
+  final List<CastingReferenceMedia> items;
+  final int initialIndex;
+
+  @override
+  State<_CastingReferencePreviewDialog> createState() =>
+      _CastingReferencePreviewDialogState();
+}
+
+class _CastingReferencePreviewDialogState
+    extends State<_CastingReferencePreviewDialog> {
+  late final PageController _controller = PageController(
+    initialPage: widget.initialIndex,
+  );
+  late int _index = widget.initialIndex;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isRu = Localizations.localeOf(context).languageCode == 'ru';
+    final size = MediaQuery.sizeOf(context);
+    final item = widget.items[_index];
+    final title = item.name.trim().isNotEmpty
+        ? item.name.trim()
+        : castingReferenceMediaKindLabel(item.kind, isRu: isRu);
+
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.all(18),
+      child: Container(
+        width: size.width,
+        constraints: BoxConstraints(
+          maxWidth: 720,
+          maxHeight: size.height * 0.78,
+        ),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          gradient: BrandTheme.lightPillGradient,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: kBorderColor),
+          boxShadow: BrandTheme.basePillShadow(isDark: false),
+        ),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: BrandTheme.pillText.copyWith(
+                      color: kTextDark,
+                      fontSize: 13,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: isRu ? 'Закрыть' : 'Close',
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close_rounded, color: kTextDark),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Expanded(
+              child: PageView.builder(
+                controller: _controller,
+                itemCount: widget.items.length,
+                onPageChanged: (value) => setState(() => _index = value),
+                itemBuilder: (context, index) =>
+                    _ReferenceLargePreview(item: widget.items[index]),
+              ),
+            ),
+            if (widget.items.length > 1) ...[
+              const SizedBox(height: 10),
+              Text(
+                '${_index + 1}/${widget.items.length}',
                 style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
+                  color: kTextMuted,
                   fontWeight: FontWeight.w900,
+                  letterSpacing: 1.1,
                 ),
               ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ReferenceLargePreview extends StatelessWidget {
+  const _ReferenceLargePreview({required this.item});
+
+  final CastingReferenceMedia item;
+
+  @override
+  Widget build(BuildContext context) {
+    final isImage = item.kind == CastingReferenceMediaKind.image;
+    final mediaUrl = isImage ? item.url.trim() : item.previewUrl.trim();
+    if (mediaUrl.isEmpty) {
+      return _ReferenceFilePreview(item: item);
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(18),
+      child: ColoredBox(
+        color: const Color(0x10000000),
+        child: InteractiveViewer(
+          minScale: 1,
+          maxScale: 4,
+          child: Center(
+            child: CachedNetworkImage(
+              imageUrl: mediaUrl,
+              fit: BoxFit.contain,
+              placeholder: (_, _) => const ColoredBox(color: Color(0x10000000)),
+              errorWidget: (_, _, _) => _ReferenceFilePreview(item: item),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ReferenceFilePreview extends StatelessWidget {
+  const _ReferenceFilePreview({required this.item});
+
+  final CastingReferenceMedia item;
+
+  @override
+  Widget build(BuildContext context) {
+    final isRu = Localizations.localeOf(context).languageCode == 'ru';
+    return Container(
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.42),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: kBorderColor),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _ReferenceIcon(kind: item.kind),
+          const SizedBox(height: 12),
+          Text(
+            item.name.trim().isEmpty
+                ? castingReferenceMediaKindLabel(item.kind, isRu: isRu)
+                : item.name.trim(),
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: kTextDark,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
         ],
       ),
     );

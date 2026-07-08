@@ -354,6 +354,26 @@ class SelectionCastingPage extends ConsumerWidget {
                 ref.invalidate(castingResponseHistoryProvider(castingId));
               }
 
+              Future<void> removeBulkResponses({
+                required List<String> profileIds,
+              }) async {
+                final ids = profileIds
+                    .map((e) => e.trim())
+                    .where((e) => e.isNotEmpty)
+                    .toList(growable: false);
+                if (ids.isEmpty) return;
+                final sb = ref.read(supabaseProvider);
+                for (final profileId in ids) {
+                  await sb
+                      .from('casting_responses')
+                      .delete()
+                      .eq('casting_id', castingId)
+                      .eq('profile_id', profileId);
+                }
+                ref.invalidate(castingResponsesProvider(castingId));
+                ref.invalidate(castingResponseHistoryProvider(castingId));
+              }
+
               return Column(
                 children: [
                   BrandAdminHeader(
@@ -416,6 +436,7 @@ class SelectionCastingPage extends ConsumerWidget {
                             castingId: castingId,
                             onStatusChanged: updateStatus,
                             onBulkStatusChanged: updateBulkStatus,
+                            onBulkRemove: removeBulkResponses,
                             history: ref.watch(
                               castingResponseHistoryProvider(castingId),
                             ),
@@ -563,6 +584,7 @@ class _CastingShortlistBoard extends StatefulWidget {
     required this.castingId,
     required this.onStatusChanged,
     required this.onBulkStatusChanged,
+    required this.onBulkRemove,
     required this.history,
   });
 
@@ -578,6 +600,7 @@ class _CastingShortlistBoard extends StatefulWidget {
     required CastingResponseStatus status,
   })
   onBulkStatusChanged;
+  final Future<void> Function({required List<String> profileIds}) onBulkRemove;
   final AsyncValue<List<Map<String, dynamic>>> history;
 
   @override
@@ -602,6 +625,40 @@ class _CastingShortlistBoardState extends State<_CastingShortlistBoard> {
     final ids = _selectedProfileIds.toList(growable: false);
     if (ids.isEmpty) return;
     await widget.onBulkStatusChanged(profileIds: ids, status: status);
+    if (!mounted) return;
+    setState(_selectedProfileIds.clear);
+  }
+
+  Future<void> _removeSelected() async {
+    final ids = _selectedProfileIds.toList(growable: false);
+    if (ids.isEmpty) return;
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(ru ? 'УДАЛИТЬ ИЗ ОТКЛИКОВ?' : 'REMOVE FROM RESPONSES?'),
+        content: Text(
+          ru
+              ? 'Выбранные анкеты будут убраны из откликов этого кастинга.'
+              : 'Selected profiles will be removed from this casting response list.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(ru ? 'Отмена' : 'Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(
+              ru ? 'Удалить' : 'Remove',
+              style: const TextStyle(color: BrandTheme.redTop),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await widget.onBulkRemove(profileIds: ids);
     if (!mounted) return;
     setState(_selectedProfileIds.clear);
   }
@@ -670,6 +727,9 @@ class _CastingShortlistBoardState extends State<_CastingShortlistBoard> {
               selectedCount: _selectedProfileIds.length,
               statuses: columns.map((e) => e.status).toList(growable: false),
               onMove: _bulkMove,
+              onRemove: () {
+                _removeSelected();
+              },
               onClear: () => setState(_selectedProfileIds.clear),
               t: t,
             ),
@@ -917,8 +977,8 @@ class _CastingBoardColumn extends StatelessWidget {
                     ),
                     child: Text(
                       Localizations.localeOf(context).languageCode == 'ru'
-                          ? 'ПЕРЕТАЩИТЬ СЮДА'
-                          : 'DROP HERE',
+                          ? 'ПУСТО'
+                          : 'EMPTY',
                       style: const TextStyle(
                         color: kTextMuted,
                         fontWeight: FontWeight.w900,
@@ -961,6 +1021,7 @@ class _BulkToolbar extends StatelessWidget {
     required this.selectedCount,
     required this.statuses,
     required this.onMove,
+    required this.onRemove,
     required this.onClear,
     required this.t,
   });
@@ -968,6 +1029,7 @@ class _BulkToolbar extends StatelessWidget {
   final int selectedCount;
   final List<CastingResponseStatus> statuses;
   final Future<void> Function(CastingResponseStatus status) onMove;
+  final VoidCallback onRemove;
   final VoidCallback onClear;
   final AppLocalizations t;
 
@@ -995,6 +1057,11 @@ class _BulkToolbar extends StatelessWidget {
               label: castingResponseStatusLabel(t, status).toUpperCase(),
               onTap: () => onMove(status),
             ),
+          _StatusMoveChip(
+            label: ru ? 'УДАЛИТЬ' : 'REMOVE',
+            onTap: onRemove,
+            tone: _StatusMoveChipTone.danger,
+          ),
           _StatusMoveChip(label: ru ? 'СБРОС' : 'CLEAR', onTap: onClear),
         ],
       ),
@@ -1237,11 +1304,18 @@ class _CastingBoardCard extends StatelessWidget {
   }
 }
 
+enum _StatusMoveChipTone { neutral, danger }
+
 class _StatusMoveChip extends StatelessWidget {
-  const _StatusMoveChip({required this.label, required this.onTap});
+  const _StatusMoveChip({
+    required this.label,
+    required this.onTap,
+    this.tone = _StatusMoveChipTone.neutral,
+  });
 
   final String label;
   final VoidCallback? onTap;
+  final _StatusMoveChipTone tone;
 
   @override
   Widget build(BuildContext context) {
@@ -1252,13 +1326,21 @@ class _StatusMoveChip extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(999),
-          color: Colors.white.withValues(alpha: 0.58),
-          border: Border.all(color: kBorderColor),
+          color: tone == _StatusMoveChipTone.danger
+              ? BrandTheme.redTop.withValues(alpha: 0.10)
+              : Colors.white.withValues(alpha: 0.58),
+          border: Border.all(
+            color: tone == _StatusMoveChipTone.danger
+                ? BrandTheme.redTop.withValues(alpha: 0.36)
+                : kBorderColor,
+          ),
         ),
         child: Text(
           label,
-          style: const TextStyle(
-            color: _text,
+          style: TextStyle(
+            color: tone == _StatusMoveChipTone.danger
+                ? BrandTheme.redTop
+                : _text,
             fontSize: 11,
             fontWeight: FontWeight.w900,
           ),
