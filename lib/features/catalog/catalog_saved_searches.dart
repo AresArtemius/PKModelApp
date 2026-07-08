@@ -81,7 +81,7 @@ class CatalogSavedSearchesController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final next = isRemoteEnabled ? await _loadRemote() : await _loadLocal();
+      final next = isRemoteEnabled ? await _loadMerged() : await _loadLocal();
 
       _items
         ..clear()
@@ -137,9 +137,8 @@ class CatalogSavedSearchesController extends ChangeNotifier {
 
     _items.add(search);
     notifyListeners();
-    if (!isRemoteEnabled) {
-      await _persistLocal();
-    } else {
+    await _persistLocal();
+    if (isRemoteEnabled) {
       await refresh();
     }
   }
@@ -150,7 +149,7 @@ class CatalogSavedSearchesController extends ChangeNotifier {
       return;
     }
 
-    final next = await _loadRemote();
+    final next = await _loadMerged();
     _items
       ..clear()
       ..addAll(next);
@@ -182,9 +181,8 @@ class CatalogSavedSearchesController extends ChangeNotifier {
       filters: current.filters,
     );
     notifyListeners();
-    if (!isRemoteEnabled) {
-      await _persistLocal();
-    } else {
+    await _persistLocal();
+    if (isRemoteEnabled) {
       await refresh();
     }
   }
@@ -199,9 +197,8 @@ class CatalogSavedSearchesController extends ChangeNotifier {
     _items.removeWhere((item) => item.id == id && !item.isBuiltin);
     if (_items.length == before) return;
     notifyListeners();
-    if (!isRemoteEnabled) {
-      await _persistLocal();
-    } else {
+    await _persistLocal();
+    if (isRemoteEnabled) {
       await refresh();
     }
   }
@@ -272,6 +269,35 @@ class CatalogSavedSearchesController extends ChangeNotifier {
     }
 
     return next;
+  }
+
+  Future<List<CatalogSavedSearch>> _loadMerged() async {
+    final remote = await _loadRemote();
+    final local = await _loadLocal();
+    return _mergeSearches(remote, local);
+  }
+
+  List<CatalogSavedSearch> _mergeSearches(
+    Iterable<CatalogSavedSearch> primary,
+    Iterable<CatalogSavedSearch> secondary,
+  ) {
+    final seen = <String>{};
+    final merged = <CatalogSavedSearch>[];
+
+    void add(CatalogSavedSearch item) {
+      if (item.id.trim().isEmpty || item.title.trim().isEmpty) return;
+      final key = _dedupeKey(item);
+      if (!seen.add(key)) return;
+      merged.add(item);
+    }
+
+    for (final item in primary) {
+      add(item);
+    }
+    for (final item in secondary) {
+      add(item);
+    }
+    return merged;
   }
 
   Future<void> _migrateLocalSearches() async {
