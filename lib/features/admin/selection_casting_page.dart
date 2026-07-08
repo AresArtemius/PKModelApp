@@ -17,6 +17,7 @@ import '../selection/selection_export_item.dart';
 import '../selection/selection_pdf_options.dart';
 import '../selection/selection_pdf_options_dialog.dart';
 import '../selection/selection_pdf_service.dart';
+import '../selection/public_profile_access_link_service.dart';
 import '../catalog/model_data.dart';
 import '../castings/casting_reference_media.dart';
 import '../castings/casting_response_status.dart';
@@ -287,12 +288,21 @@ class SelectionCastingPage extends ConsumerWidget {
                 );
                 if (options == null) return;
 
+                final modelLinks =
+                    await PublicProfileAccessLinkService(
+                      ref.read(supabaseProvider),
+                    ).createLinks(
+                      profileIds: scopedItems.map((e) => e.id),
+                      source: 'casting_pdf',
+                      relatedId: castingId,
+                    );
                 final service = SelectionPdfService();
                 await service.previewSelectionPdf(
                   title: title,
                   items: scopedItems,
                   options: options,
                   references: references,
+                  modelLinks: modelLinks,
                 );
               }
 

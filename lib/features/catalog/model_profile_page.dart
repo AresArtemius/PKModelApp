@@ -212,11 +212,26 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
     _didInitFuture = true;
     final fromAdmin =
         GoRouterState.of(context).uri.queryParameters['from'] == 'admin';
-    _future = _load(fromAdmin: fromAdmin);
+    final accessToken =
+        GoRouterState.of(context).uri.queryParameters['t'] ?? '';
+    _future = _load(fromAdmin: fromAdmin, accessToken: accessToken);
   }
 
-  Future<ModelVm?> _load({required bool fromAdmin}) async {
+  Future<ModelVm?> _load({
+    required bool fromAdmin,
+    required String accessToken,
+  }) async {
     final sb = Supabase.instance.client;
+    final token = accessToken.trim();
+
+    if (!fromAdmin && token.isNotEmpty) {
+      final tokenModel = await _loadByAccessToken(sb, token);
+      if (tokenModel != null) {
+        trackProfileViewLater(ref, tokenModel.id);
+        return tokenModel;
+      }
+      return null;
+    }
 
     Future<Map<String, dynamic>?> run({
       required bool includeBirthDate,
@@ -292,10 +307,34 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
     return model;
   }
 
+  Future<ModelVm?> _loadByAccessToken(SupabaseClient sb, String token) async {
+    try {
+      final data = await sb.rpc<Map<String, dynamic>?>(
+        'get_public_profile_by_access_token',
+        params: {'p_profile_id': widget.modelId, 'p_token': token},
+      );
+      if (data == null) return null;
+      return ModelVm.fromMap(Map<String, dynamic>.from(data));
+    } on PostgrestException catch (e) {
+      final msg = '${e.message} ${e.details ?? ''} ${e.hint ?? ''}'
+          .toLowerCase();
+      final missingRpc =
+          msg.contains('get_public_profile_by_access_token') ||
+          msg.contains('schema cache') ||
+          msg.contains('function');
+      if (missingRpc) return null;
+      rethrow;
+    }
+  }
+
   Future<void> _refresh() async {
     final fromAdmin =
         GoRouterState.of(context).uri.queryParameters['from'] == 'admin';
-    setState(() => _future = _load(fromAdmin: fromAdmin));
+    final accessToken =
+        GoRouterState.of(context).uri.queryParameters['t'] ?? '';
+    setState(
+      () => _future = _load(fromAdmin: fromAdmin, accessToken: accessToken),
+    );
     await _future;
   }
 

@@ -19,6 +19,7 @@ import '../selection/selection_export_item.dart';
 import '../selection/selection_pdf_options.dart';
 import '../selection/selection_pdf_options_dialog.dart';
 import '../selection/selection_pdf_service.dart';
+import '../selection/public_profile_access_link_service.dart';
 import 'selection_client_feedback.dart';
 import 'selection_providers.dart';
 import 'selection_status.dart';
@@ -280,11 +281,20 @@ class SelectionProjectPage extends ConsumerWidget {
                 );
                 if (options == null) return;
 
+                final modelLinks =
+                    await PublicProfileAccessLinkService(
+                      ref.read(supabaseProvider),
+                    ).createLinks(
+                      profileIds: exportItems.map((e) => e.id),
+                      source: 'selection_pdf',
+                      relatedId: selectionId,
+                    );
                 final service = SelectionPdfService();
                 await service.previewSelectionPdf(
                   title: title.isNotEmpty ? title : t.selectionUpper,
                   items: exportItems,
                   options: options,
+                  modelLinks: modelLinks,
                 );
               }
 

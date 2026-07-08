@@ -24,6 +24,7 @@ class SelectionPdfService {
     required List<SelectionExportItem> items,
     required SelectionPdfOptions options,
     List<CastingReferenceMedia> references = const <CastingReferenceMedia>[],
+    Map<String, String> modelLinks = const <String, String>{},
   }) async {
     final filename = title.trim().isEmpty ? 'selection.pdf' : '$title.pdf';
     final bytes = await buildSelectionPdf(
@@ -31,6 +32,7 @@ class SelectionPdfService {
       items: items,
       options: options,
       references: references,
+      modelLinks: modelLinks,
     );
     await Printing.sharePdf(
       bytes: bytes,
@@ -43,6 +45,7 @@ class SelectionPdfService {
     required List<SelectionExportItem> items,
     required SelectionPdfOptions options,
     List<CastingReferenceMedia> references = const <CastingReferenceMedia>[],
+    Map<String, String> modelLinks = const <String, String>{},
   }) async {
     final doc = pw.Document();
 
@@ -93,6 +96,7 @@ class SelectionPdfService {
               imageData: imageBytes,
               baseFont: baseFont,
               boldFont: boldFont,
+              modelLinks: modelLinks,
             ),
           ),
         ],
@@ -226,6 +230,7 @@ class SelectionPdfService {
     required Map<String, Uint8List?> imageData,
     required pw.Font baseFont,
     required pw.Font boldFont,
+    required Map<String, String> modelLinks,
   }) {
     final info = <pw.Widget>[];
 
@@ -327,7 +332,7 @@ class SelectionPdfService {
       addInt('Мин. в день', item.minDailyFee);
     }
     if (options.includeModelLink) {
-      addLink(buildModelUrl(item.id));
+      addLink(modelLinks[item.id.trim()] ?? buildModelUrl(item.id));
     }
 
     return pw.Container(

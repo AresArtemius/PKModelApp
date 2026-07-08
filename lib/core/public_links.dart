@@ -18,6 +18,19 @@ String publicProfileLink(String profileId) {
   return _joinPublicPath('/p/${Uri.encodeComponent(profileId)}');
 }
 
+String publicProfileTokenLink({
+  required String profileId,
+  required String token,
+}) {
+  final id = profileId.trim();
+  final cleanToken = token.trim();
+  if (id.isEmpty) return '';
+  if (cleanToken.isEmpty) return publicProfileLink(id);
+  return _joinPublicPath(
+    '/p/${Uri.encodeComponent(id)}?t=${Uri.encodeQueryComponent(cleanToken)}',
+  );
+}
+
 String publicSelectionLink(String selectionId) {
   return _joinPublicPath('/s/${Uri.encodeComponent(selectionId)}');
 }
