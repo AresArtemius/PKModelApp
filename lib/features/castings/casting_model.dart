@@ -1,3 +1,5 @@
+import 'casting_project_stage.dart';
+
 class CastingModel {
   const CastingModel({
     required this.id,
@@ -6,6 +8,7 @@ class CastingModel {
     required this.rights,
     required this.fee,
     required this.datesText,
+    required this.projectStage,
   });
 
   final String id;
@@ -14,6 +17,7 @@ class CastingModel {
   final String rights;
   final String fee;
   final String datesText;
+  final CastingProjectStage projectStage;
 
   factory CastingModel.fromMap(Map<String, dynamic> map) {
     final id = (map['id'] ?? '').toString();
@@ -22,6 +26,9 @@ class CastingModel {
     final rights = (map['rights'] ?? '').toString();
     final fee = (map['fee'] ?? '').toString();
     final datesText = _datesToText(map['dates']);
+    final projectStage = castingProjectStageFromString(
+      map['project_stage']?.toString(),
+    );
 
     return CastingModel(
       id: id,
@@ -30,6 +37,7 @@ class CastingModel {
       rights: rights,
       fee: fee,
       datesText: datesText,
+      projectStage: projectStage,
     );
   }
 }

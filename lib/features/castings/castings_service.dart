@@ -1,6 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/supabase_compat.dart';
+import 'casting_project_stage.dart';
 import 'casting_response_status.dart';
 import 'casting_model.dart';
 
@@ -21,20 +22,41 @@ class CastingsService {
 
   Future<List<CastingModel>> fetchCastings() async {
     try {
-      final rows = await _sb
-          .from('castings')
-          .select('id,title,description,rights,fee,dates,created_at')
-          .order('created_at', ascending: false)
-          .limit(castingsPageLimit);
-
-      return (rows as List<dynamic>)
-          .map((e) => CastingModel.fromMap(Map<String, dynamic>.from(e as Map)))
-          .toList(growable: false);
+      return await _fetchCastingsWithStage();
     } on PostgrestException catch (e) {
+      if (SupabaseCompat.isMissingColumn(e, 'project_stage')) {
+        return _fetchCastingsLegacy();
+      }
       throw CastingsException('Failed to fetch castings', original: e);
     } catch (e) {
       throw CastingsException('Failed to fetch castings', original: e);
     }
+  }
+
+  Future<List<CastingModel>> _fetchCastingsWithStage() async {
+    final rows = await _sb
+        .from('castings')
+        .select(
+          'id,title,description,rights,fee,dates,project_stage,created_at',
+        )
+        .order('created_at', ascending: false)
+        .limit(castingsPageLimit);
+
+    return (rows as List<dynamic>)
+        .map((e) => CastingModel.fromMap(Map<String, dynamic>.from(e as Map)))
+        .toList(growable: false);
+  }
+
+  Future<List<CastingModel>> _fetchCastingsLegacy() async {
+    final rows = await _sb
+        .from('castings')
+        .select('id,title,description,rights,fee,dates,created_at')
+        .order('created_at', ascending: false)
+        .limit(castingsPageLimit);
+
+    return (rows as List<dynamic>)
+        .map((e) => CastingModel.fromMap(Map<String, dynamic>.from(e as Map)))
+        .toList(growable: false);
   }
 
   Future<void> respond({
@@ -147,6 +169,41 @@ class CastingsService {
       }
     } catch (e) {
       throw CastingsException('Failed to delete casting', original: e);
+    }
+  }
+
+  Future<void> setProjectStage({
+    required String castingId,
+    required CastingProjectStage stage,
+  }) async {
+    final id = castingId.trim();
+    if (id.isEmpty) return;
+
+    try {
+      await _sb.rpc(
+        'set_casting_project_stage',
+        params: {
+          'p_casting_id': id,
+          'p_project_stage': castingProjectStageToString(stage),
+        },
+      );
+    } on PostgrestException catch (e) {
+      if (!SupabaseCompat.isMissingRpc(e, 'set_casting_project_stage')) {
+        throw CastingsException('Failed to update casting stage', original: e);
+      }
+      try {
+        await _sb
+            .from('castings')
+            .update({'project_stage': castingProjectStageToString(stage)})
+            .eq('id', id);
+      } on PostgrestException catch (second) {
+        throw CastingsException(
+          'Failed to update casting stage',
+          original: second,
+        );
+      }
+    } catch (e) {
+      throw CastingsException('Failed to update casting stage', original: e);
     }
   }
 

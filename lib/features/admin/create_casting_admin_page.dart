@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/supabase_compat.dart';
 import '../../core/supabase_provider.dart';
 import '../../core/admin_action_log_service.dart';
 import '../../gen_l10n/app_localizations.dart';
 import '../../ui/brand/brand_admin_header.dart';
 import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
+import '../castings/casting_project_stage.dart';
 import 'admin_style.dart';
 
 class CreateCastingAdminPage extends ConsumerStatefulWidget {
@@ -26,6 +29,7 @@ class _CreateCastingAdminPageState
   final _feeC = TextEditingController();
 
   final _selectedDates = <DateTime>{};
+  CastingProjectStage _stage = defaultCastingProjectStage;
 
   @override
   void dispose() {
@@ -51,15 +55,25 @@ class _CreateCastingAdminPageState
 
     // ВАЖНО: тут предполагается таблица "castings".
     // Поля можно подстроить под твою схему.
-    await sb.from('castings').insert({
+    final payload = {
       'title': title,
       'description': desc,
       'rights': rights,
       'fee': fee,
+      'project_stage': castingProjectStageToString(_stage),
       // храню как список ISO-дат (YYYY-MM-DD)
       'dates': dates.map((d) => _dateOnly(d).toIso8601String()).toList(),
       'created_at': DateTime.now().toIso8601String(),
-    });
+    };
+
+    try {
+      await sb.from('castings').insert(payload);
+    } on PostgrestException catch (e) {
+      if (!SupabaseCompat.isMissingColumn(e, 'project_stage')) rethrow;
+      final legacyPayload = Map<String, dynamic>.from(payload)
+        ..remove('project_stage');
+      await sb.from('castings').insert(legacyPayload);
+    }
     await AdminActionLogService(sb).log(
       actionType: 'casting_created',
       title: 'Кастинг создан',
@@ -133,6 +147,17 @@ class _CreateCastingAdminPageState
                             });
                           },
                         ),
+                        const SizedBox(height: 12),
+
+                        _SectionTitle(
+                          Localizations.localeOf(context).languageCode == 'ru'
+                              ? 'ЭТАП ПРОЕКТА'
+                              : 'PROJECT STAGE',
+                        ),
+                        _StageSelector(
+                          value: _stage,
+                          onChanged: (stage) => setState(() => _stage = stage),
+                        ),
                       ],
                     ),
                   ),
@@ -142,6 +167,42 @@ class _CreateCastingAdminPageState
           ),
         ),
       ),
+    );
+  }
+}
+
+class _StageSelector extends StatelessWidget {
+  const _StageSelector({required this.value, required this.onChanged});
+
+  final CastingProjectStage value;
+  final ValueChanged<CastingProjectStage> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        for (final stage in CastingProjectStage.values)
+          ChoiceChip(
+            selected: value == stage,
+            label: Text(castingProjectStageLabel(context, stage).toUpperCase()),
+            avatar: Icon(
+              castingProjectStageIcon(stage),
+              size: 17,
+              color: value == stage ? Colors.white : kTextDark,
+            ),
+            selectedColor: castingProjectStageColor(stage),
+            backgroundColor: Colors.white.withValues(alpha: 0.88),
+            side: BorderSide(color: Colors.black.withValues(alpha: 0.08)),
+            labelStyle: adminCommandStyle(
+              size: 11,
+              letterSpacing: 0.7,
+              color: value == stage ? Colors.white : kTextDark,
+            ),
+            onSelected: (_) => onChanged(stage),
+          ),
+      ],
     );
   }
 }

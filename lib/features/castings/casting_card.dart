@@ -4,6 +4,7 @@ import '../../ui/brand/ui_constants.dart';
 import '../../gen_l10n/app_localizations.dart';
 
 import 'casting_model.dart';
+import 'casting_project_stage.dart';
 import 'casting_response_status.dart';
 
 class CastingCard extends StatelessWidget {
@@ -90,6 +91,8 @@ class CastingCard extends StatelessWidget {
               ),
             ],
           ),
+          const SizedBox(height: 10),
+          _CastingStagePill(stage: casting.projectStage),
           if (casting.description.isNotEmpty) ...[
             const SizedBox(height: 8),
             Text(casting.description, style: kCastingBodyStyle),
@@ -106,6 +109,41 @@ class CastingCard extends StatelessWidget {
             const SizedBox(height: 6),
             Text(dates, style: kCastingBodyStyle),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+class _CastingStagePill extends StatelessWidget {
+  const _CastingStagePill({required this.stage});
+
+  final CastingProjectStage stage;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = castingProjectStageColor(stage);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.24)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(castingProjectStageIcon(stage), size: 15, color: color),
+          const SizedBox(width: 6),
+          Text(
+            castingProjectStageLabel(context, stage).toUpperCase(),
+            style: BrandTheme.pillText.copyWith(
+              color: color,
+              fontSize: 11,
+              letterSpacing: 0.75,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
         ],
       ),
     );

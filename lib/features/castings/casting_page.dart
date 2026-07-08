@@ -16,6 +16,7 @@ import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/brand_pill_button.dart';
 import '../../ui/brand/ui_constants.dart';
 import '../../core/auth_providers.dart';
+import 'casting_project_stage.dart';
 import 'casting_response_status.dart';
 import 'casting_model.dart';
 import 'castings_service.dart';
@@ -538,6 +539,105 @@ Future<void> _onDeleteCastingTap({
   }
 }
 
+Future<CastingProjectStage?> _showCastingStagePicker({
+  required BuildContext context,
+  required CastingProjectStage current,
+}) async {
+  final isRu = Localizations.localeOf(context).languageCode == 'ru';
+  return showModalBottomSheet<CastingProjectStage>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    builder: (ctx) {
+      return SafeArea(
+        top: false,
+        child: Container(
+          margin: const EdgeInsets.all(12),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
+          decoration: castingDialogDecoration(),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      isRu ? 'ЭТАП ПРОЕКТА' : 'PROJECT STAGE',
+                      style: kCastingDialogTitleStyle,
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(ctx).pop(),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              for (final stage in CastingProjectStage.values) ...[
+                _CastingStagePickerTile(
+                  stage: stage,
+                  selected: stage == current,
+                  onTap: () => Navigator.of(ctx).pop(stage),
+                ),
+                const SizedBox(height: 8),
+              ],
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
+Future<void> _onSetCastingProjectStage({
+  required WidgetRef ref,
+  required BuildContext context,
+  required AppLocalizations t,
+  required CastingModel casting,
+}) async {
+  final next = await _showCastingStagePicker(
+    context: context,
+    current: casting.projectStage,
+  );
+  if (!context.mounted || next == null || next == casting.projectStage) return;
+
+  try {
+    await ref
+        .read(castingsServiceProvider)
+        .setProjectStage(castingId: casting.id, stage: next);
+    await AdminActionLogService(Supabase.instance.client).log(
+      actionType: 'casting_stage_updated',
+      title: 'Этап кастинга изменен',
+      targetTable: 'castings',
+      targetId: casting.id,
+      targetText: casting.title,
+      status: castingProjectStageToString(next),
+    );
+    ref.invalidate(castingsProvider);
+    if (!context.mounted) return;
+    _showSnack(
+      context,
+      _castingLocaleText(
+        context,
+        'Этап кастинга обновлен',
+        'Casting stage updated',
+      ),
+    );
+  } on CastingsException catch (e, st) {
+    AppLogger.error(
+      'Casting stage update failed',
+      error: e.original ?? e,
+      stackTrace: st,
+    );
+    if (!context.mounted) return;
+    _showSnack(context, _castingAdminErrorText(e, t));
+  } catch (e, st) {
+    AppLogger.error('Casting stage update failed', error: e, stackTrace: st);
+    if (!context.mounted) return;
+    _showSnack(context, _castingAdminErrorText(e, t));
+  }
+}
+
 class CastingPage extends ConsumerStatefulWidget {
   const CastingPage({super.key});
 
@@ -599,6 +699,15 @@ class _CastingPageState extends ConsumerState<CastingPage> {
         context: context,
         t: t,
         castingId: castingId,
+      );
+    }
+
+    void setCastingStage(CastingModel casting) {
+      _onSetCastingProjectStage(
+        ref: ref,
+        context: context,
+        t: t,
+        casting: casting,
       );
     }
 
@@ -760,6 +869,7 @@ class _CastingPageState extends ConsumerState<CastingPage> {
                             },
                             onRespondTap: respond,
                             onDeleteTap: isAdmin ? deleteCasting : null,
+                            onStageTap: isAdmin ? setCastingStage : null,
                             onRefresh: () async =>
                                 ref.refresh(castingsProvider.future),
                           );
@@ -815,6 +925,7 @@ class _CastingsDesktopLayout extends StatelessWidget {
     required this.onSelect,
     required this.onRespondTap,
     required this.onDeleteTap,
+    required this.onStageTap,
     required this.onRefresh,
   });
 
@@ -827,6 +938,7 @@ class _CastingsDesktopLayout extends StatelessWidget {
   final ValueChanged<CastingModel> onSelect;
   final ValueChanged<String> onRespondTap;
   final ValueChanged<String>? onDeleteTap;
+  final ValueChanged<CastingModel>? onStageTap;
   final Future<void> Function() onRefresh;
 
   @override
@@ -860,6 +972,9 @@ class _CastingsDesktopLayout extends StatelessWidget {
                 isDisabled: !profilesReady,
                 isAdmin: isAdmin,
                 onRespondTap: () => onRespondTap(selected.id),
+                onStageTap: onStageTap == null
+                    ? null
+                    : () => onStageTap!(selected),
                 onDeleteTap: deleteTap == null
                     ? null
                     : () => deleteTap(selected.id),
@@ -1061,6 +1176,12 @@ class _CastingListTile extends StatelessWidget {
                 ),
               ],
               const SizedBox(height: 10),
+              _CastingMetaPill(
+                icon: castingProjectStageIcon(casting.projectStage),
+                label: castingProjectStageLabel(context, casting.projectStage),
+                color: castingProjectStageColor(casting.projectStage),
+              ),
+              const SizedBox(height: 8),
               Row(
                 children: [
                   if (casting.datesText.isNotEmpty)
@@ -1095,6 +1216,7 @@ class _CastingDesktopDetailPanel extends StatelessWidget {
     required this.isDisabled,
     required this.isAdmin,
     required this.onRespondTap,
+    required this.onStageTap,
     required this.onDeleteTap,
   });
 
@@ -1104,6 +1226,7 @@ class _CastingDesktopDetailPanel extends StatelessWidget {
   final bool isDisabled;
   final bool isAdmin;
   final VoidCallback onRespondTap;
+  final VoidCallback? onStageTap;
   final VoidCallback? onDeleteTap;
 
   @override
@@ -1160,6 +1283,14 @@ class _CastingDesktopDetailPanel extends StatelessWidget {
                     onTap: onDeleteTap,
                   ),
                 );
+                final stageButton = SizedBox(
+                  height: BrandTheme.pillHeight,
+                  child: BrandPillButton(
+                    label: _castingLocaleText(context, 'ЭТАП', 'STAGE'),
+                    style: BrandPillStyle.light,
+                    onTap: onStageTap,
+                  ),
+                );
                 final responsesButton = SizedBox(
                   height: BrandTheme.pillHeight,
                   child: BrandPillButton(
@@ -1177,11 +1308,17 @@ class _CastingDesktopDetailPanel extends StatelessWidget {
                         children: [
                           Expanded(child: deleteButton),
                           const SizedBox(width: 12),
-                          Expanded(child: responsesButton),
+                          Expanded(child: stageButton),
                         ],
                       ),
                       const SizedBox(height: 12),
-                      respondButton,
+                      Row(
+                        children: [
+                          Expanded(child: responsesButton),
+                          const SizedBox(width: 12),
+                          Expanded(child: respondButton),
+                        ],
+                      ),
                     ],
                   );
                 }
@@ -1190,7 +1327,9 @@ class _CastingDesktopDetailPanel extends StatelessWidget {
                   children: [
                     SizedBox(width: 172, child: deleteButton),
                     const SizedBox(width: 12),
-                    SizedBox(width: 190, child: responsesButton),
+                    SizedBox(width: 150, child: stageButton),
+                    const SizedBox(width: 12),
+                    SizedBox(width: 174, child: responsesButton),
                     const SizedBox(width: 12),
                     Expanded(child: respondButton),
                   ],
@@ -1281,6 +1420,11 @@ class _CastingDetailHeader extends StatelessWidget {
                 icon: Icons.event_rounded,
                 label: casting.datesText,
               ),
+            _CastingInfoChip(
+              icon: castingProjectStageIcon(casting.projectStage),
+              label: castingProjectStageLabel(context, casting.projectStage),
+              color: castingProjectStageColor(casting.projectStage),
+            ),
             if (casting.fee.isNotEmpty)
               _CastingInfoChip(
                 icon: Icons.payments_rounded,
@@ -1322,8 +1466,15 @@ class _CastingSummaryPanel extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _CastingSummaryTile(
+            icon: castingProjectStageIcon(casting.projectStage),
+            label: _castingLocaleText(context, 'Этап проекта', 'Project stage'),
+            value: castingProjectStageLabel(context, casting.projectStage),
+            color: castingProjectStageColor(casting.projectStage),
+          ),
+          const SizedBox(height: 12),
+          _CastingSummaryTile(
             icon: Icons.circle_rounded,
-            label: _castingLocaleText(context, 'Статус', 'Status'),
+            label: _castingLocaleText(context, 'Отклик', 'Response'),
             value: statusText,
           ),
           if (casting.datesText.isNotEmpty) ...[
@@ -1374,11 +1525,13 @@ class _CastingSummaryTile extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.value,
+    this.color = BrandTheme.redTop,
   });
 
   final IconData icon;
   final String label;
   final String value;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
@@ -1391,7 +1544,7 @@ class _CastingSummaryTile extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(icon, color: BrandTheme.redTop, size: 18),
+          Icon(icon, color: color, size: 18),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -1496,14 +1649,24 @@ class _CastingDetailSection extends StatelessWidget {
 }
 
 class _CastingInfoChip extends StatelessWidget {
-  const _CastingInfoChip({required this.icon, required this.label});
+  const _CastingInfoChip({
+    required this.icon,
+    required this.label,
+    this.color = BrandTheme.redTop,
+  });
 
   final IconData icon;
   final String label;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
-    return _CastingMetaPill(icon: icon, label: label, large: true);
+    return _CastingMetaPill(
+      icon: icon,
+      label: label,
+      color: color,
+      large: true,
+    );
   }
 }
 
@@ -1511,11 +1674,13 @@ class _CastingMetaPill extends StatelessWidget {
   const _CastingMetaPill({
     required this.icon,
     required this.label,
+    this.color = BrandTheme.redTop,
     this.large = false,
   });
 
   final IconData icon;
   final String label;
+  final Color color;
   final bool large;
 
   @override
@@ -1534,7 +1699,7 @@ class _CastingMetaPill extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: large ? 18 : 13, color: BrandTheme.redTop),
+          Icon(icon, size: large ? 18 : 13, color: color),
           SizedBox(width: large ? 8 : 5),
           Flexible(
             child: Text(
@@ -1549,6 +1714,57 @@ class _CastingMetaPill extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _CastingStagePickerTile extends StatelessWidget {
+  const _CastingStagePickerTile({
+    required this.stage,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final CastingProjectStage stage;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = selected ? Colors.white : castingProjectStageColor(stage);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(kPillRadius),
+        onTap: onTap,
+        child: Container(
+          height: 50,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: selected
+              ? pillDecoration(isDark: true, radius: kPillRadius)
+              : pillDecoration(isDark: false, radius: kPillRadius),
+          child: Row(
+            children: [
+              Icon(castingProjectStageIcon(stage), color: color, size: 19),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  castingProjectStageLabel(context, stage).toUpperCase(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: BrandTheme.pillText.copyWith(
+                    color: color,
+                    fontSize: 12,
+                    letterSpacing: 0.95,
+                  ),
+                ),
+              ),
+              if (selected)
+                const Icon(Icons.check_rounded, color: Colors.white, size: 20),
+            ],
+          ),
+        ),
       ),
     );
   }
