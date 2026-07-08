@@ -69,6 +69,7 @@ final castingResponsesProvider = FutureProvider.autoDispose
 
       const profileSelect = '''
         status,
+        admin_note,
         created_at,
         profile:profiles(
           id,
@@ -97,8 +98,13 @@ final castingResponsesProvider = FutureProvider.autoDispose
       } on PostgrestException catch (e) {
         final msg = '${e.message} ${e.details ?? ''} ${e.hint ?? ''}'
             .toLowerCase();
-        if (!msg.contains('status')) rethrow;
-        rows = await run(profileSelect.replaceFirst('status,', ''));
+        if (msg.contains('admin_note')) {
+          rows = await run(profileSelect.replaceFirst('admin_note,', ''));
+        } else if (msg.contains('status')) {
+          rows = await run(profileSelect.replaceFirst('status,', ''));
+        } else {
+          rethrow;
+        }
       }
 
       final items = rows
@@ -354,6 +360,38 @@ class SelectionCastingPage extends ConsumerWidget {
                 ref.invalidate(castingResponseHistoryProvider(castingId));
               }
 
+              Future<void> updateNote({
+                required String profileId,
+                required String note,
+              }) async {
+                if (profileId.trim().isEmpty) return;
+                final sb = ref.read(supabaseProvider);
+                try {
+                  await sb.rpc(
+                    'set_casting_response_admin_note',
+                    params: {
+                      'p_casting_id': castingId,
+                      'p_profile_id': profileId,
+                      'p_admin_note': note,
+                    },
+                  );
+                } on PostgrestException catch (e) {
+                  final msg = '${e.message} ${e.details ?? ''} ${e.hint ?? ''}'
+                      .toLowerCase();
+                  final missingRpc =
+                      msg.contains('set_casting_response_admin_note') ||
+                      msg.contains('schema cache') ||
+                      msg.contains('function');
+                  if (!missingRpc) rethrow;
+                  await sb
+                      .from('casting_responses')
+                      .update({'admin_note': note.trim()})
+                      .eq('casting_id', castingId)
+                      .eq('profile_id', profileId);
+                }
+                ref.invalidate(castingResponsesProvider(castingId));
+              }
+
               Future<void> removeBulkResponses({
                 required List<String> profileIds,
               }) async {
@@ -437,6 +475,7 @@ class SelectionCastingPage extends ConsumerWidget {
                             onStatusChanged: updateStatus,
                             onBulkStatusChanged: updateBulkStatus,
                             onBulkRemove: removeBulkResponses,
+                            onNoteChanged: updateNote,
                             history: ref.watch(
                               castingResponseHistoryProvider(castingId),
                             ),
@@ -585,6 +624,7 @@ class _CastingShortlistBoard extends StatefulWidget {
     required this.onStatusChanged,
     required this.onBulkStatusChanged,
     required this.onBulkRemove,
+    required this.onNoteChanged,
     required this.history,
   });
 
@@ -601,6 +641,8 @@ class _CastingShortlistBoard extends StatefulWidget {
   })
   onBulkStatusChanged;
   final Future<void> Function({required List<String> profileIds}) onBulkRemove;
+  final Future<void> Function({required String profileId, required String note})
+  onNoteChanged;
   final AsyncValue<List<Map<String, dynamic>>> history;
 
   @override
@@ -695,6 +737,7 @@ class _CastingShortlistBoardState extends State<_CastingShortlistBoard> {
                   selectedProfileIds: _selectedProfileIds,
                   onSelectionChanged: _toggleSelection,
                   onStatusChanged: _moveOne,
+                  onNoteChanged: widget.onNoteChanged,
                   allStatuses: statuses,
                   t: t,
                 )
@@ -710,6 +753,7 @@ class _CastingShortlistBoardState extends State<_CastingShortlistBoard> {
                           selectedProfileIds: _selectedProfileIds,
                           onSelectionChanged: _toggleSelection,
                           onStatusChanged: _moveOne,
+                          onNoteChanged: widget.onNoteChanged,
                           allStatuses: statuses,
                           t: t,
                         ),
@@ -887,6 +931,7 @@ class _CastingBoardColumn extends StatelessWidget {
     required this.selectedProfileIds,
     required this.onSelectionChanged,
     required this.onStatusChanged,
+    required this.onNoteChanged,
     required this.allStatuses,
     required this.t,
   });
@@ -901,6 +946,8 @@ class _CastingBoardColumn extends StatelessWidget {
     required CastingResponseStatus status,
   })
   onStatusChanged;
+  final Future<void> Function({required String profileId, required String note})
+  onNoteChanged;
   final List<CastingResponseStatus> allStatuses;
   final AppLocalizations t;
 
@@ -996,6 +1043,7 @@ class _CastingBoardColumn extends StatelessWidget {
                       selectedProfileIds: selectedProfileIds,
                       onSelectionChanged: onSelectionChanged,
                       onStatusChanged: onStatusChanged,
+                      onNoteChanged: onNoteChanged,
                       t: t,
                     ),
                     if (i != items.length - 1) const SizedBox(height: 10),
@@ -1156,6 +1204,7 @@ class _CastingBoardCard extends StatelessWidget {
     required this.selectedProfileIds,
     required this.onSelectionChanged,
     required this.onStatusChanged,
+    required this.onNoteChanged,
     required this.t,
   });
 
@@ -1170,6 +1219,8 @@ class _CastingBoardCard extends StatelessWidget {
     required CastingResponseStatus status,
   })
   onStatusChanged;
+  final Future<void> Function({required String profileId, required String note})
+  onNoteChanged;
   final AppLocalizations t;
 
   @override
@@ -1198,6 +1249,8 @@ class _CastingBoardCard extends StatelessWidget {
         ? coverUrl
         : (photoUrls.isNotEmpty ? photoUrls.first : '');
     final selected = selectedProfileIds.contains(profileId);
+    final adminNote = (row['admin_note'] ?? '').toString().trim();
+    final hasNote = adminNote.isNotEmpty;
 
     final card = Container(
       decoration: BoxDecoration(
@@ -1268,10 +1321,34 @@ class _CastingBoardCard extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
+            if (hasNote) ...[
+              _CandidateNotePreview(note: adminNote),
+              const SizedBox(height: 8),
+            ],
             Wrap(
               spacing: 6,
               runSpacing: 6,
               children: [
+                _StatusMoveChip(
+                  label: Localizations.localeOf(context).languageCode == 'ru'
+                      ? (hasNote ? 'Заметка есть' : 'Заметка')
+                      : (hasNote ? 'Has note' : 'Note'),
+                  icon: hasNote
+                      ? Icons.sticky_note_2_rounded
+                      : Icons.note_add_rounded,
+                  tone: hasNote
+                      ? _StatusMoveChipTone.note
+                      : _StatusMoveChipTone.neutral,
+                  onTap: profileId.isEmpty
+                      ? null
+                      : () => _editCandidateNote(
+                          context: context,
+                          profileName: name.isNotEmpty ? name : t.profileUpper,
+                          initialNote: adminNote,
+                          onSave: (note) =>
+                              onNoteChanged(profileId: profileId, note: note),
+                        ),
+                ),
                 for (final status in allStatuses)
                   if (status != currentStatus)
                     _StatusMoveChip(
@@ -1304,18 +1381,274 @@ class _CastingBoardCard extends StatelessWidget {
   }
 }
 
-enum _StatusMoveChipTone { neutral, danger }
+Future<void> _editCandidateNote({
+  required BuildContext context,
+  required String profileName,
+  required String initialNote,
+  required Future<void> Function(String note) onSave,
+}) async {
+  final ru = Localizations.localeOf(context).languageCode == 'ru';
+  final controller = TextEditingController(text: initialNote);
+  var saving = false;
+
+  final saved = await showModalBottomSheet<bool>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (context) {
+      return StatefulBuilder(
+        builder: (context, setSheetState) {
+          return SafeArea(
+            child: Padding(
+              padding: EdgeInsets.only(
+                left: 16,
+                right: 16,
+                top: 16,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+              ),
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  gradient: BrandTheme.lightPillGradient,
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: kBorderColor),
+                  boxShadow: BrandTheme.basePillShadow(isDark: false),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.sticky_note_2_rounded,
+                          color: BrandTheme.redTop,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            ru ? 'ЗАМЕТКА ПО КАНДИДАТУ' : 'CANDIDATE NOTE',
+                            style: const TextStyle(
+                              color: _text,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 1.2,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: saving
+                              ? null
+                              : () => Navigator.of(context).pop(false),
+                          icon: const Icon(Icons.close_rounded),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      profileName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: kTextMuted,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: controller,
+                      minLines: 4,
+                      maxLines: 8,
+                      enabled: !saving,
+                      textInputAction: TextInputAction.newline,
+                      decoration: InputDecoration(
+                        hintText: ru
+                            ? 'Например: сильная камера, уточнить доступность'
+                            : 'Example: strong camera presence, check availability',
+                        filled: true,
+                        fillColor: Colors.white.withValues(alpha: 0.66),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(18),
+                          borderSide: const BorderSide(color: kBorderColor),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(18),
+                          borderSide: const BorderSide(color: kBorderColor),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(18),
+                          borderSide: const BorderSide(
+                            color: BrandTheme.redTop,
+                            width: 1.3,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _CandidateNoteButton(
+                            label: ru ? 'Очистить' : 'Clear',
+                            onTap: saving
+                                ? null
+                                : () {
+                                    controller.clear();
+                                    setSheetState(() {});
+                                  },
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _CandidateNoteButton(
+                            label: saving
+                                ? (ru ? 'Сохранение' : 'Saving')
+                                : (ru ? 'Сохранить' : 'Save'),
+                            isPrimary: true,
+                            onTap: saving
+                                ? null
+                                : () async {
+                                    setSheetState(() => saving = true);
+                                    try {
+                                      await onSave(controller.text.trim());
+                                      if (context.mounted) {
+                                        Navigator.of(context).pop(true);
+                                      }
+                                    } catch (_) {
+                                      if (!context.mounted) return;
+                                      setSheetState(() => saving = false);
+                                      ScaffoldMessenger.of(context)
+                                        ..hideCurrentSnackBar()
+                                        ..showSnackBar(
+                                          SnackBar(
+                                            content: Text(
+                                              ru
+                                                  ? 'Не удалось сохранить заметку. Проверьте SQL для заметок кандидатов.'
+                                                  : 'Could not save the note. Check candidate notes SQL.',
+                                            ),
+                                          ),
+                                        );
+                                    }
+                                  },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      );
+    },
+  );
+
+  controller.dispose();
+  if (saved == true && context.mounted) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(content: Text(ru ? 'Заметка сохранена' : 'Note saved')),
+      );
+  }
+}
+
+class _CandidateNotePreview extends StatelessWidget {
+  const _CandidateNotePreview({required this.note});
+
+  final String note;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: BrandTheme.redTop.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: BrandTheme.redTop.withValues(alpha: 0.20)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(
+            Icons.sticky_note_2_rounded,
+            size: 16,
+            color: BrandTheme.redTop,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              note,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: _text,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                height: 1.25,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CandidateNoteButton extends StatelessWidget {
+  const _CandidateNoteButton({
+    required this.label,
+    required this.onTap,
+    this.isPrimary = false,
+  });
+
+  final String label;
+  final VoidCallback? onTap;
+  final bool isPrimary;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(18),
+      onTap: onTap,
+      child: Container(
+        height: 48,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          color: isPrimary ? _text : Colors.white.withValues(alpha: 0.58),
+          border: Border.all(color: kBorderColor),
+          boxShadow: isPrimary
+              ? BrandTheme.basePillShadow(isDark: false)
+              : null,
+        ),
+        child: Text(
+          label.toUpperCase(),
+          style: TextStyle(
+            color: isPrimary ? Colors.white : _text,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 1.1,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+enum _StatusMoveChipTone { neutral, danger, note }
 
 class _StatusMoveChip extends StatelessWidget {
   const _StatusMoveChip({
     required this.label,
     required this.onTap,
     this.tone = _StatusMoveChipTone.neutral,
+    this.icon,
   });
 
   final String label;
   final VoidCallback? onTap;
   final _StatusMoveChipTone tone;
+  final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
@@ -1328,22 +1661,43 @@ class _StatusMoveChip extends StatelessWidget {
           borderRadius: BorderRadius.circular(999),
           color: tone == _StatusMoveChipTone.danger
               ? BrandTheme.redTop.withValues(alpha: 0.10)
+              : tone == _StatusMoveChipTone.note
+              ? BrandTheme.redTop.withValues(alpha: 0.08)
               : Colors.white.withValues(alpha: 0.58),
           border: Border.all(
             color: tone == _StatusMoveChipTone.danger
                 ? BrandTheme.redTop.withValues(alpha: 0.36)
+                : tone == _StatusMoveChipTone.note
+                ? BrandTheme.redTop.withValues(alpha: 0.28)
                 : kBorderColor,
           ),
         ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: tone == _StatusMoveChipTone.danger
-                ? BrandTheme.redTop
-                : _text,
-            fontSize: 11,
-            fontWeight: FontWeight.w900,
-          ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (icon != null) ...[
+              Icon(
+                icon,
+                size: 14,
+                color: tone == _StatusMoveChipTone.neutral
+                    ? _text
+                    : BrandTheme.redTop,
+              ),
+              const SizedBox(width: 5),
+            ],
+            Text(
+              label,
+              style: TextStyle(
+                color:
+                    tone == _StatusMoveChipTone.danger ||
+                        tone == _StatusMoveChipTone.note
+                    ? BrandTheme.redTop
+                    : _text,
+                fontSize: 11,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
         ),
       ),
     );
