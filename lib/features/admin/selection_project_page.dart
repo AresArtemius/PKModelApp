@@ -6,7 +6,6 @@ import 'package:flutter/services.dart';
 
 import '../../core/admin_action_log_service.dart';
 import '../../core/app_error_mapper.dart';
-import '../../core/public_links.dart';
 import '../../core/router.dart';
 import '../../core/supabase_provider.dart';
 import '../../gen_l10n/app_localizations.dart';
@@ -23,7 +22,6 @@ import '../selection/selection_pdf_options_dialog.dart';
 import '../selection/selection_pdf_service.dart';
 import '../selection/public_profile_access_link_service.dart';
 import 'selection_client_feedback.dart';
-import 'selection_providers.dart';
 import 'selection_status.dart';
 
 const _bg = BrandTheme.greyMid;
@@ -208,46 +206,6 @@ List<MapEntry<String, String>> _campaignRows(
   return rows.where((row) => row.value.isNotEmpty).toList(growable: false);
 }
 
-class _SelectionPublicToggleException implements Exception {
-  const _SelectionPublicToggleException({
-    required this.rpcError,
-    required this.fallbackError,
-  });
-
-  final Object? rpcError;
-  final Object fallbackError;
-
-  @override
-  String toString() {
-    return 'Selection public toggle failed. RPC: $rpcError. Fallback: $fallbackError';
-  }
-}
-
-String _publicSelectionToggleErrorMessage(
-  Object error,
-  AppLocalizations t,
-  bool isRu,
-) {
-  final text = error.toString().toLowerCase();
-  if (text.contains('set_selection_public') ||
-      text.contains('is_public') ||
-      text.contains('selection_client_feedback') ||
-      text.contains('schema cache') ||
-      text.contains('function') && text.contains('not found')) {
-    return isRu
-        ? 'Публичная ссылка не включилась. Скорее всего, в Supabase не применен SQL `public_selection_client_feedback.sql` или schema cache еще не обновился.'
-        : 'Public link was not enabled. Most likely `public_selection_client_feedback.sql` is not applied in Supabase or schema cache has not refreshed yet.';
-  }
-  if (text.contains('row-level security') ||
-      text.contains('permission') ||
-      text.contains('access denied')) {
-    return isRu
-        ? 'Нет права включить публичную ссылку для этой подборки. Проверьте владельца подборки, роль админа и RLS-политики.'
-        : 'No permission to publish this selection. Check selection owner, admin role, and RLS policies.';
-  }
-  return AppErrorMapper.message(error, t);
-}
-
 class SelectionProjectPage extends ConsumerWidget {
   const SelectionProjectPage({
     super.key,
@@ -293,16 +251,12 @@ class SelectionProjectPage extends ConsumerWidget {
               final items = List<Map<String, dynamic>>.from(
                 data['items'] as List<dynamic>,
               );
-              final manager = Map<String, dynamic>.from(
-                (data['manager'] as Map?) ?? const <String, dynamic>{},
-              );
               final exportItems = List<SelectionExportItem>.from(
                 data['exportItems'] as List<dynamic>,
               );
               final title = (selection['title'] ?? '').toString();
               final publicEnabled = selection['is_public'] == true;
               final status = selectionStatusFromString(selection['status']);
-              final publicLink = publicSelectionLink(selectionId);
               final campaignRows = _campaignRows(t, selection);
 
               final clientKey = isPublic
@@ -422,88 +376,6 @@ class SelectionProjectPage extends ConsumerWidget {
                 }
               }
 
-              Future<void> setPublic(bool next) async {
-                try {
-                  final sb = ref.read(supabaseProvider);
-                  Object? rpcError;
-                  try {
-                    await sb.rpc(
-                      'set_selection_public',
-                      params: {
-                        'p_selection_id': selectionId,
-                        'p_is_public': next,
-                      },
-                    );
-                  } catch (e) {
-                    rpcError = e;
-                    try {
-                      await sb
-                          .from('selections')
-                          .update({
-                            'is_public': next,
-                            if (next && status == SelectionStatus.draft)
-                              'status':
-                                  SelectionStatus.sentToClient.storageValue,
-                          })
-                          .eq('id', selectionId);
-                    } catch (fallbackError) {
-                      throw _SelectionPublicToggleException(
-                        rpcError: rpcError,
-                        fallbackError: fallbackError,
-                      );
-                    }
-                  }
-                  try {
-                    await AdminActionLogService(sb).log(
-                      actionType: next
-                          ? 'selection_public_link_enabled'
-                          : 'selection_public_link_disabled',
-                      title: next
-                          ? 'Публичная ссылка подборки включена'
-                          : 'Публичная ссылка подборки выключена',
-                      description: publicLink,
-                      targetTable: 'selections',
-                      targetId: selectionId,
-                      targetText: title,
-                      status: next ? 'public' : 'private',
-                      metadata: {
-                        'selection_id': selectionId,
-                        'selection_title': title,
-                        'public_link': publicLink,
-                        'is_public': next,
-                      },
-                    );
-                  } catch (_) {
-                    // Audit logging must not block public link publishing.
-                  }
-                  ref.invalidate(selectionProjectProvider(selectionId));
-                  ref.invalidate(adminSelectionListProvider);
-                } catch (e) {
-                  if (!context.mounted) return;
-                  final isRu =
-                      Localizations.localeOf(context).languageCode == 'ru';
-                  ScaffoldMessenger.of(context)
-                    ..hideCurrentSnackBar()
-                    ..showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          '${t.errorUpper}: ${_publicSelectionToggleErrorMessage(e, t, isRu)}',
-                        ),
-                      ),
-                    );
-                }
-              }
-
-              Future<void> copyPublicLink() async {
-                await Clipboard.setData(ClipboardData(text: publicLink));
-                if (!context.mounted) return;
-                ScaffoldMessenger.of(context)
-                  ..hideCurrentSnackBar()
-                  ..showSnackBar(
-                    SnackBar(content: Text(t.publicSelectionLinkCopied)),
-                  );
-              }
-
               if (isPublic &&
                   publicEnabled &&
                   status == SelectionStatus.sentToClient) {
@@ -543,10 +415,6 @@ class SelectionProjectPage extends ConsumerWidget {
                             ),
                           ),
                   ),
-                  if (isPublic) ...[
-                    const SizedBox(height: 12),
-                    const _PublicClientIntro(),
-                  ],
                   const SizedBox(height: 12),
                   if (!isPublic) ...[
                     if (campaignRows.isNotEmpty) ...[
@@ -554,13 +422,6 @@ class SelectionProjectPage extends ConsumerWidget {
                       const SizedBox(height: 12),
                     ],
                     _SelectionStatusPanel(status: status, onChanged: setStatus),
-                    const SizedBox(height: 12),
-                    _PublicSelectionPanel(
-                      enabled: publicEnabled,
-                      link: publicLink,
-                      onToggle: setPublic,
-                      onCopy: copyPublicLink,
-                    ),
                     const SizedBox(height: 12),
                   ],
                   Expanded(
@@ -582,18 +443,6 @@ class SelectionProjectPage extends ConsumerWidget {
                                 ),
                               ),
                             ),
-                          )
-                        : isPublic
-                        ? _PublicSelectionPresentationView(
-                            selectionId: selectionId,
-                            title: title.isNotEmpty ? title : t.selectionUpper,
-                            selection: selection,
-                            campaignRows: campaignRows,
-                            manager: manager,
-                            publicLink: publicLink,
-                            items: items,
-                            clientKey: clientKey,
-                            clientFeedback: clientFeedback,
                           )
                         : _CardPill(
                             child: ListView.separated(
@@ -801,6 +650,8 @@ _SelectionPresentationProfile _selectionProfileVmFromRow(
   );
 }
 
+// Prototype kept for a possible future client presentation page. The active
+// selection flow currently uses the compact list plus PDF export.
 class _PublicSelectionPresentationView extends StatefulWidget {
   const _PublicSelectionPresentationView({
     required this.selectionId,
@@ -1764,16 +1615,9 @@ class _SelectionProfileCard extends StatelessWidget {
                         : '${Routes.modelPrefix}$profileId?from=project&selectionId=$selectionId',
                   ),
           ),
-          if (isPublic)
-            _ClientFeedbackControls(
-              selectionId: selectionId,
-              profileId: profileId,
-              clientKey: clientKey,
-              initial: clientFeedback,
-            )
-          else if (agentFeedback != null && !agentFeedback!.isEmpty)
+          if (!isPublic && agentFeedback != null && !agentFeedback!.isEmpty)
             _AgentFeedbackView(summary: agentFeedback!)
-          else
+          else if (!isPublic)
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
               child: Text(
@@ -2164,197 +2008,6 @@ class _CampaignInfoPanel extends StatelessWidget {
             if (row != rows.last) const SizedBox(height: 8),
           ],
         ],
-      ),
-    );
-  }
-}
-
-class _PublicClientIntro extends StatelessWidget {
-  const _PublicClientIntro();
-
-  @override
-  Widget build(BuildContext context) {
-    final t = AppLocalizations.of(context)!;
-
-    return _CardPill(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            t.publicSelectionClientTitle,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: _text,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 1.0,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            t.publicSelectionClientSubtitle,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: kTextMuted,
-              fontWeight: FontWeight.w700,
-              height: 1.3,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PublicSelectionPanel extends StatelessWidget {
-  const _PublicSelectionPanel({
-    required this.enabled,
-    required this.link,
-    required this.onToggle,
-    required this.onCopy,
-  });
-
-  final bool enabled;
-  final String link;
-  final ValueChanged<bool> onToggle;
-  final VoidCallback onCopy;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = AppLocalizations.of(context)!;
-    final isRu = Localizations.localeOf(context).languageCode == 'ru';
-
-    return _CardPill(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  t.publicSelectionLinkUpper,
-                  style: const TextStyle(
-                    color: _text,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 1.1,
-                  ),
-                ),
-              ),
-              Switch(
-                value: enabled,
-                activeThumbColor: BrandTheme.redTop,
-                onChanged: onToggle,
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            isRu
-                ? 'Включает клиентскую страницу подборки по ссылке ниже. Если выключено, клиент страницу не откроет.'
-                : 'Enables the client-facing selection page below. When disabled, clients cannot open it.',
-            style: const TextStyle(
-              color: kTextMuted,
-              fontWeight: FontWeight.w700,
-              height: 1.25,
-              fontSize: 12,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            link,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: kTextMuted,
-              fontWeight: FontWeight.w700,
-              height: 1.25,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: _PanelButton(
-                  label: enabled
-                      ? t.publicSelectionDisable
-                      : t.publicSelectionEnable,
-                  icon: enabled
-                      ? Icons.visibility_off_rounded
-                      : Icons.visibility_rounded,
-                  isDark: false,
-                  onTap: () => onToggle(!enabled),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _PanelButton(
-                  label: t.publicSelectionCopyLink,
-                  icon: Icons.copy_rounded,
-                  isDark: true,
-                  onTap: enabled ? onCopy : null,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PanelButton extends StatelessWidget {
-  const _PanelButton({
-    required this.label,
-    required this.icon,
-    required this.isDark,
-    required this.onTap,
-  });
-
-  final String label;
-  final IconData icon;
-  final bool isDark;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(999),
-        onTap: onTap,
-        child: Opacity(
-          opacity: onTap == null ? 0.45 : 1,
-          child: Container(
-            height: 44,
-            alignment: Alignment.center,
-            decoration: pillDecoration(
-              isDark: isDark,
-              radius: 999,
-            ).copyWith(border: Border.all(color: kBorderColor)),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  icon,
-                  size: 17,
-                  color: isDark ? Colors.white : BrandTheme.redTop,
-                ),
-                const SizedBox(width: 7),
-                Flexible(
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: isDark ? Colors.white : _text,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
       ),
     );
   }
