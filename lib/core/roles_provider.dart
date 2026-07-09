@@ -181,6 +181,7 @@ class AccountStatusSnapshot {
     this.pending,
     this.rejected,
     this.rejectedApplicationId,
+    this.rejectedComment,
   });
 
   final RegistrationAccountType current;
@@ -188,6 +189,7 @@ class AccountStatusSnapshot {
   final RegistrationAccountType? pending;
   final RegistrationAccountType? rejected;
   final String? rejectedApplicationId;
+  final String? rejectedComment;
 
   bool get hasPending => pending != null;
   bool get isApprovedClient => role == AccountRole.castingAgent;
@@ -229,6 +231,10 @@ final accountStatusProvider = FutureProvider<AccountStatusSnapshot>((
           application.status == 'rejected' && !application.rejectionSeen
           ? application.id
           : null,
+      rejectedComment:
+          application.status == 'rejected' && !application.rejectionSeen
+          ? application.comment
+          : null,
     );
   } on PostgrestException catch (e) {
     AppLogger.warning('Account status DB fallback', error: e);
@@ -252,12 +258,14 @@ class _StatusApplicationSnapshot {
     this.id,
     this.status,
     this.type,
+    this.comment,
     this.rejectionSeen = false,
   });
 
   final String? id;
   final String? status;
   final RegistrationAccountType? type;
+  final String? comment;
   final bool rejectionSeen;
 }
 
@@ -300,6 +308,11 @@ Future<_StatusApplicationSnapshot> _fetchLatestStatusApplication(
     if (row == null) return const _StatusApplicationSnapshot();
     final requestedRaw = row['requested_account_type']?.toString().trim();
     final commentRaw = row['comment']?.toString().trim();
+    final commentIsLegacyType =
+        commentRaw != null &&
+        publicRegistrationAccountTypes.any(
+          (type) => type.storageValue == commentRaw,
+        );
     final typeRaw =
         requestedRaw == RegistrationAccountType.castingAgent.storageValue &&
             commentRaw != null &&
@@ -311,6 +324,7 @@ Future<_StatusApplicationSnapshot> _fetchLatestStatusApplication(
       id: row['id']?.toString().trim(),
       status: row['status']?.toString().toLowerCase().trim(),
       type: registrationAccountTypeFromStorage(typeRaw),
+      comment: commentIsLegacyType ? null : commentRaw,
       rejectionSeen: (row['rejection_seen_at'] ?? '')
           .toString()
           .trim()

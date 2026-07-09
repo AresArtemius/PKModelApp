@@ -184,6 +184,7 @@ class MyProfilePage extends ConsumerWidget {
           child: _ProfileSummaryCard(
             fullName: p.fullName.trim(),
             status: p.status,
+            moderationComment: p.moderationComment ?? '',
             photoUrl: p.effectiveCoverPhotoUrl.isEmpty
                 ? null
                 : p.effectiveCoverPhotoUrl,
@@ -585,6 +586,7 @@ class _AccountStatusEntryCardState
         'account_status_rejected_seen_${userId}_${applicationId.isEmpty ? rejected.storageValue : applicationId}';
     if (_shownRejectedDialogs.contains(key)) return;
     _shownRejectedDialogs.add(key);
+    final rejectionComment = status.rejectedComment?.trim() ?? '';
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
@@ -625,6 +627,13 @@ class _AccountStatusEntryCardState
                     height: 1.35,
                   ),
                 ),
+                if (rejectionComment.isNotEmpty) ...[
+                  const SizedBox(height: 14),
+                  _CorrectionHintBlock(
+                    title: _isRussian ? 'Что исправить' : 'What to fix',
+                    text: rejectionComment,
+                  ),
+                ],
                 const SizedBox(height: 22),
                 BrandPillButton(
                   label: _isRussian ? 'ПОНЯТНО' : 'OK',
@@ -1214,6 +1223,7 @@ class _ProfileSummaryCard extends StatelessWidget {
   const _ProfileSummaryCard({
     required this.fullName,
     required this.status,
+    required this.moderationComment,
     required this.onTap,
     required this.photoUrl,
     required this.uploadTask,
@@ -1225,6 +1235,7 @@ class _ProfileSummaryCard extends StatelessWidget {
 
   final String fullName;
   final ProfileStatus status;
+  final String moderationComment;
   final String? photoUrl;
   final ProfileMediaUploadTask? uploadTask;
   final ValueChanged<ProfileMediaUploadTask> onRetryUpload;
@@ -1252,6 +1263,7 @@ class _ProfileSummaryCard extends StatelessWidget {
     final hasPhoto = photoUrl?.trim().isNotEmpty ?? false;
     final title = fullName.trim().isEmpty ? '—' : fullName.trim();
     final statusLabel = _statusLabel(t);
+    final correctionText = moderationComment.trim();
 
     return GestureDetector(
       onTap: onTap,
@@ -1311,6 +1323,19 @@ class _ProfileSummaryCard extends StatelessWidget {
                       onDismiss: () => onDismissUpload(uploadTask!),
                     ),
                   ],
+                  if (status == ProfileStatus.rejected &&
+                      correctionText.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    _CorrectionHintBlock(
+                      title: _accountLocaleText(
+                        context,
+                        'Что исправить',
+                        'What to fix',
+                      ),
+                      text: correctionText,
+                      compact: true,
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -1321,6 +1346,78 @@ class _ProfileSummaryCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _CorrectionHintBlock extends StatelessWidget {
+  const _CorrectionHintBlock({
+    required this.title,
+    required this.text,
+    this.compact = false,
+  });
+
+  final String title;
+  final String text;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 10 : 14,
+        vertical: compact ? 8 : 12,
+      ),
+      decoration: BoxDecoration(
+        color: BrandTheme.redTop.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(compact ? 16 : kCardRadius),
+        border: Border.all(
+          color: BrandTheme.redTop.withValues(alpha: 0.55),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.edit_note_rounded,
+            size: compact ? 18 : 22,
+            color: BrandTheme.redTop,
+          ),
+          SizedBox(width: compact ? 7 : 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _accountCommandStyle(
+                    color: BrandTheme.redTop,
+                    size: compact ? 10 : 12,
+                    spacing: compact ? 0.8 : 1.1,
+                    weight: FontWeight.w800,
+                  ),
+                ),
+                SizedBox(height: compact ? 2 : 5),
+                Text(
+                  text,
+                  maxLines: compact ? 3 : 5,
+                  overflow: TextOverflow.ellipsis,
+                  style: _accountBodyStyle(
+                    color: kTextDark,
+                    size: compact ? 12 : 14,
+                    weight: FontWeight.w700,
+                    height: 1.25,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

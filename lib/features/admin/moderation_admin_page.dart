@@ -14,6 +14,7 @@ import '../../core/supabase_compat.dart';
 import '../../core/supabase_provider.dart';
 import '../../core/roles_provider.dart';
 import '../../ui/brand/brand_admin_header.dart';
+import '../../ui/brand/brand_pill_button.dart';
 import 'admin_style.dart';
 import 'package:video_player/video_player.dart';
 import '../auth/auth_controller.dart';
@@ -1633,82 +1634,168 @@ class _RejectReasonDialogState extends State<_RejectReasonDialog> {
       t.moderationRejectSuspicious,
     ];
 
-    return AlertDialog(
-      backgroundColor: Colors.white.withValues(alpha: 0.96),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(kCardRadius),
-      ),
-      title: Text(
-        t.moderationRejectTitle,
-        style: adminCommandStyle(size: 17, letterSpacing: 0.9),
-      ),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 22, vertical: 24),
+      child: Container(
+        width: double.infinity,
+        constraints: const BoxConstraints(maxWidth: 560),
+        padding: const EdgeInsets.fromLTRB(22, 24, 22, 18),
+        decoration: catalogDialogDecoration(),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              for (var i = 0; i < reasons.length; i += 1)
-                ChoiceChip(
-                  label: Text(reasons[i]),
-                  selected: _selectedIndex == i,
-                  selectedColor: BrandTheme.redTop.withValues(alpha: 0.14),
-                  checkmarkColor: BrandTheme.redTop,
-                  onSelected: (_) {
-                    setState(() {
-                      _selectedIndex = i;
-                      _showRequired = false;
-                    });
-                  },
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Container(
+                  width: 56,
+                  height: 56,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    gradient: BrandTheme.darkPillGradient,
+                    borderRadius: BorderRadius.circular(18),
+                    boxShadow: BrandTheme.basePillShadow(isDark: true),
+                  ),
+                  child: const Icon(
+                    Icons.edit_note_rounded,
+                    color: Colors.white,
+                    size: 28,
+                  ),
                 ),
+              ),
+              const SizedBox(height: 18),
+              Text(
+                t.moderationRejectTitle,
+                style: adminCommandStyle(size: 19, letterSpacing: 1.2),
+              ),
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (var i = 0; i < reasons.length; i += 1)
+                    _RejectReasonPill(
+                      label: reasons[i],
+                      selected: _selectedIndex == i,
+                      onTap: () {
+                        setState(() {
+                          _selectedIndex = i;
+                          _showRequired = false;
+                        });
+                      },
+                    ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: _commentC,
+                minLines: 2,
+                maxLines: 4,
+                style: adminBodyStyle(
+                  size: 14,
+                  weight: FontWeight.w700,
+                  color: kTextDark,
+                ),
+                onChanged: (_) {
+                  if (_showRequired) setState(() => _showRequired = false);
+                },
+                decoration: InputDecoration(
+                  hintText: t.moderationRejectHint,
+                  hintStyle: adminBodyStyle(size: 13, color: kTextMuted),
+                  filled: true,
+                  fillColor: Colors.white.withValues(alpha: 0.88),
+                  border: pillBorder(),
+                  enabledBorder: pillBorder(),
+                  focusedBorder: pillBorder(
+                    color: BrandTheme.redTop,
+                    width: 1.2,
+                  ),
+                  errorText: _showRequired ? t.moderationRejectRequired : null,
+                ),
+              ),
+              const SizedBox(height: 18),
+              Row(
+                children: [
+                  Expanded(
+                    child: BrandPillButton(
+                      label: t.cancel.toUpperCase(),
+                      style: BrandPillStyle.light,
+                      onTap: () => Navigator.of(context).pop(),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: BrandPillButton(
+                      label: t.moderationRejectActionUpper,
+                      style: BrandPillStyle.dark,
+                      onTap: () {
+                        final reason = _reason(reasons);
+                        if (reason.isEmpty) {
+                          setState(() => _showRequired = true);
+                          return;
+                        }
+                        Navigator.of(context).pop(reason);
+                      },
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
-          const SizedBox(height: 14),
-          TextField(
-            controller: _commentC,
-            minLines: 2,
-            maxLines: 4,
-            onChanged: (_) {
-              if (_showRequired) setState(() => _showRequired = false);
-            },
-            decoration: InputDecoration(
-              hintText: t.moderationRejectHint,
-              filled: true,
-              fillColor: Colors.white,
-              border: pillBorder(),
-              enabledBorder: pillBorder(),
-              focusedBorder: pillBorder(color: BrandTheme.redTop, width: 1.2),
-              errorText: _showRequired ? t.moderationRejectRequired : null,
-            ),
-          ),
-        ],
+        ),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(t.cancel),
+    );
+  }
+}
+
+class _RejectReasonPill extends StatelessWidget {
+  const _RejectReasonPill({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(999),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: pillDecoration(isDark: selected, radius: 999).copyWith(
+          border: selected
+              ? null
+              : Border.all(
+                  color: BrandTheme.redTop.withValues(alpha: 0.25),
+                  width: 1,
+                ),
         ),
-        TextButton(
-          onPressed: () {
-            final reason = _reason(reasons);
-            if (reason.isEmpty) {
-              setState(() => _showRequired = true);
-              return;
-            }
-            Navigator.of(context).pop(reason);
-          },
-          child: Text(
-            t.moderationRejectActionUpper,
-            style: adminCommandStyle(
-              size: 13,
-              color: BrandTheme.redTop,
-              letterSpacing: 0.9,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (selected) ...[
+              const Icon(Icons.check_rounded, size: 16, color: Colors.white),
+              const SizedBox(width: 6),
+            ],
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: adminCommandStyle(
+                size: 12,
+                letterSpacing: 0.5,
+                color: selected ? Colors.white : kTextDark,
+              ),
             ),
-          ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }
