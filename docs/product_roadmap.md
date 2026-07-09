@@ -12,6 +12,7 @@
 
 ## Журнал изменений
 
+- 2026-07-09: центр событий получил пользовательские настройки каналов и типов событий: push/email, чаты, кастинги, анкеты и системные события; SQL `push_notifications.sql` добавляет `notification_preferences`, а production worker уважает настройки перед доставкой; commit `TBD`.
 - 2026-07-09: ручные back-office действия теперь пишутся в `admin_action_logs`: смена роли/статуса аккаунта, удаление профиля аккаунта, анкеты, кастинга и подборки сохраняют автора, цель, описание и metadata; журнал действий показывает metadata в деталях и CSV; commit `ccb24e0`.
 - 2026-07-09: compact back-office dropdowns and confirm popups aligned with PK visual style; role/account actions moved from direct client writes to admin RPC functions to satisfy production RLS; SQL `admin_backoffice_actions.sql`; commit `740292b`.
 - 2026-07-09: back-office таблицы переведены с широких россыпей chips на компактные dropdown-сводки и dropdown-фильтры; в таблицы пользователей, анкет, кастингов и подборок добавлены меню действий для удаления сущностей и управления ролью/статусом аккаунта; commit `fc78fe3`.
@@ -198,11 +199,12 @@
 - SQL/push-заготовки.
 - Firebase/Web Push client code.
 - Production `send-notifications` задеплоен с `EMAIL_FROM=PK Management <noreply@pk.management>` и `PUBLIC_APP_URL=https://app.pk.management/`; SQL для authenticated pg_net webhook на insert и pg_cron fallback каждую минуту подготовлен.
+- Базовый центр событий с настройками каналов и категорий: пользователь может включать/выключать push, email, чаты, кастинги, анкеты и системные события; серверная очередь и worker доставки учитывают эти настройки.
 
 Не хватает:
 - Стабильно подключенной production push-доставки.
 - Email-уведомлений.
-- Полноценного центра событий с настройками.
+- Production QA центра событий: применить обновленный SQL, redeploy `send-notifications`, создать тестовые события и проверить статусы доставки.
 
 ## 8. Доверие и статус
 
@@ -263,6 +265,7 @@
 Не хватает:
 - Продвинутых массовых workflow: сохранение детального журнала попыток bulk-операций как отдельной сущности, повтор неудачных операций из истории, эскалации и уведомления по нарушению SLA.
 - Расширения audit на будущие back-office зоны: пользователи, жалобы/споры, billing, ручные правки тарифов и роли.
+- Отложено: детальная карточка аккаунта внутри back-office с историей, связанными анкетами/кастингами и действиями оператора; это не берем в первый запуск, чтобы не перегружать админку.
 
 ## 11. Безопасность и приватность
 

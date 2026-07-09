@@ -20,6 +20,15 @@ type PushDeviceToken = {
   platform: string;
 };
 
+type NotificationPreferences = {
+  push_enabled: boolean;
+  email_enabled: boolean;
+  chat_enabled: boolean;
+  casting_enabled: boolean;
+  profile_enabled: boolean;
+  system_enabled: boolean;
+};
+
 const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
 const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const fcmProjectId = Deno.env.get('FCM_PROJECT_ID') ?? '';
@@ -70,16 +79,48 @@ async function processNotification(notification: AppNotification) {
     push: 'not_requested',
     email: 'not_requested',
   };
+  const preferences = await fetchPreferences(notification.user_id);
+  const group = eventGroup(notification.type);
+
+  if (!isGroupEnabled(preferences, group)) {
+    if (['pending', 'failed'].includes(notification.push_status)) {
+      await markPushSkipped(notification.id, 'Event disabled by user preferences');
+      result.push = 'skipped';
+    }
+    if (['pending', 'failed'].includes(notification.email_status)) {
+      await markEmailStatus(
+        notification.id,
+        'skipped',
+        'Event disabled by user preferences',
+      );
+      result.email = 'skipped';
+    }
+    return result;
+  }
 
   if (['pending', 'failed'].includes(notification.push_status)) {
-    result.push = await processPush(notification);
+    result.push = preferences.push_enabled
+      ? await processPush(notification)
+      : await skipPushByPreference(notification.id);
   }
 
   if (['pending', 'failed'].includes(notification.email_status)) {
-    result.email = await processEmail(notification);
+    result.email = preferences.email_enabled
+      ? await processEmail(notification)
+      : await skipEmailByPreference(notification.id);
   }
 
   return result;
+}
+
+async function skipPushByPreference(id: string): Promise<string> {
+  await markPushSkipped(id, 'Push disabled by user preferences');
+  return 'skipped';
+}
+
+async function skipEmailByPreference(id: string): Promise<string> {
+  await markEmailStatus(id, 'skipped', 'Email disabled by user preferences');
+  return 'skipped';
 }
 
 async function processPush(notification: AppNotification): Promise<string> {
@@ -222,6 +263,63 @@ async function fetchTokens(userId: string): Promise<PushDeviceToken[]> {
 
   if (error) throw error;
   return (data ?? []) as PushDeviceToken[];
+}
+
+async function fetchPreferences(userId: string): Promise<NotificationPreferences> {
+  const defaults: NotificationPreferences = {
+    push_enabled: true,
+    email_enabled: true,
+    chat_enabled: true,
+    casting_enabled: true,
+    profile_enabled: true,
+    system_enabled: true,
+  };
+
+  const { data, error } = await supabase
+    .from('notification_preferences')
+    .select(
+      'push_enabled,email_enabled,chat_enabled,casting_enabled,' +
+        'profile_enabled,system_enabled',
+    )
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (error) {
+    if (isMissingRelation(error)) return defaults;
+    throw error;
+  }
+
+  return { ...defaults, ...(data ?? {}) } as NotificationPreferences;
+}
+
+function eventGroup(type: string): 'chat' | 'casting' | 'profile' | 'system' {
+  if (type === 'chat_message') return 'chat';
+  if (
+    type === 'selection_invitation' ||
+    type === 'video_intro_request' ||
+    type.startsWith('casting_')
+  ) {
+    return 'casting';
+  }
+  if (type === 'profile_moderation' || type === 'casting_agent_moderation') {
+    return 'profile';
+  }
+  return 'system';
+}
+
+function isGroupEnabled(
+  preferences: NotificationPreferences,
+  group: 'chat' | 'casting' | 'profile' | 'system',
+) {
+  if (group === 'chat') return preferences.chat_enabled;
+  if (group === 'casting') return preferences.casting_enabled;
+  if (group === 'profile') return preferences.profile_enabled;
+  return preferences.system_enabled;
+}
+
+function isMissingRelation(error: { code?: string; message?: string }) {
+  return error.code === '42P01' ||
+    (error.message ?? '').includes('notification_preferences');
 }
 
 async function markPushProcessing(id: string) {

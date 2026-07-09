@@ -146,6 +146,8 @@ class NotificationsPage extends ConsumerWidget {
                   ),
                   const SizedBox(height: kGap16),
                   const _PushStatusCard(),
+                  const SizedBox(height: kGap12),
+                  const _NotificationSettingsCard(),
                   const SizedBox(height: kGap16),
                   Expanded(
                     child: async.when(
@@ -449,6 +451,253 @@ class _PushStatusShell extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _NotificationSettingsCard extends ConsumerWidget {
+  const _NotificationSettingsCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final async = ref.watch(notificationPreferencesProvider);
+
+    Future<void> save(NotificationPreferences next) async {
+      await ref.read(notificationPreferencesServiceProvider).save(next);
+      ref.invalidate(notificationPreferencesProvider);
+    }
+
+    return async.when(
+      loading: () => _SettingsShell(
+        ru: ru,
+        busy: true,
+        preferences: NotificationPreferences.defaults,
+        onChanged: (_) {},
+      ),
+      error: (e, _) => _SettingsShell(
+        ru: ru,
+        preferences: NotificationPreferences.defaults,
+        error: AppErrorMapper.message(e, AppLocalizations.of(context)!),
+        onChanged: (_) => ref.invalidate(notificationPreferencesProvider),
+      ),
+      data: (preferences) =>
+          _SettingsShell(ru: ru, preferences: preferences, onChanged: save),
+    );
+  }
+}
+
+class _SettingsShell extends StatelessWidget {
+  const _SettingsShell({
+    required this.ru,
+    required this.preferences,
+    required this.onChanged,
+    this.busy = false,
+    this.error,
+  });
+
+  final bool ru;
+  final NotificationPreferences preferences;
+  final ValueChanged<NotificationPreferences> onChanged;
+  final bool busy;
+  final String? error;
+
+  @override
+  Widget build(BuildContext context) {
+    final isError = error != null;
+    return Container(
+      width: double.infinity,
+      padding: kLoginCardPad,
+      decoration: catalogCardDecoration().copyWith(
+        border: Border.all(
+          color: isError ? BrandTheme.redTop : kBorderColor,
+          width: isError ? 1.4 : 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  gradient: BrandTheme.darkPillGradient,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Icon(
+                  Icons.tune_rounded,
+                  color: Colors.white,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: kGap12),
+              Expanded(
+                child: Text(
+                  ru ? 'ЦЕНТР СОБЫТИЙ' : 'EVENT CENTER',
+                  style: _notificationCommandStyle(
+                    size: 18,
+                    spacing: 1.4,
+                    weight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              if (busy)
+                const SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+            ],
+          ),
+          if (isError) ...[
+            const SizedBox(height: kGap12),
+            Text(
+              error!,
+              style: _notificationBodyStyle(
+                color: kTextDanger,
+                weight: FontWeight.w700,
+              ),
+            ),
+          ],
+          const SizedBox(height: kGap12),
+          Wrap(
+            spacing: kGap12,
+            runSpacing: kGap12,
+            children: [
+              _SettingsPill(
+                icon: Icons.notifications_active_rounded,
+                label: ru ? 'Push' : 'Push',
+                value: preferences.pushEnabled,
+                onTap: busy || isError
+                    ? null
+                    : () => onChanged(
+                        preferences.copyWith(
+                          pushEnabled: !preferences.pushEnabled,
+                        ),
+                      ),
+              ),
+              _SettingsPill(
+                icon: Icons.alternate_email_rounded,
+                label: ru ? 'Email' : 'Email',
+                value: preferences.emailEnabled,
+                onTap: busy || isError
+                    ? null
+                    : () => onChanged(
+                        preferences.copyWith(
+                          emailEnabled: !preferences.emailEnabled,
+                        ),
+                      ),
+              ),
+              _SettingsPill(
+                icon: Icons.chat_bubble_rounded,
+                label: ru ? 'Чаты' : 'Chats',
+                value: preferences.chatEnabled,
+                onTap: busy || isError
+                    ? null
+                    : () => onChanged(
+                        preferences.copyWith(
+                          chatEnabled: !preferences.chatEnabled,
+                        ),
+                      ),
+              ),
+              _SettingsPill(
+                icon: Icons.movie_filter_rounded,
+                label: ru ? 'Кастинги' : 'Castings',
+                value: preferences.castingEnabled,
+                onTap: busy || isError
+                    ? null
+                    : () => onChanged(
+                        preferences.copyWith(
+                          castingEnabled: !preferences.castingEnabled,
+                        ),
+                      ),
+              ),
+              _SettingsPill(
+                icon: Icons.badge_rounded,
+                label: ru ? 'Анкеты' : 'Profiles',
+                value: preferences.profileEnabled,
+                onTap: busy || isError
+                    ? null
+                    : () => onChanged(
+                        preferences.copyWith(
+                          profileEnabled: !preferences.profileEnabled,
+                        ),
+                      ),
+              ),
+              _SettingsPill(
+                icon: Icons.shield_rounded,
+                label: ru ? 'Системные' : 'System',
+                value: preferences.systemEnabled,
+                onTap: busy || isError
+                    ? null
+                    : () => onChanged(
+                        preferences.copyWith(
+                          systemEnabled: !preferences.systemEnabled,
+                        ),
+                      ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SettingsPill extends StatelessWidget {
+  const _SettingsPill({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool value;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final disabled = onTap == null;
+    return Material(
+      color: Colors.transparent,
+      child: Opacity(
+        opacity: disabled ? 0.64 : 1,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(22),
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 44, minWidth: 120),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: pillDecoration(isDark: value, radius: 22).copyWith(
+              border: Border.all(color: value ? kTextDark : kBorderColor),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  value ? Icons.check_rounded : icon,
+                  color: value ? Colors.white : kTextMuted,
+                  size: 19,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  label,
+                  style: _notificationCommandStyle(
+                    color: value ? Colors.white : kTextDark,
+                    size: 14,
+                    spacing: 0.4,
+                    weight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

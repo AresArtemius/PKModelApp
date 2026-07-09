@@ -24,6 +24,28 @@ create table if not exists public.app_notifications (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.notification_preferences (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  push_enabled boolean not null default true,
+  email_enabled boolean not null default true,
+  chat_enabled boolean not null default true,
+  casting_enabled boolean not null default true,
+  profile_enabled boolean not null default true,
+  system_enabled boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.notification_preferences
+  add column if not exists push_enabled boolean not null default true,
+  add column if not exists email_enabled boolean not null default true,
+  add column if not exists chat_enabled boolean not null default true,
+  add column if not exists casting_enabled boolean not null default true,
+  add column if not exists profile_enabled boolean not null default true,
+  add column if not exists system_enabled boolean not null default true,
+  add column if not exists created_at timestamptz not null default now(),
+  add column if not exists updated_at timestamptz not null default now();
+
 alter table public.app_notifications
   add column if not exists type text not null default 'generic',
   add column if not exists data jsonb not null default '{}'::jsonb,
@@ -99,6 +121,7 @@ create index if not exists push_device_tokens_user_enabled_idx
 
 alter table public.push_device_tokens enable row level security;
 alter table public.app_notifications enable row level security;
+alter table public.notification_preferences enable row level security;
 
 drop policy if exists "Users can view own push tokens"
   on public.push_device_tokens;
@@ -165,6 +188,34 @@ create policy "Users can delete own app notifications"
   to authenticated
   using (auth.uid() = user_id);
 
+drop policy if exists "Users can view own notification preferences"
+  on public.notification_preferences;
+
+create policy "Users can view own notification preferences"
+  on public.notification_preferences
+  for select
+  to authenticated
+  using (auth.uid() = user_id);
+
+drop policy if exists "Users can insert own notification preferences"
+  on public.notification_preferences;
+
+create policy "Users can insert own notification preferences"
+  on public.notification_preferences
+  for insert
+  to authenticated
+  with check (auth.uid() = user_id);
+
+drop policy if exists "Users can update own notification preferences"
+  on public.notification_preferences;
+
+create policy "Users can update own notification preferences"
+  on public.notification_preferences
+  for update
+  to authenticated
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
 create or replace function public.enqueue_app_notification(
   p_user_id uuid,
   p_title text,
@@ -183,8 +234,59 @@ declare
   v_profile_action_log_id uuid;
   v_email_to text := '';
   v_send_email boolean := false;
+  v_event_group text := 'system';
+  v_push_enabled boolean := true;
+  v_email_enabled boolean := true;
+  v_chat_enabled boolean := true;
+  v_casting_enabled boolean := true;
+  v_profile_enabled boolean := true;
+  v_system_enabled boolean := true;
 begin
   if p_user_id is null then
+    return null;
+  end if;
+
+  v_event_group := case
+    when coalesce(p_type, '') = 'chat_message' then 'chat'
+    when coalesce(p_type, '') in (
+      'selection_invitation',
+      'video_intro_request'
+    ) or coalesce(p_type, '') like 'casting_%' then 'casting'
+    when coalesce(p_type, '') in (
+      'profile_moderation',
+      'casting_agent_moderation'
+    ) then 'profile'
+    else 'system'
+  end;
+
+  select
+    coalesce(push_enabled, true),
+    coalesce(email_enabled, true),
+    coalesce(chat_enabled, true),
+    coalesce(casting_enabled, true),
+    coalesce(profile_enabled, true),
+    coalesce(system_enabled, true)
+  into
+    v_push_enabled,
+    v_email_enabled,
+    v_chat_enabled,
+    v_casting_enabled,
+    v_profile_enabled,
+    v_system_enabled
+  from public.notification_preferences
+  where user_id = p_user_id;
+
+  v_push_enabled := coalesce(v_push_enabled, true);
+  v_email_enabled := coalesce(v_email_enabled, true);
+  v_chat_enabled := coalesce(v_chat_enabled, true);
+  v_casting_enabled := coalesce(v_casting_enabled, true);
+  v_profile_enabled := coalesce(v_profile_enabled, true);
+  v_system_enabled := coalesce(v_system_enabled, true);
+
+  if (v_event_group = 'chat' and not v_chat_enabled)
+     or (v_event_group = 'casting' and not v_casting_enabled)
+     or (v_event_group = 'profile' and not v_profile_enabled)
+     or (v_event_group = 'system' and not v_system_enabled) then
     return null;
   end if;
 
@@ -223,10 +325,13 @@ begin
     type,
     data,
     profile_action_log_id,
+    push_status,
+    push_error,
     email_status,
     email_to,
     email_subject,
-    email_body
+    email_body,
+    email_error
   )
   values (
     p_user_id,
@@ -236,10 +341,20 @@ begin
     coalesce(nullif(btrim(p_type), ''), 'generic'),
     coalesce(p_data, '{}'::jsonb),
     v_profile_action_log_id,
-    case when v_send_email then 'pending' else 'none' end,
+    case when v_push_enabled then 'pending' else 'skipped' end,
+    case when v_push_enabled then null else 'Push disabled by user preferences' end,
+    case
+      when v_send_email and v_email_enabled then 'pending'
+      when v_send_email then 'skipped'
+      else 'none'
+    end,
     coalesce(v_email_to, ''),
     coalesce(nullif(btrim(p_data ->> 'email_subject'), ''), coalesce(p_title, '')),
-    coalesce(nullif(btrim(p_data ->> 'email_body'), ''), coalesce(p_body, ''))
+    coalesce(nullif(btrim(p_data ->> 'email_body'), ''), coalesce(p_body, '')),
+    case
+      when v_send_email and not v_email_enabled then 'Email disabled by user preferences'
+      else null
+    end
   )
   returning id into v_id;
 

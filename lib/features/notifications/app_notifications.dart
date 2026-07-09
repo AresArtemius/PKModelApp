@@ -140,14 +140,144 @@ class AppNotificationsService {
   }
 }
 
+class NotificationPreferences {
+  const NotificationPreferences({
+    required this.pushEnabled,
+    required this.emailEnabled,
+    required this.chatEnabled,
+    required this.castingEnabled,
+    required this.profileEnabled,
+    required this.systemEnabled,
+  });
+
+  static const defaults = NotificationPreferences(
+    pushEnabled: true,
+    emailEnabled: true,
+    chatEnabled: true,
+    castingEnabled: true,
+    profileEnabled: true,
+    systemEnabled: true,
+  );
+
+  final bool pushEnabled;
+  final bool emailEnabled;
+  final bool chatEnabled;
+  final bool castingEnabled;
+  final bool profileEnabled;
+  final bool systemEnabled;
+
+  factory NotificationPreferences.fromMap(Map<String, dynamic> map) {
+    bool flag(String key) => map[key] != false;
+
+    return NotificationPreferences(
+      pushEnabled: flag('push_enabled'),
+      emailEnabled: flag('email_enabled'),
+      chatEnabled: flag('chat_enabled'),
+      castingEnabled: flag('casting_enabled'),
+      profileEnabled: flag('profile_enabled'),
+      systemEnabled: flag('system_enabled'),
+    );
+  }
+
+  NotificationPreferences copyWith({
+    bool? pushEnabled,
+    bool? emailEnabled,
+    bool? chatEnabled,
+    bool? castingEnabled,
+    bool? profileEnabled,
+    bool? systemEnabled,
+  }) {
+    return NotificationPreferences(
+      pushEnabled: pushEnabled ?? this.pushEnabled,
+      emailEnabled: emailEnabled ?? this.emailEnabled,
+      chatEnabled: chatEnabled ?? this.chatEnabled,
+      castingEnabled: castingEnabled ?? this.castingEnabled,
+      profileEnabled: profileEnabled ?? this.profileEnabled,
+      systemEnabled: systemEnabled ?? this.systemEnabled,
+    );
+  }
+
+  Map<String, dynamic> toMap(String userId) {
+    return {
+      'user_id': userId,
+      'push_enabled': pushEnabled,
+      'email_enabled': emailEnabled,
+      'chat_enabled': chatEnabled,
+      'casting_enabled': castingEnabled,
+      'profile_enabled': profileEnabled,
+      'system_enabled': systemEnabled,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    };
+  }
+}
+
+class NotificationPreferencesService {
+  const NotificationPreferencesService(this._sb);
+
+  static const table = 'notification_preferences';
+
+  final SupabaseClient _sb;
+
+  Future<NotificationPreferences> loadForCurrentUser() async {
+    final userId = _sb.auth.currentUser?.id;
+    if (userId == null || userId.isEmpty) {
+      return NotificationPreferences.defaults;
+    }
+
+    try {
+      final row = await _sb
+          .from(table)
+          .select(
+            'push_enabled,email_enabled,chat_enabled,casting_enabled,'
+            'profile_enabled,system_enabled',
+          )
+          .eq('user_id', userId)
+          .maybeSingle();
+      if (row == null) return NotificationPreferences.defaults;
+      return NotificationPreferences.fromMap(Map<String, dynamic>.from(row));
+    } on PostgrestException catch (e) {
+      if (SupabaseCompat.isMissingRelation(e, const [table])) {
+        AppLogger.warning(
+          'Notification preferences table is not applied yet',
+          error: e,
+        );
+        return NotificationPreferences.defaults;
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> save(NotificationPreferences preferences) async {
+    final userId = _sb.auth.currentUser?.id;
+    if (userId == null || userId.isEmpty) return;
+
+    await _sb
+        .from(table)
+        .upsert(preferences.toMap(userId), onConflict: 'user_id');
+  }
+}
+
 final appNotificationsServiceProvider = Provider<AppNotificationsService>((
   ref,
 ) {
   return AppNotificationsService(ref.read(supabaseProvider));
 });
 
+final notificationPreferencesServiceProvider =
+    Provider<NotificationPreferencesService>((ref) {
+      return NotificationPreferencesService(ref.read(supabaseProvider));
+    });
+
 final appNotificationsProvider =
     FutureProvider.autoDispose<List<AppNotification>>((ref) async {
       ref.watch(currentUserIdProvider);
       return ref.read(appNotificationsServiceProvider).loadForCurrentUser();
+    });
+
+final notificationPreferencesProvider =
+    FutureProvider.autoDispose<NotificationPreferences>((ref) async {
+      ref.watch(currentUserIdProvider);
+      return ref
+          .read(notificationPreferencesServiceProvider)
+          .loadForCurrentUser();
     });
