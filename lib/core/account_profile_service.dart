@@ -24,11 +24,30 @@ final accountOwnerProfileProvider = FutureProvider<AccountOwnerProfile>((ref) {
   return ref.read(accountProfileServiceProvider).loadOwnerProfile(user);
 });
 
+enum AccountTagVisibility {
+  public('public'),
+  conversations('conversations'),
+  hidden('hidden');
+
+  const AccountTagVisibility(this.storageValue);
+
+  final String storageValue;
+}
+
+AccountTagVisibility accountTagVisibilityFromStorage(Object? value) {
+  final raw = value?.toString().trim().toLowerCase() ?? '';
+  for (final visibility in AccountTagVisibility.values) {
+    if (visibility.storageValue == raw) return visibility;
+  }
+  return AccountTagVisibility.public;
+}
+
 class AccountOwnerProfile {
   const AccountOwnerProfile({
     required this.email,
     required this.phone,
     required this.accountTag,
+    required this.accountTagVisibility,
     required this.avatarUrl,
     required this.fullName,
     required this.companyName,
@@ -43,6 +62,7 @@ class AccountOwnerProfile {
   final String email;
   final String phone;
   final String accountTag;
+  final AccountTagVisibility accountTagVisibility;
   final String avatarUrl;
   final String fullName;
   final String companyName;
@@ -73,7 +93,17 @@ class AccountOwnerProfile {
 
   String get publicHandleLabel {
     final tag = normalizedAccountTag;
-    if (tag.isNotEmpty) return tag;
+    if (tag.isNotEmpty && accountTagVisibility == AccountTagVisibility.public) {
+      return tag;
+    }
+    return email.trim();
+  }
+
+  String get conversationHandleLabel {
+    final tag = normalizedAccountTag;
+    if (tag.isNotEmpty && accountTagVisibility != AccountTagVisibility.hidden) {
+      return tag;
+    }
     return email.trim();
   }
 
@@ -81,6 +111,7 @@ class AccountOwnerProfile {
     String? email,
     String? phone,
     String? accountTag,
+    AccountTagVisibility? accountTagVisibility,
     String? avatarUrl,
     String? fullName,
     String? companyName,
@@ -95,6 +126,7 @@ class AccountOwnerProfile {
       email: email ?? this.email,
       phone: phone ?? this.phone,
       accountTag: accountTag ?? this.accountTag,
+      accountTagVisibility: accountTagVisibility ?? this.accountTagVisibility,
       avatarUrl: avatarUrl ?? this.avatarUrl,
       fullName: fullName ?? this.fullName,
       companyName: companyName ?? this.companyName,
@@ -112,6 +144,7 @@ class AccountOwnerProfile {
       email: '',
       phone: '',
       accountTag: '',
+      accountTagVisibility: AccountTagVisibility.public,
       avatarUrl: '',
       fullName: '',
       companyName: '',
@@ -136,6 +169,9 @@ class AccountOwnerProfile {
       email: value('email').isNotEmpty ? value('email') : user.email ?? '',
       phone: value('phone').isNotEmpty ? value('phone') : user.phone ?? '',
       accountTag: value('account_tag'),
+      accountTagVisibility: accountTagVisibilityFromStorage(
+        value('account_tag_visibility'),
+      ),
       avatarUrl: storedAvatarUrl.isNotEmpty
           ? storedAvatarUrl
           : metadataAvatarUrl ?? '',
@@ -156,6 +192,7 @@ class AccountOwnerProfile {
       'email': email.trim().isNotEmpty ? email.trim() : user.email,
       'phone': phone.trim().isNotEmpty ? phone.trim() : user.phone,
       'account_tag': normalizedAccountTag,
+      'account_tag_visibility': accountTagVisibility.storageValue,
       'avatar_url': avatarUrl.trim(),
       'full_name': fullName.trim(),
       'company_name': companyName.trim(),
@@ -220,13 +257,26 @@ class AccountProfileService {
 
   Future<AccountOwnerProfile> loadOwnerProfile(User user) async {
     try {
-      final row = await _loadOwnerProfileRow(user.id, includeAccountTag: true);
+      final row = await _loadOwnerProfileRow(
+        user.id,
+        includeAccountTag: true,
+        includeAccountTagVisibility: true,
+      );
       return AccountOwnerProfile.fromMap(row, user);
     } on PostgrestException catch (e) {
+      if (SupabaseCompat.isMissingColumn(e, 'account_tag_visibility')) {
+        final row = await _loadOwnerProfileRow(
+          user.id,
+          includeAccountTag: true,
+          includeAccountTagVisibility: false,
+        );
+        return AccountOwnerProfile.fromMap(row, user);
+      }
       if (SupabaseCompat.isMissingColumn(e, 'account_tag')) {
         final row = await _loadOwnerProfileRow(
           user.id,
           includeAccountTag: false,
+          includeAccountTagVisibility: false,
         );
         return AccountOwnerProfile.fromMap(row, user);
       }
@@ -244,11 +294,13 @@ class AccountProfileService {
   Future<Map<String, dynamic>?> _loadOwnerProfileRow(
     String userId, {
     required bool includeAccountTag,
+    required bool includeAccountTagVisibility,
   }) async {
     final columns = [
       'email',
       'phone',
       if (includeAccountTag) 'account_tag',
+      if (includeAccountTagVisibility) 'account_tag_visibility',
       'avatar_url',
       'full_name',
       'company_name',
@@ -283,11 +335,23 @@ class AccountProfileService {
     try {
       await _sb.from('user_profiles').upsert(payload, onConflict: 'user_id');
     } on PostgrestException catch (e) {
+      if (SupabaseCompat.isMissingColumn(e, 'account_tag_visibility')) {
+        await _sb
+            .from('user_profiles')
+            .upsert(
+              Map<String, dynamic>.from(payload)
+                ..remove('account_tag_visibility'),
+              onConflict: 'user_id',
+            );
+        return;
+      }
       if (!SupabaseCompat.isMissingColumn(e, 'account_tag')) rethrow;
       await _sb
           .from('user_profiles')
           .upsert(
-            Map<String, dynamic>.from(payload)..remove('account_tag'),
+            Map<String, dynamic>.from(payload)
+              ..remove('account_tag')
+              ..remove('account_tag_visibility'),
             onConflict: 'user_id',
           );
     }
@@ -392,6 +456,7 @@ class AccountProfileService {
   bool _isMissingOwnerProfileColumn(PostgrestException e) {
     return SupabaseCompat.isMissingColumn(e, 'company_name') ||
         SupabaseCompat.isMissingColumn(e, 'account_tag') ||
+        SupabaseCompat.isMissingColumn(e, 'account_tag_visibility') ||
         SupabaseCompat.isMissingColumn(e, 'avatar_url') ||
         SupabaseCompat.isMissingColumn(e, 'position') ||
         SupabaseCompat.isMissingColumn(e, 'website') ||

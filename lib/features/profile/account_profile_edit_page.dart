@@ -112,6 +112,7 @@ class _AccountProfileEditPageState
   String _phoneConflictPhone = '';
   String _lastConfirmedEmail = '';
   String _lastConfirmedPhone = '';
+  AccountTagVisibility _accountTagVisibility = AccountTagVisibility.public;
   String? _error;
   Timer? _phoneResendTimer;
   final _picker = ImagePicker();
@@ -147,6 +148,7 @@ class _AccountProfileEditPageState
     _companyC.text = profile.companyName;
     _positionC.text = profile.position;
     _accountTagC.text = profile.normalizedAccountTag;
+    _accountTagVisibility = profile.accountTagVisibility;
     _emailC.text = profile.email;
     _lastConfirmedEmail = profile.email;
     _avatarUrl = profile.avatarUrl;
@@ -170,6 +172,7 @@ class _AccountProfileEditPageState
       email: _confirmedEmailForSave(user),
       phone: _confirmedPhoneForSave(user),
       accountTag: _accountTagC.text,
+      accountTagVisibility: _accountTagVisibility,
       avatarUrl: _avatarUrl,
       fullName: _fullNameC.text,
       companyName: _companyC.text,
@@ -280,6 +283,7 @@ class _AccountProfileEditPageState
               email: _confirmedEmailForSave(updatedUser),
               phone: _confirmedPhoneForSave(updatedUser),
               accountTag: _accountTagC.text,
+              accountTagVisibility: _accountTagVisibility,
               avatarUrl: _avatarUrl,
               fullName: _fullNameC.text,
               companyName: _companyC.text,
@@ -500,6 +504,7 @@ class _AccountProfileEditPageState
               email: _confirmedEmailForSave(user),
               phone: _confirmedPhoneForSave(user),
               accountTag: _accountTagC.text,
+              accountTagVisibility: _accountTagVisibility,
               avatarUrl: _avatarUrl,
               fullName: _fullNameC.text,
               companyName: _companyC.text,
@@ -573,6 +578,7 @@ class _AccountProfileEditPageState
               email: _confirmedEmailForSave(updatedUser),
               phone: phone,
               accountTag: _accountTagC.text,
+              accountTagVisibility: _accountTagVisibility,
               avatarUrl: _avatarUrl,
               fullName: _fullNameC.text,
               companyName: _companyC.text,
@@ -774,6 +780,7 @@ class _AccountProfileEditPageState
         email: _confirmedEmailForSave(user),
         phone: _confirmedPhoneForSave(user),
         accountTag: _accountTagC.text,
+        accountTagVisibility: _accountTagVisibility,
         avatarUrl: url,
         fullName: _fullNameC.text,
         companyName: _companyC.text,
@@ -890,6 +897,14 @@ class _AccountProfileEditPageState
                               LengthLimitingTextInputFormatter(32),
                             ],
                           ),
+                          const SizedBox(height: kGap8),
+                          _AccountTagVisibilityPicker(
+                            value: _accountTagVisibility,
+                            isRussian: _isRussian,
+                            onChanged: (value) =>
+                                setState(() => _accountTagVisibility = value),
+                          ),
+                          const SizedBox(height: kGap12),
                           _EmailRecoveryHintCard(
                             user: ref.watch(currentUserProvider),
                             isRussian: _isRussian,
@@ -1053,6 +1068,128 @@ class _AccountProfileEditPageState
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _AccountTagVisibilityPicker extends StatelessWidget {
+  const _AccountTagVisibilityPicker({
+    required this.value,
+    required this.isRussian,
+    required this.onChanged,
+  });
+
+  final AccountTagVisibility value;
+  final bool isRussian;
+  final ValueChanged<AccountTagVisibility> onChanged;
+
+  String _label(AccountTagVisibility visibility) {
+    return switch (visibility) {
+      AccountTagVisibility.public => isRussian ? 'Всем' : 'Everyone',
+      AccountTagVisibility.conversations => isRussian ? 'Диалогам' : 'Chats',
+      AccountTagVisibility.hidden => isRussian ? 'Скрыть' : 'Hide',
+    };
+  }
+
+  String _description(AccountTagVisibility visibility) {
+    return switch (visibility) {
+      AccountTagVisibility.public =>
+        isRussian
+            ? 'Tag виден в каталоге и будущей публичной карточке.'
+            : 'Tag is visible in catalog and future public profile.',
+      AccountTagVisibility.conversations =>
+        isRussian
+            ? 'Tag видят только участники ваших диалогов.'
+            : 'Only people in your chats can see the tag.',
+      AccountTagVisibility.hidden =>
+        isRussian
+            ? 'Tag сохранен, но не показывается другим пользователям.'
+            : 'Tag is saved but hidden from other users.',
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: kGap12),
+      padding: const EdgeInsets.all(12),
+      decoration: pillDecoration(
+        isDark: false,
+        radius: kCardRadius,
+      ).copyWith(border: Border.all(color: kBorderColor, width: 1)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            isRussian ? 'Кто видит @tag' : 'Who can see @tag',
+            style: _accountEditCommandStyle(
+              size: 13,
+              spacing: 0.9,
+              weight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final option in AccountTagVisibility.values)
+                _AccountTagVisibilityPill(
+                  label: _label(option),
+                  selected: value == option,
+                  onTap: () => onChanged(option),
+                ),
+            ],
+          ),
+          const SizedBox(height: 9),
+          Text(
+            _description(value),
+            style: _accountEditBodyStyle(size: 12, height: 1.25),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AccountTagVisibilityPill extends StatelessWidget {
+  const _AccountTagVisibilityPill({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(999),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
+        decoration: pillDecoration(isDark: selected, radius: 999),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (selected) ...[
+              const Icon(Icons.check_rounded, color: Colors.white, size: 15),
+              const SizedBox(width: 5),
+            ],
+            Text(
+              label,
+              style: _accountEditCommandStyle(
+                color: selected ? Colors.white : kTextDark,
+                size: 12,
+                spacing: 0.6,
+                weight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

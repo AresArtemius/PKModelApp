@@ -810,10 +810,25 @@ class ChatService {
     if (ids.isEmpty) return const <String, _ChatAccountPreview>{};
 
     try {
-      return await _loadChatAccountPreviews(ids, includeAccountTag: true);
+      return await _loadChatAccountPreviews(
+        ids,
+        includeAccountTag: true,
+        includeAccountTagVisibility: true,
+      );
     } on PostgrestException catch (e) {
+      if (SupabaseCompat.isMissingColumn(e, 'account_tag_visibility')) {
+        return _loadChatAccountPreviews(
+          ids,
+          includeAccountTag: true,
+          includeAccountTagVisibility: false,
+        );
+      }
       if (SupabaseCompat.isMissingColumn(e, 'account_tag')) {
-        return _loadChatAccountPreviews(ids, includeAccountTag: false);
+        return _loadChatAccountPreviews(
+          ids,
+          includeAccountTag: false,
+          includeAccountTagVisibility: false,
+        );
       }
       final missingProfileColumns = SupabaseCompat.isMissingAnyColumn(e, const [
         'avatar_url',
@@ -831,6 +846,7 @@ class ChatService {
   Future<Map<String, _ChatAccountPreview>> _loadChatAccountPreviews(
     Set<String> ids, {
     required bool includeAccountTag,
+    required bool includeAccountTagVisibility,
   }) async {
     final columns = [
       'user_id',
@@ -839,6 +855,7 @@ class ChatService {
       'company_name',
       'position',
       if (includeAccountTag) 'account_tag',
+      if (includeAccountTagVisibility) 'account_tag_visibility',
     ].join(',');
     final rows = await _sb
         .from('user_profiles')
@@ -1892,6 +1909,10 @@ class _ChatAccountPreview {
     final companyName = (map['company_name'] ?? '').toString().trim();
     final fullName = (map['full_name'] ?? '').toString().trim();
     final position = (map['position'] ?? '').toString().trim();
+    final tagVisibility = (map['account_tag_visibility'] ?? 'public')
+        .toString()
+        .trim()
+        .toLowerCase();
     final title = fullName.isNotEmpty
         ? fullName
         : companyName.isNotEmpty
@@ -1903,7 +1924,9 @@ class _ChatAccountPreview {
     return _ChatAccountPreview(
       displayName: title,
       avatarUrl: (map['avatar_url'] ?? '').toString().trim(),
-      accountTag: (map['account_tag'] ?? '').toString().trim(),
+      accountTag: tagVisibility == 'hidden'
+          ? ''
+          : (map['account_tag'] ?? '').toString().trim(),
     );
   }
 }

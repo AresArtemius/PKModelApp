@@ -4,6 +4,16 @@
 alter table public.user_profiles
   add column if not exists account_tag text;
 
+alter table public.user_profiles
+  add column if not exists account_tag_visibility text not null default 'public';
+
+alter table public.user_profiles
+  drop constraint if exists user_profiles_account_tag_visibility_check;
+
+alter table public.user_profiles
+  add constraint user_profiles_account_tag_visibility_check
+  check (account_tag_visibility in ('public', 'conversations', 'hidden'));
+
 update public.user_profiles
 set account_tag = nullif(
   regexp_replace(
@@ -38,9 +48,17 @@ declare
     ),
     ''
   );
+  v_account_tag_visibility text := coalesce(
+    nullif(btrim(coalesce(p_profile ->> 'account_tag_visibility', '')), ''),
+    'public'
+  );
 begin
   if v_user_id is null then
     raise exception 'Not authenticated';
+  end if;
+
+  if v_account_tag_visibility not in ('public', 'conversations', 'hidden') then
+    v_account_tag_visibility := 'public';
   end if;
 
   insert into public.user_profiles (
@@ -48,6 +66,7 @@ begin
     email,
     phone,
     account_tag,
+    account_tag_visibility,
     avatar_url,
     full_name,
     company_name,
@@ -65,6 +84,7 @@ begin
     nullif(btrim(coalesce(p_profile ->> 'email', '')), ''),
     nullif(btrim(coalesce(p_profile ->> 'phone', '')), ''),
     v_account_tag,
+    v_account_tag_visibility,
     nullif(btrim(coalesce(p_profile ->> 'avatar_url', '')), ''),
     nullif(btrim(coalesce(p_profile ->> 'full_name', '')), ''),
     nullif(btrim(coalesce(p_profile ->> 'company_name', '')), ''),
@@ -82,6 +102,7 @@ begin
     email = excluded.email,
     phone = excluded.phone,
     account_tag = excluded.account_tag,
+    account_tag_visibility = excluded.account_tag_visibility,
     avatar_url = excluded.avatar_url,
     full_name = excluded.full_name,
     company_name = excluded.company_name,
