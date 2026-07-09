@@ -147,6 +147,8 @@ class NotificationsPage extends ConsumerWidget {
                   const SizedBox(height: kGap16),
                   const _PushStatusCard(),
                   const SizedBox(height: kGap12),
+                  const _PushQaCard(),
+                  const SizedBox(height: kGap12),
                   const _NotificationSettingsCard(),
                   const SizedBox(height: kGap16),
                   Expanded(
@@ -448,6 +450,274 @@ class _PushStatusShell extends StatelessWidget {
                   ),
                 ],
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PushQaCard extends ConsumerWidget {
+  const _PushQaCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final async = ref.watch(pushQaDiagnosticsProvider);
+
+    return async.when(
+      loading: () => _PushQaShell(
+        ru: ru,
+        busy: true,
+        diagnostics: null,
+        onRefresh: () => ref.invalidate(pushQaDiagnosticsProvider),
+      ),
+      error: (e, _) => _PushQaShell(
+        ru: ru,
+        diagnostics: null,
+        error: AppErrorMapper.message(e, AppLocalizations.of(context)!),
+        onRefresh: () => ref.invalidate(pushQaDiagnosticsProvider),
+      ),
+      data: (diagnostics) => _PushQaShell(
+        ru: ru,
+        diagnostics: diagnostics,
+        onRefresh: () => ref.invalidate(pushQaDiagnosticsProvider),
+      ),
+    );
+  }
+}
+
+class _PushQaShell extends StatelessWidget {
+  const _PushQaShell({
+    required this.ru,
+    required this.diagnostics,
+    required this.onRefresh,
+    this.busy = false,
+    this.error,
+  });
+
+  final bool ru;
+  final PushQaDiagnostics? diagnostics;
+  final VoidCallback onRefresh;
+  final bool busy;
+  final String? error;
+
+  @override
+  Widget build(BuildContext context) {
+    final d = diagnostics;
+    final passed = d?.passedCount ?? 0;
+    final complete = passed == 5;
+    final danger = error != null || (d != null && !d.fcmSecretsOk);
+    final title = ru ? 'PUSH QA' : 'PUSH QA';
+    final subtitle = busy
+        ? (ru
+              ? 'Проверяем production-цепочку...'
+              : 'Checking production path...')
+        : error ??
+              (ru ? '$passed/5 проверок пройдено' : '$passed/5 checks passed');
+
+    return Container(
+      width: double.infinity,
+      padding: kLoginCardPad,
+      decoration: catalogCardDecoration().copyWith(
+        border: Border.all(
+          color: danger
+              ? BrandTheme.redTop
+              : complete
+              ? kTextDark
+              : kBorderColor,
+          width: danger || complete ? 1.4 : 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  gradient: danger || complete
+                      ? BrandTheme.darkPillGradient
+                      : BrandTheme.lightPillGradient,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Icon(
+                  complete ? Icons.verified_rounded : Icons.fact_check_rounded,
+                  color: danger || complete ? Colors.white : kTextMuted,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: kGap12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: _notificationCommandStyle(
+                        size: 18,
+                        spacing: 1.4,
+                        weight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      style: _notificationBodyStyle(
+                        color: danger ? kTextDanger : kTextMuted,
+                        size: 14,
+                        weight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                onPressed: busy ? null : onRefresh,
+                icon: const Icon(Icons.refresh_rounded, color: kTextDark),
+                tooltip: ru ? 'Обновить' : 'Refresh',
+              ),
+            ],
+          ),
+          const SizedBox(height: kGap12),
+          if (busy)
+            const LinearProgressIndicator(minHeight: 3)
+          else if (d != null) ...[
+            Wrap(
+              spacing: kGap8,
+              runSpacing: kGap8,
+              children: [
+                _QaBadge(
+                  ok: d.deviceRegistered,
+                  label: ru ? 'Устройство' : 'Device',
+                ),
+                _QaBadge(
+                  ok: d.tokenFresh,
+                  label: ru ? 'Токен свежий' : 'Fresh token',
+                ),
+                _QaBadge(
+                  ok: d.workerSent,
+                  label: ru ? 'Worker sent' : 'Worker sent',
+                ),
+                _QaBadge(
+                  ok: d.fcmSecretsOk,
+                  label: ru ? 'FCM secrets' : 'FCM secrets',
+                ),
+                _QaBadge(
+                  ok: d.statusClear,
+                  label: ru ? 'Статус понятен' : 'Clear status',
+                ),
+              ],
+            ),
+            const SizedBox(height: kGap12),
+            _QaMetaLine(
+              icon: Icons.devices_rounded,
+              text: ru
+                  ? 'Токенов: ${d.enabledTokenCount} · ${_formatDate(d.latestTokenSeenAt, ru: ru)}'
+                  : 'Tokens: ${d.enabledTokenCount} · ${_formatDate(d.latestTokenSeenAt, ru: ru)}',
+            ),
+            _QaMetaLine(
+              icon: Icons.outbound_rounded,
+              text: ru
+                  ? 'Последний push: ${d.latestPushStatus.isEmpty ? 'нет событий' : d.latestPushStatus} · ${_formatDate(d.latestNotificationAt, ru: ru)}'
+                  : 'Latest push: ${d.latestPushStatus.isEmpty ? 'no events' : d.latestPushStatus} · ${_formatDate(d.latestNotificationAt, ru: ru)}',
+            ),
+            if (d.latestPushError.isNotEmpty)
+              _QaMetaLine(
+                icon: Icons.error_outline_rounded,
+                danger: true,
+                text: _compactError(d.latestPushError),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _formatDate(DateTime? value, {required bool ru}) {
+    if (value == null) return ru ? 'нет данных' : 'no data';
+    final local = value.toLocal();
+    String two(int number) => number.toString().padLeft(2, '0');
+    return '${two(local.day)}.${two(local.month)} ${two(local.hour)}:${two(local.minute)}';
+  }
+
+  String _compactError(String value) {
+    final clean = value.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (clean.length <= 140) return clean;
+    return '${clean.substring(0, 137)}...';
+  }
+}
+
+class _QaBadge extends StatelessWidget {
+  const _QaBadge({required this.ok, required this.label});
+
+  final bool ok;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(minHeight: 36),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: pillDecoration(
+        isDark: ok,
+        radius: 18,
+      ).copyWith(border: Border.all(color: ok ? kTextDark : kBorderColor)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            ok ? Icons.check_rounded : Icons.priority_high_rounded,
+            size: 17,
+            color: ok ? Colors.white : BrandTheme.redTop,
+          ),
+          const SizedBox(width: 7),
+          Text(
+            label,
+            style: _notificationCommandStyle(
+              color: ok ? Colors.white : kTextDark,
+              size: 13,
+              spacing: 0.2,
+              weight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QaMetaLine extends StatelessWidget {
+  const _QaMetaLine({
+    required this.icon,
+    required this.text,
+    this.danger = false,
+  });
+
+  final IconData icon;
+  final String text;
+  final bool danger;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: danger ? BrandTheme.redTop : kTextMuted, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: _notificationBodyStyle(
+                color: danger ? kTextDanger : kTextMuted,
+                size: 14,
+                weight: FontWeight.w700,
+              ),
             ),
           ),
         ],

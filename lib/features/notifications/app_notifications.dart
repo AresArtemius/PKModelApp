@@ -268,6 +268,150 @@ class NotificationPreferencesService {
   }
 }
 
+class PushQaDiagnostics {
+  const PushQaDiagnostics({
+    required this.deviceRegistered,
+    required this.tokenFresh,
+    required this.workerSent,
+    required this.fcmSecretsOk,
+    required this.statusClear,
+    required this.latestPushStatus,
+    required this.latestPushError,
+    required this.enabledTokenCount,
+    required this.latestTokenSeenAt,
+    required this.latestNotificationAt,
+  });
+
+  final bool deviceRegistered;
+  final bool tokenFresh;
+  final bool workerSent;
+  final bool fcmSecretsOk;
+  final bool statusClear;
+  final String latestPushStatus;
+  final String latestPushError;
+  final int enabledTokenCount;
+  final DateTime? latestTokenSeenAt;
+  final DateTime? latestNotificationAt;
+
+  int get passedCount {
+    return [
+      deviceRegistered,
+      tokenFresh,
+      workerSent,
+      fcmSecretsOk,
+      statusClear,
+    ].where((item) => item).length;
+  }
+}
+
+class PushQaDiagnosticsService {
+  const PushQaDiagnosticsService(this._sb);
+
+  final SupabaseClient _sb;
+
+  Future<PushQaDiagnostics> loadForCurrentUser() async {
+    final userId = _sb.auth.currentUser?.id;
+    if (userId == null || userId.isEmpty) {
+      return _empty();
+    }
+
+    try {
+      final tokenRows = await _sb
+          .from('push_device_tokens')
+          .select('enabled,last_seen_at')
+          .eq('user_id', userId)
+          .eq('enabled', true)
+          .order('last_seen_at', ascending: false)
+          .limit(10);
+
+      final notificationRows = await _sb
+          .from(AppNotificationsService.table)
+          .select('push_status,push_error,push_sent_at,created_at')
+          .eq('user_id', userId)
+          .neq('push_status', 'skipped')
+          .order('created_at', ascending: false)
+          .limit(20);
+
+      final latestTokenSeenAt = tokenRows
+          .map((row) => Map<String, dynamic>.from(row))
+          .map((row) => _date(row['last_seen_at']))
+          .whereType<DateTime>()
+          .firstOrNull;
+      final latestNotification = notificationRows
+          .map((row) => Map<String, dynamic>.from(row))
+          .firstOrNull;
+      final latestPushStatus = (latestNotification?['push_status'] ?? '')
+          .toString()
+          .trim();
+      final latestPushError = (latestNotification?['push_error'] ?? '')
+          .toString()
+          .trim();
+      final latestNotificationAt = _date(latestNotification?['created_at']);
+      final lowerError = latestPushError.toLowerCase();
+      final hasAuthError =
+          lowerError.contains('third_party_auth_error') ||
+          lowerError.contains('unauthenticated') ||
+          lowerError.contains('fcm service account secrets');
+
+      return PushQaDiagnostics(
+        deviceRegistered: tokenRows.isNotEmpty,
+        tokenFresh:
+            latestTokenSeenAt != null &&
+            DateTime.now()
+                    .toUtc()
+                    .difference(latestTokenSeenAt.toUtc())
+                    .inDays <=
+                7,
+        workerSent: latestPushStatus == 'sent',
+        fcmSecretsOk: !hasAuthError,
+        statusClear: latestPushStatus.isEmpty
+            ? false
+            : const {
+                'pending',
+                'processing',
+                'sent',
+                'failed',
+                'skipped',
+              }.contains(latestPushStatus),
+        latestPushStatus: latestPushStatus,
+        latestPushError: latestPushError,
+        enabledTokenCount: tokenRows.length,
+        latestTokenSeenAt: latestTokenSeenAt,
+        latestNotificationAt: latestNotificationAt,
+      );
+    } on PostgrestException catch (e) {
+      if (SupabaseCompat.isMissingRelation(e, const [
+        'push_device_tokens',
+        AppNotificationsService.table,
+      ])) {
+        AppLogger.warning('Push QA tables are not applied yet', error: e);
+        return _empty();
+      }
+      rethrow;
+    }
+  }
+
+  PushQaDiagnostics _empty() {
+    return const PushQaDiagnostics(
+      deviceRegistered: false,
+      tokenFresh: false,
+      workerSent: false,
+      fcmSecretsOk: false,
+      statusClear: false,
+      latestPushStatus: '',
+      latestPushError: '',
+      enabledTokenCount: 0,
+      latestTokenSeenAt: null,
+      latestNotificationAt: null,
+    );
+  }
+
+  DateTime? _date(Object? value) {
+    final raw = (value ?? '').toString().trim();
+    return raw.isEmpty ? null : DateTime.tryParse(raw);
+  }
+}
+
 final appNotificationsServiceProvider = Provider<AppNotificationsService>((
   ref,
 ) {
@@ -278,6 +422,12 @@ final notificationPreferencesServiceProvider =
     Provider<NotificationPreferencesService>((ref) {
       return NotificationPreferencesService(ref.read(supabaseProvider));
     });
+
+final pushQaDiagnosticsServiceProvider = Provider<PushQaDiagnosticsService>((
+  ref,
+) {
+  return PushQaDiagnosticsService(ref.read(supabaseProvider));
+});
 
 final appNotificationsProvider =
     FutureProvider.autoDispose<List<AppNotification>>((ref) async {
@@ -292,3 +442,10 @@ final notificationPreferencesProvider =
           .read(notificationPreferencesServiceProvider)
           .loadForCurrentUser();
     });
+
+final pushQaDiagnosticsProvider = FutureProvider.autoDispose<PushQaDiagnostics>(
+  (ref) async {
+    ref.watch(currentUserIdProvider);
+    return ref.read(pushQaDiagnosticsServiceProvider).loadForCurrentUser();
+  },
+);
