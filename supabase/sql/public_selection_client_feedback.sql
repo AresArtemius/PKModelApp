@@ -24,6 +24,17 @@ create table if not exists public.selection_client_feedback (
 create index if not exists selection_client_feedback_selection_idx
   on public.selection_client_feedback (selection_id, updated_at desc);
 
+alter table public.selection_client_feedback
+  drop constraint if exists selection_client_feedback_vote_check;
+
+update public.selection_client_feedback
+set vote = 'selected'
+where vote in ('liked', 'like', 'chosen');
+
+alter table public.selection_client_feedback
+  add constraint selection_client_feedback_vote_check
+  check (vote in ('selected', 'reserve', 'rejected'));
+
 alter table public.selection_client_feedback enable row level security;
 
 drop policy if exists "Selection owners and admins view client feedback"
@@ -121,7 +132,11 @@ begin
     raise exception 'Client key is required';
   end if;
 
-  if v_vote is not null and v_vote not in ('liked', 'rejected') then
+  if v_vote in ('liked', 'like', 'chosen') then
+    v_vote := 'selected';
+  end if;
+
+  if v_vote is not null and v_vote not in ('selected', 'reserve', 'rejected') then
     raise exception 'Unsupported vote: %', p_vote;
   end if;
 
@@ -159,6 +174,35 @@ begin
     vote = excluded.vote,
     comment = excluded.comment,
     updated_at = now();
+
+  if v_vote = 'selected' then
+    update public.selections
+    set status = 'selected'
+    where id = p_selection_id
+      and status in ('sent_to_client', 'client_viewed', 'draft', 'rejected');
+  elsif v_vote = 'rejected'
+    and not exists (
+      select 1
+      from public.selection_client_feedback f
+      where f.selection_id = p_selection_id
+        and f.vote in ('selected', 'reserve')
+    )
+    and (
+      select count(*)
+      from public.selection_client_feedback f
+      where f.selection_id = p_selection_id
+        and f.vote = 'rejected'
+    ) >= (
+      select count(*)
+      from public.selection_items si
+      where si.selection_id = p_selection_id
+    )
+  then
+    update public.selections
+    set status = 'rejected'
+    where id = p_selection_id
+      and status in ('sent_to_client', 'client_viewed', 'draft');
+  end if;
 end;
 $$;
 

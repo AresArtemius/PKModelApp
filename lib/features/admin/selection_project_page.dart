@@ -208,6 +208,46 @@ List<MapEntry<String, String>> _campaignRows(
   return rows.where((row) => row.value.isNotEmpty).toList(growable: false);
 }
 
+class _SelectionPublicToggleException implements Exception {
+  const _SelectionPublicToggleException({
+    required this.rpcError,
+    required this.fallbackError,
+  });
+
+  final Object? rpcError;
+  final Object fallbackError;
+
+  @override
+  String toString() {
+    return 'Selection public toggle failed. RPC: $rpcError. Fallback: $fallbackError';
+  }
+}
+
+String _publicSelectionToggleErrorMessage(
+  Object error,
+  AppLocalizations t,
+  bool isRu,
+) {
+  final text = error.toString().toLowerCase();
+  if (text.contains('set_selection_public') ||
+      text.contains('is_public') ||
+      text.contains('selection_client_feedback') ||
+      text.contains('schema cache') ||
+      text.contains('function') && text.contains('not found')) {
+    return isRu
+        ? 'Публичная ссылка не включилась. Скорее всего, в Supabase не применен SQL `public_selection_client_feedback.sql` или schema cache еще не обновился.'
+        : 'Public link was not enabled. Most likely `public_selection_client_feedback.sql` is not applied in Supabase or schema cache has not refreshed yet.';
+  }
+  if (text.contains('row-level security') ||
+      text.contains('permission') ||
+      text.contains('access denied')) {
+    return isRu
+        ? 'Нет права включить публичную ссылку для этой подборки. Проверьте владельца подборки, роль админа и RLS-политики.'
+        : 'No permission to publish this selection. Check selection owner, admin role, and RLS policies.';
+  }
+  return AppErrorMapper.message(error, t);
+}
+
 class SelectionProjectPage extends ConsumerWidget {
   const SelectionProjectPage({
     super.key,
@@ -385,6 +425,7 @@ class SelectionProjectPage extends ConsumerWidget {
               Future<void> setPublic(bool next) async {
                 try {
                   final sb = ref.read(supabaseProvider);
+                  Object? rpcError;
                   try {
                     await sb.rpc(
                       'set_selection_public',
@@ -393,45 +434,60 @@ class SelectionProjectPage extends ConsumerWidget {
                         'p_is_public': next,
                       },
                     );
-                  } catch (_) {
-                    await sb
-                        .from('selections')
-                        .update({
-                          'is_public': next,
-                          if (next && status == SelectionStatus.draft)
-                            'status': SelectionStatus.sentToClient.storageValue,
-                        })
-                        .eq('id', selectionId);
+                  } catch (e) {
+                    rpcError = e;
+                    try {
+                      await sb
+                          .from('selections')
+                          .update({
+                            'is_public': next,
+                            if (next && status == SelectionStatus.draft)
+                              'status':
+                                  SelectionStatus.sentToClient.storageValue,
+                          })
+                          .eq('id', selectionId);
+                    } catch (fallbackError) {
+                      throw _SelectionPublicToggleException(
+                        rpcError: rpcError,
+                        fallbackError: fallbackError,
+                      );
+                    }
                   }
-                  await AdminActionLogService(sb).log(
-                    actionType: next
-                        ? 'selection_public_link_enabled'
-                        : 'selection_public_link_disabled',
-                    title: next
-                        ? 'Публичная ссылка подборки включена'
-                        : 'Публичная ссылка подборки выключена',
-                    description: publicLink,
-                    targetTable: 'selections',
-                    targetId: selectionId,
-                    targetText: title,
-                    status: next ? 'public' : 'private',
-                    metadata: {
-                      'selection_id': selectionId,
-                      'selection_title': title,
-                      'public_link': publicLink,
-                      'is_public': next,
-                    },
-                  );
+                  try {
+                    await AdminActionLogService(sb).log(
+                      actionType: next
+                          ? 'selection_public_link_enabled'
+                          : 'selection_public_link_disabled',
+                      title: next
+                          ? 'Публичная ссылка подборки включена'
+                          : 'Публичная ссылка подборки выключена',
+                      description: publicLink,
+                      targetTable: 'selections',
+                      targetId: selectionId,
+                      targetText: title,
+                      status: next ? 'public' : 'private',
+                      metadata: {
+                        'selection_id': selectionId,
+                        'selection_title': title,
+                        'public_link': publicLink,
+                        'is_public': next,
+                      },
+                    );
+                  } catch (_) {
+                    // Audit logging must not block public link publishing.
+                  }
                   ref.invalidate(selectionProjectProvider(selectionId));
                   ref.invalidate(adminSelectionListProvider);
                 } catch (e) {
                   if (!context.mounted) return;
+                  final isRu =
+                      Localizations.localeOf(context).languageCode == 'ru';
                   ScaffoldMessenger.of(context)
                     ..hideCurrentSnackBar()
                     ..showSnackBar(
                       SnackBar(
                         content: Text(
-                          '${t.errorUpper}: ${AppErrorMapper.message(e, t)}',
+                          '${t.errorUpper}: ${_publicSelectionToggleErrorMessage(e, t, isRu)}',
                         ),
                       ),
                     );
@@ -638,23 +694,32 @@ class _SelectionChatButtonState extends ConsumerState<_SelectionChatButton> {
 
 class _AgentFeedbackSummary {
   _AgentFeedbackSummary({
-    required this.likes,
+    required this.selected,
+    required this.reserve,
     required this.rejects,
     required this.comments,
   });
 
   factory _AgentFeedbackSummary.empty() {
-    return _AgentFeedbackSummary(likes: 0, rejects: 0, comments: <String>[]);
+    return _AgentFeedbackSummary(
+      selected: 0,
+      reserve: 0,
+      rejects: 0,
+      comments: <String>[],
+    );
   }
 
-  int likes;
+  int selected;
+  int reserve;
   int rejects;
   final List<String> comments;
 
   void add(SelectionClientFeedback feedback) {
     switch (feedback.vote) {
-      case SelectionClientVote.liked:
-        likes += 1;
+      case SelectionClientVote.selected:
+        selected += 1;
+      case SelectionClientVote.reserve:
+        reserve += 1;
       case SelectionClientVote.rejected:
         rejects += 1;
       case null:
@@ -665,7 +730,8 @@ class _AgentFeedbackSummary {
     if (comment.isNotEmpty) comments.add(comment);
   }
 
-  bool get isEmpty => likes == 0 && rejects == 0 && comments.isEmpty;
+  bool get isEmpty =>
+      selected == 0 && reserve == 0 && rejects == 0 && comments.isEmpty;
 }
 
 class _SelectionPresentationProfile {
@@ -929,8 +995,11 @@ class _PublicPresentationHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isRu = Localizations.localeOf(context).languageCode == 'ru';
-    final liked = feedback.values
-        .where((e) => e.vote == SelectionClientVote.liked)
+    final selected = feedback.values
+        .where((e) => e.vote == SelectionClientVote.selected)
+        .length;
+    final reserve = feedback.values
+        .where((e) => e.vote == SelectionClientVote.reserve)
         .length;
     final rejected = feedback.values
         .where((e) => e.vote == SelectionClientVote.rejected)
@@ -956,12 +1025,17 @@ class _PublicPresentationHero extends StatelessWidget {
                 value: '$count',
               ),
               _PresentationStatPill(
-                icon: Icons.thumb_up_alt_rounded,
-                label: isRu ? 'Нравится' : 'Liked',
-                value: '$liked',
+                icon: Icons.check_circle_rounded,
+                label: isRu ? 'Выбран' : 'Selected',
+                value: '$selected',
               ),
               _PresentationStatPill(
-                icon: Icons.thumb_down_alt_rounded,
+                icon: Icons.bookmark_rounded,
+                label: isRu ? 'Резерв' : 'Reserve',
+                value: '$reserve',
+              ),
+              _PresentationStatPill(
+                icon: Icons.block_rounded,
                 label: isRu ? 'Отказ' : 'Rejected',
                 value: '$rejected',
               ),
@@ -1403,10 +1477,12 @@ class _PublicSelectionRail extends StatelessWidget {
           final profile = profiles[index];
           final vote = feedback[profile.profileId]?.vote;
           final selected = index == selectedIndex;
-          final voteIcon = vote == SelectionClientVote.liked
-              ? Icons.thumb_up_alt_rounded
+          final voteIcon = vote == SelectionClientVote.selected
+              ? Icons.check_circle_rounded
+              : vote == SelectionClientVote.reserve
+              ? Icons.bookmark_rounded
               : vote == SelectionClientVote.rejected
-              ? Icons.thumb_down_alt_rounded
+              ? Icons.block_rounded
               : Icons.radio_button_unchecked_rounded;
           return Material(
             color: Colors.transparent,
@@ -1812,6 +1888,7 @@ class _ClientFeedbackControlsState
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
+    final isRu = Localizations.localeOf(context).languageCode == 'ru';
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
@@ -1822,17 +1899,26 @@ class _ClientFeedbackControlsState
             children: [
               Expanded(
                 child: _FeedbackVoteButton(
-                  label: t.clientFeedbackLike,
-                  icon: Icons.thumb_up_alt_rounded,
-                  selected: _vote == SelectionClientVote.liked,
-                  onTap: () => _save(vote: SelectionClientVote.liked),
+                  label: isRu ? 'Выбран' : 'Selected',
+                  icon: Icons.check_circle_rounded,
+                  selected: _vote == SelectionClientVote.selected,
+                  onTap: () => _save(vote: SelectionClientVote.selected),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _FeedbackVoteButton(
+                  label: isRu ? 'Резерв' : 'Reserve',
+                  icon: Icons.bookmark_rounded,
+                  selected: _vote == SelectionClientVote.reserve,
+                  onTap: () => _save(vote: SelectionClientVote.reserve),
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: _FeedbackVoteButton(
                   label: t.clientFeedbackReject,
-                  icon: Icons.thumb_down_alt_rounded,
+                  icon: Icons.block_rounded,
                   selected: _vote == SelectionClientVote.rejected,
                   onTap: () => _save(vote: SelectionClientVote.rejected),
                 ),
@@ -1937,6 +2023,7 @@ class _AgentFeedbackView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
+    final isRu = Localizations.localeOf(context).languageCode == 'ru';
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
@@ -1948,11 +2035,19 @@ class _AgentFeedbackView extends StatelessWidget {
             runSpacing: 8,
             children: [
               _AgentFeedbackPill(
-                icon: Icons.thumb_up_alt_rounded,
-                text: t.clientFeedbackLikesCount(summary.likes),
+                icon: Icons.check_circle_rounded,
+                text: isRu
+                    ? 'Выбран: ${summary.selected}'
+                    : 'Selected: ${summary.selected}',
               ),
               _AgentFeedbackPill(
-                icon: Icons.thumb_down_alt_rounded,
+                icon: Icons.bookmark_rounded,
+                text: isRu
+                    ? 'Резерв: ${summary.reserve}'
+                    : 'Reserve: ${summary.reserve}',
+              ),
+              _AgentFeedbackPill(
+                icon: Icons.block_rounded,
                 text: t.clientFeedbackRejectsCount(summary.rejects),
               ),
             ],
@@ -2126,6 +2221,7 @@ class _PublicSelectionPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
+    final isRu = Localizations.localeOf(context).languageCode == 'ru';
 
     return _CardPill(
       child: Column(
@@ -2149,6 +2245,18 @@ class _PublicSelectionPanel extends StatelessWidget {
                 onChanged: onToggle,
               ),
             ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            isRu
+                ? 'Включает клиентскую страницу подборки по ссылке ниже. Если выключено, клиент страницу не откроет.'
+                : 'Enables the client-facing selection page below. When disabled, clients cannot open it.',
+            style: const TextStyle(
+              color: kTextMuted,
+              fontWeight: FontWeight.w700,
+              height: 1.25,
+              fontSize: 12,
+            ),
           ),
           const SizedBox(height: 8),
           Text(

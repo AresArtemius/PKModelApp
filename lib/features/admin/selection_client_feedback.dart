@@ -9,7 +9,8 @@ import '../../core/supabase_provider.dart';
 const String _clientKeyPrefsKey = 'public_selection_client_key_v1';
 
 enum SelectionClientVote {
-  liked('liked'),
+  selected('selected'),
+  reserve('reserve'),
   rejected('rejected');
 
   const SelectionClientVote(this.storageValue);
@@ -19,7 +20,8 @@ enum SelectionClientVote {
 
 SelectionClientVote? selectionClientVoteFromString(Object? value) {
   return switch (value?.toString().trim().toLowerCase()) {
-    'liked' || 'like' => SelectionClientVote.liked,
+    'selected' || 'chosen' || 'liked' || 'like' => SelectionClientVote.selected,
+    'reserve' || 'reserved' => SelectionClientVote.reserve,
     'rejected' || 'reject' => SelectionClientVote.rejected,
     _ => null,
   };
