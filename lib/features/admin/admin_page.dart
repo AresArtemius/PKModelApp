@@ -177,6 +177,15 @@ class AdminPage extends ConsumerWidget {
                         context.go('${Routes.createCastingAdmin}?from=admin'),
                   ),
                   _AdminAction(
+                    label: ru ? 'ПОЛЬЗОВАТЕЛИ' : 'USERS',
+                    description: ru
+                        ? 'Аккаунты, роли, контакты'
+                        : 'Accounts, roles, contacts',
+                    icon: Icons.groups_rounded,
+                    group: _AdminActionGroup.operations,
+                    onTap: () => context.go(Routes.adminUsers),
+                  ),
+                  _AdminAction(
                     label: t.selectionUpper,
                     description: ru
                         ? 'Подборки и кастинги'
