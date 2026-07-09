@@ -38,6 +38,7 @@ import '../features/notifications/app_notifications.dart';
 import '../features/notifications/notifications_page.dart';
 import '../features/profile/my_profile_page.dart';
 import '../features/profile/account_profile_edit_page.dart';
+import '../features/profile/public_account_profile_page.dart';
 import '../gen_l10n/app_localizations.dart';
 import '../ui/brand/brand_theme.dart';
 import '../features/admin/selection_project_page.dart';
@@ -59,6 +60,8 @@ abstract class Routes {
   static const notifications = '/notifications';
   static const profileAnalytics = '/profile_analytics';
   static const accountProfile = '/account_profile';
+  static const publicAccountPrefix = '/@';
+  static const publicAccount = '/@:tag';
 
   static const admin = '/admin';
   static const catalogAdmin = '/catalog_admin';
@@ -86,6 +89,7 @@ abstract class Routes {
 }
 
 const _routeParamId = 'id';
+const _routeParamTag = 'tag';
 const double _kDesktopShellBreakpoint = 900;
 const double _kExpandedDesktopShellBreakpoint = 1180;
 const double _kCompactDesktopNavWidth = 112;
@@ -587,6 +591,14 @@ final List<RouteBase> appRoutes = [
   GoRoute(
     path: Routes.accountProfile,
     builder: (context, state) => const AccountProfileEditPage(),
+  ),
+
+  GoRoute(
+    path: Routes.publicAccount,
+    builder: (context, state) {
+      final tag = state.pathParameters[_routeParamTag] ?? '';
+      return PublicAccountProfilePage(rawTag: tag);
+    },
   ),
 
   GoRoute(

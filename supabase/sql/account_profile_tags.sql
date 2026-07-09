@@ -118,3 +118,57 @@ end;
 $save_account_profile$;
 
 grant execute on function public.save_account_profile(jsonb) to authenticated;
+
+create or replace function public.get_public_account_profile(p_account_tag text)
+returns table (
+  user_id uuid,
+  account_tag text,
+  avatar_url text,
+  full_name text,
+  company_name text,
+  position text,
+  account_type text,
+  city text,
+  country text,
+  website text,
+  social_url text,
+  bio text
+)
+language sql
+stable
+security definer
+set search_path = public
+set row_security = off
+as $get_public_account_profile$
+  select
+    up.user_id,
+    up.account_tag,
+    up.avatar_url,
+    up.full_name,
+    up.company_name,
+    up.position,
+    up.account_type,
+    up.city,
+    up.country,
+    up.website,
+    up.social_url,
+    up.bio
+  from public.user_profiles up
+  where lower(up.account_tag) = lower(
+    nullif(
+      regexp_replace(
+        lower(regexp_replace(btrim(coalesce(p_account_tag, '')), '^@', '')),
+        '[^a-z0-9._-]',
+        '',
+        'g'
+      ),
+      ''
+    )
+  )
+    and up.account_tag_visibility = 'public'
+    and nullif(btrim(coalesce(up.account_tag, '')), '') is not null
+  limit 1;
+$get_public_account_profile$;
+
+grant execute on function public.get_public_account_profile(text)
+  to anon, authenticated;

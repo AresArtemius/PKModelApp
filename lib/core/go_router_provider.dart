@@ -70,13 +70,15 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       final isPublicSelectionRoute = path.startsWith(
         Routes.publicSelectionPrefix,
       );
+      final isPublicAccountRoute = path.startsWith(Routes.publicAccountPrefix);
       final isAdminSelectionRoute = path.startsWith(Routes.adminSelection);
 
       final isPublic =
           _publicPaths.contains(path) ||
           isModelRoute ||
           isPublicModelRoute ||
-          isPublicSelectionRoute;
+          isPublicSelectionRoute ||
+          isPublicAccountRoute;
       final isAdminRoute = _adminPaths.contains(path) || isAdminSelectionRoute;
 
       if (!loggedIn) {
