@@ -12,7 +12,7 @@
 
 ## Журнал изменений
 
-- 2026-07-09: ручные back-office действия теперь пишутся в `admin_action_logs`: смена роли/статуса аккаунта, удаление профиля аккаунта, анкеты, кастинга и подборки сохраняют автора, цель, описание и metadata; журнал действий показывает metadata в деталях и CSV; commit `TBD`.
+- 2026-07-09: ручные back-office действия теперь пишутся в `admin_action_logs`: смена роли/статуса аккаунта, удаление профиля аккаунта, анкеты, кастинга и подборки сохраняют автора, цель, описание и metadata; журнал действий показывает metadata в деталях и CSV; commit `ccb24e0`.
 - 2026-07-09: compact back-office dropdowns and confirm popups aligned with PK visual style; role/account actions moved from direct client writes to admin RPC functions to satisfy production RLS; SQL `admin_backoffice_actions.sql`; commit `740292b`.
 - 2026-07-09: back-office таблицы переведены с широких россыпей chips на компактные dropdown-сводки и dropdown-фильтры; в таблицы пользователей, анкет, кастингов и подборок добавлены меню действий для удаления сущностей и управления ролью/статусом аккаунта; commit `fc78fe3`.
 - 2026-07-09: мобильная версия back-office таблиц пользователей и анкет переведена с горизонтальных desktop-таблиц на адаптивные карточки; добавлены отдельные Web-first таблицы всех кастингов и всех подборок; commit `ab275d9`.
