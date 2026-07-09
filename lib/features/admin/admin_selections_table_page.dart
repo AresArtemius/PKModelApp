@@ -162,6 +162,49 @@ class _AdminSelectionsTablePageState
     super.dispose();
   }
 
+  Future<bool> _confirmDelete(_AdminSelectionRow selection) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Удалить подборку'),
+        content: Text('Удалить подборку «${selection.title}»?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Удалить'),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
+  }
+
+  Future<void> _deleteSelection(_AdminSelectionRow selection) async {
+    final confirmed = await _confirmDelete(selection);
+    if (!confirmed) return;
+    try {
+      await ref
+          .read(supabaseProvider)
+          .from('selections')
+          .delete()
+          .eq('id', selection.id);
+      ref.invalidate(_adminSelectionsProvider);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(content: Text('Подборка удалена')));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text('Не удалось удалить: $e')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final ru = Localizations.localeOf(context).languageCode == 'ru';
@@ -215,6 +258,7 @@ class _AdminSelectionsTablePageState
                         onPublicChanged: (value) =>
                             setState(() => _publicFilter = value),
                         onSearchChanged: () => setState(() {}),
+                        onDeleteSelection: _deleteSelection,
                       ),
                     );
                   },
@@ -237,6 +281,7 @@ class _SelectionsPanel extends StatelessWidget {
     required this.onStatusChanged,
     required this.onPublicChanged,
     required this.onSearchChanged,
+    required this.onDeleteSelection,
   });
 
   final List<_AdminSelectionRow> selections;
@@ -246,6 +291,7 @@ class _SelectionsPanel extends StatelessWidget {
   final ValueChanged<SelectionStatus?> onStatusChanged;
   final ValueChanged<bool?> onPublicChanged;
   final VoidCallback onSearchChanged;
+  final ValueChanged<_AdminSelectionRow> onDeleteSelection;
 
   @override
   Widget build(BuildContext context) {
@@ -275,13 +321,17 @@ class _SelectionsPanel extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _StatsBar(
-          items: [
-            (ru ? 'Всего' : 'Total', selections.length),
-            (ru ? 'В выборке' : 'Shown', filtered.length),
-            (ru ? 'Публичные' : 'Public', publicCount),
-            (ru ? 'Анкеты' : 'Profiles', totalItems),
-          ],
+        Align(
+          alignment: Alignment.centerLeft,
+          child: AdminCompactSummary(
+            title: ru ? 'Сводка' : 'Summary',
+            items: [
+              (ru ? 'Всего' : 'Total', selections.length),
+              (ru ? 'В выборке' : 'Shown', filtered.length),
+              (ru ? 'Публичные' : 'Public', publicCount),
+              (ru ? 'Анкеты' : 'Profiles', totalItems),
+            ],
+          ),
         ),
         const SizedBox(height: 12),
         _SelectionsToolbar(
@@ -297,8 +347,14 @@ class _SelectionsPanel extends StatelessWidget {
           child: filtered.isEmpty
               ? _EmptyState(text: ru ? 'Подборки не найдены' : 'No selections')
               : isDesktop
-              ? _SelectionsTable(selections: filtered)
-              : _SelectionsMobileList(selections: filtered),
+              ? _SelectionsTable(
+                  selections: filtered,
+                  onDeleteSelection: onDeleteSelection,
+                )
+              : _SelectionsMobileList(
+                  selections: filtered,
+                  onDeleteSelection: onDeleteSelection,
+                ),
         ),
       ],
     );
@@ -332,31 +388,40 @@ class _SelectionsToolbar extends StatelessWidget {
           : 'Search selections',
       onSearchChanged: onSearchChanged,
       filters: [
-        _FilterChipButton(
-          label: ru ? 'Все статусы' : 'All statuses',
-          selected: statusFilter == null,
-          onSelected: () => onStatusChanged(null),
+        AdminMenuFilter<SelectionStatus?>(
+          label: ru ? 'Статус' : 'Status',
+          valueLabel: statusFilter == null
+              ? (ru ? 'Все статусы' : 'All statuses')
+              : _selectionStatusText(statusFilter!, ru),
+          options: [
+            AdminMenuOption<SelectionStatus?>(
+              value: null,
+              label: ru ? 'Все статусы' : 'All statuses',
+            ),
+            for (final status in SelectionStatus.values)
+              AdminMenuOption(
+                value: status,
+                label: _selectionStatusText(status, ru),
+              ),
+          ],
+          onSelected: onStatusChanged,
         ),
-        for (final status in SelectionStatus.values)
-          _FilterChipButton(
-            label: _selectionStatusText(status, ru),
-            selected: statusFilter == status,
-            onSelected: () => onStatusChanged(status),
-          ),
-        _FilterChipButton(
-          label: ru ? 'Любой доступ' : 'Any visibility',
-          selected: publicFilter == null,
-          onSelected: () => onPublicChanged(null),
-        ),
-        _FilterChipButton(
-          label: ru ? 'Публичные' : 'Public',
-          selected: publicFilter == true,
-          onSelected: () => onPublicChanged(true),
-        ),
-        _FilterChipButton(
-          label: ru ? 'Закрытые' : 'Private',
-          selected: publicFilter == false,
-          onSelected: () => onPublicChanged(false),
+        AdminMenuFilter<bool?>(
+          label: ru ? 'Доступ' : 'Access',
+          valueLabel: publicFilter == null
+              ? (ru ? 'Любой' : 'Any')
+              : publicFilter!
+              ? (ru ? 'Публичные' : 'Public')
+              : (ru ? 'Закрытые' : 'Private'),
+          options: [
+            AdminMenuOption<bool?>(
+              value: null,
+              label: ru ? 'Любой доступ' : 'Any visibility',
+            ),
+            AdminMenuOption(value: true, label: ru ? 'Публичные' : 'Public'),
+            AdminMenuOption(value: false, label: ru ? 'Закрытые' : 'Private'),
+          ],
+          onSelected: onPublicChanged,
         ),
       ],
     );
@@ -364,9 +429,13 @@ class _SelectionsToolbar extends StatelessWidget {
 }
 
 class _SelectionsTable extends StatelessWidget {
-  const _SelectionsTable({required this.selections});
+  const _SelectionsTable({
+    required this.selections,
+    required this.onDeleteSelection,
+  });
 
   final List<_AdminSelectionRow> selections;
+  final ValueChanged<_AdminSelectionRow> onDeleteSelection;
 
   @override
   Widget build(BuildContext context) {
@@ -400,7 +469,10 @@ class _SelectionsTable extends StatelessWidget {
                     ],
                   );
                 }
-                return _SelectionTableRow(selection: selections[index - 1]);
+                return _SelectionTableRow(
+                  selection: selections[index - 1],
+                  onDeleteSelection: onDeleteSelection,
+                );
               },
             ),
           ),
@@ -411,9 +483,13 @@ class _SelectionsTable extends StatelessWidget {
 }
 
 class _SelectionTableRow extends StatelessWidget {
-  const _SelectionTableRow({required this.selection});
+  const _SelectionTableRow({
+    required this.selection,
+    required this.onDeleteSelection,
+  });
 
   final _AdminSelectionRow selection;
+  final ValueChanged<_AdminSelectionRow> onDeleteSelection;
 
   @override
   Widget build(BuildContext context) {
@@ -432,11 +508,9 @@ class _SelectionTableRow extends StatelessWidget {
           _TextCell(width: 90, text: selection.isPublic ? 'public' : 'private'),
           SizedBox(
             width: 72,
-            child: IconButton(
-              onPressed: () =>
-                  context.go('${Routes.adminSelectionProject}/${selection.id}'),
-              icon: const Icon(Icons.open_in_new_rounded),
-              color: kTextDark,
+            child: _SelectionActionsMenu(
+              selection: selection,
+              onDeleteSelection: onDeleteSelection,
             ),
           ),
         ],
@@ -446,9 +520,13 @@ class _SelectionTableRow extends StatelessWidget {
 }
 
 class _SelectionsMobileList extends StatelessWidget {
-  const _SelectionsMobileList({required this.selections});
+  const _SelectionsMobileList({
+    required this.selections,
+    required this.onDeleteSelection,
+  });
 
   final List<_AdminSelectionRow> selections;
+  final ValueChanged<_AdminSelectionRow> onDeleteSelection;
 
   @override
   Widget build(BuildContext context) {
@@ -456,16 +534,22 @@ class _SelectionsMobileList extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 18),
       itemCount: selections.length,
       separatorBuilder: (_, _) => const SizedBox(height: 10),
-      itemBuilder: (context, index) =>
-          _SelectionMobileCard(selection: selections[index]),
+      itemBuilder: (context, index) => _SelectionMobileCard(
+        selection: selections[index],
+        onDeleteSelection: onDeleteSelection,
+      ),
     );
   }
 }
 
 class _SelectionMobileCard extends StatelessWidget {
-  const _SelectionMobileCard({required this.selection});
+  const _SelectionMobileCard({
+    required this.selection,
+    required this.onDeleteSelection,
+  });
 
   final _AdminSelectionRow selection;
+  final ValueChanged<_AdminSelectionRow> onDeleteSelection;
 
   @override
   Widget build(BuildContext context) {
@@ -485,6 +569,41 @@ class _SelectionMobileCard extends StatelessWidget {
       meta: meta,
       onOpen: () =>
           context.go('${Routes.adminSelectionProject}/${selection.id}'),
+      action: _SelectionActionsMenu(
+        selection: selection,
+        onDeleteSelection: onDeleteSelection,
+      ),
+    );
+  }
+}
+
+class _SelectionActionsMenu extends StatelessWidget {
+  const _SelectionActionsMenu({
+    required this.selection,
+    required this.onDeleteSelection,
+  });
+
+  final _AdminSelectionRow selection;
+  final ValueChanged<_AdminSelectionRow> onDeleteSelection;
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<String>(
+      icon: const Icon(Icons.more_horiz_rounded, color: kTextDark),
+      onSelected: (value) {
+        switch (value) {
+          case 'open':
+            context.go('${Routes.adminSelectionProject}/${selection.id}');
+            return;
+          case 'delete':
+            onDeleteSelection(selection);
+            return;
+        }
+      },
+      itemBuilder: (context) => const [
+        PopupMenuItem(value: 'open', child: Text('Открыть')),
+        PopupMenuItem(value: 'delete', child: Text('Удалить')),
+      ],
     );
   }
 }
@@ -570,49 +689,6 @@ String _selectionStatusText(SelectionStatus status, bool ru) =>
       SelectionStatus.rejected => ru ? 'Отклонена' : 'Rejected',
     };
 
-class _StatsBar extends StatelessWidget {
-  const _StatsBar({required this.items});
-
-  final List<(String, int)> items;
-
-  @override
-  Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 10,
-      runSpacing: 10,
-      children: [
-        for (final item in items) _StatChip(label: item.$1, value: item.$2),
-      ],
-    );
-  }
-}
-
-class _StatChip extends StatelessWidget {
-  const _StatChip({required this.label, required this.value});
-
-  final String label;
-  final int value;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: kBorderColor),
-        boxShadow: BrandTheme.basePillShadow(isDark: false),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-        child: Text(
-          '$label: $value',
-          style: adminCommandStyle(size: 12, letterSpacing: 0.5),
-        ),
-      ),
-    );
-  }
-}
-
 class _ToolbarFrame extends StatelessWidget {
   const _ToolbarFrame({
     required this.controller,
@@ -678,36 +754,6 @@ class _ToolbarFrame extends StatelessWidget {
           ],
         );
       },
-    );
-  }
-}
-
-class _FilterChipButton extends StatelessWidget {
-  const _FilterChipButton({
-    required this.label,
-    required this.selected,
-    required this.onSelected,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    return ChoiceChip(
-      label: Text(label),
-      selected: selected,
-      onSelected: (_) => onSelected(),
-      labelStyle: adminCommandStyle(
-        size: 11,
-        letterSpacing: 0.3,
-        color: selected ? Colors.white : kTextDark,
-      ),
-      selectedColor: kTextDark,
-      backgroundColor: Colors.white,
-      side: const BorderSide(color: kBorderColor),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
     );
   }
 }
@@ -823,6 +869,7 @@ class _MobileCard extends StatelessWidget {
     required this.badge,
     required this.meta,
     required this.onOpen,
+    this.action,
   });
 
   final String title;
@@ -830,6 +877,7 @@ class _MobileCard extends StatelessWidget {
   final Widget badge;
   final String meta;
   final VoidCallback onOpen;
+  final Widget? action;
 
   @override
   Widget build(BuildContext context) {
@@ -884,11 +932,12 @@ class _MobileCard extends StatelessWidget {
                 ],
               ),
             ),
-            IconButton(
-              onPressed: onOpen,
-              icon: const Icon(Icons.open_in_new_rounded),
-              color: kTextDark,
-            ),
+            action ??
+                IconButton(
+                  onPressed: onOpen,
+                  icon: const Icon(Icons.open_in_new_rounded),
+                  color: kTextDark,
+                ),
           ],
         ),
       ),

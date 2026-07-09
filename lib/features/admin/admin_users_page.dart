@@ -106,6 +106,77 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
     super.dispose();
   }
 
+  Future<bool> _confirm(String title, String message) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Да'),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
+  }
+
+  void _snack(String text) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(text)));
+  }
+
+  Future<void> _setUserRole(_AdminUserRow user, String role) async {
+    final confirmed = await _confirm(
+      'Изменить роль',
+      'Назначить ${user.displayName} роль $role?',
+    );
+    if (!confirmed) return;
+    try {
+      await ref.read(supabaseProvider).from('user_roles').upsert({
+        'user_id': user.id,
+        'role': role,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      }, onConflict: 'user_id');
+      await ref.read(supabaseProvider).from('user_profiles').upsert({
+        'user_id': user.id,
+        'account_type': role == 'casting_agent' ? 'casting_agent' : role,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      }, onConflict: 'user_id');
+      ref.invalidate(_adminUsersProvider);
+      _snack('Роль обновлена');
+    } catch (e) {
+      _snack('Не удалось обновить роль: $e');
+    }
+  }
+
+  Future<void> _deleteUserProfile(_AdminUserRow user) async {
+    final confirmed = await _confirm(
+      'Удалить профиль аккаунта',
+      'Удалить профиль ${user.displayName}? Auth-пользователь не удаляется.',
+    );
+    if (!confirmed) return;
+    try {
+      await ref
+          .read(supabaseProvider)
+          .from('user_profiles')
+          .delete()
+          .eq('user_id', user.id);
+      ref.invalidate(_adminUsersProvider);
+      _snack('Профиль аккаунта удален');
+    } catch (e) {
+      _snack('Не удалось удалить профиль: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final ru = Localizations.localeOf(context).languageCode == 'ru';
@@ -154,6 +225,8 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
                         onRoleFilterChanged: (value) =>
                             setState(() => _roleFilter = value),
                         onSearchChanged: () => setState(() {}),
+                        onSetRole: _setUserRole,
+                        onDeleteUserProfile: _deleteUserProfile,
                       ),
                     );
                   },
@@ -174,6 +247,8 @@ class _UsersTablePanel extends StatelessWidget {
     required this.roleFilter,
     required this.onRoleFilterChanged,
     required this.onSearchChanged,
+    required this.onSetRole,
+    required this.onDeleteUserProfile,
   });
 
   final List<_AdminUserRow> users;
@@ -181,6 +256,8 @@ class _UsersTablePanel extends StatelessWidget {
   final _AdminUserRoleFilter roleFilter;
   final ValueChanged<_AdminUserRoleFilter> onRoleFilterChanged;
   final VoidCallback onSearchChanged;
+  final void Function(_AdminUserRow user, String role) onSetRole;
+  final ValueChanged<_AdminUserRow> onDeleteUserProfile;
 
   @override
   Widget build(BuildContext context) {
@@ -246,14 +323,22 @@ class _UsersTablePanel extends StatelessWidget {
                               const Divider(height: 1, color: kBorderColor),
                           itemBuilder: (context, index) {
                             if (index == 0) return const _UsersTableHeader();
-                            return _UserTableRow(user: filtered[index - 1]);
+                            return _UserTableRow(
+                              user: filtered[index - 1],
+                              onSetRole: onSetRole,
+                              onDeleteUserProfile: onDeleteUserProfile,
+                            );
                           },
                         ),
                       ),
                     ),
                   ),
                 )
-              : _UsersMobileList(users: filtered),
+              : _UsersMobileList(
+                  users: filtered,
+                  onSetRole: onSetRole,
+                  onDeleteUserProfile: onDeleteUserProfile,
+                ),
         ),
       ],
     );
@@ -286,9 +371,15 @@ class _UsersEmptyState extends StatelessWidget {
 }
 
 class _UsersMobileList extends StatelessWidget {
-  const _UsersMobileList({required this.users});
+  const _UsersMobileList({
+    required this.users,
+    required this.onSetRole,
+    required this.onDeleteUserProfile,
+  });
 
   final List<_AdminUserRow> users;
+  final void Function(_AdminUserRow user, String role) onSetRole;
+  final ValueChanged<_AdminUserRow> onDeleteUserProfile;
 
   @override
   Widget build(BuildContext context) {
@@ -296,15 +387,25 @@ class _UsersMobileList extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 18),
       itemCount: users.length,
       separatorBuilder: (_, _) => const SizedBox(height: 10),
-      itemBuilder: (context, index) => _UserMobileCard(user: users[index]),
+      itemBuilder: (context, index) => _UserMobileCard(
+        user: users[index],
+        onSetRole: onSetRole,
+        onDeleteUserProfile: onDeleteUserProfile,
+      ),
     );
   }
 }
 
 class _UserMobileCard extends StatelessWidget {
-  const _UserMobileCard({required this.user});
+  const _UserMobileCard({
+    required this.user,
+    required this.onSetRole,
+    required this.onDeleteUserProfile,
+  });
 
   final _AdminUserRow user;
+  final void Function(_AdminUserRow user, String role) onSetRole;
+  final ValueChanged<_AdminUserRow> onDeleteUserProfile;
 
   @override
   Widget build(BuildContext context) {
@@ -367,11 +468,10 @@ class _UserMobileCard extends StatelessWidget {
                 ],
               ),
             ),
-            IconButton(
-              onPressed: () => context.go('${Routes.chats}?user=${user.id}'),
-              icon: const Icon(Icons.chat_bubble_outline_rounded),
-              color: kTextDark,
-              tooltip: ru ? 'Открыть чаты' : 'Open chats',
+            _UserActionsMenu(
+              user: user,
+              onSetRole: onSetRole,
+              onDeleteUserProfile: onDeleteUserProfile,
             ),
           ],
         ),
@@ -396,40 +496,16 @@ class _UsersSummaryBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ru = Localizations.localeOf(context).languageCode == 'ru';
-    return Wrap(
-      spacing: 10,
-      runSpacing: 10,
-      children: [
-        _UsersStatChip(label: ru ? 'Всего' : 'Total', value: total),
-        _UsersStatChip(label: ru ? 'В выборке' : 'Shown', value: filtered),
-        _UsersStatChip(label: ru ? 'Админы' : 'Admins', value: admins),
-        _UsersStatChip(label: ru ? 'Заказчики' : 'Clients', value: agents),
-      ],
-    );
-  }
-}
-
-class _UsersStatChip extends StatelessWidget {
-  const _UsersStatChip({required this.label, required this.value});
-
-  final String label;
-  final int value;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: kBorderColor),
-        boxShadow: BrandTheme.basePillShadow(isDark: false),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-        child: Text(
-          '$label: $value',
-          style: adminCommandStyle(size: 12, letterSpacing: 0.5),
-        ),
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: AdminCompactSummary(
+        title: ru ? 'Сводка' : 'Summary',
+        items: [
+          (ru ? 'Всего' : 'Total', total),
+          (ru ? 'В выборке' : 'Shown', filtered),
+          (ru ? 'Админы' : 'Admins', admins),
+          (ru ? 'Заказчики' : 'Clients', agents),
+        ],
       ),
     );
   }
@@ -487,28 +563,14 @@ class _UsersToolbar extends StatelessWidget {
             ),
           ),
         );
-        final filters = Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
+        final filters = AdminMenuFilter<_AdminUserRoleFilter>(
+          label: ru ? 'Роль' : 'Role',
+          valueLabel: roleFilter.label(ru),
+          options: [
             for (final filter in _AdminUserRoleFilter.values)
-              ChoiceChip(
-                label: Text(filter.label(ru)),
-                selected: filter == roleFilter,
-                onSelected: (_) => onRoleFilterChanged(filter),
-                labelStyle: adminCommandStyle(
-                  size: 11,
-                  letterSpacing: 0.3,
-                  color: filter == roleFilter ? Colors.white : kTextDark,
-                ),
-                selectedColor: kTextDark,
-                backgroundColor: Colors.white,
-                side: const BorderSide(color: kBorderColor),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              ),
+              AdminMenuOption(value: filter, label: filter.label(ru)),
           ],
+          onSelected: onRoleFilterChanged,
         );
         if (compact) {
           return Column(
@@ -573,9 +635,15 @@ class _HeaderCell extends StatelessWidget {
 }
 
 class _UserTableRow extends StatelessWidget {
-  const _UserTableRow({required this.user});
+  const _UserTableRow({
+    required this.user,
+    required this.onSetRole,
+    required this.onDeleteUserProfile,
+  });
 
   final _AdminUserRow user;
+  final void Function(_AdminUserRow user, String role) onSetRole;
+  final ValueChanged<_AdminUserRow> onDeleteUserProfile;
 
   @override
   Widget build(BuildContext context) {
@@ -626,16 +694,79 @@ class _UserTableRow extends StatelessWidget {
             width: 96,
             child: Align(
               alignment: Alignment.centerRight,
-              child: IconButton(
-                onPressed: () => context.go('${Routes.chats}?user=${user.id}'),
-                icon: const Icon(Icons.chat_bubble_outline_rounded),
-                color: kTextDark,
-                tooltip: ru ? 'Открыть чаты' : 'Open chats',
+              child: _UserActionsMenu(
+                user: user,
+                onSetRole: onSetRole,
+                onDeleteUserProfile: onDeleteUserProfile,
               ),
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _UserActionsMenu extends StatelessWidget {
+  const _UserActionsMenu({
+    required this.user,
+    required this.onSetRole,
+    required this.onDeleteUserProfile,
+  });
+
+  final _AdminUserRow user;
+  final void Function(_AdminUserRow user, String role) onSetRole;
+  final ValueChanged<_AdminUserRow> onDeleteUserProfile;
+
+  @override
+  Widget build(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    return PopupMenuButton<String>(
+      tooltip: ru ? 'Действия' : 'Actions',
+      icon: const Icon(Icons.more_horiz_rounded, color: kTextDark),
+      onSelected: (value) {
+        switch (value) {
+          case 'chat':
+            context.go('${Routes.chats}?user=${user.id}');
+            return;
+          case 'admin':
+            onSetRole(user, 'admin');
+            return;
+          case 'client':
+            onSetRole(user, 'casting_agent');
+            return;
+          case 'user':
+            onSetRole(user, 'user');
+            return;
+          case 'delete_profile':
+            onDeleteUserProfile(user);
+            return;
+        }
+      },
+      itemBuilder: (context) => [
+        PopupMenuItem(
+          value: 'chat',
+          child: Text(ru ? 'Открыть чаты' : 'Chats'),
+        ),
+        PopupMenuItem(
+          value: 'admin',
+          child: Text(ru ? 'Выдать админку' : 'Make admin'),
+        ),
+        PopupMenuItem(
+          value: 'user',
+          child: Text(ru ? 'Снять админку / сделать user' : 'Make user'),
+        ),
+        PopupMenuItem(
+          value: 'client',
+          child: Text(ru ? 'Дать статус заказчика' : 'Make client'),
+        ),
+        PopupMenuItem(
+          value: 'delete_profile',
+          child: Text(
+            ru ? 'Удалить профиль аккаунта' : 'Delete account profile',
+          ),
+        ),
+      ],
     );
   }
 }

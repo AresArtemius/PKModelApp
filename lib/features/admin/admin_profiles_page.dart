@@ -141,6 +141,53 @@ class _AdminProfilesPageState extends ConsumerState<AdminProfilesPage> {
     super.dispose();
   }
 
+  Future<bool> _confirm(String title, String message) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Удалить'),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
+  }
+
+  void _snack(String text) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(text)));
+  }
+
+  Future<void> _deleteProfile(_AdminProfileRow profile) async {
+    final confirmed = await _confirm(
+      'Удалить анкету',
+      'Удалить анкету ${profile.displayName(true)}?',
+    );
+    if (!confirmed) return;
+    try {
+      await ref
+          .read(supabaseProvider)
+          .from('profiles')
+          .delete()
+          .eq('id', profile.id);
+      ref.invalidate(_adminProfilesProvider);
+      _snack('Анкета удалена');
+    } catch (e) {
+      _snack('Не удалось удалить анкету: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final ru = Localizations.localeOf(context).languageCode == 'ru';
@@ -194,6 +241,7 @@ class _AdminProfilesPageState extends ConsumerState<AdminProfilesPage> {
                         onRoleFilterChanged: (value) =>
                             setState(() => _roleFilter = value),
                         onSearchChanged: () => setState(() {}),
+                        onDeleteProfile: _deleteProfile,
                       ),
                     );
                   },
@@ -216,6 +264,7 @@ class _ProfilesTablePanel extends StatelessWidget {
     required this.onStatusFilterChanged,
     required this.onRoleFilterChanged,
     required this.onSearchChanged,
+    required this.onDeleteProfile,
   });
 
   final List<_AdminProfileRow> profiles;
@@ -225,6 +274,7 @@ class _ProfilesTablePanel extends StatelessWidget {
   final ValueChanged<_AdminProfileStatusFilter> onStatusFilterChanged;
   final ValueChanged<ProfessionalProfileType?> onRoleFilterChanged;
   final VoidCallback onSearchChanged;
+  final ValueChanged<_AdminProfileRow> onDeleteProfile;
 
   @override
   Widget build(BuildContext context) {
@@ -302,6 +352,7 @@ class _ProfilesTablePanel extends StatelessWidget {
                             }
                             return _ProfileTableRow(
                               profile: filtered[index - 1],
+                              onDeleteProfile: onDeleteProfile,
                             );
                           },
                         ),
@@ -309,7 +360,10 @@ class _ProfilesTablePanel extends StatelessWidget {
                     ),
                   ),
                 )
-              : _ProfilesMobileList(profiles: filtered),
+              : _ProfilesMobileList(
+                  profiles: filtered,
+                  onDeleteProfile: onDeleteProfile,
+                ),
         ),
       ],
     );
@@ -342,9 +396,13 @@ class _ProfilesEmptyState extends StatelessWidget {
 }
 
 class _ProfilesMobileList extends StatelessWidget {
-  const _ProfilesMobileList({required this.profiles});
+  const _ProfilesMobileList({
+    required this.profiles,
+    required this.onDeleteProfile,
+  });
 
   final List<_AdminProfileRow> profiles;
+  final ValueChanged<_AdminProfileRow> onDeleteProfile;
 
   @override
   Widget build(BuildContext context) {
@@ -352,16 +410,22 @@ class _ProfilesMobileList extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 18),
       itemCount: profiles.length,
       separatorBuilder: (_, _) => const SizedBox(height: 10),
-      itemBuilder: (context, index) =>
-          _ProfileMobileCard(profile: profiles[index]),
+      itemBuilder: (context, index) => _ProfileMobileCard(
+        profile: profiles[index],
+        onDeleteProfile: onDeleteProfile,
+      ),
     );
   }
 }
 
 class _ProfileMobileCard extends StatelessWidget {
-  const _ProfileMobileCard({required this.profile});
+  const _ProfileMobileCard({
+    required this.profile,
+    required this.onDeleteProfile,
+  });
 
   final _AdminProfileRow profile;
+  final ValueChanged<_AdminProfileRow> onDeleteProfile;
 
   @override
   Widget build(BuildContext context) {
@@ -426,25 +490,9 @@ class _ProfileMobileCard extends StatelessWidget {
                 ],
               ),
             ),
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  onPressed: () => context.go(
-                    '${Routes.modelPrefix}${profile.id}?from=admin',
-                  ),
-                  icon: const Icon(Icons.open_in_new_rounded),
-                  color: kTextDark,
-                  tooltip: ru ? 'Открыть анкету' : 'Open profile',
-                ),
-                if (profile.status == ProfileStatus.pending)
-                  IconButton(
-                    onPressed: () => context.go(Routes.moderationAdmin),
-                    icon: const Icon(Icons.verified_user_rounded),
-                    color: BrandTheme.redTop,
-                    tooltip: ru ? 'Модерация' : 'Moderation',
-                  ),
-              ],
+            _ProfileActionsMenu(
+              profile: profile,
+              onDeleteProfile: onDeleteProfile,
             ),
           ],
         ),
@@ -471,44 +519,17 @@ class _ProfilesSummaryBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ru = Localizations.localeOf(context).languageCode == 'ru';
-    return Wrap(
-      spacing: 10,
-      runSpacing: 10,
-      children: [
-        _ProfilesStatChip(label: ru ? 'Всего' : 'Total', value: total),
-        _ProfilesStatChip(label: ru ? 'В выборке' : 'Shown', value: filtered),
-        _ProfilesStatChip(label: ru ? 'Approved' : 'Approved', value: approved),
-        _ProfilesStatChip(
-          label: ru ? 'На проверке' : 'Pending',
-          value: pending,
-        ),
-        _ProfilesStatChip(label: ru ? 'Черновики' : 'Drafts', value: draft),
-      ],
-    );
-  }
-}
-
-class _ProfilesStatChip extends StatelessWidget {
-  const _ProfilesStatChip({required this.label, required this.value});
-
-  final String label;
-  final int value;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: kBorderColor),
-        boxShadow: BrandTheme.basePillShadow(isDark: false),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-        child: Text(
-          '$label: $value',
-          style: adminCommandStyle(size: 12, letterSpacing: 0.5),
-        ),
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: AdminCompactSummary(
+        title: ru ? 'Сводка' : 'Summary',
+        items: [
+          (ru ? 'Всего' : 'Total', total),
+          (ru ? 'В выборке' : 'Shown', filtered),
+          (ru ? 'Утвержденные' : 'Approved', approved),
+          (ru ? 'На проверке' : 'Pending', pending),
+          (ru ? 'Черновики' : 'Drafts', draft),
+        ],
       ),
     );
   }
@@ -574,23 +595,30 @@ class _ProfilesToolbar extends StatelessWidget {
           spacing: 8,
           runSpacing: 8,
           children: [
-            for (final filter in _AdminProfileStatusFilter.values)
-              _FilterChipButton(
-                label: filter.label(ru),
-                selected: filter == statusFilter,
-                onSelected: () => onStatusFilterChanged(filter),
-              ),
-            _FilterChipButton(
-              label: ru ? 'Все роли' : 'All roles',
-              selected: roleFilter == null,
-              onSelected: () => onRoleFilterChanged(null),
+            AdminMenuFilter<_AdminProfileStatusFilter>(
+              label: ru ? 'Статус' : 'Status',
+              valueLabel: statusFilter.label(ru),
+              options: [
+                for (final filter in _AdminProfileStatusFilter.values)
+                  AdminMenuOption(value: filter, label: filter.label(ru)),
+              ],
+              onSelected: onStatusFilterChanged,
             ),
-            for (final role in ProfessionalProfileType.values)
-              _FilterChipButton(
-                label: _roleLabel(role, ru),
-                selected: roleFilter == role,
-                onSelected: () => onRoleFilterChanged(role),
-              ),
+            AdminMenuFilter<ProfessionalProfileType?>(
+              label: ru ? 'Роль' : 'Role',
+              valueLabel: roleFilter == null
+                  ? (ru ? 'Все роли' : 'All roles')
+                  : _roleLabel(roleFilter!, ru),
+              options: [
+                AdminMenuOption<ProfessionalProfileType?>(
+                  value: null,
+                  label: ru ? 'Все роли' : 'All roles',
+                ),
+                for (final role in ProfessionalProfileType.values)
+                  AdminMenuOption(value: role, label: _roleLabel(role, ru)),
+              ],
+              onSelected: onRoleFilterChanged,
+            ),
           ],
         );
         if (compact) {
@@ -607,36 +635,6 @@ class _ProfilesToolbar extends StatelessWidget {
           ],
         );
       },
-    );
-  }
-}
-
-class _FilterChipButton extends StatelessWidget {
-  const _FilterChipButton({
-    required this.label,
-    required this.selected,
-    required this.onSelected,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    return ChoiceChip(
-      label: Text(label),
-      selected: selected,
-      onSelected: (_) => onSelected(),
-      labelStyle: adminCommandStyle(
-        size: 11,
-        letterSpacing: 0.3,
-        color: selected ? Colors.white : kTextDark,
-      ),
-      selectedColor: kTextDark,
-      backgroundColor: Colors.white,
-      side: const BorderSide(color: kBorderColor),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
     );
   }
 }
@@ -688,9 +686,13 @@ class _HeaderCell extends StatelessWidget {
 }
 
 class _ProfileTableRow extends StatelessWidget {
-  const _ProfileTableRow({required this.profile});
+  const _ProfileTableRow({
+    required this.profile,
+    required this.onDeleteProfile,
+  });
 
   final _AdminProfileRow profile;
+  final ValueChanged<_AdminProfileRow> onDeleteProfile;
 
   @override
   Widget build(BuildContext context) {
@@ -743,30 +745,55 @@ class _ProfileTableRow extends StatelessWidget {
             width: 96,
             child: Align(
               alignment: Alignment.centerRight,
-              child: Wrap(
-                spacing: 2,
-                children: [
-                  IconButton(
-                    onPressed: () => context.go(
-                      '${Routes.modelPrefix}${profile.id}?from=admin',
-                    ),
-                    icon: const Icon(Icons.open_in_new_rounded),
-                    color: kTextDark,
-                    tooltip: ru ? 'Открыть анкету' : 'Open profile',
-                  ),
-                  if (profile.status == ProfileStatus.pending)
-                    IconButton(
-                      onPressed: () => context.go(Routes.moderationAdmin),
-                      icon: const Icon(Icons.verified_user_rounded),
-                      color: BrandTheme.redTop,
-                      tooltip: ru ? 'Модерация' : 'Moderation',
-                    ),
-                ],
+              child: _ProfileActionsMenu(
+                profile: profile,
+                onDeleteProfile: onDeleteProfile,
               ),
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _ProfileActionsMenu extends StatelessWidget {
+  const _ProfileActionsMenu({
+    required this.profile,
+    required this.onDeleteProfile,
+  });
+
+  final _AdminProfileRow profile;
+  final ValueChanged<_AdminProfileRow> onDeleteProfile;
+
+  @override
+  Widget build(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    return PopupMenuButton<String>(
+      tooltip: ru ? 'Действия' : 'Actions',
+      icon: const Icon(Icons.more_horiz_rounded, color: kTextDark),
+      onSelected: (value) {
+        switch (value) {
+          case 'open':
+            context.go('${Routes.modelPrefix}${profile.id}?from=admin');
+            return;
+          case 'moderation':
+            context.go(Routes.moderationAdmin);
+            return;
+          case 'delete':
+            onDeleteProfile(profile);
+            return;
+        }
+      },
+      itemBuilder: (context) => [
+        PopupMenuItem(value: 'open', child: Text(ru ? 'Открыть' : 'Open')),
+        if (profile.status == ProfileStatus.pending)
+          PopupMenuItem(
+            value: 'moderation',
+            child: Text(ru ? 'Модерация' : 'Moderation'),
+          ),
+        PopupMenuItem(value: 'delete', child: Text(ru ? 'Удалить' : 'Delete')),
+      ],
     );
   }
 }
@@ -1069,10 +1096,7 @@ enum _AdminProfileStatusFilter {
 
   String label(bool ru) => switch (this) {
     _AdminProfileStatusFilter.all => ru ? 'Все статусы' : 'All statuses',
-    _AdminProfileStatusFilter.approved => _statusLabel(
-      ProfileStatus.approved,
-      ru,
-    ),
+    _AdminProfileStatusFilter.approved => ru ? 'Утвержденные' : 'Approved',
     _AdminProfileStatusFilter.pending => _statusLabel(
       ProfileStatus.pending,
       ru,
@@ -1086,7 +1110,7 @@ enum _AdminProfileStatusFilter {
 }
 
 String _statusLabel(ProfileStatus status, bool ru) => switch (status) {
-  ProfileStatus.approved => 'Approved',
+  ProfileStatus.approved => ru ? 'Утверждена' : 'Approved',
   ProfileStatus.pending => ru ? 'На проверке' : 'Pending',
   ProfileStatus.draft => ru ? 'Черновик' : 'Draft',
   ProfileStatus.rejected => ru ? 'Отклонена' : 'Rejected',

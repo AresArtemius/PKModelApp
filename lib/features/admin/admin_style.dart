@@ -73,3 +73,124 @@ class AdminMessageCard extends StatelessWidget {
     );
   }
 }
+
+class AdminMenuOption<T> {
+  const AdminMenuOption({required this.value, required this.label});
+
+  final T value;
+  final String label;
+}
+
+class AdminCompactSummary extends StatelessWidget {
+  const AdminCompactSummary({
+    super.key,
+    required this.title,
+    required this.items,
+  });
+
+  final String title;
+  final List<(String, int)> items;
+
+  @override
+  Widget build(BuildContext context) {
+    final first = items.isEmpty ? '' : '${items.first.$1}: ${items.first.$2}';
+    return PopupMenuButton<int>(
+      tooltip: title,
+      itemBuilder: (context) => [
+        for (var i = 0; i < items.length; i++)
+          PopupMenuItem<int>(
+            value: i,
+            enabled: false,
+            child: Text(
+              '${items[i].$1}: ${items[i].$2}',
+              style: adminBodyStyle(color: kTextDark),
+            ),
+          ),
+      ],
+      child: _AdminCompactPill(
+        icon: Icons.analytics_outlined,
+        label: first.isEmpty ? title : '$title · $first',
+        trailing: Icons.keyboard_arrow_down_rounded,
+      ),
+    );
+  }
+}
+
+class AdminMenuFilter<T> extends StatelessWidget {
+  const AdminMenuFilter({
+    super.key,
+    required this.label,
+    required this.valueLabel,
+    required this.options,
+    required this.onSelected,
+  });
+
+  final String label;
+  final String valueLabel;
+  final List<AdminMenuOption<T>> options;
+  final ValueChanged<T> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<T>(
+      tooltip: label,
+      onSelected: onSelected,
+      itemBuilder: (context) => [
+        for (final option in options)
+          PopupMenuItem<T>(
+            value: option.value,
+            child: Text(option.label, style: adminBodyStyle(color: kTextDark)),
+          ),
+      ],
+      child: _AdminCompactPill(
+        icon: Icons.tune_rounded,
+        label: '$label: $valueLabel',
+        trailing: Icons.keyboard_arrow_down_rounded,
+      ),
+    );
+  }
+}
+
+class _AdminCompactPill extends StatelessWidget {
+  const _AdminCompactPill({
+    required this.icon,
+    required this.label,
+    required this.trailing,
+  });
+
+  final IconData icon;
+  final String label;
+  final IconData trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: kBorderColor),
+        boxShadow: BrandTheme.basePillShadow(isDark: false),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 18, color: kTextDark),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: adminCommandStyle(size: 12, letterSpacing: 0.2),
+              ),
+            ),
+            const SizedBox(width: 4),
+            Icon(trailing, size: 18, color: kTextMuted),
+          ],
+        ),
+      ),
+    );
+  }
+}

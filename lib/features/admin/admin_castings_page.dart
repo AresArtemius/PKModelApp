@@ -156,6 +156,49 @@ class _AdminCastingsPageState extends ConsumerState<AdminCastingsPage> {
     super.dispose();
   }
 
+  Future<bool> _confirmDelete(_AdminCastingRow casting) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Удалить кастинг'),
+        content: Text('Удалить кастинг «${casting.title}»?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Удалить'),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
+  }
+
+  Future<void> _deleteCasting(_AdminCastingRow casting) async {
+    final confirmed = await _confirmDelete(casting);
+    if (!confirmed) return;
+    try {
+      await ref
+          .read(supabaseProvider)
+          .from('castings')
+          .delete()
+          .eq('id', casting.id);
+      ref.invalidate(_adminCastingsProvider);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(content: Text('Кастинг удален')));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text('Не удалось удалить: $e')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final ru = Localizations.localeOf(context).languageCode == 'ru';
@@ -206,6 +249,7 @@ class _AdminCastingsPageState extends ConsumerState<AdminCastingsPage> {
                         onStageChanged: (stage) =>
                             setState(() => _stageFilter = stage),
                         onSearchChanged: () => setState(() {}),
+                        onDeleteCasting: _deleteCasting,
                       ),
                     );
                   },
@@ -226,6 +270,7 @@ class _CastingsPanel extends StatelessWidget {
     required this.stageFilter,
     required this.onStageChanged,
     required this.onSearchChanged,
+    required this.onDeleteCasting,
   });
 
   final List<_AdminCastingRow> castings;
@@ -233,6 +278,7 @@ class _CastingsPanel extends StatelessWidget {
   final CastingProjectStage? stageFilter;
   final ValueChanged<CastingProjectStage?> onStageChanged;
   final VoidCallback onSearchChanged;
+  final ValueChanged<_AdminCastingRow> onDeleteCasting;
 
   @override
   Widget build(BuildContext context) {
@@ -258,13 +304,17 @@ class _CastingsPanel extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _StatsBar(
-          items: [
-            (ru ? 'Всего' : 'Total', castings.length),
-            (ru ? 'В выборке' : 'Shown', filtered.length),
-            (ru ? 'Активные' : 'Active', activeCount),
-            (ru ? 'Отклики' : 'Responses', totalResponses),
-          ],
+        Align(
+          alignment: Alignment.centerLeft,
+          child: AdminCompactSummary(
+            title: ru ? 'Сводка' : 'Summary',
+            items: [
+              (ru ? 'Всего' : 'Total', castings.length),
+              (ru ? 'В выборке' : 'Shown', filtered.length),
+              (ru ? 'Активные' : 'Active', activeCount),
+              (ru ? 'Отклики' : 'Responses', totalResponses),
+            ],
+          ),
         ),
         const SizedBox(height: 12),
         _CastingsToolbar(
@@ -278,8 +328,14 @@ class _CastingsPanel extends StatelessWidget {
           child: filtered.isEmpty
               ? _EmptyState(text: ru ? 'Кастинги не найдены' : 'No castings')
               : isDesktop
-              ? _CastingsTable(castings: filtered)
-              : _CastingsMobileList(castings: filtered),
+              ? _CastingsTable(
+                  castings: filtered,
+                  onDeleteCasting: onDeleteCasting,
+                )
+              : _CastingsMobileList(
+                  castings: filtered,
+                  onDeleteCasting: onDeleteCasting,
+                ),
         ),
       ],
     );
@@ -307,26 +363,34 @@ class _CastingsToolbar extends StatelessWidget {
       hintText: ru ? 'Поиск по проекту, клиенту, датам' : 'Search castings',
       onSearchChanged: onSearchChanged,
       filters: [
-        _FilterChipButton(
-          label: ru ? 'Все этапы' : 'All stages',
-          selected: stageFilter == null,
-          onSelected: () => onStageChanged(null),
+        AdminMenuFilter<CastingProjectStage?>(
+          label: ru ? 'Этап' : 'Stage',
+          valueLabel: stageFilter == null
+              ? (ru ? 'Все этапы' : 'All stages')
+              : castingProjectStageLabel(context, stageFilter!),
+          options: [
+            AdminMenuOption<CastingProjectStage?>(
+              value: null,
+              label: ru ? 'Все этапы' : 'All stages',
+            ),
+            for (final stage in CastingProjectStage.values)
+              AdminMenuOption(
+                value: stage,
+                label: castingProjectStageLabel(context, stage),
+              ),
+          ],
+          onSelected: onStageChanged,
         ),
-        for (final stage in CastingProjectStage.values)
-          _FilterChipButton(
-            label: castingProjectStageLabel(context, stage),
-            selected: stageFilter == stage,
-            onSelected: () => onStageChanged(stage),
-          ),
       ],
     );
   }
 }
 
 class _CastingsTable extends StatelessWidget {
-  const _CastingsTable({required this.castings});
+  const _CastingsTable({required this.castings, required this.onDeleteCasting});
 
   final List<_AdminCastingRow> castings;
+  final ValueChanged<_AdminCastingRow> onDeleteCasting;
 
   @override
   Widget build(BuildContext context) {
@@ -359,7 +423,10 @@ class _CastingsTable extends StatelessWidget {
                     ],
                   );
                 }
-                return _CastingTableRow(casting: castings[index - 1]);
+                return _CastingTableRow(
+                  casting: castings[index - 1],
+                  onDeleteCasting: onDeleteCasting,
+                );
               },
             ),
           ),
@@ -370,9 +437,13 @@ class _CastingsTable extends StatelessWidget {
 }
 
 class _CastingTableRow extends StatelessWidget {
-  const _CastingTableRow({required this.casting});
+  const _CastingTableRow({
+    required this.casting,
+    required this.onDeleteCasting,
+  });
 
   final _AdminCastingRow casting;
+  final ValueChanged<_AdminCastingRow> onDeleteCasting;
 
   @override
   Widget build(BuildContext context) {
@@ -387,11 +458,9 @@ class _CastingTableRow extends StatelessWidget {
           _TextCell(width: 100, text: '${casting.responseCount}'),
           SizedBox(
             width: 72,
-            child: IconButton(
-              onPressed: () =>
-                  context.go('${Routes.adminSelection}/${casting.id}'),
-              icon: const Icon(Icons.open_in_new_rounded),
-              color: kTextDark,
+            child: _CastingActionsMenu(
+              casting: casting,
+              onDeleteCasting: onDeleteCasting,
             ),
           ),
         ],
@@ -401,9 +470,13 @@ class _CastingTableRow extends StatelessWidget {
 }
 
 class _CastingsMobileList extends StatelessWidget {
-  const _CastingsMobileList({required this.castings});
+  const _CastingsMobileList({
+    required this.castings,
+    required this.onDeleteCasting,
+  });
 
   final List<_AdminCastingRow> castings;
+  final ValueChanged<_AdminCastingRow> onDeleteCasting;
 
   @override
   Widget build(BuildContext context) {
@@ -411,16 +484,22 @@ class _CastingsMobileList extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 18),
       itemCount: castings.length,
       separatorBuilder: (_, _) => const SizedBox(height: 10),
-      itemBuilder: (context, index) =>
-          _CastingMobileCard(casting: castings[index]),
+      itemBuilder: (context, index) => _CastingMobileCard(
+        casting: castings[index],
+        onDeleteCasting: onDeleteCasting,
+      ),
     );
   }
 }
 
 class _CastingMobileCard extends StatelessWidget {
-  const _CastingMobileCard({required this.casting});
+  const _CastingMobileCard({
+    required this.casting,
+    required this.onDeleteCasting,
+  });
 
   final _AdminCastingRow casting;
+  final ValueChanged<_AdminCastingRow> onDeleteCasting;
 
   @override
   Widget build(BuildContext context) {
@@ -439,6 +518,41 @@ class _CastingMobileCard extends StatelessWidget {
       badge: _StageBadge(stage: casting.stage),
       meta: meta,
       onOpen: () => context.go('${Routes.adminSelection}/${casting.id}'),
+      action: _CastingActionsMenu(
+        casting: casting,
+        onDeleteCasting: onDeleteCasting,
+      ),
+    );
+  }
+}
+
+class _CastingActionsMenu extends StatelessWidget {
+  const _CastingActionsMenu({
+    required this.casting,
+    required this.onDeleteCasting,
+  });
+
+  final _AdminCastingRow casting;
+  final ValueChanged<_AdminCastingRow> onDeleteCasting;
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<String>(
+      icon: const Icon(Icons.more_horiz_rounded, color: kTextDark),
+      onSelected: (value) {
+        switch (value) {
+          case 'open':
+            context.go('${Routes.adminSelection}/${casting.id}');
+            return;
+          case 'delete':
+            onDeleteCasting(casting);
+            return;
+        }
+      },
+      itemBuilder: (context) => const [
+        PopupMenuItem(value: 'open', child: Text('Открыть')),
+        PopupMenuItem(value: 'delete', child: Text('Удалить')),
+      ],
     );
   }
 }
@@ -511,49 +625,6 @@ class _StageBadge extends StatelessWidget {
   }
 }
 
-class _StatsBar extends StatelessWidget {
-  const _StatsBar({required this.items});
-
-  final List<(String, int)> items;
-
-  @override
-  Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 10,
-      runSpacing: 10,
-      children: [
-        for (final item in items) _StatChip(label: item.$1, value: item.$2),
-      ],
-    );
-  }
-}
-
-class _StatChip extends StatelessWidget {
-  const _StatChip({required this.label, required this.value});
-
-  final String label;
-  final int value;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: kBorderColor),
-        boxShadow: BrandTheme.basePillShadow(isDark: false),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-        child: Text(
-          '$label: $value',
-          style: adminCommandStyle(size: 12, letterSpacing: 0.5),
-        ),
-      ),
-    );
-  }
-}
-
 class _ToolbarFrame extends StatelessWidget {
   const _ToolbarFrame({
     required this.controller,
@@ -619,36 +690,6 @@ class _ToolbarFrame extends StatelessWidget {
           ],
         );
       },
-    );
-  }
-}
-
-class _FilterChipButton extends StatelessWidget {
-  const _FilterChipButton({
-    required this.label,
-    required this.selected,
-    required this.onSelected,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    return ChoiceChip(
-      label: Text(label),
-      selected: selected,
-      onSelected: (_) => onSelected(),
-      labelStyle: adminCommandStyle(
-        size: 11,
-        letterSpacing: 0.3,
-        color: selected ? Colors.white : kTextDark,
-      ),
-      selectedColor: kTextDark,
-      backgroundColor: Colors.white,
-      side: const BorderSide(color: kBorderColor),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
     );
   }
 }
@@ -764,6 +805,7 @@ class _MobileCard extends StatelessWidget {
     required this.badge,
     required this.meta,
     required this.onOpen,
+    this.action,
   });
 
   final String title;
@@ -771,6 +813,7 @@ class _MobileCard extends StatelessWidget {
   final Widget badge;
   final String meta;
   final VoidCallback onOpen;
+  final Widget? action;
 
   @override
   Widget build(BuildContext context) {
@@ -825,11 +868,12 @@ class _MobileCard extends StatelessWidget {
                 ],
               ),
             ),
-            IconButton(
-              onPressed: onOpen,
-              icon: const Icon(Icons.open_in_new_rounded),
-              color: kTextDark,
-            ),
+            action ??
+                IconButton(
+                  onPressed: onOpen,
+                  icon: const Icon(Icons.open_in_new_rounded),
+                  color: kTextDark,
+                ),
           ],
         ),
       ),
