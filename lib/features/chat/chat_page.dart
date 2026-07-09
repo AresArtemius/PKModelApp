@@ -1195,6 +1195,14 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     }
   }
 
+  void _goBack() {
+    if (context.canPop()) {
+      context.pop();
+      return;
+    }
+    context.go(Routes.chats);
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
@@ -1254,9 +1262,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                   title: headerData.title,
                   subtitle: headerData.subtitle,
                   avatarUrl: headerData.avatarUrl,
-                  onBack: widget.embedded
-                      ? widget.onClose
-                      : () => context.pop(),
+                  onBack: widget.embedded ? widget.onClose : _goBack,
                   onSearch: _toggleSearch,
                   searchActive: _searchOpen,
                   onDeleteChat: _deleteChat,

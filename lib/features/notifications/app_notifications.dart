@@ -87,6 +87,41 @@ class AppNotificationsService {
     }
   }
 
+  Future<int> unreadCountForCurrentUser() async {
+    final userId = _sb.auth.currentUser?.id;
+    if (userId == null || userId.isEmpty) return 0;
+
+    try {
+      Future<List<dynamic>> run({required bool includeDeletedFilter}) async {
+        var query = _sb
+            .from(table)
+            .select('id')
+            .eq('user_id', userId)
+            .filter('read_at', 'is', null);
+        if (includeDeletedFilter) {
+          query = query.filter('deleted_at', 'is', null);
+        }
+        return query.limit(100);
+      }
+
+      try {
+        return (await run(includeDeletedFilter: true)).length;
+      } on PostgrestException catch (e) {
+        if (!SupabaseCompat.isMissingColumn(e, 'deleted_at')) rethrow;
+        return (await run(includeDeletedFilter: false)).length;
+      }
+    } on PostgrestException catch (e) {
+      if (SupabaseCompat.isMissingRelation(e, const [table])) {
+        AppLogger.warning(
+          'Notifications unread count skipped: table is not applied yet',
+          error: e,
+        );
+        return 0;
+      }
+      rethrow;
+    }
+  }
+
   Future<void> markRead(String id) async {
     final trimmedId = id.trim();
     if (trimmedId.isEmpty) return;
@@ -434,6 +469,13 @@ final appNotificationsProvider =
       ref.watch(currentUserIdProvider);
       return ref.read(appNotificationsServiceProvider).loadForCurrentUser();
     });
+
+final unreadNotificationsCountProvider = FutureProvider.autoDispose<int>((
+  ref,
+) async {
+  ref.watch(currentUserIdProvider);
+  return ref.read(appNotificationsServiceProvider).unreadCountForCurrentUser();
+});
 
 final notificationPreferencesProvider =
     FutureProvider.autoDispose<NotificationPreferences>((ref) async {

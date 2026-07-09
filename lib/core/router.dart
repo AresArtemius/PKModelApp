@@ -34,6 +34,7 @@ import '../features/catalog/agent_folders_page.dart';
 import '../features/catalog/catalog_page.dart';
 import '../features/catalog/model_profile_page.dart';
 import '../features/onboarding/role_onboarding_page.dart';
+import '../features/notifications/app_notifications.dart';
 import '../features/notifications/notifications_page.dart';
 import '../features/profile/my_profile_page.dart';
 import '../features/profile/account_profile_edit_page.dart';
@@ -184,6 +185,9 @@ class AppDesktopNav extends ConsumerWidget {
     final unreadChats = ref
         .watch(unreadChatCountProvider)
         .maybeWhen(data: (value) => value, orElse: () => 0);
+    final unreadNotifications = ref
+        .watch(unreadNotificationsCountProvider)
+        .maybeWhen(data: (value) => value, orElse: () => 0);
     final adminBadge = ref
         .watch(adminDashboardCountsProvider)
         .maybeWhen(data: (value) => value.total, orElse: () => 0);
@@ -204,7 +208,12 @@ class AppDesktopNav extends ConsumerWidget {
         route: Routes.chats,
         badge: unreadChats,
       ),
-      (icon: Icons.person, label: t.myProfileTab, route: Routes.me, badge: 0),
+      (
+        icon: Icons.person,
+        label: t.myProfileTab,
+        route: Routes.me,
+        badge: unreadNotifications,
+      ),
       if (isAdmin)
         (
           icon: Icons.admin_panel_settings_rounded,
@@ -400,6 +409,9 @@ class AppBottomNav extends ConsumerWidget {
     final unreadChats = ref
         .watch(unreadChatCountProvider)
         .maybeWhen(data: (value) => value, orElse: () => 0);
+    final unreadNotifications = ref
+        .watch(unreadNotificationsCountProvider)
+        .maybeWhen(data: (value) => value, orElse: () => 0);
     final adminBadge = ref
         .watch(adminDashboardCountsProvider)
         .maybeWhen(data: (value) => value.total, orElse: () => 0);
@@ -420,7 +432,12 @@ class AppBottomNav extends ConsumerWidget {
         route: Routes.chats,
         badge: unreadChats,
       ),
-      (icon: Icons.person, label: t.myProfileTab, route: Routes.me, badge: 0),
+      (
+        icon: Icons.person,
+        label: t.myProfileTab,
+        route: Routes.me,
+        badge: unreadNotifications,
+      ),
       if (isAdmin)
         (
           icon: Icons.admin_panel_settings_rounded,

@@ -16,6 +16,7 @@ import '../../gen_l10n/app_localizations.dart';
 import '../../ui/brand/brand_pill_button.dart';
 import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
+import '../notifications/app_notifications.dart';
 import 'account_profile_edit_page.dart';
 import 'my_profile_controller.dart';
 import 'my_profile_edit_page.dart';
@@ -131,7 +132,10 @@ class MyProfilePage extends ConsumerWidget {
     );
   }
 
-  List<Widget> _accountTools(BuildContext context) {
+  List<Widget> _accountTools(BuildContext context, WidgetRef ref) {
+    final unreadNotifications = ref
+        .watch(unreadNotificationsCountProvider)
+        .maybeWhen(data: (value) => value, orElse: () => 0);
     return [
       _BillingEntryCard(onTap: () => context.go(Routes.billing)),
       const SizedBox(height: kGap14),
@@ -141,6 +145,7 @@ class MyProfilePage extends ConsumerWidget {
         subtitle: AppLocalizations.of(
           context,
         )!.notificationsAccountEntrySubtitle,
+        badge: unreadNotifications,
         onTap: () => context.go(Routes.notifications),
       ),
       const SizedBox(height: kGap14),
@@ -221,7 +226,7 @@ class MyProfilePage extends ConsumerWidget {
         const SizedBox(height: kGap14),
         ..._profileCards(context, profiles, uploads, ref),
         if (profiles.isNotEmpty) const SizedBox(height: kGap14),
-        ..._accountTools(context),
+        ..._accountTools(context, ref),
       ],
     );
   }
@@ -294,7 +299,7 @@ class MyProfilePage extends ConsumerWidget {
                         ),
                       ),
                       const SizedBox(height: 14),
-                      ..._accountTools(context),
+                      ..._accountTools(context, ref),
                     ],
                   ),
                 ),
@@ -923,6 +928,7 @@ class _AccountEntryCard extends StatelessWidget {
     required this.onTap,
     this.foregroundColor,
     this.avatarUrl,
+    this.badge = 0,
   });
 
   final IconData icon;
@@ -931,6 +937,7 @@ class _AccountEntryCard extends StatelessWidget {
   final VoidCallback? onTap;
   final Color? foregroundColor;
   final String? avatarUrl;
+  final int badge;
 
   @override
   Widget build(BuildContext context) {
@@ -990,12 +997,46 @@ class _AccountEntryCard extends StatelessWidget {
                 ],
               ),
             ),
+            if (badge > 0) ...[
+              _AccountEntryBadge(count: badge),
+              const SizedBox(width: 10),
+            ],
             const Icon(
               Icons.arrow_forward_ios_rounded,
               size: kProfileVideoPlayIconSize,
               color: kTextMuted,
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AccountEntryBadge extends StatelessWidget {
+  const _AccountEntryBadge({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(minWidth: 22),
+      height: 22,
+      alignment: Alignment.center,
+      padding: const EdgeInsets.symmetric(horizontal: 7),
+      decoration: BoxDecoration(
+        color: BrandTheme.redTop,
+        borderRadius: BorderRadius.circular(999),
+        boxShadow: BrandTheme.basePillShadow(isDark: true),
+      ),
+      child: Text(
+        count > 99 ? '99+' : '$count',
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 11,
+          fontWeight: FontWeight.w900,
+          height: 1,
         ),
       ),
     );

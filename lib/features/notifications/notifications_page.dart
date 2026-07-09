@@ -53,6 +53,7 @@ class NotificationsPage extends ConsumerWidget {
     Future<void> markAllRead() async {
       await ref.read(appNotificationsServiceProvider).markAllRead();
       ref.invalidate(appNotificationsProvider);
+      ref.invalidate(unreadNotificationsCountProvider);
     }
 
     Future<void> deleteAll() async {
@@ -113,6 +114,7 @@ class NotificationsPage extends ConsumerWidget {
       if (confirmed != true) return;
       await ref.read(appNotificationsServiceProvider).deleteAll();
       ref.invalidate(appNotificationsProvider);
+      ref.invalidate(unreadNotificationsCountProvider);
     }
 
     return Scaffold(
@@ -184,6 +186,9 @@ class NotificationsPage extends ConsumerWidget {
                                       .read(appNotificationsServiceProvider)
                                       .deleteOne(item.id);
                                   ref.invalidate(appNotificationsProvider);
+                                  ref.invalidate(
+                                    unreadNotificationsCountProvider,
+                                  );
                                   return true;
                                 },
                                 child: _NotificationCard(
@@ -193,12 +198,18 @@ class NotificationsPage extends ConsumerWidget {
                                         .read(appNotificationsServiceProvider)
                                         .deleteOne(item.id);
                                     ref.invalidate(appNotificationsProvider);
+                                    ref.invalidate(
+                                      unreadNotificationsCountProvider,
+                                    );
                                   },
                                   onTap: () async {
                                     await ref
                                         .read(appNotificationsServiceProvider)
                                         .markRead(item.id);
                                     ref.invalidate(appNotificationsProvider);
+                                    ref.invalidate(
+                                      unreadNotificationsCountProvider,
+                                    );
 
                                     if (!context.mounted) return;
                                     final route = item.route.trim();
