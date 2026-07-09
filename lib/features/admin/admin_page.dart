@@ -186,6 +186,15 @@ class AdminPage extends ConsumerWidget {
                     onTap: () => context.go(Routes.adminUsers),
                   ),
                   _AdminAction(
+                    label: ru ? 'ВСЕ АНКЕТЫ' : 'ALL PROFILES',
+                    description: ru
+                        ? 'Статусы, роли, медиа'
+                        : 'Statuses, roles, media',
+                    icon: Icons.view_list_rounded,
+                    group: _AdminActionGroup.operations,
+                    onTap: () => context.go(Routes.adminProfiles),
+                  ),
+                  _AdminAction(
                     label: t.selectionUpper,
                     description: ru
                         ? 'Подборки и кастинги'
