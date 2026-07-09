@@ -12,7 +12,7 @@
 
 ## Журнал изменений
 
-- 2026-07-09: production worker `send-notifications` получил понятную классификацию FCM ошибок: auth/secrets пишутся как `FCM credentials problem`, invalid/unregistered токены выключаются, отсутствие пригодных токенов остается `skipped`; commit `TBD`.
+- 2026-07-09: production worker `send-notifications` получил понятную классификацию FCM ошибок: auth/secrets пишутся как `FCM credentials problem`, invalid/unregistered токены выключаются, отсутствие пригодных токенов остается `skipped`; commit `eed33d2`.
 - 2026-07-09: добавлен Push QA checklist в центр уведомлений: регистрация устройства, свежесть токена, worker sent, FCM secrets и понятность статуса читаются из production-данных пользователя; commit `483fc5d`.
 - 2026-07-09: центр событий получил пользовательские настройки каналов и типов событий: push/email, чаты, кастинги, анкеты и системные события; SQL `push_notifications.sql` добавляет `notification_preferences`, а production worker уважает настройки перед доставкой; commit `27c13ad`.
 - 2026-07-09: ручные back-office действия теперь пишутся в `admin_action_logs`: смена роли/статуса аккаунта, удаление профиля аккаунта, анкеты, кастинга и подборки сохраняют автора, цель, описание и metadata; журнал действий показывает metadata в деталях и CSV; commit `ccb24e0`.
