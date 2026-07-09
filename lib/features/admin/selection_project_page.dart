@@ -11,6 +11,7 @@ import '../../core/router.dart';
 import '../../core/supabase_provider.dart';
 import '../../gen_l10n/app_localizations.dart';
 import '../../ui/brand/brand_admin_header.dart';
+import '../../ui/brand/brand_logo.dart';
 import '../../ui/brand/brand_pill_button.dart';
 import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
@@ -49,6 +50,7 @@ final selectionProjectProvider = FutureProvider.autoDispose
           if (includeCampaign) 'location',
           if (includeCampaign) 'project_dates',
           if (includeCampaign) 'project_roles',
+          'created_by',
         ].join(',');
 
         final row = await sb
@@ -90,6 +92,36 @@ final selectionProjectProvider = FutureProvider.autoDispose
           }
         }
       }
+
+      Future<Map<String, dynamic>> loadManager(String userId) async {
+        final id = userId.trim();
+        if (id.isEmpty) return const <String, dynamic>{};
+
+        Future<Map<String, dynamic>> query(String columns) async {
+          final row = await sb
+              .from('user_profiles')
+              .select(columns)
+              .eq('user_id', id)
+              .maybeSingle();
+          return Map<String, dynamic>.from(row ?? const <String, dynamic>{});
+        }
+
+        try {
+          return await query(
+            'full_name,company_name,position,email,phone,account_tag,avatar_url,website,social_url',
+          );
+        } catch (_) {
+          try {
+            return await query('full_name,company_name,email,phone');
+          } catch (_) {
+            return const <String, dynamic>{};
+          }
+        }
+      }
+
+      final managerRow = await loadManager(
+        (selectionRow?['created_by'] ?? '').toString(),
+      );
 
       final itemsRows = await sb
           .from('selection_items')
@@ -135,6 +167,7 @@ final selectionProjectProvider = FutureProvider.autoDispose
 
       return {
         'selection': selectionRow ?? const <String, dynamic>{},
+        'manager': managerRow,
         'items': items,
         'exportItems': exportItems,
       };
@@ -219,6 +252,9 @@ class SelectionProjectPage extends ConsumerWidget {
               );
               final items = List<Map<String, dynamic>>.from(
                 data['items'] as List<dynamic>,
+              );
+              final manager = Map<String, dynamic>.from(
+                (data['manager'] as Map?) ?? const <String, dynamic>{},
               );
               final exportItems = List<SelectionExportItem>.from(
                 data['exportItems'] as List<dynamic>,
@@ -495,7 +531,10 @@ class SelectionProjectPage extends ConsumerWidget {
                         ? _PublicSelectionPresentationView(
                             selectionId: selectionId,
                             title: title.isNotEmpty ? title : t.selectionUpper,
+                            selection: selection,
                             campaignRows: campaignRows,
+                            manager: manager,
+                            publicLink: publicLink,
                             items: items,
                             clientKey: clientKey,
                             clientFeedback: clientFeedback,
@@ -700,7 +739,10 @@ class _PublicSelectionPresentationView extends StatefulWidget {
   const _PublicSelectionPresentationView({
     required this.selectionId,
     required this.title,
+    required this.selection,
     required this.campaignRows,
+    required this.manager,
+    required this.publicLink,
     required this.items,
     required this.clientKey,
     required this.clientFeedback,
@@ -708,7 +750,10 @@ class _PublicSelectionPresentationView extends StatefulWidget {
 
   final String selectionId;
   final String title;
+  final Map<String, dynamic> selection;
   final List<MapEntry<String, String>> campaignRows;
+  final Map<String, dynamic> manager;
+  final String publicLink;
   final List<Map<String, dynamic>> items;
   final String clientKey;
   final Map<String, SelectionClientFeedback> clientFeedback;
@@ -721,6 +766,21 @@ class _PublicSelectionPresentationView extends StatefulWidget {
 class _PublicSelectionPresentationViewState
     extends State<_PublicSelectionPresentationView> {
   int _selectedIndex = 0;
+
+  Future<void> _copyPublicLink() async {
+    await Clipboard.setData(ClipboardData(text: widget.publicLink));
+    if (!mounted) return;
+    final isRu = Localizations.localeOf(context).languageCode == 'ru';
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            isRu ? 'Ссылка на подборку скопирована' : 'Selection link copied',
+          ),
+        ),
+      );
+  }
 
   @override
   void didUpdateWidget(covariant _PublicSelectionPresentationView oldWidget) {
@@ -797,7 +857,11 @@ class _PublicSelectionPresentationViewState
               title: widget.title,
               count: profiles.length,
               feedback: widget.clientFeedback,
+              selection: widget.selection,
               campaignRows: widget.campaignRows,
+              manager: widget.manager,
+              publicLink: widget.publicLink,
+              onShare: _copyPublicLink,
             ),
             const SizedBox(height: 12),
             Expanded(child: content),
@@ -813,13 +877,54 @@ class _PublicPresentationHero extends StatelessWidget {
     required this.title,
     required this.count,
     required this.feedback,
+    required this.selection,
     required this.campaignRows,
+    required this.manager,
+    required this.publicLink,
+    required this.onShare,
   });
 
   final String title;
   final int count;
   final Map<String, SelectionClientFeedback> feedback;
+  final Map<String, dynamic> selection;
   final List<MapEntry<String, String>> campaignRows;
+  final Map<String, dynamic> manager;
+  final String publicLink;
+  final VoidCallback onShare;
+
+  String _value(Map<String, dynamic> map, String key) {
+    return (map[key] ?? '').toString().trim();
+  }
+
+  String _managerName(bool isRu) {
+    final fullName = _value(manager, 'full_name');
+    if (fullName.isNotEmpty) return fullName;
+    final company = _value(manager, 'company_name');
+    if (company.isNotEmpty) return company;
+    return isRu ? 'PK Management' : 'PK Management';
+  }
+
+  String _managerSubtitle(bool isRu) {
+    final parts = <String>[
+      _value(manager, 'position'),
+      _value(manager, 'company_name'),
+    ].where((e) => e.isNotEmpty).toList(growable: false);
+    if (parts.isNotEmpty) return parts.join(' • ');
+    return isRu ? 'Менеджер подборки' : 'Selection manager';
+  }
+
+  List<String> _managerContacts() {
+    return [
+      _value(manager, 'phone'),
+      _value(manager, 'email'),
+      _value(manager, 'account_tag').isEmpty
+          ? ''
+          : '@${_value(manager, 'account_tag')}',
+      _value(manager, 'website'),
+      _value(manager, 'social_url'),
+    ].where((e) => e.isNotEmpty).take(2).toList(growable: false);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -830,11 +935,17 @@ class _PublicPresentationHero extends StatelessWidget {
     final rejected = feedback.values
         .where((e) => e.vote == SelectionClientVote.rejected)
         .length;
+    final brandName = _value(selection, 'brand_name');
+    final clientName = _value(selection, 'client_name');
+    final location = _value(selection, 'location');
+    final dates = _value(selection, 'project_dates');
+    final roles = _value(selection, 'project_roles');
+    final managerContacts = _managerContacts();
     return _PresentationPanel(
-      padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final compact = constraints.maxWidth < 680;
+          final compact = constraints.maxWidth < 720;
           final stats = Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -856,20 +967,73 @@ class _PublicPresentationHero extends StatelessWidget {
               ),
             ],
           );
+          final projectChips = Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              if (brandName.isNotEmpty)
+                _PresentationInfoChip(
+                  icon: Icons.business_center_rounded,
+                  label: brandName,
+                ),
+              if (clientName.isNotEmpty)
+                _PresentationInfoChip(
+                  icon: Icons.handshake_rounded,
+                  label: clientName,
+                ),
+              if (dates.isNotEmpty)
+                _PresentationInfoChip(
+                  icon: Icons.calendar_month_rounded,
+                  label: dates,
+                ),
+              if (location.isNotEmpty)
+                _PresentationInfoChip(
+                  icon: Icons.location_on_rounded,
+                  label: location,
+                ),
+              if (roles.isNotEmpty)
+                _PresentationInfoChip(
+                  icon: Icons.assignment_ind_rounded,
+                  label: roles,
+                ),
+            ],
+          );
           final copy = Column(
             crossAxisAlignment: compact
                 ? CrossAxisAlignment.center
                 : CrossAxisAlignment.start,
             children: [
+              Row(
+                mainAxisSize: compact ? MainAxisSize.min : MainAxisSize.max,
+                children: [
+                  const BrandLogo(height: 54),
+                  const SizedBox(width: 12),
+                  Flexible(
+                    child: Text(
+                      'PK MANAGEMENT',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: _text,
+                        fontSize: 16,
+                        height: 1.05,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
               Text(
                 title,
                 textAlign: compact ? TextAlign.center : TextAlign.left,
-                maxLines: 2,
+                maxLines: 3,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   color: _text,
-                  fontSize: 26,
-                  height: 1.05,
+                  fontSize: 30,
+                  height: 1.02,
                   fontWeight: FontWeight.w900,
                   letterSpacing: 0.2,
                 ),
@@ -877,8 +1041,8 @@ class _PublicPresentationHero extends StatelessWidget {
               const SizedBox(height: 8),
               Text(
                 isRu
-                    ? 'Просмотрите кандидатов, отметьте понравившихся и оставьте комментарии.'
-                    : 'Review candidates, mark favorites, and leave comments.',
+                    ? 'Клиентская подборка моделей. Отметьте понравившихся, оставьте комментарии и отправьте ссылку команде.'
+                    : 'Client model presentation. Mark favorites, leave comments, and share the link with your team.',
                 textAlign: compact ? TextAlign.center : TextAlign.left,
                 style: const TextStyle(
                   color: kTextMuted,
@@ -886,36 +1050,179 @@ class _PublicPresentationHero extends StatelessWidget {
                   height: 1.25,
                 ),
               ),
-              if (campaignRows.isNotEmpty) ...[
-                const SizedBox(height: 10),
-                Text(
-                  campaignRows.take(2).map((e) => e.value).join(' • '),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: compact ? TextAlign.center : TextAlign.left,
-                  style: const TextStyle(
-                    color: _text,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 12,
-                  ),
-                ),
+              if (projectChips.children.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                projectChips,
               ],
             ],
+          );
+          final managerCard = _PublicDeliveryManagerCard(
+            title: isRu ? 'Контакт менеджера' : 'Manager contact',
+            name: _managerName(isRu),
+            subtitle: _managerSubtitle(isRu),
+            avatarUrl: _value(manager, 'avatar_url'),
+            contacts: managerContacts,
+            linkLabel: isRu ? 'Ссылка активна' : 'Link active',
+            linkValue: isRu ? 'до выключения публикации' : 'until unpublished',
+            publicLink: publicLink,
+            onShare: onShare,
           );
           if (compact) {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.center,
-              children: [copy, const SizedBox(height: 14), stats],
+              children: [
+                copy,
+                const SizedBox(height: 14),
+                stats,
+                const SizedBox(height: 12),
+                managerCard,
+              ],
             );
           }
           return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(child: copy),
               const SizedBox(width: 18),
-              stats,
+              SizedBox(
+                width: 340,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [stats, const SizedBox(height: 12), managerCard],
+                ),
+              ),
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+class _PublicDeliveryManagerCard extends StatelessWidget {
+  const _PublicDeliveryManagerCard({
+    required this.title,
+    required this.name,
+    required this.subtitle,
+    required this.avatarUrl,
+    required this.contacts,
+    required this.linkLabel,
+    required this.linkValue,
+    required this.publicLink,
+    required this.onShare,
+  });
+
+  final String title;
+  final String name;
+  final String subtitle;
+  final String avatarUrl;
+  final List<String> contacts;
+  final String linkLabel;
+  final String linkValue;
+  final String publicLink;
+  final VoidCallback onShare;
+
+  @override
+  Widget build(BuildContext context) {
+    final isRu = Localizations.localeOf(context).languageCode == 'ru';
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: pillDecoration(isDark: false, radius: 20).copyWith(
+        border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            title.toUpperCase(),
+            style: const TextStyle(
+              color: kTextMuted,
+              fontWeight: FontWeight.w900,
+              fontSize: 10,
+              letterSpacing: 1,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              SizedBox(
+                width: 52,
+                height: 52,
+                child: avatarUrl.trim().isEmpty
+                    ? Container(
+                        decoration: pillDecoration(isDark: true, radius: 16),
+                        alignment: Alignment.center,
+                        child: const Icon(
+                          Icons.support_agent_rounded,
+                          color: Colors.white,
+                        ),
+                      )
+                    : _PresentationImage(url: avatarUrl, radius: 16),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: _text,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 15,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: kTextMuted,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 12,
+                        height: 1.2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (contacts.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            for (final contact in contacts)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(
+                  contact,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: _text,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+          ],
+          const SizedBox(height: 8),
+          _PresentationInfoChip(
+            icon: Icons.verified_user_rounded,
+            label: '$linkLabel: $linkValue',
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            height: BrandTheme.pillHeight,
+            child: BrandPillButton(
+              label: isRu ? 'ПОДЕЛИТЬСЯ' : 'SHARE',
+              style: BrandPillStyle.dark,
+              onTap: publicLink.trim().isEmpty ? null : onShare,
+            ),
+          ),
+        ],
       ),
     );
   }
