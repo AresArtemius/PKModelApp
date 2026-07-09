@@ -74,11 +74,223 @@ class AdminMessageCard extends StatelessWidget {
   }
 }
 
+Future<bool> showAdminConfirmDialog({
+  required BuildContext context,
+  required String title,
+  required String message,
+  String cancelLabel = 'Отмена',
+  String confirmLabel = 'Да',
+  bool destructive = false,
+}) async {
+  final result = await showDialog<bool>(
+    context: context,
+    barrierColor: kTextDark.withValues(alpha: 0.34),
+    builder: (dialogContext) => Dialog(
+      elevation: 0,
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 22, vertical: 24),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 430),
+        child: DecoratedBox(
+          decoration: catalogCardDecoration().copyWith(
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.86)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(22, 20, 22, 18),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: adminCommandStyle(
+                    size: 16,
+                    letterSpacing: 1.0,
+                    weight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  message,
+                  style: adminBodyStyle(
+                    size: 13,
+                    color: kTextDark,
+                    height: 1.35,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    _AdminDialogButton(
+                      label: cancelLabel,
+                      onTap: () => Navigator.of(dialogContext).pop(false),
+                    ),
+                    const SizedBox(width: 10),
+                    _AdminDialogButton(
+                      label: confirmLabel,
+                      dark: true,
+                      destructive: destructive,
+                      onTap: () => Navigator.of(dialogContext).pop(true),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+  return result ?? false;
+}
+
+class _AdminDialogButton extends StatelessWidget {
+  const _AdminDialogButton({
+    required this.label,
+    required this.onTap,
+    this.dark = false,
+    this.destructive = false,
+  });
+
+  final String label;
+  final VoidCallback onTap;
+  final bool dark;
+  final bool destructive;
+
+  @override
+  Widget build(BuildContext context) {
+    final gradient = destructive
+        ? BrandTheme.redPillGradient
+        : dark
+        ? BrandTheme.darkPillGradient
+        : BrandTheme.lightPillGradient;
+    final color = dark || destructive ? Colors.white : kTextDark;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: onTap,
+        child: Ink(
+          decoration: BoxDecoration(
+            gradient: gradient,
+            borderRadius: BorderRadius.circular(999),
+            border: dark || destructive
+                ? null
+                : Border.all(color: kBorderColor),
+            boxShadow: BrandTheme.basePillShadow(isDark: dark || destructive),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            child: Text(
+              label,
+              style: adminCommandStyle(
+                size: 11,
+                letterSpacing: 0.4,
+                color: color,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class AdminMenuOption<T> {
-  const AdminMenuOption({required this.value, required this.label});
+  const AdminMenuOption({
+    required this.value,
+    required this.label,
+    this.icon,
+    this.destructive = false,
+    this.enabled = true,
+  });
 
   final T value;
   final String label;
+  final IconData? icon;
+  final bool destructive;
+  final bool enabled;
+}
+
+class AdminPopupMenuButton<T> extends StatelessWidget {
+  const AdminPopupMenuButton({
+    super.key,
+    required this.tooltip,
+    required this.options,
+    required this.child,
+    this.onSelected,
+  });
+
+  final String tooltip;
+  final List<AdminMenuOption<T>> options;
+  final Widget child;
+  final ValueChanged<T>? onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<T>(
+      tooltip: tooltip,
+      onSelected: onSelected,
+      color: Colors.white,
+      surfaceTintColor: Colors.transparent,
+      elevation: 16,
+      shadowColor: const Color(0x33000000),
+      offset: const Offset(0, 8),
+      constraints: const BoxConstraints(minWidth: 190, maxWidth: 300),
+      menuPadding: const EdgeInsets.symmetric(vertical: 8),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: const BorderSide(color: kBorderColor),
+      ),
+      itemBuilder: (context) => [
+        for (final option in options)
+          PopupMenuItem<T>(
+            value: option.value,
+            enabled: option.enabled,
+            height: 44,
+            padding: EdgeInsets.zero,
+            child: _AdminPopupMenuItem(option: option),
+          ),
+      ],
+      child: child,
+    );
+  }
+}
+
+class _AdminPopupMenuItem<T> extends StatelessWidget {
+  const _AdminPopupMenuItem({required this.option});
+
+  final AdminMenuOption<T> option;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = option.destructive ? BrandTheme.redTop : kTextDark;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      child: Row(
+        children: [
+          if (option.icon != null) ...[
+            Icon(option.icon, size: 17, color: color),
+            const SizedBox(width: 10),
+          ],
+          Expanded(
+            child: Text(
+              option.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: adminBodyStyle(
+                size: 12,
+                weight: FontWeight.w700,
+                color: color,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class AdminCompactSummary extends StatelessWidget {
@@ -94,17 +306,15 @@ class AdminCompactSummary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final first = items.isEmpty ? '' : '${items.first.$1}: ${items.first.$2}';
-    return PopupMenuButton<int>(
+    return AdminPopupMenuButton<int>(
       tooltip: title,
-      itemBuilder: (context) => [
+      options: [
         for (var i = 0; i < items.length; i++)
-          PopupMenuItem<int>(
+          AdminMenuOption<int>(
             value: i,
+            label: '${items[i].$1}: ${items[i].$2}',
             enabled: false,
-            child: Text(
-              '${items[i].$1}: ${items[i].$2}',
-              style: adminBodyStyle(color: kTextDark),
-            ),
+            icon: i == 0 ? Icons.analytics_outlined : Icons.circle_outlined,
           ),
       ],
       child: _AdminCompactPill(
@@ -132,16 +342,10 @@ class AdminMenuFilter<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PopupMenuButton<T>(
+    return AdminPopupMenuButton<T>(
       tooltip: label,
       onSelected: onSelected,
-      itemBuilder: (context) => [
-        for (final option in options)
-          PopupMenuItem<T>(
-            value: option.value,
-            child: Text(option.label, style: adminBodyStyle(color: kTextDark)),
-          ),
-      ],
+      options: options,
       child: _AdminCompactPill(
         icon: Icons.tune_rounded,
         label: '$label: $valueLabel',

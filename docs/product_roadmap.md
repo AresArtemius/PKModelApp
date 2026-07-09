@@ -12,6 +12,7 @@
 
 ## Журнал изменений
 
+- 2026-07-09: compact back-office dropdowns and confirm popups aligned with PK visual style; role/account actions moved from direct client writes to admin RPC functions to satisfy production RLS; SQL `admin_backoffice_actions.sql`; commit `TBD`.
 - 2026-07-09: back-office таблицы переведены с широких россыпей chips на компактные dropdown-сводки и dropdown-фильтры; в таблицы пользователей, анкет, кастингов и подборок добавлены меню действий для удаления сущностей и управления ролью/статусом аккаунта; commit `fc78fe3`.
 - 2026-07-09: мобильная версия back-office таблиц пользователей и анкет переведена с горизонтальных desktop-таблиц на адаптивные карточки; добавлены отдельные Web-first таблицы всех кастингов и всех подборок; commit `ab275d9`.
 - 2026-07-09: добавлена отдельная Web-first таблица всех анкет в админке: поиск, фильтры статуса/ролей, владелец, город, параметры, медиа-счетчик и быстрый переход в анкету/модерацию; commit `63d6b08`.

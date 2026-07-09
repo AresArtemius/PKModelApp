@@ -106,25 +106,18 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
     super.dispose();
   }
 
-  Future<bool> _confirm(String title, String message) async {
-    final result = await showDialog<bool>(
+  Future<bool> _confirm(
+    String title,
+    String message, {
+    bool destructive = false,
+  }) async {
+    return showAdminConfirmDialog(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(title),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Отмена'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Да'),
-          ),
-        ],
-      ),
+      title: title,
+      message: message,
+      confirmLabel: 'Да',
+      destructive: destructive,
     );
-    return result ?? false;
   }
 
   void _snack(String text) {
@@ -135,26 +128,23 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
   }
 
   Future<void> _setUserRole(_AdminUserRow user, String role) async {
+    final accountType = role == 'casting_agent' ? 'casting_agent' : role;
     final confirmed = await _confirm(
       'Изменить роль',
-      'Назначить ${user.displayName} роль $role?',
+      'Назначить ${user.displayName} роль ${_roleActionLabel(role)}?',
     );
     if (!confirmed) return;
     try {
-      await ref.read(supabaseProvider).from('user_roles').upsert({
-        'user_id': user.id,
-        'role': role,
-        'updated_at': DateTime.now().toUtc().toIso8601String(),
-      }, onConflict: 'user_id');
-      await ref.read(supabaseProvider).from('user_profiles').upsert({
-        'user_id': user.id,
-        'account_type': role == 'casting_agent' ? 'casting_agent' : role,
-        'updated_at': DateTime.now().toUtc().toIso8601String(),
-      }, onConflict: 'user_id');
+      await ref
+          .read(supabaseProvider)
+          .rpc(
+            'admin_set_user_account_access',
+            params: {'p_user_id': user.id, 'p_account_type': accountType},
+          );
       ref.invalidate(_adminUsersProvider);
       _snack('Роль обновлена');
     } catch (e) {
-      _snack('Не удалось обновить роль: $e');
+      _snack(_adminUsersActionError(e, 'Не удалось обновить роль'));
     }
   }
 
@@ -162,18 +152,17 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
     final confirmed = await _confirm(
       'Удалить профиль аккаунта',
       'Удалить профиль ${user.displayName}? Auth-пользователь не удаляется.',
+      destructive: true,
     );
     if (!confirmed) return;
     try {
       await ref
           .read(supabaseProvider)
-          .from('user_profiles')
-          .delete()
-          .eq('user_id', user.id);
+          .rpc('admin_delete_user_profile', params: {'p_user_id': user.id});
       ref.invalidate(_adminUsersProvider);
       _snack('Профиль аккаунта удален');
     } catch (e) {
-      _snack('Не удалось удалить профиль: $e');
+      _snack(_adminUsersActionError(e, 'Не удалось удалить профиль'));
     }
   }
 
@@ -721,9 +710,8 @@ class _UserActionsMenu extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ru = Localizations.localeOf(context).languageCode == 'ru';
-    return PopupMenuButton<String>(
+    return AdminPopupMenuButton<String>(
       tooltip: ru ? 'Действия' : 'Actions',
-      icon: const Icon(Icons.more_horiz_rounded, color: kTextDark),
       onSelected: (value) {
         switch (value) {
           case 'chat':
@@ -743,30 +731,47 @@ class _UserActionsMenu extends StatelessWidget {
             return;
         }
       },
-      itemBuilder: (context) => [
-        PopupMenuItem(
+      options: [
+        AdminMenuOption(
           value: 'chat',
-          child: Text(ru ? 'Открыть чаты' : 'Chats'),
+          label: ru ? 'Открыть чаты' : 'Chats',
+          icon: Icons.chat_bubble_outline_rounded,
         ),
-        PopupMenuItem(
+        AdminMenuOption(
           value: 'admin',
-          child: Text(ru ? 'Выдать админку' : 'Make admin'),
+          label: ru ? 'Выдать админку' : 'Make admin',
+          icon: Icons.admin_panel_settings_rounded,
         ),
-        PopupMenuItem(
+        AdminMenuOption(
           value: 'user',
-          child: Text(ru ? 'Снять админку / сделать user' : 'Make user'),
+          label: ru ? 'Снять админку' : 'Make user',
+          icon: Icons.person_outline_rounded,
         ),
-        PopupMenuItem(
+        AdminMenuOption(
           value: 'client',
-          child: Text(ru ? 'Дать статус заказчика' : 'Make client'),
+          label: ru ? 'Дать статус заказчика' : 'Make client',
+          icon: Icons.business_center_outlined,
         ),
-        PopupMenuItem(
+        AdminMenuOption(
           value: 'delete_profile',
-          child: Text(
-            ru ? 'Удалить профиль аккаунта' : 'Delete account profile',
-          ),
+          label: ru ? 'Удалить профиль аккаунта' : 'Delete account profile',
+          icon: Icons.delete_outline_rounded,
+          destructive: true,
         ),
       ],
+      child: const _AdminActionDots(),
+    );
+  }
+}
+
+class _AdminActionDots extends StatelessWidget {
+  const _AdminActionDots();
+
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox.square(
+      dimension: 40,
+      child: Center(child: Icon(Icons.more_horiz_rounded, color: kTextDark)),
     );
   }
 }
@@ -984,4 +989,28 @@ String _usersErrorText(Object error, bool ru) {
   return ru
       ? 'Не удалось загрузить пользователей: $error'
       : 'Could not load users: $error';
+}
+
+String _roleActionLabel(String role) => switch (role) {
+  'admin' => 'админ',
+  'casting_agent' => 'заказчик',
+  _ => 'пользователь',
+};
+
+String _adminUsersActionError(Object error, String prefix) {
+  if (error is PostgrestException) {
+    final details = [
+      error.message,
+      if ((error.details ?? '').toString().trim().isNotEmpty) error.details,
+      if ((error.hint ?? '').toString().trim().isNotEmpty) error.hint,
+      if ((error.code ?? '').toString().trim().isNotEmpty)
+        'code: ${error.code}',
+    ].map((e) => e.toString().trim()).where((e) => e.isNotEmpty).join('\n');
+    if (details.toLowerCase().contains('admin_set_user_account_access') ||
+        details.toLowerCase().contains('admin_delete_user_profile')) {
+      return '$prefix.\nПримените SQL: supabase/sql/admin_backoffice_actions.sql';
+    }
+    return '$prefix: $details';
+  }
+  return '$prefix: $error';
 }

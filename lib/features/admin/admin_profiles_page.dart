@@ -142,24 +142,13 @@ class _AdminProfilesPageState extends ConsumerState<AdminProfilesPage> {
   }
 
   Future<bool> _confirm(String title, String message) async {
-    final result = await showDialog<bool>(
+    return showAdminConfirmDialog(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(title),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Отмена'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Удалить'),
-          ),
-        ],
-      ),
+      title: title,
+      message: message,
+      confirmLabel: 'Удалить',
+      destructive: true,
     );
-    return result ?? false;
   }
 
   void _snack(String text) {
@@ -178,13 +167,11 @@ class _AdminProfilesPageState extends ConsumerState<AdminProfilesPage> {
     try {
       await ref
           .read(supabaseProvider)
-          .from('profiles')
-          .delete()
-          .eq('id', profile.id);
+          .rpc('admin_delete_profile', params: {'p_profile_id': profile.id});
       ref.invalidate(_adminProfilesProvider);
       _snack('Анкета удалена');
     } catch (e) {
-      _snack('Не удалось удалить анкету: $e');
+      _snack(_adminProfilesActionError(e, 'Не удалось удалить анкету'));
     }
   }
 
@@ -769,9 +756,8 @@ class _ProfileActionsMenu extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ru = Localizations.localeOf(context).languageCode == 'ru';
-    return PopupMenuButton<String>(
+    return AdminPopupMenuButton<String>(
       tooltip: ru ? 'Действия' : 'Actions',
-      icon: const Icon(Icons.more_horiz_rounded, color: kTextDark),
       onSelected: (value) {
         switch (value) {
           case 'open':
@@ -785,15 +771,38 @@ class _ProfileActionsMenu extends StatelessWidget {
             return;
         }
       },
-      itemBuilder: (context) => [
-        PopupMenuItem(value: 'open', child: Text(ru ? 'Открыть' : 'Open')),
+      options: [
+        AdminMenuOption(
+          value: 'open',
+          label: ru ? 'Открыть' : 'Open',
+          icon: Icons.open_in_new_rounded,
+        ),
         if (profile.status == ProfileStatus.pending)
-          PopupMenuItem(
+          AdminMenuOption(
             value: 'moderation',
-            child: Text(ru ? 'Модерация' : 'Moderation'),
+            label: ru ? 'Модерация' : 'Moderation',
+            icon: Icons.verified_user_rounded,
           ),
-        PopupMenuItem(value: 'delete', child: Text(ru ? 'Удалить' : 'Delete')),
+        AdminMenuOption(
+          value: 'delete',
+          label: ru ? 'Удалить' : 'Delete',
+          icon: Icons.delete_outline_rounded,
+          destructive: true,
+        ),
       ],
+      child: const _AdminActionDots(),
+    );
+  }
+}
+
+class _AdminActionDots extends StatelessWidget {
+  const _AdminActionDots();
+
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox.square(
+      dimension: 40,
+      child: Center(child: Icon(Icons.more_horiz_rounded, color: kTextDark)),
     );
   }
 }
@@ -1142,4 +1151,21 @@ bool _boolFromMap(Object? value) {
 int _listCount(Object? value) {
   if (value is List) return value.length;
   return 0;
+}
+
+String _adminProfilesActionError(Object error, String prefix) {
+  if (error is PostgrestException) {
+    final details = [
+      error.message,
+      if ((error.details ?? '').toString().trim().isNotEmpty) error.details,
+      if ((error.hint ?? '').toString().trim().isNotEmpty) error.hint,
+      if ((error.code ?? '').toString().trim().isNotEmpty)
+        'code: ${error.code}',
+    ].map((e) => e.toString().trim()).where((e) => e.isNotEmpty).join('\n');
+    if (details.toLowerCase().contains('admin_delete_profile')) {
+      return '$prefix.\nПримените SQL: supabase/sql/admin_backoffice_actions.sql';
+    }
+    return '$prefix: $details';
+  }
+  return '$prefix: $error';
 }

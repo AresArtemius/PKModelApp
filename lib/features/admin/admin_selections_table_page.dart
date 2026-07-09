@@ -163,24 +163,13 @@ class _AdminSelectionsTablePageState
   }
 
   Future<bool> _confirmDelete(_AdminSelectionRow selection) async {
-    final result = await showDialog<bool>(
+    return showAdminConfirmDialog(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Удалить подборку'),
-        content: Text('Удалить подборку «${selection.title}»?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Отмена'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Удалить'),
-          ),
-        ],
-      ),
+      title: 'Удалить подборку',
+      message: 'Удалить подборку «${selection.title}»?',
+      confirmLabel: 'Удалить',
+      destructive: true,
     );
-    return result ?? false;
   }
 
   Future<void> _deleteSelection(_AdminSelectionRow selection) async {
@@ -189,9 +178,10 @@ class _AdminSelectionsTablePageState
     try {
       await ref
           .read(supabaseProvider)
-          .from('selections')
-          .delete()
-          .eq('id', selection.id);
+          .rpc(
+            'admin_delete_selection',
+            params: {'p_selection_id': selection.id},
+          );
       ref.invalidate(_adminSelectionsProvider);
       if (!mounted) return;
       ScaffoldMessenger.of(context)
@@ -201,7 +191,7 @@ class _AdminSelectionsTablePageState
       if (!mounted) return;
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content: Text('Не удалось удалить: $e')));
+        ..showSnackBar(SnackBar(content: Text(_adminSelectionsActionError(e))));
     }
   }
 
@@ -588,8 +578,8 @@ class _SelectionActionsMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PopupMenuButton<String>(
-      icon: const Icon(Icons.more_horiz_rounded, color: kTextDark),
+    return AdminPopupMenuButton<String>(
+      tooltip: 'Действия',
       onSelected: (value) {
         switch (value) {
           case 'open':
@@ -600,10 +590,32 @@ class _SelectionActionsMenu extends StatelessWidget {
             return;
         }
       },
-      itemBuilder: (context) => const [
-        PopupMenuItem(value: 'open', child: Text('Открыть')),
-        PopupMenuItem(value: 'delete', child: Text('Удалить')),
+      options: const [
+        AdminMenuOption(
+          value: 'open',
+          label: 'Открыть',
+          icon: Icons.open_in_new_rounded,
+        ),
+        AdminMenuOption(
+          value: 'delete',
+          label: 'Удалить',
+          icon: Icons.delete_outline_rounded,
+          destructive: true,
+        ),
       ],
+      child: const _AdminActionDots(),
+    );
+  }
+}
+
+class _AdminActionDots extends StatelessWidget {
+  const _AdminActionDots();
+
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox.square(
+      dimension: 40,
+      child: Center(child: Icon(Icons.more_horiz_rounded, color: kTextDark)),
     );
   }
 }
@@ -975,4 +987,21 @@ bool _boolFromMap(Object? value) {
   if (value is num) return value != 0;
   final text = value?.toString().toLowerCase().trim() ?? '';
   return text == 'true' || text == '1' || text == 'yes';
+}
+
+String _adminSelectionsActionError(Object error) {
+  if (error is PostgrestException) {
+    final details = [
+      error.message,
+      if ((error.details ?? '').toString().trim().isNotEmpty) error.details,
+      if ((error.hint ?? '').toString().trim().isNotEmpty) error.hint,
+      if ((error.code ?? '').toString().trim().isNotEmpty)
+        'code: ${error.code}',
+    ].map((e) => e.toString().trim()).where((e) => e.isNotEmpty).join('\n');
+    if (details.toLowerCase().contains('admin_delete_selection')) {
+      return 'Не удалось удалить подборку.\nПримените SQL: supabase/sql/admin_backoffice_actions.sql';
+    }
+    return 'Не удалось удалить: $details';
+  }
+  return 'Не удалось удалить: $error';
 }
