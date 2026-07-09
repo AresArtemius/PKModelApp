@@ -251,9 +251,20 @@ class NotificationPreferencesService {
     final userId = _sb.auth.currentUser?.id;
     if (userId == null || userId.isEmpty) return;
 
-    await _sb
-        .from(table)
-        .upsert(preferences.toMap(userId), onConflict: 'user_id');
+    try {
+      await _sb
+          .from(table)
+          .upsert(preferences.toMap(userId), onConflict: 'user_id');
+    } on PostgrestException catch (e) {
+      if (SupabaseCompat.isMissingRelation(e, const [table])) {
+        AppLogger.warning(
+          'Notification preferences save skipped until SQL is applied',
+          error: e,
+        );
+        return;
+      }
+      rethrow;
+    }
   }
 }
 
