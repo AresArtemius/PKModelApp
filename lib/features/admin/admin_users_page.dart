@@ -222,22 +222,16 @@ class _UsersTablePanel extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         Expanded(
-          child: DecoratedBox(
-            decoration: catalogCardDecoration().copyWith(
-              border: Border.all(color: kBorderColor),
-            ),
-            child: filtered.isEmpty
-                ? Center(
-                    child: Text(
-                      ru ? 'Пользователи не найдены' : 'No users found',
-                      style: adminCommandStyle(
-                        size: 13,
-                        letterSpacing: 0.7,
-                        color: kTextMuted,
-                      ),
-                    ),
-                  )
-                : Scrollbar(
+          child: filtered.isEmpty
+              ? _UsersEmptyState(
+                  text: ru ? 'Пользователи не найдены' : 'No users found',
+                )
+              : isDesktop
+              ? DecoratedBox(
+                  decoration: catalogCardDecoration().copyWith(
+                    border: Border.all(color: kBorderColor),
+                  ),
+                  child: Scrollbar(
                     thumbVisibility: isDesktop,
                     child: SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
@@ -258,9 +252,130 @@ class _UsersTablePanel extends StatelessWidget {
                       ),
                     ),
                   ),
-          ),
+                )
+              : _UsersMobileList(users: filtered),
         ),
       ],
+    );
+  }
+}
+
+class _UsersEmptyState extends StatelessWidget {
+  const _UsersEmptyState({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: catalogCardDecoration().copyWith(
+        border: Border.all(color: kBorderColor),
+      ),
+      child: Center(
+        child: Text(
+          text,
+          style: adminCommandStyle(
+            size: 13,
+            letterSpacing: 0.7,
+            color: kTextMuted,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _UsersMobileList extends StatelessWidget {
+  const _UsersMobileList({required this.users});
+
+  final List<_AdminUserRow> users;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.separated(
+      padding: const EdgeInsets.only(bottom: 18),
+      itemCount: users.length,
+      separatorBuilder: (_, _) => const SizedBox(height: 10),
+      itemBuilder: (context, index) => _UserMobileCard(user: users[index]),
+    );
+  }
+}
+
+class _UserMobileCard extends StatelessWidget {
+  const _UserMobileCard({required this.user});
+
+  final _AdminUserRow user;
+
+  @override
+  Widget build(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final meta = [
+      user.contactLabel.replaceAll('\n', ' • '),
+      user.locationLabel,
+      user.activityLabel(ru),
+    ].where((part) => part.trim().isNotEmpty).join(' • ');
+    return DecoratedBox(
+      decoration: catalogCardDecoration().copyWith(
+        border: Border.all(color: kBorderColor),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _UserAvatar(user: user),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          user.displayName,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: adminCommandStyle(
+                            size: 14,
+                            letterSpacing: 0.1,
+                            weight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      _RoleBadge(role: user.primaryRole),
+                    ],
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    user.handleOrId,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: adminBodyStyle(size: 12),
+                  ),
+                  if (meta.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      meta,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: adminBodyStyle(size: 12, color: kTextDark),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            IconButton(
+              onPressed: () => context.go('${Routes.chats}?user=${user.id}'),
+              icon: const Icon(Icons.chat_bubble_outline_rounded),
+              color: kTextDark,
+              tooltip: ru ? 'Открыть чаты' : 'Open chats',
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

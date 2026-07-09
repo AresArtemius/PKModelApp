@@ -274,22 +274,16 @@ class _ProfilesTablePanel extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         Expanded(
-          child: DecoratedBox(
-            decoration: catalogCardDecoration().copyWith(
-              border: Border.all(color: kBorderColor),
-            ),
-            child: filtered.isEmpty
-                ? Center(
-                    child: Text(
-                      ru ? 'Анкеты не найдены' : 'No profiles found',
-                      style: adminCommandStyle(
-                        size: 13,
-                        letterSpacing: 0.7,
-                        color: kTextMuted,
-                      ),
-                    ),
-                  )
-                : Scrollbar(
+          child: filtered.isEmpty
+              ? _ProfilesEmptyState(
+                  text: ru ? 'Анкеты не найдены' : 'No profiles found',
+                )
+              : isDesktop
+              ? DecoratedBox(
+                  decoration: catalogCardDecoration().copyWith(
+                    border: Border.all(color: kBorderColor),
+                  ),
+                  child: Scrollbar(
                     thumbVisibility: isDesktop,
                     child: SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
@@ -314,9 +308,147 @@ class _ProfilesTablePanel extends StatelessWidget {
                       ),
                     ),
                   ),
-          ),
+                )
+              : _ProfilesMobileList(profiles: filtered),
         ),
       ],
+    );
+  }
+}
+
+class _ProfilesEmptyState extends StatelessWidget {
+  const _ProfilesEmptyState({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: catalogCardDecoration().copyWith(
+        border: Border.all(color: kBorderColor),
+      ),
+      child: Center(
+        child: Text(
+          text,
+          style: adminCommandStyle(
+            size: 13,
+            letterSpacing: 0.7,
+            color: kTextMuted,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfilesMobileList extends StatelessWidget {
+  const _ProfilesMobileList({required this.profiles});
+
+  final List<_AdminProfileRow> profiles;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.separated(
+      padding: const EdgeInsets.only(bottom: 18),
+      itemCount: profiles.length,
+      separatorBuilder: (_, _) => const SizedBox(height: 10),
+      itemBuilder: (context, index) =>
+          _ProfileMobileCard(profile: profiles[index]),
+    );
+  }
+}
+
+class _ProfileMobileCard extends StatelessWidget {
+  const _ProfileMobileCard({required this.profile});
+
+  final _AdminProfileRow profile;
+
+  @override
+  Widget build(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final meta = [
+      profile.rolesLabel(ru),
+      profile.ownerLabel,
+      profile.locationLabel,
+      profile.basicsLabel(ru),
+      profile.mediaLabel(ru),
+    ].where((part) => part.trim().isNotEmpty).join(' • ');
+    return DecoratedBox(
+      decoration: catalogCardDecoration().copyWith(
+        border: Border.all(color: kBorderColor),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _ProfileCover(profile: profile),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          profile.displayName(ru),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: adminCommandStyle(
+                            size: 14,
+                            letterSpacing: 0.1,
+                            weight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      _StatusBadge(status: profile.status),
+                    ],
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    profile.id,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: adminBodyStyle(size: 11),
+                  ),
+                  if (meta.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      meta,
+                      maxLines: 4,
+                      overflow: TextOverflow.ellipsis,
+                      style: adminBodyStyle(size: 12, color: kTextDark),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  onPressed: () => context.go(
+                    '${Routes.modelPrefix}${profile.id}?from=admin',
+                  ),
+                  icon: const Icon(Icons.open_in_new_rounded),
+                  color: kTextDark,
+                  tooltip: ru ? 'Открыть анкету' : 'Open profile',
+                ),
+                if (profile.status == ProfileStatus.pending)
+                  IconButton(
+                    onPressed: () => context.go(Routes.moderationAdmin),
+                    icon: const Icon(Icons.verified_user_rounded),
+                    color: BrandTheme.redTop,
+                    tooltip: ru ? 'Модерация' : 'Moderation',
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

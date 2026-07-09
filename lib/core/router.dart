@@ -5,7 +5,9 @@ import 'package:go_router/go_router.dart';
 import 'admin_dashboard_counts_provider.dart';
 import 'roles_provider.dart';
 import '../features/admin/account_merge_requests_page.dart';
+import '../features/admin/admin_castings_page.dart';
 import '../features/admin/admin_profiles_page.dart';
+import '../features/admin/admin_selections_table_page.dart';
 import '../features/admin/admin_users_page.dart';
 import '../features/admin/selection_admin_page.dart';
 import '../features/admin/selection_casting_page.dart';
@@ -65,6 +67,8 @@ abstract class Routes {
   static const accountMergeRequestsAdmin = '/account_merge_requests_admin';
   static const adminUsers = '/admin_users';
   static const adminProfiles = '/admin_profiles';
+  static const adminCastings = '/admin_castings';
+  static const adminSelectionsTable = '/admin_selections_table';
   static const createCastingAdmin = '/create_casting_admin';
   static const adminSelection = '/admin_selection';
   static const safetyAdmin = '/safety_admin';
@@ -108,6 +112,8 @@ class AppShell extends StatelessWidget {
     if (path.startsWith(Routes.accountMergeRequestsAdmin)) return 4;
     if (path.startsWith(Routes.adminUsers)) return 4;
     if (path.startsWith(Routes.adminProfiles)) return 4;
+    if (path.startsWith(Routes.adminCastings)) return 4;
+    if (path.startsWith(Routes.adminSelectionsTable)) return 4;
     if (path.startsWith(Routes.createCastingAdmin)) return 4;
     if (path.startsWith(Routes.adminSelection)) return 4;
     if (path.startsWith(Routes.safetyAdmin)) return 4;
@@ -669,6 +675,14 @@ final List<RouteBase> appRoutes = [
       GoRoute(
         path: Routes.adminProfiles,
         builder: (context, state) => const AdminProfilesPage(),
+      ),
+      GoRoute(
+        path: Routes.adminCastings,
+        builder: (context, state) => const AdminCastingsPage(),
+      ),
+      GoRoute(
+        path: Routes.adminSelectionsTable,
+        builder: (context, state) => const AdminSelectionsTablePage(),
       ),
       GoRoute(
         path: Routes.createCastingAdmin,

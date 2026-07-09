@@ -195,6 +195,24 @@ class AdminPage extends ConsumerWidget {
                     onTap: () => context.go(Routes.adminProfiles),
                   ),
                   _AdminAction(
+                    label: ru ? 'ВСЕ КАСТИНГИ' : 'ALL CASTINGS',
+                    description: ru
+                        ? 'Этапы, отклики, референсы'
+                        : 'Stages, responses, refs',
+                    icon: Icons.table_chart_rounded,
+                    group: _AdminActionGroup.operations,
+                    onTap: () => context.go(Routes.adminCastings),
+                  ),
+                  _AdminAction(
+                    label: ru ? 'ВСЕ ПОДБОРКИ' : 'ALL SELECTIONS',
+                    description: ru
+                        ? 'Статусы, клиенты, PDF'
+                        : 'Statuses, clients, PDF',
+                    icon: Icons.folder_copy_rounded,
+                    group: _AdminActionGroup.operations,
+                    onTap: () => context.go(Routes.adminSelectionsTable),
+                  ),
+                  _AdminAction(
                     label: t.selectionUpper,
                     description: ru
                         ? 'Подборки и кастинги'
