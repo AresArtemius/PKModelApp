@@ -12,6 +12,7 @@
 
 ## Журнал изменений
 
+- 2026-07-09: production worker `send-notifications` получил понятную классификацию FCM ошибок: auth/secrets пишутся как `FCM credentials problem`, invalid/unregistered токены выключаются, отсутствие пригодных токенов остается `skipped`; commit `TBD`.
 - 2026-07-09: добавлен Push QA checklist в центр уведомлений: регистрация устройства, свежесть токена, worker sent, FCM secrets и понятность статуса читаются из production-данных пользователя; commit `483fc5d`.
 - 2026-07-09: центр событий получил пользовательские настройки каналов и типов событий: push/email, чаты, кастинги, анкеты и системные события; SQL `push_notifications.sql` добавляет `notification_preferences`, а production worker уважает настройки перед доставкой; commit `27c13ad`.
 - 2026-07-09: ручные back-office действия теперь пишутся в `admin_action_logs`: смена роли/статуса аккаунта, удаление профиля аккаунта, анкеты, кастинга и подборки сохраняют автора, цель, описание и metadata; журнал действий показывает metadata в деталях и CSV; commit `ccb24e0`.
@@ -202,11 +203,13 @@
 - Production `send-notifications` задеплоен с `EMAIL_FROM=PK Management <noreply@pk.management>` и `PUBLIC_APP_URL=https://app.pk.management/`; SQL для authenticated pg_net webhook на insert и pg_cron fallback каждую минуту подготовлен.
 - Базовый центр событий с настройками каналов и категорий: пользователь может включать/выключать push, email, чаты, кастинги, анкеты и системные события; серверная очередь и worker доставки учитывают эти настройки.
 - Push QA checklist в центре уведомлений: устройство зарегистрировано, токен свежий, worker отправляет, FCM secrets без auth-ошибок, статус `sent/failed/skipped` понятен.
+- FCM ошибки в production worker классифицируются человекочитаемо: auth/secrets → `FCM credentials problem`, invalid/unregistered token → токен выключается, отсутствие пригодных токенов → `skipped`.
 
 Не хватает:
 - Финального production QA push после свежего тестового события: все 5 проверок должны быть зелеными на реальном устройстве.
 - Email-уведомлений.
 - Production QA центра событий: применить обновленный SQL, redeploy `send-notifications`, создать тестовые события и проверить статусы доставки.
+- Отложено: back-office/техническая диагностика уведомлений — таблица или SQL-view последних событий с `user_id`, `type`, `push_status`, `email_status`, `attempts`, `push_error` и `email_error`, чтобы не разбирать широкую Supabase-таблицу вручную.
 
 ## 8. Доверие и статус
 

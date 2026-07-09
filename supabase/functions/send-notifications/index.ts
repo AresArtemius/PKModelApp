@@ -20,6 +20,17 @@ type PushDeviceToken = {
   platform: string;
 };
 
+type FcmSendFailureReason = 'auth' | 'invalid_token' | 'quota' | 'unknown';
+
+type FcmSendResult =
+  | { ok: true }
+  | {
+      ok: false;
+      error: string;
+      disableToken: boolean;
+      reason: FcmSendFailureReason;
+    };
+
 type NotificationPreferences = {
   push_enabled: boolean;
   email_enabled: boolean;
@@ -137,9 +148,23 @@ async function processPush(notification: AppNotification): Promise<string> {
     return 'skipped';
   }
 
-  const accessToken = await getFcmAccessToken();
+  let accessToken = '';
+  try {
+    accessToken = await getFcmAccessToken();
+  } catch (error) {
+    await updateNotificationPushStatus(
+      notification.id,
+      'failed',
+      `FCM credentials problem: ${errorMessage(error)}`.slice(0, 2000),
+      null,
+    );
+    return 'failed';
+  }
+
   let sent = 0;
   const errors: string[] = [];
+  let disabledTokens = 0;
+  let authFailures = 0;
 
   for (const device of tokens) {
     const result = await sendFcmMessage(notification, device, accessToken);
@@ -147,8 +172,10 @@ async function processPush(notification: AppNotification): Promise<string> {
       sent += 1;
     } else {
       errors.push(result.error);
+      if (result.reason === 'auth') authFailures += 1;
       if (result.disableToken) {
         await disableToken(device.token);
+        disabledTokens += 1;
       }
     }
   }
@@ -163,10 +190,22 @@ async function processPush(notification: AppNotification): Promise<string> {
     return 'sent';
   }
 
+  if (disabledTokens > 0 && disabledTokens === tokens.length) {
+    await markPushSkipped(
+      notification.id,
+      'No deliverable device tokens; invalid tokens were disabled',
+    );
+    return 'skipped';
+  }
+
+  const errorText = authFailures > 0
+    ? `FCM credentials problem: ${errors.join('\n')}`
+    : errors.join('\n');
+
   await updateNotificationPushStatus(
     notification.id,
     'failed',
-    errors.join('\n').slice(0, 2000),
+    errorText.slice(0, 2000),
     null,
   );
   return 'failed';
@@ -377,7 +416,7 @@ async function sendFcmMessage(
   notification: AppNotification,
   device: PushDeviceToken,
   accessToken: string,
-): Promise<{ ok: true } | { ok: false; error: string; disableToken: boolean }> {
+): Promise<FcmSendResult> {
   const response = await fetch(
     `https://fcm.googleapis.com/v1/projects/${fcmProjectId}/messages:send`,
     {
@@ -411,16 +450,80 @@ async function sendFcmMessage(
   if (response.ok) return { ok: true };
 
   const text = await response.text();
-  const disableToken =
-    response.status === 404 ||
-    text.includes('UNREGISTERED') ||
-    text.includes('registration-token-not-registered');
+  const reason = classifyFcmFailure(response.status, text);
+  const disableToken = reason === 'invalid_token';
+  const error = readableFcmError({
+    platform: device.platform,
+    status: response.status,
+    reason,
+    text,
+  });
 
   return {
     ok: false,
-    error: `${device.platform}:${response.status}:${text}`,
+    error,
     disableToken,
+    reason,
   };
+}
+
+function classifyFcmFailure(
+  status: number,
+  text: string,
+): FcmSendFailureReason {
+  const normalized = text.toLowerCase();
+  if (
+    status === 401 ||
+    status === 403 ||
+    normalized.includes('third_party_auth_error') ||
+    normalized.includes('unauthenticated') ||
+    normalized.includes('permission_denied') ||
+    normalized.includes('sender_id_mismatch')
+  ) {
+    return 'auth';
+  }
+
+  if (
+    status === 404 ||
+    normalized.includes('unregistered') ||
+    normalized.includes('registration-token-not-registered') ||
+    normalized.includes('invalid_registration') ||
+    normalized.includes('invalid token') ||
+    normalized.includes('invalid registration token') ||
+    normalized.includes('registration token is not a valid')
+  ) {
+    return 'invalid_token';
+  }
+
+  if (status === 429 || normalized.includes('quota')) {
+    return 'quota';
+  }
+
+  return 'unknown';
+}
+
+function readableFcmError({
+  platform,
+  status,
+  reason,
+  text,
+}: {
+  platform: string;
+  status: number;
+  reason: FcmSendFailureReason;
+  text: string;
+}) {
+  const compact = text.replace(/\s+/g, ' ').trim().slice(0, 1200);
+  if (reason === 'auth') {
+    return `${platform}:${status}: FCM credentials problem (${compact})`;
+  }
+  if (reason === 'invalid_token') {
+    return `${platform}:${status}: invalid push token disabled (${compact})`;
+  }
+  if (reason === 'quota') {
+    return `${platform}:${status}: FCM quota/rate limit (${compact})`;
+  }
+  return `${platform}:${status}: FCM send failed (${compact})`;
 }
 
 function buildFcmData(notification: AppNotification): Record<string, string> {
