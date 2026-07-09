@@ -15,6 +15,7 @@ class AdminActionLogEntry {
     required this.targetId,
     required this.targetText,
     required this.status,
+    required this.metadata,
     required this.createdAt,
   });
 
@@ -31,6 +32,7 @@ class AdminActionLogEntry {
       targetId: (map['target_id'] ?? '').toString().trim(),
       targetText: (map['target_text'] ?? '').toString().trim(),
       status: (map['status'] ?? '').toString().trim(),
+      metadata: _metadataFromMap(map['metadata']),
       createdAt: DateTime.tryParse((map['created_at'] ?? '').toString()),
     );
   }
@@ -46,6 +48,7 @@ class AdminActionLogEntry {
   final String targetId;
   final String targetText;
   final String status;
+  final Map<String, dynamic> metadata;
   final DateTime? createdAt;
 
   String get actorLabel {
@@ -65,7 +68,7 @@ class AdminActionLogService {
 
   static const _selectColumns =
       'id,actor_user_id,actor_name,actor_company,action_type,title,'
-      'description,target_table,target_id,target_text,status,created_at';
+      'description,target_table,target_id,target_text,status,metadata,created_at';
 
   Future<List<AdminActionLogEntry>?> fetch({int limit = 200}) async {
     try {
@@ -90,6 +93,7 @@ class AdminActionLogService {
         'actor_company',
         'target_table',
         'target_text',
+        'metadata',
       ])) {
         return null;
       }
@@ -174,6 +178,12 @@ class AdminActionLogService {
     final clean = value.trim();
     return clean.isEmpty ? null : clean;
   }
+}
+
+Map<String, dynamic> _metadataFromMap(Object? value) {
+  if (value is Map<String, dynamic>) return value;
+  if (value is Map) return Map<String, dynamic>.from(value);
+  return const <String, dynamic>{};
 }
 
 class AdminActionLogSetupRequiredException implements Exception {

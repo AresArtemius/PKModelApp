@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -76,6 +78,7 @@ class AuditLogItem {
     required this.relatedText,
     required this.templateKey,
     required this.templateBody,
+    required this.metadata,
     required this.profileId,
     required this.createdAt,
     required this.deliveredAt,
@@ -97,6 +100,7 @@ class AuditLogItem {
       relatedText: item.relatedText,
       templateKey: item.templateKey,
       templateBody: item.templateBody,
+      metadata: const <String, dynamic>{},
       profileId: item.profileId,
       createdAt: item.createdAt,
       deliveredAt: item.deliveredAt,
@@ -119,6 +123,7 @@ class AuditLogItem {
       relatedText: item.targetText,
       templateKey: '',
       templateBody: '',
+      metadata: item.metadata,
       profileId: '',
       createdAt: item.createdAt,
       deliveredAt: null,
@@ -139,6 +144,7 @@ class AuditLogItem {
   final String relatedText;
   final String templateKey;
   final String templateBody;
+  final Map<String, dynamic> metadata;
   final String profileId;
   final DateTime? createdAt;
   final DateTime? deliveredAt;
@@ -473,7 +479,7 @@ class _ProfileActionAuditPageState
           if (query.isEmpty) return true;
           final haystack =
               '${item.title} ${item.description} ${item.actionType} ${item.status} '
-                      '${item.relatedTable} ${item.relatedText} ${item.templateBody}'
+                      '${item.relatedTable} ${item.relatedText} ${item.templateBody} ${item.metadata}'
                   .toLowerCase();
           return haystack.contains(query);
         })
@@ -576,6 +582,7 @@ class _ProfileActionAuditPageState
         'related_text',
         'title',
         'description',
+        'metadata',
       ],
       for (final item in logs)
         [
@@ -590,6 +597,9 @@ class _ProfileActionAuditPageState
           item.relatedText,
           item.title,
           item.description,
+          item.metadata.isEmpty
+              ? ''
+              : const JsonEncoder.withIndent('  ').convert(item.metadata),
         ],
     ];
     final csv = rows.map((row) => row.map(_csvCell).join(',')).join('\n');
@@ -1450,6 +1460,13 @@ class _AuditDetails extends StatelessWidget {
           _TextBox(
             title: isRu ? 'ОПИСАНИЕ' : 'DESCRIPTION',
             text: log.description,
+          ),
+        ],
+        if (log.metadata.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          _TextBox(
+            title: isRu ? 'ДЕТАЛИ / METADATA' : 'DETAILS / METADATA',
+            text: const JsonEncoder.withIndent('  ').convert(log.metadata),
           ),
         ],
         const SizedBox(height: 14),
