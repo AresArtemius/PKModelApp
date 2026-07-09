@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/account_profile_service.dart';
 import '../../core/profile_action_log_service.dart';
 import '../../core/supabase_compat.dart';
 import 'chat_models.dart';
@@ -1510,6 +1511,142 @@ class ChatService {
       userId: userId,
       readAt: DateTime.tryParse((inserted['read_at'] ?? '').toString()),
     );
+    await _notifyMentionedParticipants(
+      chatId: chatId,
+      body: payload['body']?.toString() ?? text,
+      senderId: userId,
+    );
+  }
+
+  Future<List<ChatMentionTarget>> fetchMentionTargets({
+    required String chatId,
+    required String currentUserId,
+  }) async {
+    final cleanChatId = chatId.trim();
+    if (cleanChatId.isEmpty || currentUserId.trim().isEmpty) {
+      return const <ChatMentionTarget>[];
+    }
+
+    final row = await _sb
+        .from('selection_chats')
+        .select('model_user_id,agent_user_id')
+        .eq('id', cleanChatId)
+        .maybeSingle();
+    if (row == null) return const <ChatMentionTarget>[];
+
+    final map = Map<String, dynamic>.from(row);
+    final participantIds = <String>{
+      (map['model_user_id'] ?? '').toString().trim(),
+      (map['agent_user_id'] ?? '').toString().trim(),
+    }..removeWhere((id) => id.isEmpty || id == currentUserId);
+    if (participantIds.isEmpty) return const <ChatMentionTarget>[];
+
+    try {
+      return await _loadMentionTargets(participantIds, includeVisibility: true);
+    } on PostgrestException catch (e) {
+      if (SupabaseCompat.isMissingColumn(e, 'account_tag_visibility')) {
+        return _loadMentionTargets(participantIds, includeVisibility: false);
+      }
+      if (SupabaseCompat.isMissingColumn(e, 'account_tag')) {
+        return const <ChatMentionTarget>[];
+      }
+      if (_isRlsRecursion(e)) return const <ChatMentionTarget>[];
+      rethrow;
+    }
+  }
+
+  Future<List<ChatMentionTarget>> _loadMentionTargets(
+    Set<String> userIds, {
+    required bool includeVisibility,
+  }) async {
+    final rows = await _sb
+        .from('user_profiles')
+        .select(
+          [
+            'user_id',
+            'account_tag',
+            if (includeVisibility) 'account_tag_visibility',
+            'avatar_url',
+            'full_name',
+            'company_name',
+            'position',
+          ].join(','),
+        )
+        .inFilter('user_id', userIds.toList(growable: false));
+    final targets = <ChatMentionTarget>[];
+    for (final raw in rows as List) {
+      final map = Map<String, dynamic>.from(raw as Map);
+      final visibility = (map['account_tag_visibility'] ?? 'public')
+          .toString()
+          .trim()
+          .toLowerCase();
+      final tag = normalizeAccountTag((map['account_tag'] ?? '').toString());
+      if (tag.isEmpty || visibility == 'hidden') continue;
+      final fullName = (map['full_name'] ?? '').toString().trim();
+      final companyName = (map['company_name'] ?? '').toString().trim();
+      final position = (map['position'] ?? '').toString().trim();
+      final displayName = fullName.isNotEmpty
+          ? fullName
+          : companyName.isNotEmpty
+          ? companyName
+          : position.isNotEmpty
+          ? position
+          : '@$tag';
+      targets.add(
+        ChatMentionTarget(
+          userId: (map['user_id'] ?? '').toString().trim(),
+          accountTag: tag,
+          displayName: displayName,
+          avatarUrl: (map['avatar_url'] ?? '').toString().trim(),
+        ),
+      );
+    }
+    targets.sort((a, b) => a.accountTag.compareTo(b.accountTag));
+    return targets;
+  }
+
+  Future<void> _notifyMentionedParticipants({
+    required String chatId,
+    required String body,
+    required String senderId,
+  }) async {
+    final mentionedTags = RegExp(r'(^|[\s.,!?;:()\[\]{}])@([a-z0-9._-]{2,32})')
+        .allMatches(body.toLowerCase())
+        .map((match) => normalizeAccountTag(match.group(2) ?? ''))
+        .where((tag) => tag.isNotEmpty)
+        .toSet();
+    if (mentionedTags.isEmpty) return;
+
+    try {
+      final targets = await fetchMentionTargets(
+        chatId: chatId,
+        currentUserId: senderId,
+      );
+      for (final target in targets) {
+        if (!mentionedTags.contains(target.accountTag)) continue;
+        await _sb.rpc(
+          'enqueue_app_notification',
+          params: {
+            'p_user_id': target.userId,
+            'p_title': 'Вас упомянули в чате',
+            'p_body': body.length > 120 ? '${body.substring(0, 120)}...' : body,
+            'p_route': '/chat/$chatId',
+            'p_type': 'chat_message',
+            'p_data': {
+              'chat_id': chatId,
+              'mention_tag': target.accountTag,
+              'sender_id': senderId,
+            },
+          },
+        );
+      }
+    } on PostgrestException catch (e) {
+      if (SupabaseCompat.isMissingRpc(e, 'enqueue_app_notification')) return;
+      if (_isRlsRecursion(e)) return;
+      return;
+    } catch (_) {
+      return;
+    }
   }
 
   Future<void> forwardMessages({

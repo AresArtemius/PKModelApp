@@ -72,3 +72,12 @@ final chatParticipantAvatarsProvider = FutureProvider.autoDispose
     .family<Map<String, String>, String>((ref, chatId) {
       return ref.watch(chatServiceProvider).fetchChatParticipantAvatars(chatId);
     });
+
+final chatMentionTargetsProvider = FutureProvider.autoDispose
+    .family<List<ChatMentionTarget>, String>((ref, chatId) {
+      final userId = ref.watch(currentUserIdProvider);
+      if (userId == null) return Future.value(const <ChatMentionTarget>[]);
+      return ref
+          .watch(chatServiceProvider)
+          .fetchMentionTargets(chatId: chatId, currentUserId: userId);
+    });

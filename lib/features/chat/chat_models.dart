@@ -331,6 +331,29 @@ class ChatSummary {
   }
 }
 
+class ChatMentionTarget {
+  const ChatMentionTarget({
+    required this.userId,
+    required this.accountTag,
+    required this.displayName,
+    required this.avatarUrl,
+  });
+
+  final String userId;
+  final String accountTag;
+  final String displayName;
+  final String avatarUrl;
+
+  String get handle => '@$accountTag';
+
+  bool matches(String query) {
+    final q = query.trim().toLowerCase();
+    if (q.isEmpty) return true;
+    return accountTag.toLowerCase().contains(q) ||
+        displayName.toLowerCase().contains(q);
+  }
+}
+
 class ChatContextEntry {
   const ChatContextEntry({
     required this.id,

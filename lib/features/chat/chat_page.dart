@@ -97,6 +97,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   Timer? _searchDebounceTimer;
   final List<ChatMessage> _olderMessages = [];
   List<ChatMessage> _serverSearchResults = const <ChatMessage>[];
+  String? _mentionQuery;
   final _picker = ImagePicker();
   bool _serverSearchLoading = false;
   String _serverSearchQuery = '';
@@ -122,6 +123,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     _serverSearchLoading = false;
     _serverSearchQuery = '';
     _serverSearchError = '';
+    _mentionQuery = null;
     _searchController.clear();
     _pendingAttachment = null;
     _lastTypingSentAt = null;
@@ -130,7 +132,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   @override
   void initState() {
     super.initState();
-    _messageController.addListener(_handleTypingChanged);
+    _messageController.addListener(_handleMessageInputChanged);
   }
 
   @override
@@ -138,11 +140,54 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     _typingStopTimer?.cancel();
     _searchDebounceTimer?.cancel();
     unawaited(_setTyping(false));
-    _messageController.removeListener(_handleTypingChanged);
+    _messageController.removeListener(_handleMessageInputChanged);
     _messageController.dispose();
     _searchController.dispose();
     _messageListController.dispose();
     super.dispose();
+  }
+
+  void _handleMessageInputChanged() {
+    _updateMentionQuery();
+    _handleTypingChanged();
+  }
+
+  void _updateMentionQuery() {
+    final nextQuery = _currentMentionQuery();
+    if (nextQuery == _mentionQuery) return;
+    if (!mounted) return;
+    setState(() => _mentionQuery = nextQuery);
+  }
+
+  String? _currentMentionQuery() {
+    final text = _messageController.text;
+    final cursor = _messageController.selection.baseOffset;
+    if (cursor < 1 || cursor > text.length) return null;
+    final prefix = text.substring(0, cursor);
+    final match = RegExp(
+      r'(^|[\s(])@([a-zA-Z0-9._-]{0,32})$',
+    ).firstMatch(prefix);
+    return match?.group(2)?.toLowerCase();
+  }
+
+  void _insertMention(ChatMentionTarget target) {
+    final cursor = _messageController.selection.baseOffset;
+    if (cursor < 0) return;
+    final text = _messageController.text;
+    final prefix = text.substring(0, cursor);
+    final match = RegExp(
+      r'(^|[\s(])@([a-zA-Z0-9._-]{0,32})$',
+    ).firstMatch(prefix);
+    if (match == null) return;
+    final start = match.start + (match.group(1)?.length ?? 0);
+    final replacement = '${target.handle} ';
+    final nextText = text.replaceRange(start, cursor, replacement);
+    final nextCursor = start + replacement.length;
+    _messageController.value = TextEditingValue(
+      text: nextText,
+      selection: TextSelection.collapsed(offset: nextCursor),
+    );
+    setState(() => _mentionQuery = null);
   }
 
   void _handleTypingChanged() {
@@ -211,6 +256,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       setState(() {
         _replyingTo = null;
         _pendingAttachment = null;
+        _mentionQuery = null;
       });
     } finally {
       if (mounted) setState(() => _sending = false);
@@ -1213,7 +1259,17 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     final summary = ref.watch(chatSummaryProvider(widget.chatId));
     final contexts = ref.watch(chatContextsProvider(widget.chatId));
     final avatars = ref.watch(chatParticipantAvatarsProvider(widget.chatId));
+    final mentionTargetsAsync = ref.watch(
+      chatMentionTargetsProvider(widget.chatId),
+    );
     final avatarMap = avatars.valueOrNull ?? const <String, String>{};
+    final mentionQuery = _mentionQuery;
+    final mentionTargets = mentionQuery == null
+        ? const <ChatMentionTarget>[]
+        : (mentionTargetsAsync.valueOrNull ?? const <ChatMentionTarget>[])
+              .where((target) => target.matches(mentionQuery))
+              .take(5)
+              .toList(growable: false);
     final searchVisibleMessages = messages.valueOrNull == null
         ? const <ChatMessage>[]
         : _mergedMessages(messages.valueOrNull!);
@@ -1417,6 +1473,13 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                 if ((typingStates.valueOrNull ?? const <ChatTypingState>[])
                     .isNotEmpty) ...[
                   const _TypingIndicator(),
+                  const SizedBox(height: 10),
+                ],
+                if (mentionQuery != null && mentionTargets.isNotEmpty) ...[
+                  _MentionSuggestions(
+                    targets: mentionTargets,
+                    onSelect: _insertMention,
+                  ),
                   const SizedBox(height: 10),
                 ],
                 if (_selectionMode) ...[
@@ -1770,6 +1833,154 @@ class _ChatSearchPanel extends StatelessWidget {
             color: kTextDark,
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _MentionSuggestions extends StatelessWidget {
+  const _MentionSuggestions({required this.targets, required this.onSelect});
+
+  final List<ChatMentionTarget> targets;
+  final ValueChanged<ChatMentionTarget> onSelect;
+
+  String _initials(ChatMentionTarget target) {
+    final source = target.displayName.trim().isNotEmpty
+        ? target.displayName.trim()
+        : target.accountTag.trim();
+    final parts = source
+        .split(RegExp(r'\s+'))
+        .where((part) => part.isNotEmpty)
+        .toList(growable: false);
+    if (parts.isEmpty) return '@';
+    if (parts.length == 1) return parts.first.characters.first.toUpperCase();
+    return '${parts.first.characters.first}${parts.last.characters.first}'
+        .toUpperCase();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.94),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: kBorderColor, width: 1),
+        boxShadow: BrandTheme.basePillShadow(isDark: false),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            for (var i = 0; i < targets.length; i += 1) ...[
+              _MentionSuggestionChip(
+                target: targets[i],
+                initials: _initials(targets[i]),
+                onTap: () => onSelect(targets[i]),
+              ),
+              if (i != targets.length - 1) const SizedBox(width: kGap8),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MentionSuggestionChip extends StatelessWidget {
+  const _MentionSuggestionChip({
+    required this.target,
+    required this.initials,
+    required this.onTap,
+  });
+
+  final ChatMentionTarget target;
+  final String initials;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(999),
+      onTap: onTap,
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 230),
+        padding: const EdgeInsets.fromLTRB(7, 6, 12, 6),
+        decoration: pillDecoration(
+          isDark: false,
+          radius: 999,
+        ).copyWith(border: Border.all(color: kBorderColor, width: 1)),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: BrandTheme.darkPillGradient,
+              ),
+              clipBehavior: Clip.antiAlias,
+              alignment: Alignment.center,
+              child: target.avatarUrl.isEmpty
+                  ? Text(
+                      initials,
+                      style: BrandTheme.pillText.copyWith(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0,
+                      ),
+                    )
+                  : CachedNetworkImage(
+                      imageUrl: target.avatarUrl,
+                      fit: BoxFit.cover,
+                      width: 32,
+                      height: 32,
+                      errorWidget: (_, _, _) => Text(
+                        initials,
+                        style: BrandTheme.pillText.copyWith(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0,
+                        ),
+                      ),
+                    ),
+            ),
+            const SizedBox(width: kGap8),
+            Flexible(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    target.handle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: BrandTheme.pillText.copyWith(
+                      color: BrandTheme.redTop,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+                  Text(
+                    target.displayName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: kTextMuted,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      height: 1.1,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

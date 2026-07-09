@@ -105,7 +105,9 @@ class PublicAccountProfile {
       avatarUrl: value('avatar_url'),
       fullName: value('full_name'),
       companyName: value('company_name'),
-      position: value('position'),
+      position: value('account_position').isNotEmpty
+          ? value('account_position')
+          : value('position'),
       accountType: registrationAccountTypeFromStorage(value('account_type')),
       city: value('city'),
       country: value('country'),
