@@ -13,6 +13,7 @@ import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
 import '../../gen_l10n/app_localizations.dart';
 import '../../core/locale_provider.dart';
+import '../notifications/app_notifications.dart';
 import 'auth_rate_limiter.dart';
 import 'auth_controller.dart';
 import 'phone_number_field.dart';
@@ -131,6 +132,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         AuthRateLimitAction.signIn,
         subject,
       );
+      await ref
+          .read(securityNotificationsServiceProvider)
+          .notifyNewLogin(method: 'email');
       if (!mounted) return;
       context.go(Routes.search);
     } on AuthException catch (e) {
@@ -250,6 +254,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         AuthRateLimitAction.phoneSignIn,
         phone,
       );
+      await ref
+          .read(securityNotificationsServiceProvider)
+          .notifyNewLogin(method: 'phone');
       if (!mounted) return;
       context.go(Routes.search);
     } on AuthException catch (e) {

@@ -18,6 +18,7 @@ import '../../ui/brand/ui_constants.dart';
 import '../auth/auth_rate_limiter.dart';
 import '../auth/auth_controller.dart';
 import '../auth/password_strength.dart';
+import '../notifications/app_notifications.dart';
 
 const String _kAccountAvatarBucket = 'profile-media';
 
@@ -281,6 +282,9 @@ class _AccountProfileEditPageState
         UserAttributes(email: email, password: password),
         emailRedirectTo: AuthController.authRedirectTo,
       );
+      await ref
+          .read(securityNotificationsServiceProvider)
+          .notifyEmailChangeRequested(email);
       final updatedUser = _sb.auth.currentUser ?? user;
       await ref
           .read(accountProfileServiceProvider)
@@ -362,6 +366,9 @@ class _AccountProfileEditPageState
       await ref
           .read(authControllerProvider)
           .setCurrentUserPassword(password: password);
+      await ref
+          .read(securityNotificationsServiceProvider)
+          .notifyPasswordChanged();
       if (!mounted) return;
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
@@ -640,6 +647,9 @@ class _AccountProfileEditPageState
         AuthRateLimitAction.phoneOtpVerify,
         phone,
       );
+      await ref
+          .read(securityNotificationsServiceProvider)
+          .notifyPhoneChanged(phone);
       if (!mounted) return;
       _phoneResendTimer?.cancel();
       setState(() {

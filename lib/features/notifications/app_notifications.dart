@@ -175,6 +175,132 @@ class AppNotificationsService {
   }
 }
 
+class SecurityNotificationsService {
+  const SecurityNotificationsService(this._sb);
+
+  final SupabaseClient _sb;
+
+  Future<void> notifyNewLogin({required String method}) {
+    return _enqueue(
+      type: 'security_new_login',
+      titleRu: 'Новый вход в аккаунт',
+      titleEn: 'New account sign-in',
+      bodyRu: 'В аккаунт выполнен вход через $method.',
+      bodyEn: 'Your account was signed in with $method.',
+      data: {'method': method},
+    );
+  }
+
+  Future<void> notifyPasswordChanged() {
+    return _enqueue(
+      type: 'security_password_changed',
+      titleRu: 'Пароль изменен',
+      titleEn: 'Password changed',
+      bodyRu: 'Пароль для входа в аккаунт был обновлен.',
+      bodyEn: 'Your sign-in password was updated.',
+    );
+  }
+
+  Future<void> notifyEmailChangeRequested(String email) {
+    final cleanEmail = email.trim();
+    return _enqueue(
+      type: 'security_email_change_requested',
+      titleRu: 'Запрошена смена email',
+      titleEn: 'Email change requested',
+      bodyRu: cleanEmail.isEmpty
+          ? 'Для аккаунта запрошено изменение email.'
+          : 'Для аккаунта запрошено изменение email на $cleanEmail.',
+      bodyEn: cleanEmail.isEmpty
+          ? 'An email change was requested for your account.'
+          : 'An email change to $cleanEmail was requested for your account.',
+      data: {'email': cleanEmail},
+    );
+  }
+
+  Future<void> notifyPhoneChanged(String phone) {
+    final cleanPhone = phone.trim();
+    return _enqueue(
+      type: 'security_phone_changed',
+      titleRu: 'Телефон изменен',
+      titleEn: 'Phone changed',
+      bodyRu: cleanPhone.isEmpty
+          ? 'Телефон для входа в аккаунт был обновлен.'
+          : 'Телефон для входа обновлен: $cleanPhone.',
+      bodyEn: cleanPhone.isEmpty
+          ? 'Your sign-in phone was updated.'
+          : 'Your sign-in phone was updated: $cleanPhone.',
+      data: {'phone': cleanPhone},
+    );
+  }
+
+  Future<void> _enqueue({
+    required String type,
+    required String titleRu,
+    required String titleEn,
+    required String bodyRu,
+    required String bodyEn,
+    Map<String, dynamic> data = const {},
+  }) async {
+    final user = _sb.auth.currentUser;
+    final userId = user?.id;
+    if (userId == null || userId.isEmpty) return;
+
+    final email = (user?.email ?? '').trim();
+    final title = titleRu;
+    final body = bodyRu;
+    final payload = <String, dynamic>{
+      ...data,
+      'title_en': titleEn,
+      'body_en': bodyEn,
+      'send_email': email.isNotEmpty,
+      'email_to': email,
+      'email_subject': title,
+      'email_body': body,
+      'created_client_at': DateTime.now().toUtc().toIso8601String(),
+    };
+
+    try {
+      await _sb.rpc<void>(
+        'enqueue_app_notification',
+        params: {
+          'p_user_id': userId,
+          'p_title': title,
+          'p_body': body,
+          'p_route': '/notifications',
+          'p_type': type,
+          'p_data': payload,
+        },
+      );
+    } on PostgrestException catch (e) {
+      if (SupabaseCompat.isMissingRelation(e, const [
+        AppNotificationsService.table,
+        NotificationPreferencesService.table,
+      ])) {
+        AppLogger.warning(
+          'Security notification skipped until notification SQL is applied',
+          error: e,
+        );
+        return;
+      }
+      final message = e.message.toLowerCase();
+      if (message.contains('enqueue_app_notification')) {
+        AppLogger.warning(
+          'Security notification RPC is not applied yet',
+          error: e,
+        );
+        return;
+      }
+      rethrow;
+    } catch (e, stack) {
+      AppLogger.warning(
+        'Security notification enqueue failed',
+        error: e,
+        stackTrace: stack,
+      );
+    }
+  }
+}
+
 class NotificationPreferences {
   const NotificationPreferences({
     required this.pushEnabled,
@@ -452,6 +578,11 @@ final appNotificationsServiceProvider = Provider<AppNotificationsService>((
 ) {
   return AppNotificationsService(ref.read(supabaseProvider));
 });
+
+final securityNotificationsServiceProvider =
+    Provider<SecurityNotificationsService>((ref) {
+      return SecurityNotificationsService(ref.read(supabaseProvider));
+    });
 
 final notificationPreferencesServiceProvider =
     Provider<NotificationPreferencesService>((ref) {
