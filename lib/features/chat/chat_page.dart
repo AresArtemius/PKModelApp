@@ -20,6 +20,7 @@ import 'package:video_thumbnail/video_thumbnail.dart';
 import '../../core/app_error_mapper.dart';
 import '../../core/auth_providers.dart';
 import '../../core/entitlements_provider.dart';
+import '../../core/protected_media_url.dart';
 import '../../core/router.dart';
 import '../../core/supabase_provider.dart';
 import '../../gen_l10n/app_localizations.dart';
@@ -28,7 +29,8 @@ import '../../ui/brand/ui_constants.dart';
 import 'chat_models.dart';
 import 'chat_providers.dart';
 
-const _chatMediaBucket = 'profile-media';
+const _chatMediaBucket = 'chat-media';
+const _legacyChatMediaBucket = 'profile-media';
 const _chatRealtimeMessageLimit = 120;
 const _replyPrefix = '↩ ';
 const _replySeparator = '\n\n';
@@ -715,14 +717,50 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     required Uint8List bytes,
     required String contentType,
   }) async {
-    await _sb.storage
-        .from(_chatMediaBucket)
+    try {
+      await _uploadBytesToBucket(
+        bucket: _chatMediaBucket,
+        path: path,
+        bytes: bytes,
+        contentType: contentType,
+      );
+      return ProtectedMediaUrlService.storageUri(
+        bucket: _chatMediaBucket,
+        path: path,
+      );
+    } on StorageException catch (e) {
+      if (!_isMissingChatMediaBucket(e)) rethrow;
+      await _uploadBytesToBucket(
+        bucket: _legacyChatMediaBucket,
+        path: path,
+        bytes: bytes,
+        contentType: contentType,
+      );
+      return _sb.storage.from(_legacyChatMediaBucket).getPublicUrl(path);
+    }
+  }
+
+  Future<void> _uploadBytesToBucket({
+    required String bucket,
+    required String path,
+    required Uint8List bytes,
+    required String contentType,
+  }) {
+    return _sb.storage
+        .from(bucket)
         .uploadBinary(
           path,
           bytes,
           fileOptions: FileOptions(contentType: contentType, upsert: true),
         );
-    return _sb.storage.from(_chatMediaBucket).getPublicUrl(path);
+  }
+
+  bool _isMissingChatMediaBucket(StorageException e) {
+    final status = e.statusCode?.trim() ?? '';
+    final message = e.message.toLowerCase();
+    return status == '404' ||
+        message.contains('bucket not found') ||
+        message.contains('not found');
   }
 
   Future<void> _selectPendingMedia({
@@ -3103,14 +3141,15 @@ class _MessageMedia extends StatelessWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              CachedNetworkImage(
-                imageUrl: imageUrl,
+              _ProtectedCachedNetworkImage(
+                source: imageUrl,
                 fit: BoxFit.cover,
                 memCacheWidth: 520,
                 maxWidthDiskCache: 900,
-                placeholder: (_, _) =>
-                    Container(color: Colors.white.withValues(alpha: 0.18)),
-                errorWidget: (_, _, _) => Container(
+                placeholder: Container(
+                  color: Colors.white.withValues(alpha: 0.18),
+                ),
+                errorWidget: Container(
                   color: Colors.white.withValues(alpha: 0.18),
                   child: const Icon(Icons.broken_image_rounded),
                 ),
@@ -3134,7 +3173,7 @@ class _MessageMedia extends StatelessWidget {
   }
 }
 
-class _AudioMessagePlayer extends StatefulWidget {
+class _AudioMessagePlayer extends ConsumerStatefulWidget {
   const _AudioMessagePlayer({
     required this.message,
     required this.showReadStatus,
@@ -3146,10 +3185,11 @@ class _AudioMessagePlayer extends StatefulWidget {
   final VoidCallback onListened;
 
   @override
-  State<_AudioMessagePlayer> createState() => _AudioMessagePlayerState();
+  ConsumerState<_AudioMessagePlayer> createState() =>
+      _AudioMessagePlayerState();
 }
 
-class _AudioMessagePlayerState extends State<_AudioMessagePlayer> {
+class _AudioMessagePlayerState extends ConsumerState<_AudioMessagePlayer> {
   late final AudioPlayer _player;
   StreamSubscription<PlayerState>? _stateSub;
   StreamSubscription<Duration>? _positionSub;
@@ -3204,7 +3244,10 @@ class _AudioMessagePlayerState extends State<_AudioMessagePlayer> {
         return;
       }
       if (_player.audioSource == null) {
-        await _player.setUrl(widget.message.mediaUrl);
+        final url = await ref
+            .read(protectedMediaUrlServiceProvider)
+            .resolve(widget.message.mediaUrl);
+        await _player.setUrl(url);
       }
       await _player.play();
       _markListenedOnce();
@@ -3524,18 +3567,19 @@ class _MediaViewerDialog extends StatelessWidget {
           children: [
             Center(
               child: message.isVideo
-                  ? _VideoPlayerSurface(url: message.mediaUrl)
+                  ? _VideoPlayerSurface(source: message.mediaUrl)
                   : InteractiveViewer(
                       minScale: 0.8,
                       maxScale: 4,
-                      child: CachedNetworkImage(
-                        imageUrl: message.mediaUrl,
+                      child: _ProtectedCachedNetworkImage(
+                        source: message.mediaUrl,
                         fit: BoxFit.contain,
                         memCacheWidth: 1400,
                         maxWidthDiskCache: 2000,
-                        placeholder: (_, _) =>
-                            const Center(child: CircularProgressIndicator()),
-                        errorWidget: (_, _, _) => const Icon(
+                        placeholder: const Center(
+                          child: CircularProgressIndicator(),
+                        ),
+                        errorWidget: const Icon(
                           Icons.broken_image_rounded,
                           color: Colors.white,
                           size: 48,
@@ -3703,40 +3747,100 @@ class _ViewerCloseButton extends StatelessWidget {
   }
 }
 
-class _VideoPlayerSurface extends StatefulWidget {
-  const _VideoPlayerSurface({required this.url});
+class _ProtectedCachedNetworkImage extends ConsumerWidget {
+  const _ProtectedCachedNetworkImage({
+    required this.source,
+    required this.fit,
+    required this.placeholder,
+    required this.errorWidget,
+    this.memCacheWidth,
+    this.maxWidthDiskCache,
+  });
 
-  final String url;
+  final String source;
+  final BoxFit fit;
+  final Widget placeholder;
+  final Widget errorWidget;
+  final int? memCacheWidth;
+  final int? maxWidthDiskCache;
 
   @override
-  State<_VideoPlayerSurface> createState() => _VideoPlayerSurfaceState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final url = ref.watch(_protectedMediaUrlProvider(source));
+    return url.when(
+      data: (resolved) {
+        if (resolved.trim().isEmpty) return errorWidget;
+        return CachedNetworkImage(
+          imageUrl: resolved,
+          fit: fit,
+          memCacheWidth: memCacheWidth,
+          maxWidthDiskCache: maxWidthDiskCache,
+          placeholder: (_, _) => placeholder,
+          errorWidget: (_, _, _) => errorWidget,
+        );
+      },
+      loading: () => placeholder,
+      error: (_, _) => errorWidget,
+    );
+  }
 }
 
-class _VideoPlayerSurfaceState extends State<_VideoPlayerSurface> {
-  late final VideoPlayerController _controller;
+final _protectedMediaUrlProvider = FutureProvider.autoDispose
+    .family<String, String>((ref, source) {
+      return ref.read(protectedMediaUrlServiceProvider).resolve(source);
+    });
+
+class _VideoPlayerSurface extends ConsumerStatefulWidget {
+  const _VideoPlayerSurface({required this.source});
+
+  final String source;
+
+  @override
+  ConsumerState<_VideoPlayerSurface> createState() =>
+      _VideoPlayerSurfaceState();
+}
+
+class _VideoPlayerSurfaceState extends ConsumerState<_VideoPlayerSurface> {
+  VideoPlayerController? _controller;
   bool _ready = false;
+  String _error = '';
 
   @override
   void initState() {
     super.initState();
-    _controller = VideoPlayerController.networkUrl(Uri.parse(widget.url))
-      ..initialize().then((_) {
-        if (!mounted) return;
-        setState(() => _ready = true);
-        _controller.play();
-      });
+    unawaited(_initialize());
+  }
+
+  Future<void> _initialize() async {
+    try {
+      final url = await ref
+          .read(protectedMediaUrlServiceProvider)
+          .resolve(widget.source);
+      final controller = VideoPlayerController.networkUrl(Uri.parse(url));
+      _controller = controller;
+      await controller.initialize();
+      if (!mounted) {
+        await controller.dispose();
+        return;
+      }
+      setState(() => _ready = true);
+      await controller.play();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _error = 'Не удалось открыть видео');
+    }
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _controller?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return AspectRatio(
-      aspectRatio: _ready ? _controller.value.aspectRatio : 1,
+      aspectRatio: _ready ? _controller!.value.aspectRatio : 1,
       child: Stack(
         alignment: Alignment.center,
         children: [
@@ -3744,22 +3848,30 @@ class _VideoPlayerSurfaceState extends State<_VideoPlayerSurface> {
             GestureDetector(
               onTap: () {
                 setState(() {
-                  _controller.value.isPlaying
-                      ? _controller.pause()
-                      : _controller.play();
+                  _controller!.value.isPlaying
+                      ? _controller!.pause()
+                      : _controller!.play();
                 });
               },
-              child: VideoPlayer(_controller),
+              child: VideoPlayer(_controller!),
+            )
+          else if (_error.isNotEmpty)
+            Text(
+              _error,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
+              ),
             )
           else
             const Center(child: CircularProgressIndicator()),
-          if (_ready && !_controller.value.isBuffering)
+          if (_ready && !_controller!.value.isBuffering)
             Positioned(
               left: 18,
               right: 18,
               bottom: 18,
               child: VideoProgressIndicator(
-                _controller,
+                _controller!,
                 allowScrubbing: true,
                 colors: const VideoProgressColors(
                   playedColor: Colors.white,
@@ -3768,7 +3880,7 @@ class _VideoPlayerSurfaceState extends State<_VideoPlayerSurface> {
                 ),
               ),
             ),
-          if (_ready && !_controller.value.isPlaying)
+          if (_ready && !_controller!.value.isPlaying)
             const Icon(
               Icons.play_circle_fill_rounded,
               color: Colors.white,
