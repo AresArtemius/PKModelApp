@@ -14,8 +14,13 @@ import '../../ui/brand/ui_constants.dart';
 import '../../ui/brand/brand_pill_button.dart';
 import '../../ui/brand/brand_theme.dart';
 import '../../gen_l10n/app_localizations.dart';
+import '../legal/legal_consent_service.dart';
+import '../legal/legal_documents.dart';
 import 'auth_controller.dart';
 import 'phone_number_field.dart';
+
+const _legalRequiredMessage =
+    'Примите документы и согласие на обработку данных, чтобы продолжить.';
 
 class RegisterPage extends ConsumerStatefulWidget {
   const RegisterPage({super.key});
@@ -39,6 +44,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
   bool _hide1 = true;
   bool _hide2 = true;
   bool _isClient = false;
+  bool _acceptedLegal = false;
   RegistrationAccountType _selectedClientType =
       RegistrationAccountType.castingDirector;
   String? _error;
@@ -79,6 +85,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
     if (p1.length < kPasswordMinLen) return t.passwordMin6;
     if (p2.isEmpty) return t.enterPassword;
     if (p1 != p2) return t.passwordsDontMatch;
+    if (!_acceptedLegal) return _legalRequiredMessage;
     return null;
   }
 
@@ -94,7 +101,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
         _emailF.requestFocus();
       } else if (msg == t.passwordsDontMatch) {
         _pass2F.requestFocus();
-      } else {
+      } else if (msg != _legalRequiredMessage) {
         _passF.requestFocus();
       }
       return;
@@ -113,6 +120,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
           'account_type': registrationType.storageValue,
           'requested_account_type': registrationType.storageValue,
           'role': AccountRole.user.storageValue,
+          ...legalConsentMetadata(source: 'email_registration'),
         },
       );
 
@@ -131,6 +139,10 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
         supabase,
         res.user?.id,
         registrationType,
+      );
+      await recordLegalConsentIfPossible(
+        supabase,
+        source: 'email_registration',
       );
       ref.read(pendingEmailConfirmationProvider.notifier).state = null;
 
@@ -394,6 +406,20 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                                   setState(() {
                                     _selectedClientType = value;
                                     _error = null;
+                                  });
+                                },
+                              ),
+
+                              const SizedBox(height: kRegisterGap16),
+
+                              _LegalConsentBox(
+                                accepted: _acceptedLegal,
+                                onChanged: (value) {
+                                  setState(() {
+                                    _acceptedLegal = value;
+                                    if (_error == _legalRequiredMessage) {
+                                      _error = null;
+                                    }
                                   });
                                 },
                               ),
@@ -755,6 +781,7 @@ class _PhoneOtpDialogState extends ConsumerState<_PhoneOtpDialog> {
   bool _loading = false;
   bool _hide1 = true;
   bool _hide2 = true;
+  bool _acceptedLegal = false;
   int _resendSeconds = 0;
   Timer? _resendTimer;
   String? _error;
@@ -810,6 +837,10 @@ class _PhoneOtpDialogState extends ConsumerState<_PhoneOtpDialog> {
       setState(() => _error = t.passwordsDontMatch);
       return;
     }
+    if (!_acceptedLegal) {
+      setState(() => _error = _legalRequiredMessage);
+      return;
+    }
 
     setState(() {
       _loading = true;
@@ -859,6 +890,10 @@ class _PhoneOtpDialogState extends ConsumerState<_PhoneOtpDialog> {
       await ref
           .read(authControllerProvider)
           .setCurrentUserPassword(password: _passC.text);
+      await recordLegalConsentIfPossible(
+        ref.read(supabaseProvider),
+        source: 'phone_registration',
+      );
       if (!mounted) return;
       Navigator.of(context).pop(true);
     } on AuthException catch (e) {
@@ -970,6 +1005,19 @@ class _PhoneOtpDialogState extends ConsumerState<_PhoneOtpDialog> {
                   icon: Icon(_hide2 ? Icons.visibility_off : Icons.visibility),
                 ),
               ),
+            ),
+            const SizedBox(height: 12),
+            _LegalConsentBox(
+              accepted: _acceptedLegal,
+              compact: true,
+              onChanged: (value) {
+                setState(() {
+                  _acceptedLegal = value;
+                  if (_error == _legalRequiredMessage) {
+                    _error = null;
+                  }
+                });
+              },
             ),
           ],
           if (_codeSent) ...[
@@ -1103,6 +1151,144 @@ class _DialogInlineButton extends StatelessWidget {
 }
 
 // ===== UI =====
+
+class _LegalConsentBox extends StatelessWidget {
+  const _LegalConsentBox({
+    required this.accepted,
+    required this.onChanged,
+    this.compact = false,
+  });
+
+  final bool accepted;
+  final ValueChanged<bool> onChanged;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final isRu = Localizations.localeOf(context).languageCode == 'ru';
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(20),
+      onTap: () => onChanged(!accepted),
+      child: Ink(
+        padding: EdgeInsets.all(compact ? 12 : 14),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          gradient: BrandTheme.lightPillGradient,
+          border: Border.all(
+            color: accepted
+                ? BrandTheme.redTop.withValues(alpha: 0.38)
+                : Colors.black.withValues(alpha: 0.10),
+          ),
+          boxShadow: BrandTheme.basePillShadow(isDark: false),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              width: compact ? 28 : 32,
+              height: compact ? 28 : 32,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: accepted
+                    ? BrandTheme.darkPillGradient
+                    : BrandTheme.lightPillGradient,
+                border: Border.all(
+                  color: accepted
+                      ? Colors.transparent
+                      : Colors.black.withValues(alpha: 0.16),
+                ),
+              ),
+              child: accepted
+                  ? const Icon(
+                      Icons.check_rounded,
+                      color: Colors.white,
+                      size: 19,
+                    )
+                  : null,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    isRu
+                        ? 'Я принимаю документы и согласие на обработку данных'
+                        : 'I accept the documents and data processing consent',
+                    style: _registerBodyText(
+                      color: kTextDark,
+                      fontSize: compact ? 13 : 14,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: [
+                      _LegalLink(
+                        label: isRu ? 'Конфиденциальность' : 'Privacy',
+                        route: legalDocumentByKind(
+                          LegalDocumentKind.privacy,
+                        ).route,
+                      ),
+                      _LegalLink(
+                        label: isRu ? 'Условия' : 'Terms',
+                        route: legalDocumentByKind(
+                          LegalDocumentKind.terms,
+                        ).route,
+                      ),
+                      _LegalLink(
+                        label: 'Cookies',
+                        route: legalDocumentByKind(
+                          LegalDocumentKind.cookies,
+                        ).route,
+                      ),
+                      _LegalLink(
+                        label: isRu ? 'Обработка данных' : 'Processing',
+                        route: legalDocumentByKind(
+                          LegalDocumentKind.processingNotice,
+                        ).route,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LegalLink extends StatelessWidget {
+  const _LegalLink({required this.label, required this.route});
+
+  final String label;
+  final String route;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(999),
+      onTap: () => context.push(route),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+        child: Text(
+          label,
+          style: _registerBodyText(
+            color: BrandTheme.redTop,
+            fontSize: 13,
+            fontWeight: FontWeight.w800,
+          ).copyWith(decoration: TextDecoration.underline),
+        ),
+      ),
+    );
+  }
+}
 
 class _AuthDivider extends StatelessWidget {
   const _AuthDivider({required this.text});

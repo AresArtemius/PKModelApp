@@ -39,6 +39,8 @@ import '../features/notifications/notifications_page.dart';
 import '../features/profile/my_profile_page.dart';
 import '../features/profile/account_profile_edit_page.dart';
 import '../features/profile/public_account_profile_page.dart';
+import '../features/legal/legal_document_page.dart';
+import '../features/legal/legal_documents.dart';
 import '../gen_l10n/app_localizations.dart';
 import '../ui/brand/brand_theme.dart';
 import '../features/admin/selection_project_page.dart';
@@ -49,6 +51,10 @@ abstract class Routes {
   static const emailVerification = '/verify-email';
   static const authRequired = '/auth-required';
   static const onboarding = '/onboarding';
+  static const privacyPolicy = '/privacy';
+  static const termsOfService = '/terms';
+  static const cookiePolicy = '/cookies';
+  static const processingNotice = '/processing-notice';
 
   static const castings = '/castings';
   static const search = '/search';
@@ -581,6 +587,26 @@ final List<RouteBase> appRoutes = [
     path: Routes.emailVerification,
     builder: (context, state) =>
         EmailVerificationPage(email: state.uri.queryParameters['email'] ?? ''),
+  ),
+  GoRoute(
+    path: Routes.privacyPolicy,
+    builder: (context, state) =>
+        const LegalDocumentPage(kind: LegalDocumentKind.privacy),
+  ),
+  GoRoute(
+    path: Routes.termsOfService,
+    builder: (context, state) =>
+        const LegalDocumentPage(kind: LegalDocumentKind.terms),
+  ),
+  GoRoute(
+    path: Routes.cookiePolicy,
+    builder: (context, state) =>
+        const LegalDocumentPage(kind: LegalDocumentKind.cookies),
+  ),
+  GoRoute(
+    path: Routes.processingNotice,
+    builder: (context, state) =>
+        const LegalDocumentPage(kind: LegalDocumentKind.processingNotice),
   ),
 
   GoRoute(

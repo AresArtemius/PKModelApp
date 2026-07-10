@@ -12,6 +12,7 @@
 
 ## Журнал изменений
 
+- 2026-07-10: пункт 11 начат с launch-first privacy слоя: добавлены публичные страницы Privacy/Terms/Cookie/Processing notice, consent-блок в email/phone регистрации, версии документов сохраняются в auth metadata и подготовлен SQL/RPC `legal_consents.sql` для отдельной таблицы согласий; commit `TBD`.
 - 2026-07-09: production worker `send-notifications` получил понятную классификацию FCM ошибок: auth/secrets пишутся как `FCM credentials problem`, invalid/unregistered токены выключаются, отсутствие пригодных токенов остается `skipped`; commit `eed33d2`.
 - 2026-07-09: добавлен Push QA checklist в центр уведомлений: регистрация устройства, свежесть токена, worker sent, FCM secrets и понятность статуса читаются из production-данных пользователя; commit `483fc5d`.
 - 2026-07-09: центр событий получил пользовательские настройки каналов и типов событий: push/email, чаты, кастинги, анкеты и системные события; SQL `push_notifications.sql` добавляет `notification_preferences`, а production worker уважает настройки перед доставкой; commit `27c13ad`.
@@ -290,10 +291,12 @@ Changelog:
 - Email/phone sign-in и подтверждение email/телефона в аккаунте.
 - Удаление аккаунта и базовые safety/admin-зоны.
 - Auth-ошибки входа локализуются: `Invalid login credentials` показывается пользователю по-русски как неверный email/телефон или пароль.
+- Публичные launch-draft документы: Privacy Policy, Terms of Service, Cookie Policy и Consent/Data Processing Notice доступны как отдельные страницы `/privacy`, `/terms`, `/cookies`, `/processing-notice`.
+- Принятие документов при email/phone регистрации: пользователь явно принимает consent, версии документов и дата принятия сохраняются в auth metadata; SQL/RPC `legal_consents.sql` подготовлен для отдельной таблицы `user_legal_consents` после применения в Supabase.
 
 Не хватает:
-- Публичных документов: Privacy Policy, Terms of Service, Cookie Policy и Consent/processing notice для моделей, родителей и заказчиков.
-- Принятия документов при регистрации с сохранением версии политики, даты, IP/User-Agent и источника согласия.
+- Юридической финальной вычитки публичных документов перед масштабным запуском.
+- Применить `supabase/sql/legal_consents.sql` в Supabase, чтобы consent дополнительно писался в отдельную таблицу; IP/User-Agent на первом этапе фиксируются как client hint/пустой IP, полноценный серверный capture можно усилить отдельным шагом.
 - Проверки силы пароля при регистрации/смене: минимальная длина, запрет простых паролей, подсказки по надежности, блок популярных паролей.
 - Rate limiting и анти-bruteforce для логина, восстановления пароля, OTP/SMS и повторной отправки email.
 - 2FA/MFA для админов и casting/account-owner ролей, с резервными кодами.
