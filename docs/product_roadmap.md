@@ -250,7 +250,7 @@ Changelog:
 - Расширенного RPC для всего back-office поиска одним endpoint, если production-объемы покажут, что PostgREST-фильтров и точечных агрегатов уже недостаточно.
 
 Changelog:
-- TBD — добавлен RPC/SQL-слой агрегатов back-office: `admin_casting_response_counts` и `admin_selection_item_counts`, приложение использует их для счетчиков текущей страницы.
+- b070983 — добавлен RPC/SQL-слой агрегатов back-office: `admin_casting_response_counts` и `admin_selection_item_counts`, приложение использует их для счетчиков текущей страницы.
 - d0933a6 — добавлен server-side поиск/фильтрация для back-office таблиц поверх staged loading: запросы учитывают search/status/role/stage/public до пагинации.
 - 5c96cf4 — добавлена staged pagination для глубоких back-office таблиц: стартовая загрузка 80 строк, server-side range и branded “Загрузить еще”.
 - 47e3413 — добавлен первый performance-pass для Web: image cache при старте, `cacheExtent` у больших списков и облегченные брендовые тени/blur без изменения UX.
