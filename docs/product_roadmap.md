@@ -248,7 +248,7 @@ Changelog:
 - Более глубокого server-side поиска/фильтрации по всем связанным сущностям, если админские таблицы перерастут MVP-догрузку страниц.
 
 Changelog:
-- TBD — добавлена staged pagination для глубоких back-office таблиц: стартовая загрузка 80 строк, server-side range и branded “Загрузить еще”.
+- 5c96cf4 — добавлена staged pagination для глубоких back-office таблиц: стартовая загрузка 80 строк, server-side range и branded “Загрузить еще”.
 - 47e3413 — добавлен первый performance-pass для Web: image cache при старте, `cacheExtent` у больших списков и облегченные брендовые тени/blur без изменения UX.
 
 ## 10. Админка
