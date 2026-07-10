@@ -17,9 +17,17 @@ const _kSelectionsBg = BrandTheme.greyMid;
 const _kSelectionsPad = 16.0;
 const _kSelectionsDesktopBreakpoint = 920.0;
 const _kSelectionsListCacheExtent = 900.0;
+const _kSelectionsPageSize = 80;
 
-final _adminSelectionsProvider =
-    FutureProvider.autoDispose<List<_AdminSelectionRow>>((ref) async {
+class _AdminSelectionsPageData {
+  const _AdminSelectionsPageData({required this.rows, required this.hasMore});
+
+  final List<_AdminSelectionRow> rows;
+  final bool hasMore;
+}
+
+final _adminSelectionsProvider = FutureProvider.autoDispose
+    .family<_AdminSelectionsPageData, int>((ref, limit) async {
       final sb = ref.watch(supabaseProvider);
       try {
         final rows = await sb
@@ -28,21 +36,26 @@ final _adminSelectionsProvider =
               'id,title,status,is_public,client_name,brand_name,location,project_dates,created_by,created_at',
             )
             .order('created_at', ascending: false)
-            .limit(300);
+            .range(0, limit);
         final owners = await _loadSelectionOwnerLabels(sb);
         final counts = await _loadSelectionItemCounts(sb);
-        return (rows as List)
-            .map((row) {
-              final map = Map<String, dynamic>.from(row as Map);
-              final id = (map['id'] ?? '').toString();
-              final ownerId = (map['created_by'] ?? '').toString();
-              return _AdminSelectionRow.fromMap(
-                map,
-                ownerLabel: owners[ownerId] ?? ownerId,
-                itemCount: counts[id] ?? 0,
-              );
-            })
-            .toList(growable: false);
+        final list = rows as List;
+        return _AdminSelectionsPageData(
+          hasMore: list.length > limit,
+          rows: list
+              .take(limit)
+              .map((row) {
+                final map = Map<String, dynamic>.from(row as Map);
+                final id = (map['id'] ?? '').toString();
+                final ownerId = (map['created_by'] ?? '').toString();
+                return _AdminSelectionRow.fromMap(
+                  map,
+                  ownerLabel: owners[ownerId] ?? ownerId,
+                  itemCount: counts[id] ?? 0,
+                );
+              })
+              .toList(growable: false),
+        );
       } on PostgrestException catch (e) {
         if (SupabaseCompat.isMissingAnyColumn(e, [
           'status',
@@ -57,22 +70,30 @@ final _adminSelectionsProvider =
               .from('selections')
               .select('id,title,created_at')
               .order('created_at', ascending: false)
-              .limit(300);
+              .range(0, limit);
           final counts = await _loadSelectionItemCounts(sb);
-          return (rows as List)
-              .map((row) {
-                final map = Map<String, dynamic>.from(row as Map);
-                final id = (map['id'] ?? '').toString();
-                return _AdminSelectionRow.fromMap(
-                  map,
-                  ownerLabel: '',
-                  itemCount: counts[id] ?? 0,
-                );
-              })
-              .toList(growable: false);
+          final list = rows as List;
+          return _AdminSelectionsPageData(
+            hasMore: list.length > limit,
+            rows: list
+                .take(limit)
+                .map((row) {
+                  final map = Map<String, dynamic>.from(row as Map);
+                  final id = (map['id'] ?? '').toString();
+                  return _AdminSelectionRow.fromMap(
+                    map,
+                    ownerLabel: '',
+                    itemCount: counts[id] ?? 0,
+                  );
+                })
+                .toList(growable: false),
+          );
         }
         if (SupabaseCompat.isMissingRelation(e, const ['selections'])) {
-          return const <_AdminSelectionRow>[];
+          return const _AdminSelectionsPageData(
+            rows: <_AdminSelectionRow>[],
+            hasMore: false,
+          );
         }
         rethrow;
       }
@@ -156,6 +177,7 @@ class _AdminSelectionsTablePageState
   final TextEditingController _searchC = TextEditingController();
   SelectionStatus? _statusFilter;
   bool? _publicFilter;
+  int _selectionsLimit = _kSelectionsPageSize;
 
   @override
   void dispose() {
@@ -200,7 +222,9 @@ class _AdminSelectionsTablePageState
   Widget build(BuildContext context) {
     final ru = Localizations.localeOf(context).languageCode == 'ru';
     final isAdminAsync = ref.watch(isAdminProvider);
-    final selectionsAsync = ref.watch(_adminSelectionsProvider);
+    final selectionsAsync = ref.watch(
+      _adminSelectionsProvider(_selectionsLimit),
+    );
 
     return Scaffold(
       backgroundColor: _kSelectionsBg,
@@ -239,8 +263,9 @@ class _AdminSelectionsTablePageState
                         isError: true,
                         maxWidth: 680,
                       ),
-                      data: (selections) => _SelectionsPanel(
-                        selections: selections,
+                      data: (data) => _SelectionsPanel(
+                        selections: data.rows,
+                        hasMore: data.hasMore,
                         controller: _searchC,
                         statusFilter: _statusFilter,
                         publicFilter: _publicFilter,
@@ -249,6 +274,9 @@ class _AdminSelectionsTablePageState
                         onPublicChanged: (value) =>
                             setState(() => _publicFilter = value),
                         onSearchChanged: () => setState(() {}),
+                        onLoadMore: () => setState(
+                          () => _selectionsLimit += _kSelectionsPageSize,
+                        ),
                         onDeleteSelection: _deleteSelection,
                       ),
                     );
@@ -266,22 +294,26 @@ class _AdminSelectionsTablePageState
 class _SelectionsPanel extends StatelessWidget {
   const _SelectionsPanel({
     required this.selections,
+    required this.hasMore,
     required this.controller,
     required this.statusFilter,
     required this.publicFilter,
     required this.onStatusChanged,
     required this.onPublicChanged,
     required this.onSearchChanged,
+    required this.onLoadMore,
     required this.onDeleteSelection,
   });
 
   final List<_AdminSelectionRow> selections;
+  final bool hasMore;
   final TextEditingController controller;
   final SelectionStatus? statusFilter;
   final bool? publicFilter;
   final ValueChanged<SelectionStatus?> onStatusChanged;
   final ValueChanged<bool?> onPublicChanged;
   final VoidCallback onSearchChanged;
+  final VoidCallback onLoadMore;
   final ValueChanged<_AdminSelectionRow> onDeleteSelection;
 
   @override
@@ -336,14 +368,31 @@ class _SelectionsPanel extends StatelessWidget {
         const SizedBox(height: 12),
         Expanded(
           child: filtered.isEmpty
-              ? _EmptyState(text: ru ? 'Подборки не найдены' : 'No selections')
+              ? Column(
+                  children: [
+                    Expanded(
+                      child: _EmptyState(
+                        text: ru ? 'Подборки не найдены' : 'No selections',
+                      ),
+                    ),
+                    if (hasMore)
+                      AdminLoadMoreFooter(
+                        label: ru ? 'Загрузить еще' : 'Load more',
+                        onPressed: onLoadMore,
+                      ),
+                  ],
+                )
               : isDesktop
               ? _SelectionsTable(
                   selections: filtered,
+                  hasMore: hasMore,
+                  onLoadMore: onLoadMore,
                   onDeleteSelection: onDeleteSelection,
                 )
               : _SelectionsMobileList(
                   selections: filtered,
+                  hasMore: hasMore,
+                  onLoadMore: onLoadMore,
                   onDeleteSelection: onDeleteSelection,
                 ),
         ),
@@ -422,10 +471,14 @@ class _SelectionsToolbar extends StatelessWidget {
 class _SelectionsTable extends StatelessWidget {
   const _SelectionsTable({
     required this.selections,
+    required this.hasMore,
+    required this.onLoadMore,
     required this.onDeleteSelection,
   });
 
   final List<_AdminSelectionRow> selections;
+  final bool hasMore;
+  final VoidCallback onLoadMore;
   final ValueChanged<_AdminSelectionRow> onDeleteSelection;
 
   @override
@@ -445,7 +498,7 @@ class _SelectionsTable extends StatelessWidget {
               // ignore: deprecated_member_use
               cacheExtent: _kSelectionsListCacheExtent,
               padding: const EdgeInsets.all(10),
-              itemCount: selections.length + 1,
+              itemCount: selections.length + 1 + (hasMore ? 1 : 0),
               separatorBuilder: (_, _) =>
                   const Divider(height: 1, color: kBorderColor),
               itemBuilder: (context, index) {
@@ -460,6 +513,12 @@ class _SelectionsTable extends StatelessWidget {
                       (ru ? 'Доступ' : 'Access', 90.0),
                       ('', 72.0),
                     ],
+                  );
+                }
+                if (hasMore && index == selections.length + 1) {
+                  return AdminLoadMoreFooter(
+                    label: ru ? 'Загрузить еще' : 'Load more',
+                    onPressed: onLoadMore,
                   );
                 }
                 return _SelectionTableRow(
@@ -515,22 +574,35 @@ class _SelectionTableRow extends StatelessWidget {
 class _SelectionsMobileList extends StatelessWidget {
   const _SelectionsMobileList({
     required this.selections,
+    required this.hasMore,
+    required this.onLoadMore,
     required this.onDeleteSelection,
   });
 
   final List<_AdminSelectionRow> selections;
+  final bool hasMore;
+  final VoidCallback onLoadMore;
   final ValueChanged<_AdminSelectionRow> onDeleteSelection;
 
   @override
   Widget build(BuildContext context) {
     return ListView.separated(
       padding: const EdgeInsets.only(bottom: 18),
-      itemCount: selections.length,
+      itemCount: selections.length + (hasMore ? 1 : 0),
       separatorBuilder: (_, _) => const SizedBox(height: 10),
-      itemBuilder: (context, index) => _SelectionMobileCard(
-        selection: selections[index],
-        onDeleteSelection: onDeleteSelection,
-      ),
+      itemBuilder: (context, index) {
+        if (index >= selections.length) {
+          final ru = Localizations.localeOf(context).languageCode == 'ru';
+          return AdminLoadMoreFooter(
+            label: ru ? 'Загрузить еще' : 'Load more',
+            onPressed: onLoadMore,
+          );
+        }
+        return _SelectionMobileCard(
+          selection: selections[index],
+          onDeleteSelection: onDeleteSelection,
+        );
+      },
     );
   }
 }

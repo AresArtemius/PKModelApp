@@ -241,12 +241,14 @@ Changelog:
 - Сжатие медиа перед upload.
 - Progress upload по файлам.
 - Web performance-pass: настроены decoded image cache, cache window у больших builder-списков каталога/back-office и облегченные тени/blur для Flutter Web.
+- Server-side staged loading: каталог уже работает через infinite-scroll, а глубокие back-office таблицы пользователей, анкет, кастингов и подборок грузят первую страницу и догружают следующие порции по кнопке.
 
 Не хватает:
 - Глубокого performance-профилирования на production-данных и точечной оптимизации экранов, если реальные метрики покажут узкие места.
-- Server-side pagination/infinite scroll для таблиц и каталога, когда объемы перерастут текущие безопасные лимиты.
+- Более глубокого server-side поиска/фильтрации по всем связанным сущностям, если админские таблицы перерастут MVP-догрузку страниц.
 
 Changelog:
+- TBD — добавлена staged pagination для глубоких back-office таблиц: стартовая загрузка 80 строк, server-side range и branded “Загрузить еще”.
 - 47e3413 — добавлен первый performance-pass для Web: image cache при старте, `cacheExtent` у больших списков и облегченные брендовые тени/blur без изменения UX.
 
 ## 10. Админка

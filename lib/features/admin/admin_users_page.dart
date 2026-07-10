@@ -16,55 +16,75 @@ const _kUsersPageBg = BrandTheme.greyMid;
 const _kUsersPad = 16.0;
 const _kUsersDesktopBreakpoint = 920.0;
 const _kUsersListCacheExtent = 900.0;
+const _kUsersPageSize = 80;
 
-final _adminUsersProvider = FutureProvider.autoDispose<List<_AdminUserRow>>((
-  ref,
-) async {
-  final sb = ref.watch(supabaseProvider);
-  try {
-    final rows = await sb
-        .from('user_profiles')
-        .select(
-          'user_id,email,phone,account_tag,full_name,company_name,position,city,country,avatar_url,updated_at,last_seen_at',
-        )
-        .order('updated_at', ascending: false)
-        .limit(300);
-    final rolesByUserId = await _loadRolesByUserId(sb);
-    return (rows as List)
-        .map((row) {
-          final map = Map<String, dynamic>.from(row);
-          return _AdminUserRow.fromMap(
-            map,
-            role: rolesByUserId[(map['user_id'] ?? '').toString()],
+class _AdminUsersPageData {
+  const _AdminUsersPageData({required this.rows, required this.hasMore});
+
+  final List<_AdminUserRow> rows;
+  final bool hasMore;
+}
+
+final _adminUsersProvider = FutureProvider.autoDispose
+    .family<_AdminUsersPageData, int>((ref, limit) async {
+      final sb = ref.watch(supabaseProvider);
+      try {
+        final rows = await sb
+            .from('user_profiles')
+            .select(
+              'user_id,email,phone,account_tag,full_name,company_name,position,city,country,avatar_url,updated_at,last_seen_at',
+            )
+            .order('updated_at', ascending: false)
+            .range(0, limit);
+        final rolesByUserId = await _loadRolesByUserId(sb);
+        final list = rows as List;
+        return _AdminUsersPageData(
+          hasMore: list.length > limit,
+          rows: list
+              .take(limit)
+              .map((row) {
+                final map = Map<String, dynamic>.from(row);
+                return _AdminUserRow.fromMap(
+                  map,
+                  role: rolesByUserId[(map['user_id'] ?? '').toString()],
+                );
+              })
+              .toList(growable: false),
+        );
+      } on PostgrestException catch (e) {
+        if (SupabaseCompat.isMissingColumn(e, 'account_tag')) {
+          final rows = await sb
+              .from('user_profiles')
+              .select(
+                'user_id,email,phone,full_name,company_name,position,city,country,avatar_url,updated_at,last_seen_at',
+              )
+              .order('updated_at', ascending: false)
+              .range(0, limit);
+          final rolesByUserId = await _loadRolesByUserId(sb);
+          final list = rows as List;
+          return _AdminUsersPageData(
+            hasMore: list.length > limit,
+            rows: list
+                .take(limit)
+                .map((row) {
+                  final map = Map<String, dynamic>.from(row);
+                  return _AdminUserRow.fromMap(
+                    map,
+                    role: rolesByUserId[(map['user_id'] ?? '').toString()],
+                  );
+                })
+                .toList(growable: false),
           );
-        })
-        .toList(growable: false);
-  } on PostgrestException catch (e) {
-    if (SupabaseCompat.isMissingColumn(e, 'account_tag')) {
-      final rows = await sb
-          .from('user_profiles')
-          .select(
-            'user_id,email,phone,full_name,company_name,position,city,country,avatar_url,updated_at,last_seen_at',
-          )
-          .order('updated_at', ascending: false)
-          .limit(300);
-      final rolesByUserId = await _loadRolesByUserId(sb);
-      return (rows as List)
-          .map((row) {
-            final map = Map<String, dynamic>.from(row);
-            return _AdminUserRow.fromMap(
-              map,
-              role: rolesByUserId[(map['user_id'] ?? '').toString()],
-            );
-          })
-          .toList(growable: false);
-    }
-    if (SupabaseCompat.isMissingRelation(e, const ['user_profiles'])) {
-      return const <_AdminUserRow>[];
-    }
-    rethrow;
-  }
-});
+        }
+        if (SupabaseCompat.isMissingRelation(e, const ['user_profiles'])) {
+          return const _AdminUsersPageData(
+            rows: <_AdminUserRow>[],
+            hasMore: false,
+          );
+        }
+        rethrow;
+      }
+    });
 
 Future<Map<String, String>> _loadRolesByUserId(SupabaseClient sb) async {
   try {
@@ -100,6 +120,7 @@ class AdminUsersPage extends ConsumerStatefulWidget {
 class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
   final TextEditingController _searchC = TextEditingController();
   _AdminUserRoleFilter _roleFilter = _AdminUserRoleFilter.all;
+  int _usersLimit = _kUsersPageSize;
 
   @override
   void dispose() {
@@ -171,7 +192,7 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
   Widget build(BuildContext context) {
     final ru = Localizations.localeOf(context).languageCode == 'ru';
     final isAdminAsync = ref.watch(isAdminProvider);
-    final usersAsync = ref.watch(_adminUsersProvider);
+    final usersAsync = ref.watch(_adminUsersProvider(_usersLimit));
 
     return Scaffold(
       backgroundColor: _kUsersPageBg,
@@ -208,13 +229,16 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
                         isError: true,
                         maxWidth: 620,
                       ),
-                      data: (users) => _UsersTablePanel(
-                        users: users,
+                      data: (data) => _UsersTablePanel(
+                        users: data.rows,
+                        hasMore: data.hasMore,
                         searchController: _searchC,
                         roleFilter: _roleFilter,
                         onRoleFilterChanged: (value) =>
                             setState(() => _roleFilter = value),
                         onSearchChanged: () => setState(() {}),
+                        onLoadMore: () =>
+                            setState(() => _usersLimit += _kUsersPageSize),
                         onSetRole: _setUserRole,
                         onDeleteUserProfile: _deleteUserProfile,
                       ),
@@ -233,19 +257,23 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
 class _UsersTablePanel extends StatelessWidget {
   const _UsersTablePanel({
     required this.users,
+    required this.hasMore,
     required this.searchController,
     required this.roleFilter,
     required this.onRoleFilterChanged,
     required this.onSearchChanged,
+    required this.onLoadMore,
     required this.onSetRole,
     required this.onDeleteUserProfile,
   });
 
   final List<_AdminUserRow> users;
+  final bool hasMore;
   final TextEditingController searchController;
   final _AdminUserRoleFilter roleFilter;
   final ValueChanged<_AdminUserRoleFilter> onRoleFilterChanged;
   final VoidCallback onSearchChanged;
+  final VoidCallback onLoadMore;
   final void Function(_AdminUserRow user, String role) onSetRole;
   final ValueChanged<_AdminUserRow> onDeleteUserProfile;
 
@@ -290,8 +318,19 @@ class _UsersTablePanel extends StatelessWidget {
         const SizedBox(height: 12),
         Expanded(
           child: filtered.isEmpty
-              ? _UsersEmptyState(
-                  text: ru ? 'Пользователи не найдены' : 'No users found',
+              ? Column(
+                  children: [
+                    Expanded(
+                      child: _UsersEmptyState(
+                        text: ru ? 'Пользователи не найдены' : 'No users found',
+                      ),
+                    ),
+                    if (hasMore)
+                      AdminLoadMoreFooter(
+                        label: ru ? 'Загрузить еще' : 'Load more',
+                        onPressed: onLoadMore,
+                      ),
+                  ],
                 )
               : isDesktop
               ? DecoratedBox(
@@ -310,11 +349,17 @@ class _UsersTablePanel extends StatelessWidget {
                           // ignore: deprecated_member_use
                           cacheExtent: _kUsersListCacheExtent,
                           padding: const EdgeInsets.all(10),
-                          itemCount: filtered.length + 1,
+                          itemCount: filtered.length + 1 + (hasMore ? 1 : 0),
                           separatorBuilder: (_, _) =>
                               const Divider(height: 1, color: kBorderColor),
                           itemBuilder: (context, index) {
                             if (index == 0) return const _UsersTableHeader();
+                            if (hasMore && index == filtered.length + 1) {
+                              return AdminLoadMoreFooter(
+                                label: ru ? 'Загрузить еще' : 'Load more',
+                                onPressed: onLoadMore,
+                              );
+                            }
                             return _UserTableRow(
                               user: filtered[index - 1],
                               onSetRole: onSetRole,
@@ -328,6 +373,8 @@ class _UsersTablePanel extends StatelessWidget {
                 )
               : _UsersMobileList(
                   users: filtered,
+                  hasMore: hasMore,
+                  onLoadMore: onLoadMore,
                   onSetRole: onSetRole,
                   onDeleteUserProfile: onDeleteUserProfile,
                 ),
@@ -365,11 +412,15 @@ class _UsersEmptyState extends StatelessWidget {
 class _UsersMobileList extends StatelessWidget {
   const _UsersMobileList({
     required this.users,
+    required this.hasMore,
+    required this.onLoadMore,
     required this.onSetRole,
     required this.onDeleteUserProfile,
   });
 
   final List<_AdminUserRow> users;
+  final bool hasMore;
+  final VoidCallback onLoadMore;
   final void Function(_AdminUserRow user, String role) onSetRole;
   final ValueChanged<_AdminUserRow> onDeleteUserProfile;
 
@@ -379,13 +430,22 @@ class _UsersMobileList extends StatelessWidget {
       // ignore: deprecated_member_use
       cacheExtent: _kUsersListCacheExtent,
       padding: const EdgeInsets.only(bottom: 18),
-      itemCount: users.length,
+      itemCount: users.length + (hasMore ? 1 : 0),
       separatorBuilder: (_, _) => const SizedBox(height: 10),
-      itemBuilder: (context, index) => _UserMobileCard(
-        user: users[index],
-        onSetRole: onSetRole,
-        onDeleteUserProfile: onDeleteUserProfile,
-      ),
+      itemBuilder: (context, index) {
+        if (index >= users.length) {
+          final ru = Localizations.localeOf(context).languageCode == 'ru';
+          return AdminLoadMoreFooter(
+            label: ru ? 'Загрузить еще' : 'Load more',
+            onPressed: onLoadMore,
+          );
+        }
+        return _UserMobileCard(
+          user: users[index],
+          onSetRole: onSetRole,
+          onDeleteUserProfile: onDeleteUserProfile,
+        );
+      },
     );
   }
 }

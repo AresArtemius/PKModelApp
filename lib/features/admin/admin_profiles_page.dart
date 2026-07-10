@@ -17,35 +17,30 @@ const _kProfilesPageBg = BrandTheme.greyMid;
 const _kProfilesPad = 16.0;
 const _kProfilesDesktopBreakpoint = 920.0;
 const _kProfilesListCacheExtent = 900.0;
+const _kProfilesPageSize = 80;
 
-final _adminProfilesProvider =
-    FutureProvider.autoDispose<List<_AdminProfileRow>>((ref) async {
+class _AdminProfilesPageData {
+  const _AdminProfilesPageData({required this.rows, required this.hasMore});
+
+  final List<_AdminProfileRow> rows;
+  final bool hasMore;
+}
+
+final _adminProfilesProvider = FutureProvider.autoDispose
+    .family<_AdminProfilesPageData, int>((ref, limit) async {
       final sb = ref.watch(supabaseProvider);
       try {
         final rows = await sb
             .from('profiles')
             .select(_adminProfilesColumns(includeProfileRoles: true))
             .order('updated_at', ascending: false)
-            .limit(400);
+            .range(0, limit);
         final ownersByUserId = await _loadOwnersByUserId(sb);
-        return (rows as List)
-            .map((row) {
-              final map = Map<String, dynamic>.from(row as Map);
-              return _AdminProfileRow.fromMap(
-                map,
-                owner: ownersByUserId[(map['user_id'] ?? '').toString()],
-              );
-            })
-            .toList(growable: false);
-      } on PostgrestException catch (e) {
-        if (SupabaseCompat.isMissingColumn(e, 'profile_roles')) {
-          final rows = await sb
-              .from('profiles')
-              .select(_adminProfilesColumns(includeProfileRoles: false))
-              .order('updated_at', ascending: false)
-              .limit(400);
-          final ownersByUserId = await _loadOwnersByUserId(sb);
-          return (rows as List)
+        final list = rows as List;
+        return _AdminProfilesPageData(
+          hasMore: list.length > limit,
+          rows: list
+              .take(limit)
               .map((row) {
                 final map = Map<String, dynamic>.from(row as Map);
                 return _AdminProfileRow.fromMap(
@@ -53,10 +48,36 @@ final _adminProfilesProvider =
                   owner: ownersByUserId[(map['user_id'] ?? '').toString()],
                 );
               })
-              .toList(growable: false);
+              .toList(growable: false),
+        );
+      } on PostgrestException catch (e) {
+        if (SupabaseCompat.isMissingColumn(e, 'profile_roles')) {
+          final rows = await sb
+              .from('profiles')
+              .select(_adminProfilesColumns(includeProfileRoles: false))
+              .order('updated_at', ascending: false)
+              .range(0, limit);
+          final ownersByUserId = await _loadOwnersByUserId(sb);
+          final list = rows as List;
+          return _AdminProfilesPageData(
+            hasMore: list.length > limit,
+            rows: list
+                .take(limit)
+                .map((row) {
+                  final map = Map<String, dynamic>.from(row as Map);
+                  return _AdminProfileRow.fromMap(
+                    map,
+                    owner: ownersByUserId[(map['user_id'] ?? '').toString()],
+                  );
+                })
+                .toList(growable: false),
+          );
         }
         if (SupabaseCompat.isMissingRelation(e, const ['profiles'])) {
-          return const <_AdminProfileRow>[];
+          return const _AdminProfilesPageData(
+            rows: <_AdminProfileRow>[],
+            hasMore: false,
+          );
         }
         rethrow;
       }
@@ -135,6 +156,7 @@ class _AdminProfilesPageState extends ConsumerState<AdminProfilesPage> {
   final TextEditingController _searchC = TextEditingController();
   _AdminProfileStatusFilter _statusFilter = _AdminProfileStatusFilter.all;
   ProfessionalProfileType? _roleFilter;
+  int _profilesLimit = _kProfilesPageSize;
 
   @override
   void dispose() {
@@ -180,7 +202,7 @@ class _AdminProfilesPageState extends ConsumerState<AdminProfilesPage> {
   Widget build(BuildContext context) {
     final ru = Localizations.localeOf(context).languageCode == 'ru';
     final isAdminAsync = ref.watch(isAdminProvider);
-    final profilesAsync = ref.watch(_adminProfilesProvider);
+    final profilesAsync = ref.watch(_adminProfilesProvider(_profilesLimit));
 
     return Scaffold(
       backgroundColor: _kProfilesPageBg,
@@ -219,8 +241,9 @@ class _AdminProfilesPageState extends ConsumerState<AdminProfilesPage> {
                         isError: true,
                         maxWidth: 680,
                       ),
-                      data: (profiles) => _ProfilesTablePanel(
-                        profiles: profiles,
+                      data: (data) => _ProfilesTablePanel(
+                        profiles: data.rows,
+                        hasMore: data.hasMore,
                         searchController: _searchC,
                         statusFilter: _statusFilter,
                         roleFilter: _roleFilter,
@@ -229,6 +252,9 @@ class _AdminProfilesPageState extends ConsumerState<AdminProfilesPage> {
                         onRoleFilterChanged: (value) =>
                             setState(() => _roleFilter = value),
                         onSearchChanged: () => setState(() {}),
+                        onLoadMore: () => setState(
+                          () => _profilesLimit += _kProfilesPageSize,
+                        ),
                         onDeleteProfile: _deleteProfile,
                       ),
                     );
@@ -246,22 +272,26 @@ class _AdminProfilesPageState extends ConsumerState<AdminProfilesPage> {
 class _ProfilesTablePanel extends StatelessWidget {
   const _ProfilesTablePanel({
     required this.profiles,
+    required this.hasMore,
     required this.searchController,
     required this.statusFilter,
     required this.roleFilter,
     required this.onStatusFilterChanged,
     required this.onRoleFilterChanged,
     required this.onSearchChanged,
+    required this.onLoadMore,
     required this.onDeleteProfile,
   });
 
   final List<_AdminProfileRow> profiles;
+  final bool hasMore;
   final TextEditingController searchController;
   final _AdminProfileStatusFilter statusFilter;
   final ProfessionalProfileType? roleFilter;
   final ValueChanged<_AdminProfileStatusFilter> onStatusFilterChanged;
   final ValueChanged<ProfessionalProfileType?> onRoleFilterChanged;
   final VoidCallback onSearchChanged;
+  final VoidCallback onLoadMore;
   final ValueChanged<_AdminProfileRow> onDeleteProfile;
 
   @override
@@ -313,8 +343,19 @@ class _ProfilesTablePanel extends StatelessWidget {
         const SizedBox(height: 12),
         Expanded(
           child: filtered.isEmpty
-              ? _ProfilesEmptyState(
-                  text: ru ? 'Анкеты не найдены' : 'No profiles found',
+              ? Column(
+                  children: [
+                    Expanded(
+                      child: _ProfilesEmptyState(
+                        text: ru ? 'Анкеты не найдены' : 'No profiles found',
+                      ),
+                    ),
+                    if (hasMore)
+                      AdminLoadMoreFooter(
+                        label: ru ? 'Загрузить еще' : 'Load more',
+                        onPressed: onLoadMore,
+                      ),
+                  ],
                 )
               : isDesktop
               ? DecoratedBox(
@@ -333,12 +374,18 @@ class _ProfilesTablePanel extends StatelessWidget {
                           // ignore: deprecated_member_use
                           cacheExtent: _kProfilesListCacheExtent,
                           padding: const EdgeInsets.all(10),
-                          itemCount: filtered.length + 1,
+                          itemCount: filtered.length + 1 + (hasMore ? 1 : 0),
                           separatorBuilder: (_, _) =>
                               const Divider(height: 1, color: kBorderColor),
                           itemBuilder: (context, index) {
                             if (index == 0) {
                               return const _ProfilesTableHeader();
+                            }
+                            if (hasMore && index == filtered.length + 1) {
+                              return AdminLoadMoreFooter(
+                                label: ru ? 'Загрузить еще' : 'Load more',
+                                onPressed: onLoadMore,
+                              );
                             }
                             return _ProfileTableRow(
                               profile: filtered[index - 1],
@@ -352,6 +399,8 @@ class _ProfilesTablePanel extends StatelessWidget {
                 )
               : _ProfilesMobileList(
                   profiles: filtered,
+                  hasMore: hasMore,
+                  onLoadMore: onLoadMore,
                   onDeleteProfile: onDeleteProfile,
                 ),
         ),
@@ -388,10 +437,14 @@ class _ProfilesEmptyState extends StatelessWidget {
 class _ProfilesMobileList extends StatelessWidget {
   const _ProfilesMobileList({
     required this.profiles,
+    required this.hasMore,
+    required this.onLoadMore,
     required this.onDeleteProfile,
   });
 
   final List<_AdminProfileRow> profiles;
+  final bool hasMore;
+  final VoidCallback onLoadMore;
   final ValueChanged<_AdminProfileRow> onDeleteProfile;
 
   @override
@@ -400,12 +453,21 @@ class _ProfilesMobileList extends StatelessWidget {
       // ignore: deprecated_member_use
       cacheExtent: _kProfilesListCacheExtent,
       padding: const EdgeInsets.only(bottom: 18),
-      itemCount: profiles.length,
+      itemCount: profiles.length + (hasMore ? 1 : 0),
       separatorBuilder: (_, _) => const SizedBox(height: 10),
-      itemBuilder: (context, index) => _ProfileMobileCard(
-        profile: profiles[index],
-        onDeleteProfile: onDeleteProfile,
-      ),
+      itemBuilder: (context, index) {
+        if (index >= profiles.length) {
+          final ru = Localizations.localeOf(context).languageCode == 'ru';
+          return AdminLoadMoreFooter(
+            label: ru ? 'Загрузить еще' : 'Load more',
+            onPressed: onLoadMore,
+          );
+        }
+        return _ProfileMobileCard(
+          profile: profiles[index],
+          onDeleteProfile: onDeleteProfile,
+        );
+      },
     );
   }
 }

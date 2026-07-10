@@ -17,63 +17,83 @@ const _kCastingsBg = BrandTheme.greyMid;
 const _kCastingsPad = 16.0;
 const _kCastingsDesktopBreakpoint = 920.0;
 const _kCastingsListCacheExtent = 900.0;
+const _kCastingsPageSize = 80;
 
-final _adminCastingsProvider = FutureProvider.autoDispose<List<_AdminCastingRow>>((
-  ref,
-) async {
-  final sb = ref.watch(supabaseProvider);
-  try {
-    final rows = await sb
-        .from('castings')
-        .select(
-          'id,title,description,fee,rights,dates,project_stage,reference_media,created_by,created_at',
-        )
-        .order('created_at', ascending: false)
-        .limit(300);
-    final owners = await _loadOwnerLabels(sb);
-    final counts = await _loadCastingResponseCounts(sb);
-    return (rows as List)
-        .map((row) {
-          final map = Map<String, dynamic>.from(row as Map);
-          final id = (map['id'] ?? '').toString();
-          final ownerId = (map['created_by'] ?? '').toString();
-          return _AdminCastingRow.fromMap(
-            map,
-            ownerLabel: owners[ownerId] ?? ownerId,
-            responseCount: counts[id] ?? 0,
+class _AdminCastingsPageData {
+  const _AdminCastingsPageData({required this.rows, required this.hasMore});
+
+  final List<_AdminCastingRow> rows;
+  final bool hasMore;
+}
+
+final _adminCastingsProvider = FutureProvider.autoDispose
+    .family<_AdminCastingsPageData, int>((ref, limit) async {
+      final sb = ref.watch(supabaseProvider);
+      try {
+        final rows = await sb
+            .from('castings')
+            .select(
+              'id,title,description,fee,rights,dates,project_stage,reference_media,created_by,created_at',
+            )
+            .order('created_at', ascending: false)
+            .range(0, limit);
+        final owners = await _loadOwnerLabels(sb);
+        final counts = await _loadCastingResponseCounts(sb);
+        final list = rows as List;
+        return _AdminCastingsPageData(
+          hasMore: list.length > limit,
+          rows: list
+              .take(limit)
+              .map((row) {
+                final map = Map<String, dynamic>.from(row as Map);
+                final id = (map['id'] ?? '').toString();
+                final ownerId = (map['created_by'] ?? '').toString();
+                return _AdminCastingRow.fromMap(
+                  map,
+                  ownerLabel: owners[ownerId] ?? ownerId,
+                  responseCount: counts[id] ?? 0,
+                );
+              })
+              .toList(growable: false),
+        );
+      } on PostgrestException catch (e) {
+        if (SupabaseCompat.isMissingAnyColumn(e, [
+          'project_stage',
+          'reference_media',
+          'created_by',
+        ])) {
+          final rows = await sb
+              .from('castings')
+              .select('id,title,description,fee,rights,dates,created_at')
+              .order('created_at', ascending: false)
+              .range(0, limit);
+          final counts = await _loadCastingResponseCounts(sb);
+          final list = rows as List;
+          return _AdminCastingsPageData(
+            hasMore: list.length > limit,
+            rows: list
+                .take(limit)
+                .map((row) {
+                  final map = Map<String, dynamic>.from(row as Map);
+                  final id = (map['id'] ?? '').toString();
+                  return _AdminCastingRow.fromMap(
+                    map,
+                    ownerLabel: '',
+                    responseCount: counts[id] ?? 0,
+                  );
+                })
+                .toList(growable: false),
           );
-        })
-        .toList(growable: false);
-  } on PostgrestException catch (e) {
-    if (SupabaseCompat.isMissingAnyColumn(e, [
-      'project_stage',
-      'reference_media',
-      'created_by',
-    ])) {
-      final rows = await sb
-          .from('castings')
-          .select('id,title,description,fee,rights,dates,created_at')
-          .order('created_at', ascending: false)
-          .limit(300);
-      final counts = await _loadCastingResponseCounts(sb);
-      return (rows as List)
-          .map((row) {
-            final map = Map<String, dynamic>.from(row as Map);
-            final id = (map['id'] ?? '').toString();
-            return _AdminCastingRow.fromMap(
-              map,
-              ownerLabel: '',
-              responseCount: counts[id] ?? 0,
-            );
-          })
-          .toList(growable: false);
-    }
-    if (SupabaseCompat.isMissingRelation(e, const ['castings'])) {
-      return const <_AdminCastingRow>[];
-    }
-    rethrow;
-  }
-});
+        }
+        if (SupabaseCompat.isMissingRelation(e, const ['castings'])) {
+          return const _AdminCastingsPageData(
+            rows: <_AdminCastingRow>[],
+            hasMore: false,
+          );
+        }
+        rethrow;
+      }
+    });
 
 Future<Map<String, int>> _loadCastingResponseCounts(SupabaseClient sb) async {
   try {
@@ -150,6 +170,7 @@ class AdminCastingsPage extends ConsumerStatefulWidget {
 class _AdminCastingsPageState extends ConsumerState<AdminCastingsPage> {
   final TextEditingController _searchC = TextEditingController();
   CastingProjectStage? _stageFilter;
+  int _castingsLimit = _kCastingsPageSize;
 
   @override
   void dispose() {
@@ -191,7 +212,7 @@ class _AdminCastingsPageState extends ConsumerState<AdminCastingsPage> {
   Widget build(BuildContext context) {
     final ru = Localizations.localeOf(context).languageCode == 'ru';
     final isAdminAsync = ref.watch(isAdminProvider);
-    final castingsAsync = ref.watch(_adminCastingsProvider);
+    final castingsAsync = ref.watch(_adminCastingsProvider(_castingsLimit));
 
     return Scaffold(
       backgroundColor: _kCastingsBg,
@@ -230,13 +251,17 @@ class _AdminCastingsPageState extends ConsumerState<AdminCastingsPage> {
                         isError: true,
                         maxWidth: 680,
                       ),
-                      data: (castings) => _CastingsPanel(
-                        castings: castings,
+                      data: (data) => _CastingsPanel(
+                        castings: data.rows,
+                        hasMore: data.hasMore,
                         controller: _searchC,
                         stageFilter: _stageFilter,
                         onStageChanged: (stage) =>
                             setState(() => _stageFilter = stage),
                         onSearchChanged: () => setState(() {}),
+                        onLoadMore: () => setState(
+                          () => _castingsLimit += _kCastingsPageSize,
+                        ),
                         onDeleteCasting: _deleteCasting,
                       ),
                     );
@@ -254,18 +279,22 @@ class _AdminCastingsPageState extends ConsumerState<AdminCastingsPage> {
 class _CastingsPanel extends StatelessWidget {
   const _CastingsPanel({
     required this.castings,
+    required this.hasMore,
     required this.controller,
     required this.stageFilter,
     required this.onStageChanged,
     required this.onSearchChanged,
+    required this.onLoadMore,
     required this.onDeleteCasting,
   });
 
   final List<_AdminCastingRow> castings;
+  final bool hasMore;
   final TextEditingController controller;
   final CastingProjectStage? stageFilter;
   final ValueChanged<CastingProjectStage?> onStageChanged;
   final VoidCallback onSearchChanged;
+  final VoidCallback onLoadMore;
   final ValueChanged<_AdminCastingRow> onDeleteCasting;
 
   @override
@@ -314,14 +343,31 @@ class _CastingsPanel extends StatelessWidget {
         const SizedBox(height: 12),
         Expanded(
           child: filtered.isEmpty
-              ? _EmptyState(text: ru ? 'Кастинги не найдены' : 'No castings')
+              ? Column(
+                  children: [
+                    Expanded(
+                      child: _EmptyState(
+                        text: ru ? 'Кастинги не найдены' : 'No castings',
+                      ),
+                    ),
+                    if (hasMore)
+                      AdminLoadMoreFooter(
+                        label: ru ? 'Загрузить еще' : 'Load more',
+                        onPressed: onLoadMore,
+                      ),
+                  ],
+                )
               : isDesktop
               ? _CastingsTable(
                   castings: filtered,
+                  hasMore: hasMore,
+                  onLoadMore: onLoadMore,
                   onDeleteCasting: onDeleteCasting,
                 )
               : _CastingsMobileList(
                   castings: filtered,
+                  hasMore: hasMore,
+                  onLoadMore: onLoadMore,
                   onDeleteCasting: onDeleteCasting,
                 ),
         ),
@@ -375,9 +421,16 @@ class _CastingsToolbar extends StatelessWidget {
 }
 
 class _CastingsTable extends StatelessWidget {
-  const _CastingsTable({required this.castings, required this.onDeleteCasting});
+  const _CastingsTable({
+    required this.castings,
+    required this.hasMore,
+    required this.onLoadMore,
+    required this.onDeleteCasting,
+  });
 
   final List<_AdminCastingRow> castings;
+  final bool hasMore;
+  final VoidCallback onLoadMore;
   final ValueChanged<_AdminCastingRow> onDeleteCasting;
 
   @override
@@ -397,7 +450,7 @@ class _CastingsTable extends StatelessWidget {
               // ignore: deprecated_member_use
               cacheExtent: _kCastingsListCacheExtent,
               padding: const EdgeInsets.all(10),
-              itemCount: castings.length + 1,
+              itemCount: castings.length + 1 + (hasMore ? 1 : 0),
               separatorBuilder: (_, _) =>
                   const Divider(height: 1, color: kBorderColor),
               itemBuilder: (context, index) {
@@ -411,6 +464,12 @@ class _CastingsTable extends StatelessWidget {
                       (ru ? 'Отклики' : 'Responses', 100.0),
                       ('', 72.0),
                     ],
+                  );
+                }
+                if (hasMore && index == castings.length + 1) {
+                  return AdminLoadMoreFooter(
+                    label: ru ? 'Загрузить еще' : 'Load more',
+                    onPressed: onLoadMore,
                   );
                 }
                 return _CastingTableRow(
@@ -462,22 +521,35 @@ class _CastingTableRow extends StatelessWidget {
 class _CastingsMobileList extends StatelessWidget {
   const _CastingsMobileList({
     required this.castings,
+    required this.hasMore,
+    required this.onLoadMore,
     required this.onDeleteCasting,
   });
 
   final List<_AdminCastingRow> castings;
+  final bool hasMore;
+  final VoidCallback onLoadMore;
   final ValueChanged<_AdminCastingRow> onDeleteCasting;
 
   @override
   Widget build(BuildContext context) {
     return ListView.separated(
       padding: const EdgeInsets.only(bottom: 18),
-      itemCount: castings.length,
+      itemCount: castings.length + (hasMore ? 1 : 0),
       separatorBuilder: (_, _) => const SizedBox(height: 10),
-      itemBuilder: (context, index) => _CastingMobileCard(
-        casting: castings[index],
-        onDeleteCasting: onDeleteCasting,
-      ),
+      itemBuilder: (context, index) {
+        if (index >= castings.length) {
+          final ru = Localizations.localeOf(context).languageCode == 'ru';
+          return AdminLoadMoreFooter(
+            label: ru ? 'Загрузить еще' : 'Load more',
+            onPressed: onLoadMore,
+          );
+        }
+        return _CastingMobileCard(
+          casting: castings[index],
+          onDeleteCasting: onDeleteCasting,
+        );
+      },
     );
   }
 }

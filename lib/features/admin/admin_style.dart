@@ -214,6 +214,50 @@ class AdminMenuOption<T> {
   final bool enabled;
 }
 
+class AdminLoadMoreFooter extends StatelessWidget {
+  const AdminLoadMoreFooter({
+    super.key,
+    required this.label,
+    required this.onPressed,
+  });
+
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(999),
+            onTap: onPressed,
+            child: Ink(
+              decoration: pillDecoration(isDark: true, radius: 999),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 11,
+                ),
+                child: Text(
+                  label,
+                  style: adminCommandStyle(
+                    size: 11,
+                    letterSpacing: 0.5,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class AdminPopupMenuButton<T> extends StatelessWidget {
   const AdminPopupMenuButton({
     super.key,
