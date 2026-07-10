@@ -72,9 +72,14 @@ final _adminSelectionsProvider = FutureProvider.autoDispose
         final rows = await request
             .order('created_at', ascending: false)
             .range(0, params.limit);
-        final owners = await _loadSelectionOwnerLabels(sb);
-        final counts = await _loadSelectionItemCounts(sb);
         final list = rows as List;
+        final selectionIds = list
+            .take(params.limit)
+            .map((row) => ((row as Map)['id'] ?? '').toString().trim())
+            .where((id) => id.isNotEmpty)
+            .toList(growable: false);
+        final owners = await _loadSelectionOwnerLabels(sb);
+        final counts = await _loadSelectionItemCounts(sb, selectionIds);
         return _AdminSelectionsPageData(
           hasMore: list.length > params.limit,
           rows: list
@@ -110,8 +115,13 @@ final _adminSelectionsProvider = FutureProvider.autoDispose
           final rows = await request
               .order('created_at', ascending: false)
               .range(0, params.limit);
-          final counts = await _loadSelectionItemCounts(sb);
           final list = rows as List;
+          final selectionIds = list
+              .take(params.limit)
+              .map((row) => ((row as Map)['id'] ?? '').toString().trim())
+              .where((id) => id.isNotEmpty)
+              .toList(growable: false);
+          final counts = await _loadSelectionItemCounts(sb, selectionIds);
           return _AdminSelectionsPageData(
             hasMore: list.length > params.limit,
             rows: list
@@ -179,9 +189,44 @@ String _adminSearchTerm(String value) {
       .replaceAll('*', r'\*');
 }
 
-Future<Map<String, int>> _loadSelectionItemCounts(SupabaseClient sb) async {
+Future<Map<String, int>> _loadSelectionItemCounts(
+  SupabaseClient sb,
+  List<String> selectionIds,
+) async {
+  if (selectionIds.isEmpty) return const <String, int>{};
   try {
-    final rows = await sb.from('selection_items').select('selection_id');
+    final rows = await sb.rpc(
+      'admin_selection_item_counts',
+      params: {'p_selection_ids': selectionIds},
+    );
+    final counts = <String, int>{};
+    for (final row in rows as List) {
+      final map = row as Map;
+      final id = (map['selection_id'] ?? '').toString();
+      if (id.isEmpty) continue;
+      counts[id] = (map['item_count'] as num?)?.toInt() ?? 0;
+    }
+    return counts;
+  } on PostgrestException catch (e) {
+    if (SupabaseCompat.isMissingRpc(e, 'admin_selection_item_counts')) {
+      return _loadSelectionItemCountsFallback(sb, selectionIds);
+    }
+    if (SupabaseCompat.isMissingRelation(e, const ['selection_items'])) {
+      return const <String, int>{};
+    }
+    rethrow;
+  }
+}
+
+Future<Map<String, int>> _loadSelectionItemCountsFallback(
+  SupabaseClient sb,
+  List<String> selectionIds,
+) async {
+  try {
+    final rows = await sb
+        .from('selection_items')
+        .select('selection_id')
+        .inFilter('selection_id', selectionIds);
     final counts = <String, int>{};
     for (final row in rows as List) {
       final id = ((row as Map)['selection_id'] ?? '').toString();

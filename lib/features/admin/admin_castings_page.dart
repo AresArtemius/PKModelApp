@@ -66,9 +66,14 @@ final _adminCastingsProvider = FutureProvider.autoDispose
         final rows = await request
             .order('created_at', ascending: false)
             .range(0, params.limit);
-        final owners = await _loadOwnerLabels(sb);
-        final counts = await _loadCastingResponseCounts(sb);
         final list = rows as List;
+        final castingIds = list
+            .take(params.limit)
+            .map((row) => ((row as Map)['id'] ?? '').toString().trim())
+            .where((id) => id.isNotEmpty)
+            .toList(growable: false);
+        final owners = await _loadOwnerLabels(sb);
+        final counts = await _loadCastingResponseCounts(sb, castingIds);
         return _AdminCastingsPageData(
           hasMore: list.length > params.limit,
           rows: list
@@ -102,8 +107,13 @@ final _adminCastingsProvider = FutureProvider.autoDispose
           final rows = await request
               .order('created_at', ascending: false)
               .range(0, params.limit);
-          final counts = await _loadCastingResponseCounts(sb);
           final list = rows as List;
+          final castingIds = list
+              .take(params.limit)
+              .map((row) => ((row as Map)['id'] ?? '').toString().trim())
+              .where((id) => id.isNotEmpty)
+              .toList(growable: false);
+          final counts = await _loadCastingResponseCounts(sb, castingIds);
           return _AdminCastingsPageData(
             hasMore: list.length > params.limit,
             rows: list
@@ -166,9 +176,44 @@ String _adminSearchTerm(String value) {
       .replaceAll('*', r'\*');
 }
 
-Future<Map<String, int>> _loadCastingResponseCounts(SupabaseClient sb) async {
+Future<Map<String, int>> _loadCastingResponseCounts(
+  SupabaseClient sb,
+  List<String> castingIds,
+) async {
+  if (castingIds.isEmpty) return const <String, int>{};
   try {
-    final rows = await sb.from('casting_responses').select('casting_id');
+    final rows = await sb.rpc(
+      'admin_casting_response_counts',
+      params: {'p_casting_ids': castingIds},
+    );
+    final counts = <String, int>{};
+    for (final row in rows as List) {
+      final map = row as Map;
+      final id = (map['casting_id'] ?? '').toString();
+      if (id.isEmpty) continue;
+      counts[id] = (map['response_count'] as num?)?.toInt() ?? 0;
+    }
+    return counts;
+  } on PostgrestException catch (e) {
+    if (SupabaseCompat.isMissingRpc(e, 'admin_casting_response_counts')) {
+      return _loadCastingResponseCountsFallback(sb, castingIds);
+    }
+    if (SupabaseCompat.isMissingRelation(e, const ['casting_responses'])) {
+      return const <String, int>{};
+    }
+    rethrow;
+  }
+}
+
+Future<Map<String, int>> _loadCastingResponseCountsFallback(
+  SupabaseClient sb,
+  List<String> castingIds,
+) async {
+  try {
+    final rows = await sb
+        .from('casting_responses')
+        .select('casting_id')
+        .inFilter('casting_id', castingIds);
     final counts = <String, int>{};
     for (final row in rows as List) {
       final id = ((row as Map)['casting_id'] ?? '').toString();

@@ -243,12 +243,14 @@ Changelog:
 - Web performance-pass: настроены decoded image cache, cache window у больших builder-списков каталога/back-office и облегченные тени/blur для Flutter Web.
 - Server-side staged loading: каталог уже работает через infinite-scroll, а глубокие back-office таблицы пользователей, анкет, кастингов и подборок грузят первую страницу и догружают следующие порции по кнопке.
 - Server-side поиск и фильтрация в back-office таблицах: пользователи, анкеты, кастинги и подборки запрашиваются с учетом поисковой строки/статуса/роли/этапа/публичности по всей таблице, а не только по уже загруженной странице.
+- RPC/SQL-слой для back-office агрегатов: счетчики откликов кастингов и анкет в подборках считаются SQL-функциями только по ID текущей страницы, с fallback до применения SQL в Supabase.
 
 Не хватает:
 - Глубокого performance-профилирования на production-данных и точечной оптимизации экранов, если реальные метрики покажут узкие места.
-- RPC/SQL-слоя для сложных back-office поисков по агрегатам и счетчикам, если текущих PostgREST-фильтров станет мало на больших production-объемах.
+- Расширенного RPC для всего back-office поиска одним endpoint, если production-объемы покажут, что PostgREST-фильтров и точечных агрегатов уже недостаточно.
 
 Changelog:
+- TBD — добавлен RPC/SQL-слой агрегатов back-office: `admin_casting_response_counts` и `admin_selection_item_counts`, приложение использует их для счетчиков текущей страницы.
 - d0933a6 — добавлен server-side поиск/фильтрация для back-office таблиц поверх staged loading: запросы учитывают search/status/role/stage/public до пагинации.
 - 5c96cf4 — добавлена staged pagination для глубоких back-office таблиц: стартовая загрузка 80 строк, server-side range и branded “Загрузить еще”.
 - 47e3413 — добавлен первый performance-pass для Web: image cache при старте, `cacheExtent` у больших списков и облегченные брендовые тени/blur без изменения UX.
