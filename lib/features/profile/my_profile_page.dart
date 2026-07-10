@@ -158,6 +158,17 @@ class MyProfilePage extends ConsumerWidget {
       const SizedBox(height: kGap14),
       const _OwnerProfileEntryCard(),
       const SizedBox(height: kGap14),
+      _AccountEntryCard(
+        icon: Icons.privacy_tip_rounded,
+        title: Localizations.localeOf(context).languageCode == 'ru'
+            ? 'ДАННЫЕ И УДАЛЕНИЕ'
+            : 'DATA & DELETION',
+        subtitle: Localizations.localeOf(context).languageCode == 'ru'
+            ? 'Экспорт JSON и понятное удаление персональных данных'
+            : 'JSON export and personal data deletion',
+        onTap: () => context.go(Routes.dataPrivacy),
+      ),
+      const SizedBox(height: kGap14),
       const _AccountStatusEntryCard(),
       const SizedBox(height: kGap14),
       const _DeleteAccountEntryCard(),
@@ -357,12 +368,7 @@ class _OwnerProfileEntryCard extends ConsumerWidget {
   }
 
   Future<void> _open(BuildContext context, WidgetRef ref) async {
-    final saved = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(builder: (_) => const AccountProfileEditPage()),
-    );
-    if (saved == true) {
-      ref.invalidate(accountOwnerProfileProvider);
-    }
+    context.go(Routes.accountProfile);
   }
 
   @override

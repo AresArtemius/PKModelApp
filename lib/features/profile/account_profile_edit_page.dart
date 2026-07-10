@@ -919,7 +919,13 @@ class _AccountProfileEditPageState
                       title: title,
                       onBack: _saving
                           ? () {}
-                          : () => Navigator.of(context).pop(false),
+                          : () {
+                              if (context.canPop()) {
+                                context.pop(false);
+                              } else {
+                                context.go(Routes.me);
+                              }
+                            },
                     ),
                     const SizedBox(height: kGap14),
                     Container(
