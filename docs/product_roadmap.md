@@ -247,7 +247,7 @@ Changelog:
 - Server-side pagination/infinite scroll для таблиц и каталога, когда объемы перерастут текущие безопасные лимиты.
 
 Changelog:
-- TBD — добавлен первый performance-pass для Web: image cache при старте, `cacheExtent` у больших списков и облегченные брендовые тени/blur без изменения UX.
+- 47e3413 — добавлен первый performance-pass для Web: image cache при старте, `cacheExtent` у больших списков и облегченные брендовые тени/blur без изменения UX.
 
 ## 10. Админка
 
