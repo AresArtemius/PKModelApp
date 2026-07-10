@@ -394,6 +394,7 @@ class _CastingsTable extends StatelessWidget {
           child: ConstrainedBox(
             constraints: const BoxConstraints(minWidth: 1040),
             child: ListView.separated(
+              // ignore: deprecated_member_use
               cacheExtent: _kCastingsListCacheExtent,
               padding: const EdgeInsets.all(10),
               itemCount: castings.length + 1,

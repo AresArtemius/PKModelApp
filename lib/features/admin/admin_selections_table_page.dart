@@ -442,6 +442,7 @@ class _SelectionsTable extends StatelessWidget {
           child: ConstrainedBox(
             constraints: const BoxConstraints(minWidth: 1080),
             child: ListView.separated(
+              // ignore: deprecated_member_use
               cacheExtent: _kSelectionsListCacheExtent,
               padding: const EdgeInsets.all(10),
               itemCount: selections.length + 1,

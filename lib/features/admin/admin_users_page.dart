@@ -307,6 +307,7 @@ class _UsersTablePanel extends StatelessWidget {
                           minWidth: isDesktop ? 980 : 860,
                         ),
                         child: ListView.separated(
+                          // ignore: deprecated_member_use
                           cacheExtent: _kUsersListCacheExtent,
                           padding: const EdgeInsets.all(10),
                           itemCount: filtered.length + 1,
@@ -375,6 +376,7 @@ class _UsersMobileList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView.separated(
+      // ignore: deprecated_member_use
       cacheExtent: _kUsersListCacheExtent,
       padding: const EdgeInsets.only(bottom: 18),
       itemCount: users.length,

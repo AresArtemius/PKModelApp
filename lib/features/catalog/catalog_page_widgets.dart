@@ -1497,6 +1497,7 @@ class _CatalogGrid extends StatelessWidget {
           final columns = _crossAxisCount(constraints.maxWidth);
           return GridView.builder(
             controller: gridController,
+            // ignore: deprecated_member_use
             cacheExtent: _catalogGridCacheExtent,
             padding: kGridPadding.copyWith(
               bottom: kGridPadding.bottom + bottomInset,

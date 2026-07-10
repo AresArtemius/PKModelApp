@@ -330,6 +330,7 @@ class _ProfilesTablePanel extends StatelessWidget {
                           minWidth: isDesktop ? 1160 : 1040,
                         ),
                         child: ListView.separated(
+                          // ignore: deprecated_member_use
                           cacheExtent: _kProfilesListCacheExtent,
                           padding: const EdgeInsets.all(10),
                           itemCount: filtered.length + 1,
@@ -396,6 +397,7 @@ class _ProfilesMobileList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView.separated(
+      // ignore: deprecated_member_use
       cacheExtent: _kProfilesListCacheExtent,
       padding: const EdgeInsets.only(bottom: 18),
       itemCount: profiles.length,
