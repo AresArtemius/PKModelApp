@@ -26,21 +26,55 @@ class _AdminProfilesPageData {
   final bool hasMore;
 }
 
+class _AdminProfilesQuery {
+  const _AdminProfilesQuery({
+    required this.limit,
+    required this.search,
+    required this.status,
+    required this.role,
+  });
+
+  final int limit;
+  final String search;
+  final ProfileStatus? status;
+  final ProfessionalProfileType? role;
+
+  @override
+  bool operator ==(Object other) {
+    return other is _AdminProfilesQuery &&
+        limit == other.limit &&
+        search == other.search &&
+        status == other.status &&
+        role == other.role;
+  }
+
+  @override
+  int get hashCode => Object.hash(limit, search, status, role);
+}
+
 final _adminProfilesProvider = FutureProvider.autoDispose
-    .family<_AdminProfilesPageData, int>((ref, limit) async {
+    .family<_AdminProfilesPageData, _AdminProfilesQuery>((ref, params) async {
       final sb = ref.watch(supabaseProvider);
+      final ownerIds = await _loadProfileOwnerIdsForSearch(sb, params.search);
       try {
-        final rows = await sb
+        var request = sb
             .from('profiles')
-            .select(_adminProfilesColumns(includeProfileRoles: true))
+            .select(_adminProfilesColumns(includeProfileRoles: true));
+        request = _applyProfileServerFilters(
+          request,
+          params: params,
+          ownerIds: ownerIds,
+          includeProfileRoles: true,
+        );
+        final rows = await request
             .order('updated_at', ascending: false)
-            .range(0, limit);
+            .range(0, params.limit);
         final ownersByUserId = await _loadOwnersByUserId(sb);
         final list = rows as List;
         return _AdminProfilesPageData(
-          hasMore: list.length > limit,
+          hasMore: list.length > params.limit,
           rows: list
-              .take(limit)
+              .take(params.limit)
               .map((row) {
                 final map = Map<String, dynamic>.from(row as Map);
                 return _AdminProfileRow.fromMap(
@@ -52,17 +86,24 @@ final _adminProfilesProvider = FutureProvider.autoDispose
         );
       } on PostgrestException catch (e) {
         if (SupabaseCompat.isMissingColumn(e, 'profile_roles')) {
-          final rows = await sb
+          var request = sb
               .from('profiles')
-              .select(_adminProfilesColumns(includeProfileRoles: false))
+              .select(_adminProfilesColumns(includeProfileRoles: false));
+          request = _applyProfileServerFilters(
+            request,
+            params: params,
+            ownerIds: ownerIds,
+            includeProfileRoles: false,
+          );
+          final rows = await request
               .order('updated_at', ascending: false)
-              .range(0, limit);
+              .range(0, params.limit);
           final ownersByUserId = await _loadOwnersByUserId(sb);
           final list = rows as List;
           return _AdminProfilesPageData(
-            hasMore: list.length > limit,
+            hasMore: list.length > params.limit,
             rows: list
-                .take(limit)
+                .take(params.limit)
                 .map((row) {
                   final map = Map<String, dynamic>.from(row as Map);
                   return _AdminProfileRow.fromMap(
@@ -82,6 +123,91 @@ final _adminProfilesProvider = FutureProvider.autoDispose
         rethrow;
       }
     });
+
+dynamic _applyProfileServerFilters(
+  dynamic request, {
+  required _AdminProfilesQuery params,
+  required Set<String>? ownerIds,
+  required bool includeProfileRoles,
+}) {
+  var next = request;
+  final status = params.status;
+  if (status != null) {
+    next = next.eq('status', statusToString(status));
+  }
+
+  final role = params.role;
+  if (role != null) {
+    final storage = role.storageValue;
+    next = includeProfileRoles
+        ? next.filter('profile_roles', 'cs', '{$storage}')
+        : next.eq('profile_type', storage);
+  }
+
+  final clean = _adminSearchTerm(params.search);
+  if (clean.isNotEmpty) {
+    final parts = <String>[
+      'full_name.ilike.%$clean%',
+      'city.ilike.%$clean%',
+      'country.ilike.%$clean%',
+      if (ownerIds != null && ownerIds.isNotEmpty)
+        'user_id.in.(${ownerIds.join(',')})',
+    ];
+    next = next.or(parts.join(','));
+  }
+
+  return next;
+}
+
+String _adminSearchTerm(String value) {
+  return value
+      .trim()
+      .replaceAll(RegExp(r'[,()]'), ' ')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .replaceAll('%', r'\%')
+      .replaceAll('*', r'\*');
+}
+
+Future<Set<String>?> _loadProfileOwnerIdsForSearch(
+  SupabaseClient sb,
+  String search,
+) async {
+  final clean = _adminSearchTerm(search);
+  if (clean.isEmpty) return null;
+
+  Future<Set<String>> run({required bool includeTag}) async {
+    var request = sb
+        .from('user_profiles')
+        .select('user_id,email,phone,full_name,company_name');
+    final fields = [
+      'email',
+      'phone',
+      if (includeTag) 'account_tag',
+      'full_name',
+      'company_name',
+    ];
+    request = request.or(
+      fields.map((field) => '$field.ilike.%$clean%').join(','),
+    );
+    final rows = await request.limit(250);
+    return {
+      for (final row in rows as List)
+        ((row as Map)['user_id'] ?? '').toString().trim(),
+    }..remove('');
+  }
+
+  try {
+    return await run(includeTag: true);
+  } on PostgrestException catch (e) {
+    if (SupabaseCompat.isMissingColumn(e, 'account_tag')) {
+      return run(includeTag: false);
+    }
+    if (SupabaseCompat.isMissingRelation(e, const ['user_profiles'])) {
+      return const <String>{};
+    }
+    rethrow;
+  }
+}
 
 String _adminProfilesColumns({required bool includeProfileRoles}) {
   return [
@@ -202,7 +328,13 @@ class _AdminProfilesPageState extends ConsumerState<AdminProfilesPage> {
   Widget build(BuildContext context) {
     final ru = Localizations.localeOf(context).languageCode == 'ru';
     final isAdminAsync = ref.watch(isAdminProvider);
-    final profilesAsync = ref.watch(_adminProfilesProvider(_profilesLimit));
+    final profilesQuery = _AdminProfilesQuery(
+      limit: _profilesLimit,
+      search: _searchC.text,
+      status: _statusFilter.status,
+      role: _roleFilter,
+    );
+    final profilesAsync = ref.watch(_adminProfilesProvider(profilesQuery));
 
     return Scaffold(
       backgroundColor: _kProfilesPageBg,
@@ -247,11 +379,17 @@ class _AdminProfilesPageState extends ConsumerState<AdminProfilesPage> {
                         searchController: _searchC,
                         statusFilter: _statusFilter,
                         roleFilter: _roleFilter,
-                        onStatusFilterChanged: (value) =>
-                            setState(() => _statusFilter = value),
-                        onRoleFilterChanged: (value) =>
-                            setState(() => _roleFilter = value),
-                        onSearchChanged: () => setState(() {}),
+                        onStatusFilterChanged: (value) => setState(() {
+                          _statusFilter = value;
+                          _profilesLimit = _kProfilesPageSize;
+                        }),
+                        onRoleFilterChanged: (value) => setState(() {
+                          _roleFilter = value;
+                          _profilesLimit = _kProfilesPageSize;
+                        }),
+                        onSearchChanged: () => setState(() {
+                          _profilesLimit = _kProfilesPageSize;
+                        }),
                         onLoadMore: () => setState(
                           () => _profilesLimit += _kProfilesPageSize,
                         ),

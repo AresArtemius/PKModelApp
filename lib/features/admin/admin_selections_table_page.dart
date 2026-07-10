@@ -26,24 +26,59 @@ class _AdminSelectionsPageData {
   final bool hasMore;
 }
 
+class _AdminSelectionsQuery {
+  const _AdminSelectionsQuery({
+    required this.limit,
+    required this.search,
+    required this.status,
+    required this.isPublic,
+  });
+
+  final int limit;
+  final String search;
+  final SelectionStatus? status;
+  final bool? isPublic;
+
+  @override
+  bool operator ==(Object other) {
+    return other is _AdminSelectionsQuery &&
+        limit == other.limit &&
+        search == other.search &&
+        status == other.status &&
+        isPublic == other.isPublic;
+  }
+
+  @override
+  int get hashCode => Object.hash(limit, search, status, isPublic);
+}
+
 final _adminSelectionsProvider = FutureProvider.autoDispose
-    .family<_AdminSelectionsPageData, int>((ref, limit) async {
+    .family<_AdminSelectionsPageData, _AdminSelectionsQuery>((
+      ref,
+      params,
+    ) async {
       final sb = ref.watch(supabaseProvider);
       try {
-        final rows = await sb
+        var request = sb
             .from('selections')
             .select(
               'id,title,status,is_public,client_name,brand_name,location,project_dates,created_by,created_at',
-            )
+            );
+        request = _applySelectionsServerFilters(
+          request,
+          params,
+          includeStatusAndPublic: true,
+        );
+        final rows = await request
             .order('created_at', ascending: false)
-            .range(0, limit);
+            .range(0, params.limit);
         final owners = await _loadSelectionOwnerLabels(sb);
         final counts = await _loadSelectionItemCounts(sb);
         final list = rows as List;
         return _AdminSelectionsPageData(
-          hasMore: list.length > limit,
+          hasMore: list.length > params.limit,
           rows: list
-              .take(limit)
+              .take(params.limit)
               .map((row) {
                 final map = Map<String, dynamic>.from(row as Map);
                 final id = (map['id'] ?? '').toString();
@@ -66,17 +101,21 @@ final _adminSelectionsProvider = FutureProvider.autoDispose
           'project_dates',
           'created_by',
         ])) {
-          final rows = await sb
-              .from('selections')
-              .select('id,title,created_at')
+          var request = sb.from('selections').select('id,title,created_at');
+          request = _applySelectionsServerFilters(
+            request,
+            params,
+            includeStatusAndPublic: false,
+          );
+          final rows = await request
               .order('created_at', ascending: false)
-              .range(0, limit);
+              .range(0, params.limit);
           final counts = await _loadSelectionItemCounts(sb);
           final list = rows as List;
           return _AdminSelectionsPageData(
-            hasMore: list.length > limit,
+            hasMore: list.length > params.limit,
             rows: list
-                .take(limit)
+                .take(params.limit)
                 .map((row) {
                   final map = Map<String, dynamic>.from(row as Map);
                   final id = (map['id'] ?? '').toString();
@@ -98,6 +137,47 @@ final _adminSelectionsProvider = FutureProvider.autoDispose
         rethrow;
       }
     });
+
+dynamic _applySelectionsServerFilters(
+  dynamic request,
+  _AdminSelectionsQuery params, {
+  required bool includeStatusAndPublic,
+}) {
+  var next = request;
+  if (includeStatusAndPublic) {
+    if (params.status != null) {
+      next = next.eq('status', params.status!.storageValue);
+    }
+    if (params.isPublic != null) {
+      next = next.eq('is_public', params.isPublic!);
+    }
+  }
+
+  final clean = _adminSearchTerm(params.search);
+  if (clean.isNotEmpty) {
+    next = next.or(
+      [
+        'title.ilike.%$clean%',
+        if (includeStatusAndPublic) 'status.ilike.%$clean%',
+        if (includeStatusAndPublic) 'client_name.ilike.%$clean%',
+        if (includeStatusAndPublic) 'brand_name.ilike.%$clean%',
+        if (includeStatusAndPublic) 'location.ilike.%$clean%',
+        if (includeStatusAndPublic) 'project_dates.ilike.%$clean%',
+      ].join(','),
+    );
+  }
+
+  return next;
+}
+
+String _adminSearchTerm(String value) {
+  return value
+      .trim()
+      .replaceAll(RegExp(r'[,()]'), ' ')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .replaceAll('%', r'\%')
+      .replaceAll('*', r'\*');
+}
 
 Future<Map<String, int>> _loadSelectionItemCounts(SupabaseClient sb) async {
   try {
@@ -222,8 +302,14 @@ class _AdminSelectionsTablePageState
   Widget build(BuildContext context) {
     final ru = Localizations.localeOf(context).languageCode == 'ru';
     final isAdminAsync = ref.watch(isAdminProvider);
+    final selectionsQuery = _AdminSelectionsQuery(
+      limit: _selectionsLimit,
+      search: _searchC.text,
+      status: _statusFilter,
+      isPublic: _publicFilter,
+    );
     final selectionsAsync = ref.watch(
-      _adminSelectionsProvider(_selectionsLimit),
+      _adminSelectionsProvider(selectionsQuery),
     );
 
     return Scaffold(
@@ -269,11 +355,17 @@ class _AdminSelectionsTablePageState
                         controller: _searchC,
                         statusFilter: _statusFilter,
                         publicFilter: _publicFilter,
-                        onStatusChanged: (status) =>
-                            setState(() => _statusFilter = status),
-                        onPublicChanged: (value) =>
-                            setState(() => _publicFilter = value),
-                        onSearchChanged: () => setState(() {}),
+                        onStatusChanged: (status) => setState(() {
+                          _statusFilter = status;
+                          _selectionsLimit = _kSelectionsPageSize;
+                        }),
+                        onPublicChanged: (value) => setState(() {
+                          _publicFilter = value;
+                          _selectionsLimit = _kSelectionsPageSize;
+                        }),
+                        onSearchChanged: () => setState(() {
+                          _selectionsLimit = _kSelectionsPageSize;
+                        }),
                         onLoadMore: () => setState(
                           () => _selectionsLimit += _kSelectionsPageSize,
                         ),

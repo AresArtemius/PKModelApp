@@ -25,23 +25,69 @@ class _AdminUsersPageData {
   final bool hasMore;
 }
 
+class _AdminUsersQuery {
+  const _AdminUsersQuery({
+    required this.limit,
+    required this.search,
+    required this.role,
+  });
+
+  final int limit;
+  final String search;
+  final String role;
+
+  @override
+  bool operator ==(Object other) {
+    return other is _AdminUsersQuery &&
+        limit == other.limit &&
+        search == other.search &&
+        role == other.role;
+  }
+
+  @override
+  int get hashCode => Object.hash(limit, search, role);
+}
+
+class _AdminUserRoleScope {
+  const _AdminUserRoleScope({this.includeIds, this.excludeIds});
+
+  final Set<String>? includeIds;
+  final Set<String>? excludeIds;
+}
+
 final _adminUsersProvider = FutureProvider.autoDispose
-    .family<_AdminUsersPageData, int>((ref, limit) async {
+    .family<_AdminUsersPageData, _AdminUsersQuery>((ref, params) async {
       final sb = ref.watch(supabaseProvider);
+      final roleScope = await _loadUserRoleScope(sb, params.role);
+      if (roleScope.includeIds != null && roleScope.includeIds!.isEmpty) {
+        return const _AdminUsersPageData(
+          rows: <_AdminUserRow>[],
+          hasMore: false,
+        );
+      }
       try {
-        final rows = await sb
+        var request = sb
             .from('user_profiles')
             .select(
               'user_id,email,phone,account_tag,full_name,company_name,position,city,country,avatar_url,updated_at,last_seen_at',
-            )
+            );
+        request = _applyUsersSearch(request, params.search, true);
+        if (roleScope.includeIds != null) {
+          request = request.inFilter(
+            'user_id',
+            roleScope.includeIds!.toList(growable: false),
+          );
+        }
+        request = _applyUserRoleExclusion(request, roleScope.excludeIds);
+        final rows = await request
             .order('updated_at', ascending: false)
-            .range(0, limit);
+            .range(0, params.limit);
         final rolesByUserId = await _loadRolesByUserId(sb);
         final list = rows as List;
         return _AdminUsersPageData(
-          hasMore: list.length > limit,
+          hasMore: list.length > params.limit,
           rows: list
-              .take(limit)
+              .take(params.limit)
               .map((row) {
                 final map = Map<String, dynamic>.from(row);
                 return _AdminUserRow.fromMap(
@@ -53,19 +99,28 @@ final _adminUsersProvider = FutureProvider.autoDispose
         );
       } on PostgrestException catch (e) {
         if (SupabaseCompat.isMissingColumn(e, 'account_tag')) {
-          final rows = await sb
+          var request = sb
               .from('user_profiles')
               .select(
                 'user_id,email,phone,full_name,company_name,position,city,country,avatar_url,updated_at,last_seen_at',
-              )
+              );
+          request = _applyUsersSearch(request, params.search, false);
+          if (roleScope.includeIds != null) {
+            request = request.inFilter(
+              'user_id',
+              roleScope.includeIds!.toList(growable: false),
+            );
+          }
+          request = _applyUserRoleExclusion(request, roleScope.excludeIds);
+          final rows = await request
               .order('updated_at', ascending: false)
-              .range(0, limit);
+              .range(0, params.limit);
           final rolesByUserId = await _loadRolesByUserId(sb);
           final list = rows as List;
           return _AdminUsersPageData(
-            hasMore: list.length > limit,
+            hasMore: list.length > params.limit,
             rows: list
-                .take(limit)
+                .take(params.limit)
                 .map((row) {
                   final map = Map<String, dynamic>.from(row);
                   return _AdminUserRow.fromMap(
@@ -85,6 +140,74 @@ final _adminUsersProvider = FutureProvider.autoDispose
         rethrow;
       }
     });
+
+dynamic _applyUsersSearch(dynamic request, String search, bool includeTag) {
+  final clean = _adminSearchTerm(search);
+  if (clean.isEmpty) return request;
+  final fields = [
+    'email',
+    'phone',
+    if (includeTag) 'account_tag',
+    'full_name',
+    'company_name',
+    'position',
+    'city',
+    'country',
+  ];
+  return request.or(fields.map((field) => '$field.ilike.%$clean%').join(','));
+}
+
+String _adminSearchTerm(String value) {
+  return value
+      .trim()
+      .replaceAll(RegExp(r'[,()]'), ' ')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .replaceAll('%', r'\%')
+      .replaceAll('*', r'\*');
+}
+
+dynamic _applyUserRoleExclusion(dynamic request, Set<String>? excludeIds) {
+  if (excludeIds == null || excludeIds.isEmpty) return request;
+  return request.not('user_id', 'in', '(${excludeIds.join(',')})');
+}
+
+Future<_AdminUserRoleScope> _loadUserRoleScope(
+  SupabaseClient sb,
+  String role,
+) async {
+  final cleanRole = role.trim();
+  if (cleanRole.isEmpty) return const _AdminUserRoleScope();
+  try {
+    if (cleanRole == 'user') {
+      final rows = await sb.from('user_roles').select('user_id').inFilter(
+        'role',
+        const ['admin', 'casting_agent'],
+      );
+      final excluded = {
+        for (final row in rows as List)
+          ((row as Map)['user_id'] ?? '').toString().trim(),
+      }..remove('');
+      return _AdminUserRoleScope(excludeIds: excluded);
+    }
+
+    final rows = await sb
+        .from('user_roles')
+        .select('user_id')
+        .eq('role', cleanRole);
+    final included = {
+      for (final row in rows as List)
+        ((row as Map)['user_id'] ?? '').toString().trim(),
+    }..remove('');
+    return _AdminUserRoleScope(includeIds: included);
+  } on PostgrestException catch (e) {
+    if (SupabaseCompat.isMissingRelation(e, const ['user_roles'])) {
+      return cleanRole == 'user'
+          ? const _AdminUserRoleScope()
+          : const _AdminUserRoleScope(includeIds: <String>{});
+    }
+    rethrow;
+  }
+}
 
 Future<Map<String, String>> _loadRolesByUserId(SupabaseClient sb) async {
   try {
@@ -192,7 +315,12 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
   Widget build(BuildContext context) {
     final ru = Localizations.localeOf(context).languageCode == 'ru';
     final isAdminAsync = ref.watch(isAdminProvider);
-    final usersAsync = ref.watch(_adminUsersProvider(_usersLimit));
+    final usersQuery = _AdminUsersQuery(
+      limit: _usersLimit,
+      search: _searchC.text,
+      role: _roleFilter.role,
+    );
+    final usersAsync = ref.watch(_adminUsersProvider(usersQuery));
 
     return Scaffold(
       backgroundColor: _kUsersPageBg,
@@ -234,9 +362,13 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
                         hasMore: data.hasMore,
                         searchController: _searchC,
                         roleFilter: _roleFilter,
-                        onRoleFilterChanged: (value) =>
-                            setState(() => _roleFilter = value),
-                        onSearchChanged: () => setState(() {}),
+                        onRoleFilterChanged: (value) => setState(() {
+                          _roleFilter = value;
+                          _usersLimit = _kUsersPageSize;
+                        }),
+                        onSearchChanged: () => setState(() {
+                          _usersLimit = _kUsersPageSize;
+                        }),
                         onLoadMore: () =>
                             setState(() => _usersLimit += _kUsersPageSize),
                         onSetRole: _setUserRole,

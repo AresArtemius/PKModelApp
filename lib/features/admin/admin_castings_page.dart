@@ -26,24 +26,53 @@ class _AdminCastingsPageData {
   final bool hasMore;
 }
 
+class _AdminCastingsQuery {
+  const _AdminCastingsQuery({
+    required this.limit,
+    required this.search,
+    required this.stage,
+  });
+
+  final int limit;
+  final String search;
+  final CastingProjectStage? stage;
+
+  @override
+  bool operator ==(Object other) {
+    return other is _AdminCastingsQuery &&
+        limit == other.limit &&
+        search == other.search &&
+        stage == other.stage;
+  }
+
+  @override
+  int get hashCode => Object.hash(limit, search, stage);
+}
+
 final _adminCastingsProvider = FutureProvider.autoDispose
-    .family<_AdminCastingsPageData, int>((ref, limit) async {
+    .family<_AdminCastingsPageData, _AdminCastingsQuery>((ref, params) async {
       final sb = ref.watch(supabaseProvider);
       try {
-        final rows = await sb
+        var request = sb
             .from('castings')
             .select(
               'id,title,description,fee,rights,dates,project_stage,reference_media,created_by,created_at',
-            )
+            );
+        request = _applyCastingsServerFilters(
+          request,
+          params,
+          includeProjectStage: true,
+        );
+        final rows = await request
             .order('created_at', ascending: false)
-            .range(0, limit);
+            .range(0, params.limit);
         final owners = await _loadOwnerLabels(sb);
         final counts = await _loadCastingResponseCounts(sb);
         final list = rows as List;
         return _AdminCastingsPageData(
-          hasMore: list.length > limit,
+          hasMore: list.length > params.limit,
           rows: list
-              .take(limit)
+              .take(params.limit)
               .map((row) {
                 final map = Map<String, dynamic>.from(row as Map);
                 final id = (map['id'] ?? '').toString();
@@ -62,17 +91,23 @@ final _adminCastingsProvider = FutureProvider.autoDispose
           'reference_media',
           'created_by',
         ])) {
-          final rows = await sb
+          var request = sb
               .from('castings')
-              .select('id,title,description,fee,rights,dates,created_at')
+              .select('id,title,description,fee,rights,dates,created_at');
+          request = _applyCastingsServerFilters(
+            request,
+            params,
+            includeProjectStage: false,
+          );
+          final rows = await request
               .order('created_at', ascending: false)
-              .range(0, limit);
+              .range(0, params.limit);
           final counts = await _loadCastingResponseCounts(sb);
           final list = rows as List;
           return _AdminCastingsPageData(
-            hasMore: list.length > limit,
+            hasMore: list.length > params.limit,
             rows: list
-                .take(limit)
+                .take(params.limit)
                 .map((row) {
                   final map = Map<String, dynamic>.from(row as Map);
                   final id = (map['id'] ?? '').toString();
@@ -94,6 +129,42 @@ final _adminCastingsProvider = FutureProvider.autoDispose
         rethrow;
       }
     });
+
+dynamic _applyCastingsServerFilters(
+  dynamic request,
+  _AdminCastingsQuery params, {
+  required bool includeProjectStage,
+}) {
+  var next = request;
+  if (includeProjectStage && params.stage != null) {
+    next = next.eq('project_stage', castingProjectStageToString(params.stage!));
+  }
+
+  final clean = _adminSearchTerm(params.search);
+  if (clean.isNotEmpty) {
+    next = next.or(
+      [
+        'title.ilike.%$clean%',
+        'description.ilike.%$clean%',
+        'fee.ilike.%$clean%',
+        'rights.ilike.%$clean%',
+        'dates.ilike.%$clean%',
+        if (includeProjectStage) 'project_stage.ilike.%$clean%',
+      ].join(','),
+    );
+  }
+
+  return next;
+}
+
+String _adminSearchTerm(String value) {
+  return value
+      .trim()
+      .replaceAll(RegExp(r'[,()]'), ' ')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .replaceAll('%', r'\%')
+      .replaceAll('*', r'\*');
+}
 
 Future<Map<String, int>> _loadCastingResponseCounts(SupabaseClient sb) async {
   try {
@@ -212,7 +283,12 @@ class _AdminCastingsPageState extends ConsumerState<AdminCastingsPage> {
   Widget build(BuildContext context) {
     final ru = Localizations.localeOf(context).languageCode == 'ru';
     final isAdminAsync = ref.watch(isAdminProvider);
-    final castingsAsync = ref.watch(_adminCastingsProvider(_castingsLimit));
+    final castingsQuery = _AdminCastingsQuery(
+      limit: _castingsLimit,
+      search: _searchC.text,
+      stage: _stageFilter,
+    );
+    final castingsAsync = ref.watch(_adminCastingsProvider(castingsQuery));
 
     return Scaffold(
       backgroundColor: _kCastingsBg,
@@ -256,9 +332,13 @@ class _AdminCastingsPageState extends ConsumerState<AdminCastingsPage> {
                         hasMore: data.hasMore,
                         controller: _searchC,
                         stageFilter: _stageFilter,
-                        onStageChanged: (stage) =>
-                            setState(() => _stageFilter = stage),
-                        onSearchChanged: () => setState(() {}),
+                        onStageChanged: (stage) => setState(() {
+                          _stageFilter = stage;
+                          _castingsLimit = _kCastingsPageSize;
+                        }),
+                        onSearchChanged: () => setState(() {
+                          _castingsLimit = _kCastingsPageSize;
+                        }),
                         onLoadMore: () => setState(
                           () => _castingsLimit += _kCastingsPageSize,
                         ),
