@@ -15,6 +15,7 @@ import '../../ui/brand/brand_admin_header.dart';
 import '../../ui/brand/brand_pill_button.dart';
 import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
+import '../auth/auth_rate_limiter.dart';
 import '../auth/auth_controller.dart';
 import '../auth/password_strength.dart';
 
@@ -444,6 +445,15 @@ class _AccountProfileEditPageState
       return;
     }
 
+    final limiterState = await AuthRateLimiter.instance.check(
+      AuthRateLimitAction.phoneOtpSend,
+      phone,
+    );
+    if (!limiterState.allowed) {
+      setState(() => _error = limiterState.message(_isRussian));
+      return;
+    }
+
     setState(() {
       _linkingPhone = true;
       _error = null;
@@ -452,6 +462,10 @@ class _AccountProfileEditPageState
 
     try {
       await ref.read(authControllerProvider).linkPhoneForLogin(phone: phone);
+      await AuthRateLimiter.instance.recordSent(
+        AuthRateLimitAction.phoneOtpSend,
+        phone,
+      );
       if (!mounted) return;
       _phoneOtpC.clear();
       _startPhoneResendTimer();
@@ -468,6 +482,10 @@ class _AccountProfileEditPageState
       });
     } catch (e) {
       if (!mounted) return;
+      await AuthRateLimiter.instance.recordFailure(
+        AuthRateLimitAction.phoneOtpSend,
+        phone,
+      );
       if (_isPhoneAlreadyRegistered(e)) {
         setState(() {
           _phoneConflictPhone = phone;
@@ -576,6 +594,15 @@ class _AccountProfileEditPageState
       return;
     }
 
+    final limiterState = await AuthRateLimiter.instance.check(
+      AuthRateLimitAction.phoneOtpVerify,
+      phone,
+    );
+    if (!limiterState.allowed) {
+      setState(() => _error = limiterState.message(_isRussian));
+      return;
+    }
+
     setState(() {
       _linkingPhone = true;
       _error = null;
@@ -609,6 +636,10 @@ class _AccountProfileEditPageState
           );
       ref.invalidate(accountOwnerProfileProvider);
       ref.invalidate(currentUserProvider);
+      await AuthRateLimiter.instance.recordSuccess(
+        AuthRateLimitAction.phoneOtpVerify,
+        phone,
+      );
       if (!mounted) return;
       _phoneResendTimer?.cancel();
       setState(() {
@@ -623,6 +654,10 @@ class _AccountProfileEditPageState
       });
     } catch (e) {
       if (!mounted) return;
+      await AuthRateLimiter.instance.recordFailure(
+        AuthRateLimitAction.phoneOtpVerify,
+        phone,
+      );
       setState(() {
         _error = _isRussian
             ? 'Не удалось привязать телефон. Возможно, номер уже используется другим аккаунтом.\n$e'

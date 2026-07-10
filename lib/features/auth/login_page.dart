@@ -13,6 +13,7 @@ import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
 import '../../gen_l10n/app_localizations.dart';
 import '../../core/locale_provider.dart';
+import 'auth_rate_limiter.dart';
 import 'auth_controller.dart';
 import 'phone_number_field.dart';
 
@@ -86,6 +87,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     FocusScope.of(context).unfocus();
 
     final t = AppLocalizations.of(context)!;
+    final isRussian = Localizations.localeOf(context).languageCode == 'ru';
     setState(() => _error = null);
 
     final msg = _validate(t);
@@ -96,6 +98,16 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       } else {
         _passF.requestFocus();
       }
+      return;
+    }
+
+    final subject = _emailC.text.trim();
+    final limiterState = await AuthRateLimiter.instance.check(
+      AuthRateLimitAction.signIn,
+      subject,
+    );
+    if (!limiterState.allowed) {
+      setState(() => _error = limiterState.message(isRussian));
       return;
     }
 
@@ -115,10 +127,18 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         return;
       }
 
+      await AuthRateLimiter.instance.recordSuccess(
+        AuthRateLimitAction.signIn,
+        subject,
+      );
       if (!mounted) return;
       context.go(Routes.search);
     } on AuthException catch (e) {
       if (!mounted) return;
+      await AuthRateLimiter.instance.recordFailure(
+        AuthRateLimitAction.signIn,
+        subject,
+      );
       setState(
         () => _error = AppErrorMapper.message(
           e,
@@ -128,6 +148,10 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       );
     } catch (e) {
       if (!mounted) return;
+      await AuthRateLimiter.instance.recordFailure(
+        AuthRateLimitAction.signIn,
+        subject,
+      );
       setState(
         () => _error = AppErrorMapper.message(
           e,
@@ -154,6 +178,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   Future<void> _signInWithPhonePassword() async {
     FocusScope.of(context).unfocus();
     final t = AppLocalizations.of(context)!;
+    final isRussian = Localizations.localeOf(context).languageCode == 'ru';
     final phone = _normalizedPhone();
     final password = _phonePassC.text;
     if (phone.isEmpty) {
@@ -168,6 +193,15 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     if (password.length < kPasswordMinLen) {
       setState(() => _error = t.passwordMin6);
       _phonePassF.requestFocus();
+      return;
+    }
+
+    final limiterState = await AuthRateLimiter.instance.check(
+      AuthRateLimitAction.phoneSignIn,
+      phone,
+    );
+    if (!limiterState.allowed) {
+      setState(() => _error = limiterState.message(isRussian));
       return;
     }
 
@@ -212,10 +246,18 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         setState(() => _error = t.signInUserIdMissing);
         return;
       }
+      await AuthRateLimiter.instance.recordSuccess(
+        AuthRateLimitAction.phoneSignIn,
+        phone,
+      );
       if (!mounted) return;
       context.go(Routes.search);
     } on AuthException catch (e) {
       if (!mounted) return;
+      await AuthRateLimiter.instance.recordFailure(
+        AuthRateLimitAction.phoneSignIn,
+        phone,
+      );
       setState(
         () => _error = AppErrorMapper.message(
           e,
@@ -225,6 +267,10 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       );
     } catch (_) {
       if (!mounted) return;
+      await AuthRateLimiter.instance.recordFailure(
+        AuthRateLimitAction.phoneSignIn,
+        phone,
+      );
       setState(() => _error = t.signInGenericError);
     } finally {
       TextInput.finishAutofillContext(shouldSave: true);

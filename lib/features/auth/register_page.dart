@@ -16,6 +16,7 @@ import '../../ui/brand/brand_theme.dart';
 import '../../gen_l10n/app_localizations.dart';
 import '../legal/legal_consent_service.dart';
 import '../legal/legal_documents.dart';
+import 'auth_rate_limiter.dart';
 import 'auth_controller.dart';
 import 'password_strength.dart';
 import 'phone_number_field.dart';
@@ -830,6 +831,7 @@ class _PhoneOtpDialogState extends ConsumerState<_PhoneOtpDialog> {
 
   Future<void> _sendCode() async {
     final t = AppLocalizations.of(context)!;
+    final isRu = Localizations.localeOf(context).languageCode == 'ru';
     final phone = _normalizedPhone();
     if (phone.isEmpty) {
       setState(() => _error = t.phoneInternationalHint);
@@ -857,12 +859,25 @@ class _PhoneOtpDialogState extends ConsumerState<_PhoneOtpDialog> {
       return;
     }
 
+    final limiterState = await AuthRateLimiter.instance.check(
+      AuthRateLimitAction.phoneOtpSend,
+      phone,
+    );
+    if (!limiterState.allowed) {
+      setState(() => _error = limiterState.message(isRu));
+      return;
+    }
+
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
       await ref.read(authControllerProvider).sendPhoneOtp(phone: phone);
+      await AuthRateLimiter.instance.recordSent(
+        AuthRateLimitAction.phoneOtpSend,
+        phone,
+      );
       if (!mounted) return;
       setState(() {
         _codeSent = true;
@@ -871,6 +886,10 @@ class _PhoneOtpDialogState extends ConsumerState<_PhoneOtpDialog> {
       _startResendTimer();
     } on AuthException catch (e) {
       if (!mounted) return;
+      await AuthRateLimiter.instance.recordFailure(
+        AuthRateLimitAction.phoneOtpSend,
+        phone,
+      );
       setState(
         () => _error = AppErrorMapper.message(
           e,
@@ -880,6 +899,10 @@ class _PhoneOtpDialogState extends ConsumerState<_PhoneOtpDialog> {
       );
     } catch (_) {
       if (!mounted) return;
+      await AuthRateLimiter.instance.recordFailure(
+        AuthRateLimitAction.phoneOtpSend,
+        phone,
+      );
       setState(() => _error = t.phoneOtpSendFailed);
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -888,9 +911,20 @@ class _PhoneOtpDialogState extends ConsumerState<_PhoneOtpDialog> {
 
   Future<void> _verifyCode() async {
     final t = AppLocalizations.of(context)!;
+    final isRu = Localizations.localeOf(context).languageCode == 'ru';
     final code = _codeC.text.trim();
     if (code.isEmpty) {
       setState(() => _error = t.phoneOtpEnterCode);
+      return;
+    }
+
+    final phone = _normalizedPhone();
+    final limiterState = await AuthRateLimiter.instance.check(
+      AuthRateLimitAction.phoneOtpVerify,
+      phone,
+    );
+    if (!limiterState.allowed) {
+      setState(() => _error = limiterState.message(isRu));
       return;
     }
 
@@ -901,7 +935,7 @@ class _PhoneOtpDialogState extends ConsumerState<_PhoneOtpDialog> {
     try {
       await ref
           .read(authControllerProvider)
-          .verifyPhoneOtp(phone: _normalizedPhone(), token: code);
+          .verifyPhoneOtp(phone: phone, token: code);
       await ref
           .read(authControllerProvider)
           .setCurrentUserPassword(password: _passC.text);
@@ -909,10 +943,18 @@ class _PhoneOtpDialogState extends ConsumerState<_PhoneOtpDialog> {
         ref.read(supabaseProvider),
         source: 'phone_registration',
       );
+      await AuthRateLimiter.instance.recordSuccess(
+        AuthRateLimitAction.phoneOtpVerify,
+        phone,
+      );
       if (!mounted) return;
       Navigator.of(context).pop(true);
     } on AuthException catch (e) {
       if (!mounted) return;
+      await AuthRateLimiter.instance.recordFailure(
+        AuthRateLimitAction.phoneOtpVerify,
+        phone,
+      );
       setState(
         () => _error = AppErrorMapper.message(
           e,
@@ -922,6 +964,10 @@ class _PhoneOtpDialogState extends ConsumerState<_PhoneOtpDialog> {
       );
     } catch (_) {
       if (!mounted) return;
+      await AuthRateLimiter.instance.recordFailure(
+        AuthRateLimitAction.phoneOtpVerify,
+        phone,
+      );
       setState(() => _error = t.phoneOtpVerifyFailed);
     } finally {
       if (mounted) setState(() => _loading = false);

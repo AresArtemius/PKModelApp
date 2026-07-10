@@ -12,6 +12,7 @@
 
 ## Журнал изменений
 
+- 2026-07-10: добавлен мягкий anti-bruteforce/cooldown в Auth UI: локальные лимиты для email/phone login, отправки и проверки phone OTP, повторной отправки email verification; commit `TBD`.
 - 2026-07-10: добавлена проверка силы нового пароля при email/phone регистрации, привязке email и смене пароля: шкала надежности, подсказки, минимум 8 символов, запрет популярных/повторяющихся/последовательных паролей и включения email/телефона; commit `4c43b80`.
 - 2026-07-10: пункт 11 начат с launch-first privacy слоя: добавлены публичные страницы Privacy/Terms/Cookie/Processing notice, consent-блок в email/phone регистрации, версии документов сохраняются в auth metadata и подготовлен SQL/RPC `legal_consents.sql` для отдельной таблицы согласий; commit `077a719`.
 - 2026-07-09: production worker `send-notifications` получил понятную классификацию FCM ошибок: auth/secrets пишутся как `FCM credentials problem`, invalid/unregistered токены выключаются, отсутствие пригодных токенов остается `skipped`; commit `eed33d2`.
@@ -295,11 +296,12 @@ Changelog:
 - Публичные launch-draft документы: Privacy Policy, Terms of Service, Cookie Policy и Consent/Data Processing Notice доступны как отдельные страницы `/privacy`, `/terms`, `/cookies`, `/processing-notice`.
 - Принятие документов при email/phone регистрации: пользователь явно принимает consent, версии документов и дата принятия сохраняются в auth metadata; SQL/RPC `legal_consents.sql` подготовлен для отдельной таблицы `user_legal_consents` после применения в Supabase.
 - Проверка силы нового пароля при регистрации/смене: минимум 8 символов, буквы + цифры/символы, запрет популярных, повторяющихся и последовательных паролей, запрет включать email/телефон; в UI есть шкала надежности и подсказки. Логин сохраняет старую мягкую проверку, чтобы не заблокировать существующие короткие пароли.
+- Мягкий anti-bruteforce/cooldown в клиенте: email/phone login блокируется после серии неудач, phone OTP и resend email verification имеют cooldown и временную блокировку после частых попыток.
 
 Не хватает:
 - Юридической финальной вычитки публичных документов перед масштабным запуском.
 - Применить `supabase/sql/legal_consents.sql` в Supabase, чтобы consent дополнительно писался в отдельную таблицу; IP/User-Agent на первом этапе фиксируются как client hint/пустой IP, полноценный серверный capture можно усилить отдельным шагом.
-- Rate limiting и анти-bruteforce для логина, восстановления пароля, OTP/SMS и повторной отправки email.
+- Настоящий server-side rate limiting для Auth через Edge Function/прокси-слой или отдельную серверную схему, если перед production потребуется защита сильнее локального UI cooldown.
 - 2FA/MFA для админов и casting/account-owner ролей, с резервными кодами.
 - Управления активными сессиями: список устройств, “выйти со всех устройств”, уведомление о новом входе.
 - Security notifications: новый вход, смена пароля/email/телефона, подозрительная активность.

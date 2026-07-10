@@ -9,6 +9,7 @@ import '../../gen_l10n/app_localizations.dart';
 import '../../ui/brand/brand_pill_button.dart';
 import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
+import 'auth_rate_limiter.dart';
 import 'auth_controller.dart';
 
 class EmailVerificationPage extends ConsumerStatefulWidget {
@@ -32,6 +33,19 @@ class _EmailVerificationPageState extends ConsumerState<EmailVerificationPage> {
     if (_loading || _email.isEmpty) return;
 
     final t = AppLocalizations.of(context)!;
+    final isRussian = Localizations.localeOf(context).languageCode == 'ru';
+    final limiterState = await AuthRateLimiter.instance.check(
+      AuthRateLimitAction.emailVerificationResend,
+      _email,
+    );
+    if (!limiterState.allowed) {
+      setState(() {
+        _message = limiterState.message(isRussian);
+        _isError = true;
+      });
+      return;
+    }
+
     setState(() {
       _loading = true;
       _message = null;
@@ -40,6 +54,10 @@ class _EmailVerificationPageState extends ConsumerState<EmailVerificationPage> {
 
     try {
       await ref.read(authControllerProvider).resendSignUpEmail(_email);
+      await AuthRateLimiter.instance.recordSent(
+        AuthRateLimitAction.emailVerificationResend,
+        _email,
+      );
       if (!mounted) return;
       setState(() {
         _message = t.emailVerificationResent;
@@ -47,12 +65,20 @@ class _EmailVerificationPageState extends ConsumerState<EmailVerificationPage> {
       });
     } on AuthException catch (e) {
       if (!mounted) return;
+      await AuthRateLimiter.instance.recordFailure(
+        AuthRateLimitAction.emailVerificationResend,
+        _email,
+      );
       setState(() {
         _message = AppErrorMapper.message(e, t);
         _isError = true;
       });
     } catch (e) {
       if (!mounted) return;
+      await AuthRateLimiter.instance.recordFailure(
+        AuthRateLimitAction.emailVerificationResend,
+        _email,
+      );
       setState(() {
         _message = AppErrorMapper.message(e, t);
         _isError = true;
