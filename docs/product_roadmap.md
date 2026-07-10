@@ -12,7 +12,7 @@
 
 ## Журнал изменений
 
-- 2026-07-10: добавлен мягкий anti-bruteforce/cooldown в Auth UI: локальные лимиты для email/phone login, отправки и проверки phone OTP, повторной отправки email verification; commit `TBD`.
+- 2026-07-10: добавлен мягкий anti-bruteforce/cooldown в Auth UI: локальные лимиты для email/phone login, отправки и проверки phone OTP, повторной отправки email verification; commit `4986d3c`.
 - 2026-07-10: добавлена проверка силы нового пароля при email/phone регистрации, привязке email и смене пароля: шкала надежности, подсказки, минимум 8 символов, запрет популярных/повторяющихся/последовательных паролей и включения email/телефона; commit `4c43b80`.
 - 2026-07-10: пункт 11 начат с launch-first privacy слоя: добавлены публичные страницы Privacy/Terms/Cookie/Processing notice, consent-блок в email/phone регистрации, версии документов сохраняются в auth metadata и подготовлен SQL/RPC `legal_consents.sql` для отдельной таблицы согласий; commit `077a719`.
 - 2026-07-09: production worker `send-notifications` получил понятную классификацию FCM ошибок: auth/secrets пишутся как `FCM credentials problem`, invalid/unregistered токены выключаются, отсутствие пригодных токенов остается `skipped`; commit `eed33d2`.
