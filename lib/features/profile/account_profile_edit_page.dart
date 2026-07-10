@@ -5,11 +5,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/account_profile_service.dart';
 import '../../core/auth_providers.dart';
+import '../../core/router.dart';
 import '../../core/supabase_provider.dart';
 import '../../ui/brand/brand_admin_header.dart';
 import '../../ui/brand/brand_pill_button.dart';
@@ -1031,6 +1033,11 @@ class _AccountProfileEditPageState
                             onChange: _changePasswordForLogin,
                           ),
                           const SizedBox(height: kGap12),
+                          _AccountDevicesEntryCard(
+                            isRussian: _isRussian,
+                            onTap: () => context.go(Routes.accountDevices),
+                          ),
+                          const SizedBox(height: kGap12),
                           _field(_cityC, _isRussian ? 'Город' : 'City'),
                           _field(_countryC, _isRussian ? 'Страна' : 'Country'),
                           _field(_websiteC, _isRussian ? 'Сайт' : 'Website'),
@@ -1625,6 +1632,75 @@ class _PasswordLoginCard extends StatelessWidget {
                   : (isRussian ? 'СМЕНИТЬ ПАРОЛЬ' : 'CHANGE PASSWORD'),
               style: BrandPillStyle.light,
               onTap: busy ? null : onChange,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AccountDevicesEntryCard extends StatelessWidget {
+  const _AccountDevicesEntryCard({
+    required this.isRussian,
+    required this.onTap,
+  });
+
+  final bool isRussian;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: catalogCardDecoration(),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              gradient: BrandTheme.darkPillGradient,
+              boxShadow: BrandTheme.basePillShadow(isDark: true),
+            ),
+            child: const Icon(
+              Icons.devices_rounded,
+              color: Colors.white,
+              size: 22,
+            ),
+          ),
+          const SizedBox(width: kGap12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isRussian ? 'Устройства и входы' : 'Devices and sign-ins',
+                  style: _accountEditCommandStyle(
+                    size: 15,
+                    spacing: 0.8,
+                    weight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  isRussian
+                      ? 'Текущая сессия, push-устройства и быстрый выход на этом устройстве.'
+                      : 'Current session, push devices and quick sign-out on this device.',
+                  style: _accountEditBodyStyle(),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: 42,
+                  child: BrandPillButton(
+                    label: isRussian ? 'ОТКРЫТЬ' : 'OPEN',
+                    style: BrandPillStyle.light,
+                    onTap: onTap,
+                  ),
+                ),
+              ],
             ),
           ),
         ],

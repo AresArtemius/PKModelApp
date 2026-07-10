@@ -38,6 +38,7 @@ import '../features/notifications/app_notifications.dart';
 import '../features/notifications/notifications_page.dart';
 import '../features/profile/my_profile_page.dart';
 import '../features/profile/account_profile_edit_page.dart';
+import '../features/profile/account_devices_page.dart';
 import '../features/profile/public_account_profile_page.dart';
 import '../features/legal/legal_document_page.dart';
 import '../features/legal/legal_documents.dart';
@@ -66,6 +67,7 @@ abstract class Routes {
   static const notifications = '/notifications';
   static const profileAnalytics = '/profile_analytics';
   static const accountProfile = '/account_profile';
+  static const accountDevices = '/account_devices';
   static const publicAccountPrefix = '/@';
   static const publicAccount = '/@:tag';
 
@@ -115,6 +117,7 @@ class AppShell extends StatelessWidget {
     if (path.startsWith(Routes.billing)) return 3;
     if (path.startsWith(Routes.notifications)) return 3;
     if (path.startsWith(Routes.profileAnalytics)) return 3;
+    if (path.startsWith(Routes.accountDevices)) return 3;
     if (path.startsWith(Routes.me)) return 3;
     if (path.startsWith(Routes.admin)) return 4;
     if (path.startsWith(Routes.catalogAdmin)) return 4;
@@ -617,6 +620,10 @@ final List<RouteBase> appRoutes = [
   GoRoute(
     path: Routes.accountProfile,
     builder: (context, state) => const AccountProfileEditPage(),
+  ),
+  GoRoute(
+    path: Routes.accountDevices,
+    builder: (context, state) => const AccountDevicesPage(),
   ),
 
   GoRoute(
