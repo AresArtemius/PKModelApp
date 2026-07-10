@@ -249,7 +249,7 @@ Changelog:
 - RPC/SQL-слоя для сложных back-office поисков по агрегатам и счетчикам, если текущих PostgREST-фильтров станет мало на больших production-объемах.
 
 Changelog:
-- TBD — добавлен server-side поиск/фильтрация для back-office таблиц поверх staged loading: запросы учитывают search/status/role/stage/public до пагинации.
+- d0933a6 — добавлен server-side поиск/фильтрация для back-office таблиц поверх staged loading: запросы учитывают search/status/role/stage/public до пагинации.
 - 5c96cf4 — добавлена staged pagination для глубоких back-office таблиц: стартовая загрузка 80 строк, server-side range и branded “Загрузить еще”.
 - 47e3413 — добавлен первый performance-pass для Web: image cache при старте, `cacheExtent` у больших списков и облегченные брендовые тени/blur без изменения UX.
 
