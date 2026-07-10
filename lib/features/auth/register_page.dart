@@ -17,6 +17,7 @@ import '../../gen_l10n/app_localizations.dart';
 import '../legal/legal_consent_service.dart';
 import '../legal/legal_documents.dart';
 import 'auth_controller.dart';
+import 'password_strength.dart';
 import 'phone_number_field.dart';
 
 const _legalRequiredMessage =
@@ -82,7 +83,12 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
     if (email.isEmpty) return t.enterEmail;
     if (!_emailRegex.hasMatch(email)) return t.invalidEmail;
     if (p1.isEmpty) return t.enterPassword;
-    if (p1.length < kPasswordMinLen) return t.passwordMin6;
+    final passwordMessage = newPasswordValidationMessage(
+      p1,
+      isRussian: _isRussian,
+      email: email,
+    );
+    if (passwordMessage != null) return passwordMessage;
     if (p2.isEmpty) return t.enterPassword;
     if (p1 != p2) return t.passwordsDontMatch;
     if (!_acceptedLegal) return _legalRequiredMessage;
@@ -362,10 +368,14 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                                 action: TextInputAction.next,
                                 onSubmitted: () => _pass2F.requestFocus(),
                                 onChanged: (_) {
-                                  if (_error != null) {
-                                    setState(() => _error = null);
-                                  }
+                                  setState(() => _error = null);
                                 },
+                              ),
+                              const SizedBox(height: 10),
+                              PasswordStrengthMeter(
+                                password: _passC.text,
+                                isRussian: _isRussian,
+                                email: _emailC.text,
                               ),
                               const SizedBox(height: kRegisterGap12),
 
@@ -829,8 +839,13 @@ class _PhoneOtpDialogState extends ConsumerState<_PhoneOtpDialog> {
       setState(() => _error = t.enterPassword);
       return;
     }
-    if (_passC.text.length < kPasswordMinLen) {
-      setState(() => _error = t.passwordMin6);
+    final passwordMessage = newPasswordValidationMessage(
+      _passC.text,
+      isRussian: Localizations.localeOf(context).languageCode == 'ru',
+      phone: phone,
+    );
+    if (passwordMessage != null) {
+      setState(() => _error = passwordMessage);
       return;
     }
     if (_passC.text != _pass2C.text) {
@@ -982,6 +997,14 @@ class _PhoneOtpDialogState extends ConsumerState<_PhoneOtpDialog> {
                   icon: Icon(_hide1 ? Icons.visibility_off : Icons.visibility),
                 ),
               ),
+              onChanged: (_) => setState(() {}),
+            ),
+            const SizedBox(height: 10),
+            PasswordStrengthMeter(
+              password: _passC.text,
+              isRussian: isRu,
+              phone: _normalizedPhone(),
+              compact: true,
             ),
             const SizedBox(height: 12),
             TextField(

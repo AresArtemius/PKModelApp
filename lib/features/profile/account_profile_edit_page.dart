@@ -16,6 +16,7 @@ import '../../ui/brand/brand_pill_button.dart';
 import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
 import '../auth/auth_controller.dart';
+import '../auth/password_strength.dart';
 
 const String _kAccountAvatarBucket = 'profile-media';
 
@@ -253,13 +254,18 @@ class _AccountProfileEditPageState
     final password = await _askPassword(
       title: _isRussian ? 'Пароль для email' : 'Email password',
       actionLabel: _isRussian ? 'ПРИВЯЗАТЬ' : 'LINK',
+      email: email,
     );
     if (password == null) return;
-    if (password.length < 6) {
+    final passwordMessage = newPasswordValidationMessage(
+      password,
+      isRussian: _isRussian,
+      email: email,
+      phone: _confirmedPhoneForSave(user),
+    );
+    if (passwordMessage != null) {
       setState(() {
-        _error = _isRussian
-            ? 'Пароль должен быть не короче 6 символов.'
-            : 'Password must be at least 6 characters.';
+        _error = passwordMessage;
       });
       return;
     }
@@ -325,13 +331,24 @@ class _AccountProfileEditPageState
     final password = await _askPassword(
       title: _isRussian ? 'Пароль для входа' : 'Sign-in password',
       actionLabel: _isRussian ? 'СОХРАНИТЬ' : 'SAVE',
+      email: ref.read(currentUserProvider) == null
+          ? null
+          : _confirmedEmailForSave(ref.read(currentUserProvider)!),
+      phone: ref.read(currentUserProvider) == null
+          ? null
+          : _confirmedPhoneForSave(ref.read(currentUserProvider)!),
     );
     if (password == null) return;
-    if (password.length < 6) {
+    final user = ref.read(currentUserProvider);
+    final passwordMessage = newPasswordValidationMessage(
+      password,
+      isRussian: _isRussian,
+      email: user == null ? null : _confirmedEmailForSave(user),
+      phone: user == null ? null : _confirmedPhoneForSave(user),
+    );
+    if (passwordMessage != null) {
       setState(() {
-        _error = _isRussian
-            ? 'Пароль должен быть не короче 6 символов.'
-            : 'Password must be at least 6 characters.';
+        _error = passwordMessage;
       });
       return;
     }
@@ -619,6 +636,8 @@ class _AccountProfileEditPageState
   Future<String?> _askPassword({
     required String title,
     required String actionLabel,
+    String? email,
+    String? phone,
   }) async {
     final controller = TextEditingController();
     var obscure = true;
@@ -648,6 +667,7 @@ class _AccountProfileEditPageState
                   controller: controller,
                   obscureText: obscure,
                   autofocus: true,
+                  onChanged: (_) => setDialogState(() {}),
                   decoration:
                       profileFieldDecoration(
                         label: _isRussian ? 'Пароль' : 'Password',
@@ -662,6 +682,14 @@ class _AccountProfileEditPageState
                           ),
                         ),
                       ),
+                ),
+                const SizedBox(height: kGap10),
+                PasswordStrengthMeter(
+                  password: controller.text,
+                  isRussian: _isRussian,
+                  email: email,
+                  phone: phone,
+                  compact: true,
                 ),
                 const SizedBox(height: kGap16),
                 Row(
