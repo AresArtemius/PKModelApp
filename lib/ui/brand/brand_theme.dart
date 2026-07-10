@@ -1,4 +1,5 @@
 import 'dart:ui' as ui;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 /// Единый стиль приложения (цвета, радиусы, тени, фон, кнопки).
@@ -31,32 +32,68 @@ class BrandTheme {
   static const _bgVignetteCenter = Alignment(0.0, 0.0);
   static const _bgVignetteRadius = 1.1;
   static const _bgVignetteStops = <double>[0.55, 0.82, 1.0];
-  static const _bgBlurSigma = 5.0;
+  static double get _bgBlurSigma => kIsWeb ? 1.5 : 5.0;
 
   // Shadows
   static const _baseShadowColor = Color(0x33000000);
 
-  static List<BoxShadow> basePillShadow({required bool isDark}) => [
-    BoxShadow(
-      color: _baseShadowColor,
-      blurRadius: isDark ? 18 : 14,
-      offset: const Offset(0, 8),
-    ),
-    const BoxShadow(
-      color: BrandTheme._white22,
-      blurRadius: 8,
-      offset: Offset(0, -4),
-    ),
-  ];
+  static List<BoxShadow> basePillShadow({required bool isDark}) {
+    if (kIsWeb) {
+      return [
+        BoxShadow(
+          color: _baseShadowColor,
+          blurRadius: isDark ? 12 : 9,
+          offset: const Offset(0, 5),
+        ),
+      ];
+    }
+
+    return [
+      BoxShadow(
+        color: _baseShadowColor,
+        blurRadius: isDark ? 18 : 14,
+        offset: const Offset(0, 8),
+      ),
+      const BoxShadow(
+        color: BrandTheme._white22,
+        blurRadius: 8,
+        offset: Offset(0, -4),
+      ),
+    ];
+  }
 
   static List<BoxShadow> redGlow({required bool strong}) => [
     BoxShadow(
       color: strong ? const Color(0x88B00000) : const Color(0x66B00000),
-      blurRadius: strong ? 22 : 16,
-      spreadRadius: strong ? 3 : 1,
-      offset: const Offset(0, 9),
+      blurRadius: kIsWeb ? (strong ? 14 : 10) : (strong ? 22 : 16),
+      spreadRadius: kIsWeb ? (strong ? 1 : 0) : (strong ? 3 : 1),
+      offset: Offset(0, kIsWeb ? 5 : 9),
     ),
   ];
+
+  static List<BoxShadow> surfaceShadow({
+    required Color darkColor,
+    required double darkBlur,
+    required Offset darkOffset,
+    required Color lightColor,
+    required double lightBlur,
+    required Offset lightOffset,
+  }) {
+    if (kIsWeb) {
+      return [
+        BoxShadow(
+          color: darkColor,
+          blurRadius: darkBlur * 0.6,
+          offset: Offset(darkOffset.dx * 0.7, darkOffset.dy * 0.6),
+        ),
+      ];
+    }
+
+    return [
+      BoxShadow(color: darkColor, blurRadius: darkBlur, offset: darkOffset),
+      BoxShadow(color: lightColor, blurRadius: lightBlur, offset: lightOffset),
+    ];
+  }
 
   // Gradients
   static const darkPillGradient = LinearGradient(

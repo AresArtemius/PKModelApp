@@ -16,6 +16,7 @@ import 'admin_style.dart';
 const _kCastingsBg = BrandTheme.greyMid;
 const _kCastingsPad = 16.0;
 const _kCastingsDesktopBreakpoint = 920.0;
+const _kCastingsListCacheExtent = 900.0;
 
 final _adminCastingsProvider = FutureProvider.autoDispose<List<_AdminCastingRow>>((
   ref,
@@ -393,6 +394,7 @@ class _CastingsTable extends StatelessWidget {
           child: ConstrainedBox(
             constraints: const BoxConstraints(minWidth: 1040),
             child: ListView.separated(
+              cacheExtent: _kCastingsListCacheExtent,
               padding: const EdgeInsets.all(10),
               itemCount: castings.length + 1,
               separatorBuilder: (_, _) =>

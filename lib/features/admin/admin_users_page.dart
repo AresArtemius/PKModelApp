@@ -15,6 +15,7 @@ import 'admin_style.dart';
 const _kUsersPageBg = BrandTheme.greyMid;
 const _kUsersPad = 16.0;
 const _kUsersDesktopBreakpoint = 920.0;
+const _kUsersListCacheExtent = 900.0;
 
 final _adminUsersProvider = FutureProvider.autoDispose<List<_AdminUserRow>>((
   ref,
@@ -306,6 +307,7 @@ class _UsersTablePanel extends StatelessWidget {
                           minWidth: isDesktop ? 980 : 860,
                         ),
                         child: ListView.separated(
+                          cacheExtent: _kUsersListCacheExtent,
                           padding: const EdgeInsets.all(10),
                           itemCount: filtered.length + 1,
                           separatorBuilder: (_, _) =>
@@ -373,6 +375,7 @@ class _UsersMobileList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView.separated(
+      cacheExtent: _kUsersListCacheExtent,
       padding: const EdgeInsets.only(bottom: 18),
       itemCount: users.length,
       separatorBuilder: (_, _) => const SizedBox(height: 10),

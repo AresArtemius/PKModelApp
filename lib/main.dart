@@ -56,6 +56,19 @@ const double _kWebCabinetMaxWidth = 1440.0;
 const double _kBootstrapErrorMaxWidth = 520.0;
 const EdgeInsets _kBootstrapErrorPadding = EdgeInsets.all(24);
 const double _kBootstrapErrorGap = 12.0;
+const int _kWebImageCacheCount = 450;
+const int _kMobileImageCacheCount = 280;
+const int _kWebImageCacheMb = 180;
+const int _kMobileImageCacheMb = 96;
+
+void _configureImageCache() {
+  final imageCache = PaintingBinding.instance.imageCache;
+  imageCache.maximumSize = kIsWeb
+      ? _kWebImageCacheCount
+      : _kMobileImageCacheCount;
+  imageCache.maximumSizeBytes =
+      (kIsWeb ? _kWebImageCacheMb : _kMobileImageCacheMb) * 1024 * 1024;
+}
 
 class _WebAppFrame extends StatelessWidget {
   const _WebAppFrame({required this.child});
@@ -123,6 +136,7 @@ Future<void> main() async {
   await runZonedGuarded(
     () async {
       WidgetsFlutterBinding.ensureInitialized();
+      _configureImageCache();
 
       FlutterError.onError = (details) {
         FlutterError.presentError(details);

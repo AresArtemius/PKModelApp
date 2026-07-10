@@ -240,11 +240,14 @@ Changelog:
 - Частичная lazy-загрузка.
 - Сжатие медиа перед upload.
 - Progress upload по файлам.
+- Web performance-pass: настроены decoded image cache, cache window у больших builder-списков каталога/back-office и облегченные тени/blur для Flutter Web.
 
 Не хватает:
-- Виртуализации больших списков.
-- Агрессивного кэша.
-- Облегчения тяжелых теней/рендеринга Flutter Web.
+- Глубокого performance-профилирования на production-данных и точечной оптимизации экранов, если реальные метрики покажут узкие места.
+- Server-side pagination/infinite scroll для таблиц и каталога, когда объемы перерастут текущие безопасные лимиты.
+
+Changelog:
+- TBD — добавлен первый performance-pass для Web: image cache при старте, `cacheExtent` у больших списков и облегченные брендовые тени/blur без изменения UX.
 
 ## 10. Админка
 

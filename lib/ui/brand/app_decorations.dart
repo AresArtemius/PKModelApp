@@ -73,18 +73,14 @@ BoxDecoration castingCardDecoration() {
     ),
     borderRadius: BorderRadius.circular(kCardRadius),
     border: Border.all(color: Colors.white.withValues(alpha: 0.76), width: 1),
-    boxShadow: [
-      const BoxShadow(
-        color: Color(0x22000000),
-        blurRadius: 16,
-        offset: Offset(0, 10),
-      ),
-      BoxShadow(
-        color: Colors.white.withValues(alpha: 0.92),
-        blurRadius: 8,
-        offset: const Offset(0, -3),
-      ),
-    ],
+    boxShadow: BrandTheme.surfaceShadow(
+      darkColor: const Color(0x22000000),
+      darkBlur: 16,
+      darkOffset: const Offset(0, 10),
+      lightColor: Colors.white.withValues(alpha: 0.92),
+      lightBlur: 8,
+      lightOffset: const Offset(0, -3),
+    ),
   );
 }
 
@@ -99,18 +95,14 @@ BoxDecoration castingDialogDecoration() {
         const Color(0xFFF1F1F1).withValues(alpha: 0.95),
       ],
     ),
-    boxShadow: [
-      BoxShadow(
-        color: Colors.black.withValues(alpha: 0.18),
-        blurRadius: 22,
-        offset: const Offset(0, 12),
-      ),
-      BoxShadow(
-        color: Colors.white.withValues(alpha: 0.82),
-        blurRadius: 8,
-        offset: const Offset(0, -3),
-      ),
-    ],
+    boxShadow: BrandTheme.surfaceShadow(
+      darkColor: Colors.black.withValues(alpha: 0.18),
+      darkBlur: 22,
+      darkOffset: const Offset(0, 12),
+      lightColor: Colors.white.withValues(alpha: 0.82),
+      lightBlur: 8,
+      lightOffset: const Offset(0, -3),
+    ),
     border: Border.all(color: Colors.white.withValues(alpha: 0.78), width: 1),
   );
 }
@@ -131,18 +123,14 @@ BoxDecoration catalogCardDecoration() {
       ],
     ),
     border: Border.all(color: Colors.white.withValues(alpha: 0.82), width: 1),
-    boxShadow: [
-      const BoxShadow(
-        color: Color(0x21000000),
-        blurRadius: 15,
-        offset: Offset(0, 9),
-      ),
-      BoxShadow(
-        color: Colors.white.withValues(alpha: 0.9),
-        blurRadius: 8,
-        offset: const Offset(0, -3),
-      ),
-    ],
+    boxShadow: BrandTheme.surfaceShadow(
+      darkColor: const Color(0x21000000),
+      darkBlur: 15,
+      darkOffset: const Offset(0, 9),
+      lightColor: Colors.white.withValues(alpha: 0.9),
+      lightBlur: 8,
+      lightOffset: const Offset(0, -3),
+    ),
   );
 }
 
@@ -165,18 +153,14 @@ BoxDecoration catalogSearchDecoration({
       color: borderColor ?? Colors.white.withValues(alpha: 0.72),
       width: borderWidth,
     ),
-    boxShadow: [
-      const BoxShadow(
-        color: Color(0x16000000),
-        blurRadius: 11,
-        offset: Offset(0, 6),
-      ),
-      BoxShadow(
-        color: Colors.white.withValues(alpha: 0.86),
-        blurRadius: 6,
-        offset: const Offset(0, -2),
-      ),
-    ],
+    boxShadow: BrandTheme.surfaceShadow(
+      darkColor: const Color(0x16000000),
+      darkBlur: 11,
+      darkOffset: const Offset(0, 6),
+      lightColor: Colors.white.withValues(alpha: 0.86),
+      lightBlur: 6,
+      lightOffset: const Offset(0, -2),
+    ),
   );
 }
 
@@ -203,18 +187,14 @@ BoxDecoration catalogDialogDecoration() {
       ],
     ),
     border: Border.all(color: Colors.white.withValues(alpha: 0.82), width: 1),
-    boxShadow: [
-      BoxShadow(
-        color: Colors.black.withValues(alpha: 0.24),
-        blurRadius: 24,
-        offset: const Offset(0, 13),
-      ),
-      BoxShadow(
-        color: Colors.white.withValues(alpha: 0.9),
-        blurRadius: 9,
-        offset: const Offset(0, -3),
-      ),
-    ],
+    boxShadow: BrandTheme.surfaceShadow(
+      darkColor: Colors.black.withValues(alpha: 0.24),
+      darkBlur: 24,
+      darkOffset: const Offset(0, 13),
+      lightColor: Colors.white.withValues(alpha: 0.9),
+      lightBlur: 9,
+      lightOffset: const Offset(0, -3),
+    ),
   );
 }
 

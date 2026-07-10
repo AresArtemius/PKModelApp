@@ -16,6 +16,7 @@ import 'selection_status.dart';
 const _kSelectionsBg = BrandTheme.greyMid;
 const _kSelectionsPad = 16.0;
 const _kSelectionsDesktopBreakpoint = 920.0;
+const _kSelectionsListCacheExtent = 900.0;
 
 final _adminSelectionsProvider =
     FutureProvider.autoDispose<List<_AdminSelectionRow>>((ref) async {
@@ -441,6 +442,7 @@ class _SelectionsTable extends StatelessWidget {
           child: ConstrainedBox(
             constraints: const BoxConstraints(minWidth: 1080),
             child: ListView.separated(
+              cacheExtent: _kSelectionsListCacheExtent,
               padding: const EdgeInsets.all(10),
               itemCount: selections.length + 1,
               separatorBuilder: (_, _) =>
