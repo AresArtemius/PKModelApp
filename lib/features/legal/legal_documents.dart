@@ -1,4 +1,4 @@
-const kLegalVersion = '2026-07-10';
+const kLegalVersion = '2026-07-11';
 
 enum LegalDocumentKind { privacy, terms, cookies, processingNotice }
 
@@ -41,44 +41,74 @@ const legalDocuments = <LegalDocument>[
       LegalDocumentSection(
         title: 'Что мы собираем',
         body:
-            'PK Management хранит данные аккаунта, анкет, кастингов, подборок, сообщений, медиафайлов и технические события доставки уведомлений. Для несовершеннолетних участников данные должны предоставляться законным представителем или с его согласия.',
+            'PK Management хранит данные аккаунта, контактные данные, account tag, роли, анкеты моделей, актеров и других специалистов, кастинги, подборки, сообщения, медиафайлы, настройки уведомлений, данные устройств и технические события доставки уведомлений.',
       ),
       LegalDocumentSection(
         title: 'Зачем это нужно',
         body:
-            'Данные используются для работы каталога, кастингов, коммуникации между участниками и заказчиками, модерации, безопасности, поддержки и исполнения пользовательских запросов.',
+            'Данные используются для регистрации и входа, работы каталога, создания и модерации анкет, проведения кастингов и подборок, общения в чатах, отправки push/email-уведомлений, поддержки, безопасности, аудита важных действий и исполнения запросов пользователя.',
       ),
       LegalDocumentSection(
         title: 'Кому доступны данные',
         body:
-            'Доступ зависит от настроек видимости, роли пользователя и участия в кастинге, подборке или диалоге. Администраторы могут видеть данные, необходимые для модерации, поддержки и безопасности.',
+            'Доступ зависит от роли пользователя, настроек видимости, участия в кастинге, подборке или диалоге. Администраторы и модераторы могут видеть данные, необходимые для модерации, поддержки, безопасности и обработки запросов. Клиенты и участники получают доступ только к тем данным, которые нужны для согласованных рабочих процессов.',
+      ),
+      LegalDocumentSection(
+        title: 'Медиа и приватные материалы',
+        body:
+            'Фото, видео, голосовые сообщения, файлы и материалы анкет используются для просмотра, отбора, коммуникации и подготовки подборок. Приватные чатовые медиа хранятся с ограниченным доступом; публичные материалы анкет могут быть видны в каталоге или подборках согласно настройкам и логике приложения.',
+      ),
+      LegalDocumentSection(
+        title: 'Несовершеннолетние участники',
+        body:
+            'Если данные относятся к несовершеннолетнему участнику, аккаунт и материалы должны создаваться, передаваться и поддерживаться родителем, законным представителем или с его явного согласия. Представитель отвечает за актуальность данных и наличие необходимых разрешений на участие в кастингах, съемках и публикацию материалов.',
       ),
       LegalDocumentSection(
         title: 'Хранение и удаление',
         body:
-            'Пользователь может запросить удаление аккаунта и связанных персональных данных. Часть записей может сохраняться ограниченное время, если это требуется для безопасности, журналов действий, споров или законных обязательств.',
+            'Пользователь может экспортировать доступные ему данные и запросить удаление аккаунта или отдельных данных. Часть записей может сохраняться ограниченное время, если это нужно для безопасности, журналов действий, расследования спорных ситуаций, подтверждения согласий или выполнения обязательных требований.',
+      ),
+      LegalDocumentSection(
+        title: 'Запросы по данным',
+        body:
+            'Пользователь может обратиться через доступные каналы поддержки приложения, чтобы уточнить состав данных, обновить их, запросить экспорт, ограничение обработки или удаление. Перед выполнением чувствительного запроса может потребоваться подтверждение личности владельца аккаунта.',
       ),
     ],
     sectionsEn: [
       LegalDocumentSection(
         title: 'Data we collect',
         body:
-            'PK Management stores account data, profiles, castings, selections, messages, media files and technical notification delivery events. Minors must provide data through a parent/legal guardian or with their consent.',
+            'PK Management stores account data, contact details, account tag, roles, profiles for models, actors and other specialists, castings, selections, messages, media files, notification settings, device data and technical notification delivery events.',
       ),
       LegalDocumentSection(
         title: 'Why we use it',
         body:
-            'Data is used to operate the catalogue, castings, communication, moderation, security, support and user-requested product workflows.',
+            'Data is used for registration and sign-in, catalogue operation, profile creation and moderation, castings and selections, chats, push/email notifications, support, security, audit of important actions and user-requested workflows.',
       ),
       LegalDocumentSection(
         title: 'Who can access it',
         body:
-            'Access depends on visibility settings, user role and participation in a casting, selection or dialog. Administrators may access data needed for moderation, support and safety.',
+            'Access depends on user role, visibility settings and participation in a casting, selection or dialog. Administrators and moderators may access data needed for moderation, support, safety and request handling. Clients and participants receive only the data needed for agreed workflows.',
+      ),
+      LegalDocumentSection(
+        title: 'Media and private materials',
+        body:
+            'Photos, videos, voice messages, files and profile materials are used for review, selection, communication and preparation of selections. Private chat media is stored with restricted access; public profile materials may be visible in the catalogue or selections according to app settings and product logic.',
+      ),
+      LegalDocumentSection(
+        title: 'Minors',
+        body:
+            'If data relates to a minor, the account and materials must be created, provided and maintained by a parent/legal guardian or with their explicit consent. The representative is responsible for data accuracy and required permissions for castings, shoots and publication of materials.',
       ),
       LegalDocumentSection(
         title: 'Retention and deletion',
         body:
-            'A user can request account deletion and removal of related personal data. Some records may be retained for a limited period when needed for safety, audit logs, disputes or legal obligations.',
+            'A user can export available data and request account or data deletion. Some records may be retained for a limited period when needed for safety, audit logs, dispute investigation, proof of consent or mandatory requirements.',
+      ),
+      LegalDocumentSection(
+        title: 'Data requests',
+        body:
+            'A user can contact the app through available support channels to clarify stored data, update it, request export, restrict processing or request deletion. Sensitive requests may require identity confirmation by the account owner.',
       ),
     ],
   ),
@@ -96,17 +126,32 @@ const legalDocuments = <LegalDocument>[
       LegalDocumentSection(
         title: 'Ответственность пользователя',
         body:
-            'Пользователь отвечает за точность данных, права на загружаемые материалы и корректность коммуникации. Запрещены чужие данные без разрешения, незаконный контент, спам и обход ограничений платформы.',
+            'Пользователь отвечает за точность данных, права на загружаемые материалы, наличие согласий от изображенных людей и корректность коммуникации. Запрещены чужие данные без разрешения, незаконный контент, спам, обман, обход ограничений платформы и действия, которые могут навредить другим пользователям.',
+      ),
+      LegalDocumentSection(
+        title: 'Анкеты и роли',
+        body:
+            'Анкеты могут относиться к моделям, актерам, фотографам, видеографам, стилистам, визажистам и другим ролям. Пользователь подтверждает, что информация в анкете актуальна, а материалы можно использовать в рамках каталога, кастингов, подборок и коммуникации в приложении.',
       ),
       LegalDocumentSection(
         title: 'Модерация и ограничения',
         body:
-            'Администрация может скрывать, отклонять, ограничивать или удалять материалы и аккаунты при нарушениях правил, рисках безопасности или запросах правообладателей.',
+            'Администрация может проверять, скрывать, отклонять, ограничивать или удалять материалы, анкеты, кастинги, подборки и аккаунты при нарушениях правил, рисках безопасности, жалобах, спорных ситуациях или запросах правообладателей.',
       ),
       LegalDocumentSection(
         title: 'Кастинги и договоренности',
         body:
-            'Приложение помогает организовать процесс, но конкретные условия съемок, оплат, документов и разрешений должны подтверждаться сторонами отдельно.',
+            'Приложение помогает организовать процесс, но конкретные условия съемок, оплат, документов, разрешений, поездок и публикаций должны подтверждаться сторонами отдельно. PK Management не заменяет договор между участником, представителем, заказчиком и другими сторонами.',
+      ),
+      LegalDocumentSection(
+        title: 'Чаты и подборки',
+        body:
+            'Сообщения, голосовые, файлы и подборки должны использоваться только для рабочих целей, связанных с кастингами, коммуникацией и согласованным подбором. Нельзя распространять материалы из приложения вне разрешенного контекста без согласия правообладателя или участника.',
+      ),
+      LegalDocumentSection(
+        title: 'Безопасность аккаунта',
+        body:
+            'Пользователь должен защищать доступ к аккаунту, не передавать пароль и коды восстановления третьим лицам и своевременно сообщать о подозрительной активности. Администраторы и важные пользователи могут использовать 2FA для дополнительной защиты.',
       ),
     ],
     sectionsEn: [
@@ -118,17 +163,32 @@ const legalDocuments = <LegalDocument>[
       LegalDocumentSection(
         title: 'User responsibility',
         body:
-            'Users are responsible for accurate data, rights to uploaded materials and respectful communication. Unauthorized personal data, illegal content, spam and platform abuse are prohibited.',
+            'Users are responsible for accurate data, rights to uploaded materials, consent from depicted persons and respectful communication. Unauthorized personal data, illegal content, spam, deception, bypassing platform limits and actions that may harm other users are prohibited.',
+      ),
+      LegalDocumentSection(
+        title: 'Profiles and roles',
+        body:
+            'Profiles may represent models, actors, photographers, videographers, stylists, makeup artists and other roles. The user confirms that profile information is accurate and materials may be used within the catalogue, castings, selections and in-app communication.',
       ),
       LegalDocumentSection(
         title: 'Moderation and restrictions',
         body:
-            'Administration may hide, reject, restrict or remove materials and accounts when rules are violated, safety risks appear or rights-holder requests are received.',
+            'Administration may review, hide, reject, restrict or remove materials, profiles, castings, selections and accounts when rules are violated, safety risks appear, complaints are received, disputes arise or rights-holder requests are made.',
       ),
       LegalDocumentSection(
         title: 'Castings and agreements',
         body:
-            'The app helps organize workflows, but specific shooting terms, payments, documents and permissions must be confirmed separately by the parties.',
+            'The app helps organize workflows, but specific shoot terms, payments, documents, permissions, travel and publication rights must be confirmed separately by the parties. PK Management does not replace an agreement between talent, representatives, clients and other parties.',
+      ),
+      LegalDocumentSection(
+        title: 'Chats and selections',
+        body:
+            'Messages, voice notes, files and selections must be used only for work purposes related to castings, communication and agreed selection workflows. Materials from the app must not be distributed outside the allowed context without consent from the rights holder or participant.',
+      ),
+      LegalDocumentSection(
+        title: 'Account security',
+        body:
+            'Users must protect account access, keep passwords and recovery codes private and report suspicious activity. Administrators and important users may use 2FA for additional protection.',
       ),
     ],
   ),
@@ -141,12 +201,17 @@ const legalDocuments = <LegalDocument>[
       LegalDocumentSection(
         title: 'Что используется',
         body:
-            'Web-версия может использовать cookies, local storage, IndexedDB и похожие технологии для входа, восстановления сессии, очередей загрузки, сохранения настроек и стабильной работы приложения.',
+            'Web-версия может использовать cookies, local storage, IndexedDB, service worker cache и похожие технологии для входа, восстановления сессии, очередей загрузки, push-уведомлений, сохранения настроек и стабильной работы приложения.',
       ),
       LegalDocumentSection(
         title: 'Служебные данные',
         body:
-            'Служебные данные помогают держать пользователя авторизованным, запоминать настройки интерфейса, восстанавливать загрузки и поддерживать безопасность.',
+            'Служебные данные помогают держать пользователя авторизованным, запоминать настройки интерфейса, восстанавливать загрузки, показывать уведомления, защищать аккаунт и понимать технические ошибки.',
+      ),
+      LegalDocumentSection(
+        title: 'Аналитика и маркетинг',
+        body:
+            'На текущем launch-first этапе приложение использует прежде всего функциональные технологии, необходимые для работы продукта. Если позже появятся отдельные маркетинговые или рекламные cookies, их нужно будет явно описать и, при необходимости, добавить отдельное согласие.',
       ),
       LegalDocumentSection(
         title: 'Ограничение',
@@ -158,12 +223,17 @@ const legalDocuments = <LegalDocument>[
       LegalDocumentSection(
         title: 'What is used',
         body:
-            'The web app may use cookies, local storage, IndexedDB and similar technologies for sign-in, session recovery, upload queues, saved settings and stable app operation.',
+            'The web app may use cookies, local storage, IndexedDB, service worker cache and similar technologies for sign-in, session recovery, upload queues, push notifications, saved settings and stable app operation.',
       ),
       LegalDocumentSection(
         title: 'Functional data',
         body:
-            'Functional data keeps the user signed in, remembers interface settings, restores uploads and supports security.',
+            'Functional data keeps the user signed in, remembers interface settings, restores uploads, shows notifications, protects the account and helps diagnose technical errors.',
+      ),
+      LegalDocumentSection(
+        title: 'Analytics and marketing',
+        body:
+            'At the current launch-first stage, the app primarily uses functional technologies required for the product to work. If separate marketing or advertising cookies are added later, they must be described explicitly and, where needed, covered by separate consent.',
       ),
       LegalDocumentSection(
         title: 'Limitation',
@@ -181,44 +251,64 @@ const legalDocuments = <LegalDocument>[
       LegalDocumentSection(
         title: 'Согласие',
         body:
-            'Создавая аккаунт, пользователь подтверждает согласие на обработку данных, необходимых для работы анкеты, каталога, кастингов, подборок, сообщений, уведомлений и поддержки.',
+            'Создавая аккаунт, пользователь подтверждает согласие на обработку данных, необходимых для регистрации, входа, анкеты, каталога, кастингов, подборок, сообщений, уведомлений, безопасности, поддержки, экспорта данных и обработки запроса на удаление.',
       ),
       LegalDocumentSection(
         title: 'Модели, актеры и авторы медиа',
         body:
-            'Участник подтверждает, что имеет право передавать свои данные и материалы. Для несовершеннолетних требуется участие или согласие родителя/законного представителя.',
+            'Участник подтверждает, что имеет право передавать свои данные, фото, видео, голосовые сообщения и другие материалы, а также разрешает использовать их внутри приложения для каталога, кастингов, подборок, коммуникации и модерации.',
+      ),
+      LegalDocumentSection(
+        title: 'Несовершеннолетние',
+        body:
+            'Если участник несовершеннолетний, согласие и данные должны предоставляться родителем или законным представителем либо с его явного разрешения. Представитель подтверждает право управлять аккаунтом и материалами участника.',
       ),
       LegalDocumentSection(
         title: 'Заказчики и представители',
         body:
-            'Заказчик или представитель подтверждает, что использует данные участников только в рамках кастинга, подбора, коммуникации и согласованных рабочих процессов.',
+            'Заказчик или представитель подтверждает, что использует данные участников только в рамках кастинга, подбора, коммуникации и согласованных рабочих процессов, не передает их третьим лицам вне разрешенного контекста и соблюдает права участников и авторов материалов.',
+      ),
+      LegalDocumentSection(
+        title: 'Уведомления и безопасность',
+        body:
+            'Пользователь соглашается получать сервисные уведомления, связанные с сообщениями, кастингами, анкетами, безопасностью аккаунта и важными изменениями. Настройки push/email можно менять в центре уведомлений, кроме сообщений, необходимых для безопасности и работы аккаунта.',
       ),
       LegalDocumentSection(
         title: 'Отзыв согласия',
         body:
-            'Пользователь может обратиться за удалением аккаунта или отдельных данных. Часть технических записей может сохраняться ограниченно для безопасности и подтверждения выполненных действий.',
+            'Пользователь может запросить удаление аккаунта или отдельных данных. Часть технических записей может сохраняться ограниченно для безопасности, подтверждения согласий, истории важных действий, исполнения обязательных требований или разбора спорных ситуаций.',
       ),
     ],
     sectionsEn: [
       LegalDocumentSection(
         title: 'Consent',
         body:
-            'By creating an account, the user consents to processing data needed for profiles, catalogue, castings, selections, messages, notifications and support.',
+            'By creating an account, the user consents to processing data needed for registration, sign-in, profiles, catalogue, castings, selections, messages, notifications, security, support, data export and account deletion requests.',
       ),
       LegalDocumentSection(
         title: 'Talent and media authors',
         body:
-            'Talent confirms they have the right to provide their data and materials. Minors require participation or consent of a parent/legal guardian.',
+            'Talent confirms they have the right to provide their data, photos, videos, voice messages and other materials and permits their use inside the app for the catalogue, castings, selections, communication and moderation.',
+      ),
+      LegalDocumentSection(
+        title: 'Minors',
+        body:
+            'If a participant is a minor, consent and data must be provided by a parent/legal guardian or with their explicit permission. The representative confirms the right to manage the participant account and materials.',
       ),
       LegalDocumentSection(
         title: 'Clients and representatives',
         body:
-            'Clients or representatives confirm that participant data is used only for casting, selection, communication and agreed product workflows.',
+            'Clients or representatives confirm that participant data is used only for casting, selection, communication and agreed workflows, is not shared with third parties outside the allowed context and respects the rights of participants and media authors.',
+      ),
+      LegalDocumentSection(
+        title: 'Notifications and security',
+        body:
+            'The user agrees to receive service notifications related to messages, castings, profiles, account security and important changes. Push/email preferences can be changed in the notification center, except for messages required for account security and operation.',
       ),
       LegalDocumentSection(
         title: 'Withdrawal',
         body:
-            'A user can request account or data deletion. Some technical records may be retained for a limited period for safety and proof of performed actions.',
+            'A user can request account or data deletion. Some technical records may be retained for a limited period for safety, proof of consent, history of important actions, mandatory requirements or dispute handling.',
       ),
     ],
   ),

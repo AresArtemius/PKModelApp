@@ -91,8 +91,8 @@ class LegalDocumentPage extends StatelessWidget {
                       const SizedBox(height: 10),
                       Text(
                         isRu
-                            ? 'Рабочий текст для запуска приложения. Перед публичным масштабированием документ нужно финально проверить с юристом.'
-                            : 'Operational launch draft. Before public scale-up, this document should be reviewed by legal counsel.',
+                            ? 'Launch-draft для текущей версии приложения. Документ нужно обновлять при изменении продукта, реквизитов или правил обработки данных.'
+                            : 'Launch draft for the current app version. This document should be updated when the product, legal details or data processing rules change.',
                         style: _bodyStyle(
                           color: BrandTheme.redTop,
                           fontWeight: FontWeight.w700,
