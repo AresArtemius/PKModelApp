@@ -1044,6 +1044,11 @@ class _AccountProfileEditPageState
                             onTap: () => context.go(Routes.accountDevices),
                           ),
                           const SizedBox(height: kGap12),
+                          _AccountSecurityEntryCard(
+                            isRussian: _isRussian,
+                            onTap: () => context.go(Routes.accountMfa),
+                          ),
+                          const SizedBox(height: kGap12),
                           _field(_cityC, _isRussian ? 'Город' : 'City'),
                           _field(_countryC, _isRussian ? 'Страна' : 'Country'),
                           _field(_websiteC, _isRussian ? 'Сайт' : 'Website'),
@@ -1810,6 +1815,75 @@ class _AvatarPicker extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _AccountSecurityEntryCard extends StatelessWidget {
+  const _AccountSecurityEntryCard({
+    required this.isRussian,
+    required this.onTap,
+  });
+
+  final bool isRussian;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: catalogCardDecoration(),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              gradient: BrandTheme.darkPillGradient,
+              boxShadow: BrandTheme.basePillShadow(isDark: true),
+            ),
+            child: const Icon(
+              Icons.security_rounded,
+              color: Colors.white,
+              size: 22,
+            ),
+          ),
+          const SizedBox(width: kGap12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isRussian ? 'Безопасность и 2FA' : 'Security and 2FA',
+                  style: _accountEditCommandStyle(
+                    size: 15,
+                    spacing: 0.8,
+                    weight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  isRussian
+                      ? 'Код из Authenticator для защиты входа и админ-доступа.'
+                      : 'Authenticator code for sign-in and admin access protection.',
+                  style: _accountEditBodyStyle(),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: 42,
+                  child: BrandPillButton(
+                    label: isRussian ? 'ОТКРЫТЬ' : 'OPEN',
+                    style: BrandPillStyle.light,
+                    onTap: onTap,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

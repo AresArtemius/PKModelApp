@@ -169,6 +169,17 @@ class MyProfilePage extends ConsumerWidget {
         onTap: () => context.go(Routes.dataPrivacy),
       ),
       const SizedBox(height: kGap14),
+      _AccountEntryCard(
+        icon: Icons.security_rounded,
+        title: Localizations.localeOf(context).languageCode == 'ru'
+            ? 'БЕЗОПАСНОСТЬ'
+            : 'SECURITY',
+        subtitle: Localizations.localeOf(context).languageCode == 'ru'
+            ? '2FA для защиты входа и админ-доступа'
+            : '2FA for sign-in and admin access',
+        onTap: () => context.go(Routes.accountMfa),
+      ),
+      const SizedBox(height: kGap14),
       const _AccountStatusEntryCard(),
       const SizedBox(height: kGap14),
       const _DeleteAccountEntryCard(),
