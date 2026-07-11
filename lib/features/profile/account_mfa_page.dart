@@ -146,6 +146,20 @@ class _AccountMfaPageState extends ConsumerState<AccountMfaPage> {
 
   Future<void> _startEnrollment() async {
     if (_busy) return;
+    final factors =
+        ref.read(supabaseProvider).auth.currentUser?.factors ??
+        const <Factor>[];
+    final hasTotp = factors.any(
+      (factor) => factor.factorType == FactorType.totp,
+    );
+    if (hasTotp) {
+      setState(() {
+        _message = _isRussian
+            ? 'Authenticator уже подключен.'
+            : 'Authenticator is already connected.';
+      });
+      return;
+    }
     setState(() {
       _busy = true;
       _message = '';
@@ -411,7 +425,7 @@ class _AccountMfaPageState extends ConsumerState<AccountMfaPage> {
               children: [
                 BrandAdminHeader(
                   title: _isRussian ? 'БЕЗОПАСНОСТЬ' : 'SECURITY',
-                  onBack: () => context.go(Routes.accountProfile),
+                  onBack: () => context.go(Routes.me),
                 ),
                 const SizedBox(height: kGap14),
                 asyncStatus.when(
@@ -731,7 +745,17 @@ class _MfaContent extends StatelessWidget {
           danger: status.isAdmin && !verified,
         ),
         const SizedBox(height: kGap12),
-        if (enrollment == null)
+        if (enrollment != null)
+          _EnrollmentCard(
+            enrollment: enrollment!,
+            controller: enrollCodeC,
+            busy: busy,
+            isRussian: isRussian,
+            onCopySecret: onCopySecret,
+            onCopyUri: onCopyUri,
+            onVerify: onVerifyEnrollment,
+          )
+        else if (!status.hasTotp)
           _ActionCard(
             icon: Icons.add_moderator_rounded,
             title: isRussian
@@ -745,15 +769,7 @@ class _MfaContent extends StatelessWidget {
             onTap: onStartEnrollment,
           )
         else
-          _EnrollmentCard(
-            enrollment: enrollment!,
-            controller: enrollCodeC,
-            busy: busy,
-            isRussian: isRussian,
-            onCopySecret: onCopySecret,
-            onCopyUri: onCopyUri,
-            onVerify: onVerifyEnrollment,
-          ),
+          const SizedBox.shrink(),
         if (status.factors.isNotEmpty) ...[
           const SizedBox(height: kGap12),
           _FactorsCard(
