@@ -6,7 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../core/account_deletion_service.dart';
 import '../../core/router.dart';
 import '../../core/supabase_compat.dart';
 import '../../core/supabase_provider.dart';
@@ -152,7 +151,6 @@ class DataPrivacyPage extends ConsumerStatefulWidget {
 
 class _DataPrivacyPageState extends ConsumerState<DataPrivacyPage> {
   bool _exporting = false;
-  bool _deleting = false;
   String _message = '';
   String _exportJson = '';
 
@@ -198,96 +196,6 @@ class _DataPrivacyPageState extends ConsumerState<DataPrivacyPage> {
     }
   }
 
-  Future<void> _deleteAccount() async {
-    if (_deleting) return;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => Dialog(
-        backgroundColor: Colors.transparent,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 24),
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(24, 26, 24, 20),
-          decoration: catalogDialogDecoration(),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                _isRussian ? 'УДАЛИТЬ АККАУНТ' : 'DELETE ACCOUNT',
-                textAlign: TextAlign.center,
-                style: _titleStyle(color: BrandTheme.redTop),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                _isRussian
-                    ? 'Будут удалены профиль аккаунта, анкеты, push-токены, уведомления и связанные пользовательские данные там, где это возможно. Технические/audit записи могут сохраняться ограниченно для безопасности и выполнения обязательств.'
-                    : 'Your account profile, profiles, push tokens, notifications and related user data will be deleted where possible. Technical/audit records may be retained for a limited period for safety and obligations.',
-                textAlign: TextAlign.center,
-                style: _bodyStyle(),
-              ),
-              const SizedBox(height: 22),
-              Row(
-                children: [
-                  Expanded(
-                    child: BrandPillButton(
-                      label: _isRussian ? 'ОТМЕНА' : 'CANCEL',
-                      style: BrandPillStyle.light,
-                      onTap: () => Navigator.of(context).pop(false),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: BrandPillButton(
-                      label: _isRussian ? 'УДАЛИТЬ' : 'DELETE',
-                      style: BrandPillStyle.dark,
-                      onTap: () => Navigator.of(context).pop(true),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-
-    if (confirmed != true || !mounted) return;
-    setState(() {
-      _deleting = true;
-      _message = '';
-    });
-
-    try {
-      await ref
-          .read(userSecurityAuditServiceProvider)
-          .log(
-            eventType: UserSecurityAuditEvent.accountDeletionRequested,
-            label: _isRussian
-                ? 'Запрошено удаление аккаунта'
-                : 'Account deletion requested',
-          );
-      await ref.read(accountDeletionServiceProvider).deleteMyAccount();
-      await ref.read(supabaseProvider).auth.signOut();
-      if (mounted) context.go(Routes.search);
-    } on AccountDeletionSetupRequiredException {
-      if (!mounted) return;
-      setState(() {
-        _message = _isRussian
-            ? 'Удаление пока не настроено на сервере. Нужно применить SQL delete_my_account.sql.'
-            : 'Deletion is not configured on the server yet. Apply delete_my_account.sql.';
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _message = _isRussian
-            ? 'Не удалось удалить аккаунт.\n$e'
-            : 'Could not delete account.\n$e';
-      });
-    } finally {
-      if (mounted) setState(() => _deleting = false);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -299,7 +207,7 @@ class _DataPrivacyPageState extends ConsumerState<DataPrivacyPage> {
               padding: kMyProfilePagePad,
               children: [
                 BrandAdminHeader(
-                  title: _isRussian ? 'ДАННЫЕ И УДАЛЕНИЕ' : 'DATA & DELETION',
+                  title: _isRussian ? 'ЭКСПОРТ ДАННЫХ' : 'DATA EXPORT',
                   onBack: () => context.go(Routes.me),
                 ),
                 const SizedBox(height: kGap14),
@@ -313,21 +221,6 @@ class _DataPrivacyPageState extends ConsumerState<DataPrivacyPage> {
                       ? '...'
                       : (_isRussian ? 'СКОПИРОВАТЬ JSON' : 'COPY JSON'),
                   onAction: _exporting ? null : _copyExport,
-                ),
-                const SizedBox(height: kGap12),
-                _InfoCard(
-                  icon: Icons.delete_forever_rounded,
-                  title: _isRussian
-                      ? 'Удаление персональных данных'
-                      : 'Personal data deletion',
-                  body: _isRussian
-                      ? 'Удаление аккаунта запускает серверную процедуру `delete_my_account`: она удаляет пользовательские профили, анкеты, push-устройства, уведомления и связанные данные там, где это безопасно. Часть технических записей может быть обезличена или сохранена ограниченно.'
-                      : 'Account deletion runs the server-side `delete_my_account` procedure: it removes profiles, push devices, notifications and related data where safe. Some technical records may be anonymized or retained for a limited period.',
-                  actionLabel: _deleting
-                      ? '...'
-                      : (_isRussian ? 'УДАЛИТЬ АККАУНТ' : 'DELETE ACCOUNT'),
-                  onAction: _deleting ? null : _deleteAccount,
-                  danger: true,
                 ),
                 if (_message.trim().isNotEmpty) ...[
                   const SizedBox(height: kGap12),
@@ -361,7 +254,6 @@ class _InfoCard extends StatelessWidget {
     required this.body,
     required this.actionLabel,
     required this.onAction,
-    this.danger = false,
   });
 
   final IconData icon;
@@ -369,23 +261,18 @@ class _InfoCard extends StatelessWidget {
   final String body;
   final String actionLabel;
   final VoidCallback? onAction;
-  final bool danger;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: catalogCardDecoration().copyWith(
-        border: Border.all(
-          color: danger
-              ? BrandTheme.redTop.withValues(alpha: 0.40)
-              : Colors.white.withValues(alpha: 0.70),
-        ),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.70)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: danger ? BrandTheme.redTop : kTextDark),
+          Icon(icon, color: kTextDark),
           const SizedBox(width: kGap12),
           Expanded(
             child: Column(
@@ -399,7 +286,7 @@ class _InfoCard extends StatelessWidget {
                   height: 42,
                   child: BrandPillButton(
                     label: actionLabel,
-                    style: danger ? BrandPillStyle.dark : BrandPillStyle.light,
+                    style: BrandPillStyle.light,
                     onTap: onAction,
                   ),
                 ),

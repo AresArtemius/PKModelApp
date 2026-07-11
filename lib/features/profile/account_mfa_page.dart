@@ -567,8 +567,8 @@ class _SecurityAuditCard extends StatelessWidget {
               padding: const EdgeInsets.symmetric(vertical: 8),
               child: Text(
                 isRussian
-                    ? 'Пока нет событий. Если SQL еще не применен, журнал начнет заполняться после user_security_audit_events.sql.'
-                    : 'No events yet. If SQL is not applied yet, the log will start after user_security_audit_events.sql.',
+                    ? 'Пока нет событий безопасности.'
+                    : 'No security events yet.',
                 style: _bodyStyle(),
               ),
             )

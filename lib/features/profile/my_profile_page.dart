@@ -164,12 +164,10 @@ class MyProfilePage extends ConsumerWidget {
       const SizedBox(height: kGap14),
       _AccountEntryCard(
         icon: Icons.privacy_tip_rounded,
-        title: Localizations.localeOf(context).languageCode == 'ru'
-            ? 'ДАННЫЕ И УДАЛЕНИЕ'
-            : 'DATA & DELETION',
-        subtitle: Localizations.localeOf(context).languageCode == 'ru'
-            ? 'Экспорт JSON и понятное удаление персональных данных'
-            : 'JSON export and personal data deletion',
+        title: isRu ? 'ЭКСПОРТ ДАННЫХ' : 'DATA EXPORT',
+        subtitle: isRu
+            ? 'Скопировать данные аккаунта в JSON'
+            : 'Copy account data as JSON',
         onTap: () => context.go(Routes.dataPrivacy),
       ),
       const SizedBox(height: kGap14),
