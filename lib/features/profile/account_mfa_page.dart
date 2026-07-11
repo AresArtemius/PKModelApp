@@ -63,11 +63,11 @@ class AccountMfaService {
   final SupabaseClient _sb;
 
   Future<AccountMfaStatus> loadStatus({required AccountRole role}) async {
-    final factors = await _sb.auth.mfa.listFactors();
+    final factors = _sb.auth.currentUser?.factors ?? const <Factor>[];
     final aal = _sb.auth.mfa.getAuthenticatorAssuranceLevel();
     return AccountMfaStatus(
       role: role,
-      factors: factors.all,
+      factors: factors,
       currentLevel: aal.currentLevel,
       nextLevel: aal.nextLevel,
     );
