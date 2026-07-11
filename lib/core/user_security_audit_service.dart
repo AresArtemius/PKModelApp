@@ -27,6 +27,7 @@ class UserSecurityAuditEvent {
   static const mfaEnabled = 'mfa_enabled';
   static const mfaSessionVerified = 'mfa_session_verified';
   static const mfaDisabled = 'mfa_disabled';
+  static const mfaRecoveryCodesGenerated = 'mfa_recovery_codes_generated';
   static const dataExported = 'data_exported';
   static const accountDeletionRequested = 'account_deletion_requested';
 }

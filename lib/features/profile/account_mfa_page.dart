@@ -4,8 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/mfa_recovery_code_service.dart';
 import '../../core/roles_provider.dart';
 import '../../core/router.dart';
+import '../../core/supabase_compat.dart';
 import '../../core/supabase_provider.dart';
 import '../../core/user_security_audit_service.dart';
 import '../../ui/brand/brand_admin_header.dart';
@@ -128,6 +130,7 @@ class _AccountMfaPageState extends ConsumerState<AccountMfaPage> {
   final _enrollCodeC = TextEditingController();
   final _sessionCodeC = TextEditingController();
   AccountMfaEnrollment? _enrollment;
+  List<String> _recoveryCodes = const [];
   bool _busy = false;
   String _message = '';
 
@@ -186,13 +189,22 @@ class _AccountMfaPageState extends ConsumerState<AccountMfaPage> {
             label: _isRussian ? '2FA включена' : '2FA enabled',
             metadata: {'factor_type': 'totp'},
           );
+      final recoveryCodes = await _rotateRecoveryCodesFromMfaFlow();
       if (!mounted) return;
       _enrollCodeC.clear();
       setState(() {
         _enrollment = null;
-        _message = _isRussian ? '2FA включена.' : '2FA enabled.';
+        _recoveryCodes = recoveryCodes ?? const [];
+        _message = recoveryCodes == null
+            ? (_isRussian
+                  ? '2FA включена. Для recovery codes примените SQL mfa_recovery_codes.sql.'
+                  : '2FA enabled. Apply mfa_recovery_codes.sql for recovery codes.')
+            : (_isRussian
+                  ? '2FA включена. Сохраните recovery codes.'
+                  : '2FA enabled. Save your recovery codes.');
       });
       ref.invalidate(accountMfaStatusProvider);
+      ref.invalidate(mfaRecoveryCodeStatusProvider);
     } catch (e) {
       if (!mounted) return;
       setState(() => _message = _errorText(e));
@@ -280,6 +292,67 @@ class _AccountMfaPageState extends ConsumerState<AccountMfaPage> {
     }
   }
 
+  Future<List<String>?> _rotateRecoveryCodesFromMfaFlow() async {
+    try {
+      final codes = await ref
+          .read(mfaRecoveryCodeServiceProvider)
+          .rotateCodes();
+      if (codes == null || codes.isEmpty) return null;
+      await ref
+          .read(userSecurityAuditServiceProvider)
+          .log(
+            eventType: UserSecurityAuditEvent.mfaRecoveryCodesGenerated,
+            label: _isRussian
+                ? 'Recovery codes созданы'
+                : 'Recovery codes generated',
+            metadata: {'count': codes.length},
+          );
+      return codes;
+    } on PostgrestException catch (e) {
+      if (SupabaseCompat.isMissingRpc(e, 'rotate_my_mfa_recovery_codes')) {
+        return null;
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> _generateRecoveryCodes() async {
+    if (_busy) return;
+    setState(() {
+      _busy = true;
+      _message = '';
+    });
+    try {
+      final codes = await _rotateRecoveryCodesFromMfaFlow();
+      if (!mounted) return;
+      setState(() {
+        _recoveryCodes = codes ?? const [];
+        _message = codes == null
+            ? (_isRussian
+                  ? 'Recovery codes пока не настроены на сервере. Нужно применить mfa_recovery_codes.sql.'
+                  : 'Recovery codes are not configured on the server yet. Apply mfa_recovery_codes.sql.')
+            : (_isRussian
+                  ? 'Новые recovery codes созданы. Сохраните их сейчас.'
+                  : 'New recovery codes generated. Save them now.');
+      });
+      ref.invalidate(mfaRecoveryCodeStatusProvider);
+      ref.invalidate(userSecurityAuditEntriesProvider);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _message = _errorText(e));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _copyRecoveryCodes() async {
+    if (_recoveryCodes.isEmpty) return;
+    await _copy(
+      _recoveryCodes.join('\n'),
+      _isRussian ? 'Recovery codes скопированы.' : 'Recovery codes copied.',
+    );
+  }
+
   Future<void> _copy(String value, String done) async {
     await Clipboard.setData(ClipboardData(text: value));
     if (!mounted) return;
@@ -297,12 +370,19 @@ class _AccountMfaPageState extends ConsumerState<AccountMfaPage> {
     if (raw.contains('mfa_verification_failed')) {
       return _isRussian ? 'Неверный 2FA код.' : 'Invalid 2FA code.';
     }
+    if (raw.contains('rotate_my_mfa_recovery_codes') ||
+        raw.contains('mfa_recovery_codes')) {
+      return _isRussian
+          ? 'Recovery codes пока не настроены на сервере. Нужно применить mfa_recovery_codes.sql.'
+          : 'Recovery codes are not configured on the server yet. Apply mfa_recovery_codes.sql.';
+    }
     return raw;
   }
 
   @override
   Widget build(BuildContext context) {
     final asyncStatus = ref.watch(accountMfaStatusProvider);
+    final asyncRecovery = ref.watch(mfaRecoveryCodeStatusProvider);
     final asyncAudit = ref.watch(userSecurityAuditEntriesProvider);
     return Scaffold(
       body: Stack(
@@ -337,6 +417,9 @@ class _AccountMfaPageState extends ConsumerState<AccountMfaPage> {
                     enrollment: _enrollment,
                     enrollCodeC: _enrollCodeC,
                     sessionCodeC: _sessionCodeC,
+                    recoveryCodes: _recoveryCodes,
+                    recoveryStatus: asyncRecovery.valueOrNull,
+                    recoveryLoading: asyncRecovery.isLoading,
                     busy: _busy,
                     isRussian: _isRussian,
                     onStartEnrollment: _startEnrollment,
@@ -362,6 +445,8 @@ class _AccountMfaPageState extends ConsumerState<AccountMfaPage> {
                                 ? 'Authenticator URI скопирован.'
                                 : 'Authenticator URI copied.',
                           ),
+                    onGenerateRecoveryCodes: _generateRecoveryCodes,
+                    onCopyRecoveryCodes: _copyRecoveryCodes,
                   ),
                 ),
                 if (_message.trim().isNotEmpty) ...[
@@ -515,6 +600,7 @@ class _SecurityAuditRow extends StatelessWidget {
       case UserSecurityAuditEvent.mfaEnabled:
       case UserSecurityAuditEvent.mfaSessionVerified:
       case UserSecurityAuditEvent.mfaDisabled:
+      case UserSecurityAuditEvent.mfaRecoveryCodesGenerated:
         return Icons.verified_user_rounded;
       case UserSecurityAuditEvent.dataExported:
         return Icons.download_rounded;
@@ -546,6 +632,10 @@ class _SecurityAuditRow extends StatelessWidget {
             : 'Session verified with 2FA';
       case UserSecurityAuditEvent.mfaDisabled:
         return isRussian ? '2FA отключена' : '2FA disabled';
+      case UserSecurityAuditEvent.mfaRecoveryCodesGenerated:
+        return isRussian
+            ? 'Recovery codes созданы'
+            : 'Recovery codes generated';
       case UserSecurityAuditEvent.dataExported:
         return isRussian ? 'Данные экспортированы' : 'Data exported';
       case UserSecurityAuditEvent.accountDeletionRequested:
@@ -571,6 +661,9 @@ class _MfaContent extends StatelessWidget {
     required this.enrollment,
     required this.enrollCodeC,
     required this.sessionCodeC,
+    required this.recoveryCodes,
+    required this.recoveryStatus,
+    required this.recoveryLoading,
     required this.busy,
     required this.isRussian,
     required this.onStartEnrollment,
@@ -579,12 +672,17 @@ class _MfaContent extends StatelessWidget {
     required this.onRemoveFactor,
     required this.onCopySecret,
     required this.onCopyUri,
+    required this.onGenerateRecoveryCodes,
+    required this.onCopyRecoveryCodes,
   });
 
   final AccountMfaStatus status;
   final AccountMfaEnrollment? enrollment;
   final TextEditingController enrollCodeC;
   final TextEditingController sessionCodeC;
+  final List<String> recoveryCodes;
+  final MfaRecoveryCodeStatus? recoveryStatus;
+  final bool recoveryLoading;
   final bool busy;
   final bool isRussian;
   final VoidCallback onStartEnrollment;
@@ -593,6 +691,8 @@ class _MfaContent extends StatelessWidget {
   final ValueChanged<Factor> onRemoveFactor;
   final VoidCallback? onCopySecret;
   final VoidCallback? onCopyUri;
+  final VoidCallback onGenerateRecoveryCodes;
+  final VoidCallback onCopyRecoveryCodes;
 
   @override
   Widget build(BuildContext context) {
@@ -649,7 +749,135 @@ class _MfaContent extends StatelessWidget {
             onRemoveFactor: onRemoveFactor,
           ),
         ],
+        if (verified) ...[
+          const SizedBox(height: kGap12),
+          _RecoveryCodesCard(
+            codes: recoveryCodes,
+            status: recoveryStatus,
+            loading: recoveryLoading,
+            busy: busy,
+            isRussian: isRussian,
+            onGenerate: onGenerateRecoveryCodes,
+            onCopy: onCopyRecoveryCodes,
+          ),
+        ],
       ],
+    );
+  }
+}
+
+class _RecoveryCodesCard extends StatelessWidget {
+  const _RecoveryCodesCard({
+    required this.codes,
+    required this.status,
+    required this.loading,
+    required this.busy,
+    required this.isRussian,
+    required this.onGenerate,
+    required this.onCopy,
+  });
+
+  final List<String> codes;
+  final MfaRecoveryCodeStatus? status;
+  final bool loading;
+  final bool busy;
+  final bool isRussian;
+  final VoidCallback onGenerate;
+  final VoidCallback onCopy;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasCodesToShow = codes.isNotEmpty;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: catalogCardDecoration(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            isRussian ? 'RECOVERY CODES' : 'RECOVERY CODES',
+            style: _titleStyle(),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            hasCodesToShow
+                ? (isRussian
+                      ? 'Сохраните эти коды сейчас. После ухода со страницы мы больше не покажем их полностью.'
+                      : 'Save these codes now. After leaving this page, we will not show them in full again.')
+                : (isRussian
+                      ? 'Одноразовые коды помогут восстановить доступ, если Authenticator будет потерян.'
+                      : 'One-time codes help recover access if Authenticator is lost.'),
+            style: _bodyStyle(),
+          ),
+          const SizedBox(height: 10),
+          if (loading)
+            Text(isRussian ? 'Загрузка...' : 'Loading...', style: _bodyStyle())
+          else if (status == null)
+            Text(
+              isRussian
+                  ? 'Для включения recovery codes примените SQL mfa_recovery_codes.sql.'
+                  : 'Apply mfa_recovery_codes.sql to enable recovery codes.',
+              style: _bodyStyle(color: BrandTheme.redTop),
+            )
+          else
+            Text(
+              isRussian
+                  ? 'Активных кодов: ${status!.activeCount} • использовано/заменено: ${status!.usedCount}'
+                  : 'Active codes: ${status!.activeCount} • used/replaced: ${status!.usedCount}',
+              style: _bodyStyle(color: kTextDark),
+            ),
+          if (hasCodesToShow) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.82),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.black.withValues(alpha: 0.08)),
+              ),
+              child: Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  for (final code in codes)
+                    SelectableText(
+                      code,
+                      style: const TextStyle(
+                        color: kTextDark,
+                        fontFamily: 'monospace',
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.0,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              height: 42,
+              child: BrandPillButton(
+                label: isRussian ? 'СКОПИРОВАТЬ КОДЫ' : 'COPY CODES',
+                style: BrandPillStyle.light,
+                onTap: busy ? null : onCopy,
+              ),
+            ),
+          ],
+          const SizedBox(height: 10),
+          SizedBox(
+            height: 42,
+            child: BrandPillButton(
+              label: busy
+                  ? '...'
+                  : (status?.hasCodes ?? false)
+                  ? (isRussian ? 'СОЗДАТЬ НОВЫЕ' : 'GENERATE NEW')
+                  : (isRussian ? 'СОЗДАТЬ КОДЫ' : 'GENERATE CODES'),
+              style: BrandPillStyle.dark,
+              onTap: busy ? null : onGenerate,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
