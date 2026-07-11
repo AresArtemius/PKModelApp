@@ -392,11 +392,78 @@ class _PushStatusShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final compact = MediaQuery.sizeOf(context).width < 560;
     final iconColor = enabled
         ? Colors.white
         : danger
         ? Colors.white
         : kTextMuted;
+    final cleanBody = body.replaceAll('\n', ' · ');
+    if (compact) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: catalogCardDecoration().copyWith(
+          border: Border.all(
+            color: danger
+                ? BrandTheme.redTop
+                : enabled
+                ? kTextDark
+                : kBorderColor,
+            width: danger || enabled ? 1.2 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                gradient: enabled || danger
+                    ? BrandTheme.darkPillGradient
+                    : BrandTheme.lightPillGradient,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(icon, color: iconColor, size: 21),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: _notificationCommandStyle(
+                      size: 15,
+                      spacing: 1,
+                      weight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    cleanBody,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: _notificationBodyStyle(size: 12, height: 1.1),
+                  ),
+                ],
+              ),
+            ),
+            if (actionLabel != null || secondaryLabel != null) ...[
+              const SizedBox(width: 8),
+              _CompactStatusAction(
+                label: actionLabel ?? secondaryLabel!,
+                onTap: actionLabel != null ? onAction : onSecondary,
+                dark: actionLabel != null,
+              ),
+            ],
+          ],
+        ),
+      );
+    }
+
     return Container(
       width: double.infinity,
       padding: kLoginCardPad,
@@ -470,6 +537,48 @@ class _PushStatusShell extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _CompactStatusAction extends StatelessWidget {
+  const _CompactStatusAction({
+    required this.label,
+    required this.onTap,
+    required this.dark,
+  });
+
+  final String label;
+  final VoidCallback? onTap;
+  final bool dark;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 34, minWidth: 84),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: pillDecoration(isDark: dark, radius: 18).copyWith(
+            border: Border.all(color: dark ? kTextDark : kBorderColor),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: _notificationCommandStyle(
+              color: dark ? Colors.white : kTextDark,
+              size: 11,
+              spacing: 1,
+              weight: FontWeight.w800,
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -793,6 +902,167 @@ class _SettingsShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isError = error != null;
+    final compact = MediaQuery.sizeOf(context).width < 560;
+    final toggles = [
+      _SettingsPill(
+        icon: Icons.notifications_active_rounded,
+        label: ru ? 'Push' : 'Push',
+        value: preferences.pushEnabled,
+        onTap: busy || isError
+            ? null
+            : () => onChanged(
+                preferences.copyWith(pushEnabled: !preferences.pushEnabled),
+              ),
+      ),
+      _SettingsPill(
+        icon: Icons.alternate_email_rounded,
+        label: ru ? 'Email' : 'Email',
+        value: preferences.emailEnabled,
+        onTap: busy || isError
+            ? null
+            : () => onChanged(
+                preferences.copyWith(emailEnabled: !preferences.emailEnabled),
+              ),
+      ),
+      _SettingsPill(
+        icon: Icons.chat_bubble_rounded,
+        label: ru ? 'Чаты' : 'Chats',
+        value: preferences.chatEnabled,
+        onTap: busy || isError
+            ? null
+            : () => onChanged(
+                preferences.copyWith(chatEnabled: !preferences.chatEnabled),
+              ),
+      ),
+      _SettingsPill(
+        icon: Icons.movie_filter_rounded,
+        label: ru ? 'Кастинги' : 'Castings',
+        value: preferences.castingEnabled,
+        onTap: busy || isError
+            ? null
+            : () => onChanged(
+                preferences.copyWith(
+                  castingEnabled: !preferences.castingEnabled,
+                ),
+              ),
+      ),
+      _SettingsPill(
+        icon: Icons.badge_rounded,
+        label: ru ? 'Анкеты' : 'Profiles',
+        value: preferences.profileEnabled,
+        onTap: busy || isError
+            ? null
+            : () => onChanged(
+                preferences.copyWith(
+                  profileEnabled: !preferences.profileEnabled,
+                ),
+              ),
+      ),
+      _SettingsPill(
+        icon: Icons.shield_rounded,
+        label: ru ? 'Системные' : 'System',
+        value: preferences.systemEnabled,
+        onTap: busy || isError
+            ? null
+            : () => onChanged(
+                preferences.copyWith(systemEnabled: !preferences.systemEnabled),
+              ),
+      ),
+    ];
+    final enabledCount = [
+      preferences.pushEnabled,
+      preferences.emailEnabled,
+      preferences.chatEnabled,
+      preferences.castingEnabled,
+      preferences.profileEnabled,
+      preferences.systemEnabled,
+    ].where((enabled) => enabled).length;
+
+    if (compact) {
+      return Container(
+        width: double.infinity,
+        decoration: catalogCardDecoration().copyWith(
+          border: Border.all(
+            color: isError ? BrandTheme.redTop : kBorderColor,
+            width: isError ? 1.4 : 1,
+          ),
+        ),
+        child: Theme(
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            tilePadding: const EdgeInsets.symmetric(horizontal: 14),
+            childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+            initiallyExpanded: false,
+            leading: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                gradient: BrandTheme.darkPillGradient,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: const Icon(
+                Icons.tune_rounded,
+                color: Colors.white,
+                size: 21,
+              ),
+            ),
+            title: Text(
+              ru ? 'ЦЕНТР СОБЫТИЙ' : 'EVENT CENTER',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: _notificationCommandStyle(
+                size: 15,
+                spacing: 1,
+                weight: FontWeight.w800,
+              ),
+            ),
+            subtitle: Text(
+              isError
+                  ? error!
+                  : busy
+                  ? (ru ? 'Загружаем настройки' : 'Loading preferences')
+                  : (ru
+                        ? 'Включено: $enabledCount/6'
+                        : 'Enabled: $enabledCount/6'),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: _notificationBodyStyle(
+                color: isError ? kTextDanger : kTextMuted,
+                size: 12,
+                weight: FontWeight.w700,
+                height: 1.1,
+              ),
+            ),
+            trailing: busy
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(
+                    Icons.keyboard_arrow_down_rounded,
+                    color: kTextDark,
+                  ),
+            children: [
+              if (isError)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    error!,
+                    style: _notificationBodyStyle(
+                      color: kTextDanger,
+                      weight: FontWeight.w700,
+                    ),
+                  ),
+                )
+              else
+                Wrap(spacing: kGap8, runSpacing: kGap8, children: toggles),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Container(
       width: double.infinity,
       padding: kLoginCardPad,
@@ -850,84 +1120,7 @@ class _SettingsShell extends StatelessWidget {
             ),
           ],
           const SizedBox(height: kGap12),
-          Wrap(
-            spacing: kGap12,
-            runSpacing: kGap12,
-            children: [
-              _SettingsPill(
-                icon: Icons.notifications_active_rounded,
-                label: ru ? 'Push' : 'Push',
-                value: preferences.pushEnabled,
-                onTap: busy || isError
-                    ? null
-                    : () => onChanged(
-                        preferences.copyWith(
-                          pushEnabled: !preferences.pushEnabled,
-                        ),
-                      ),
-              ),
-              _SettingsPill(
-                icon: Icons.alternate_email_rounded,
-                label: ru ? 'Email' : 'Email',
-                value: preferences.emailEnabled,
-                onTap: busy || isError
-                    ? null
-                    : () => onChanged(
-                        preferences.copyWith(
-                          emailEnabled: !preferences.emailEnabled,
-                        ),
-                      ),
-              ),
-              _SettingsPill(
-                icon: Icons.chat_bubble_rounded,
-                label: ru ? 'Чаты' : 'Chats',
-                value: preferences.chatEnabled,
-                onTap: busy || isError
-                    ? null
-                    : () => onChanged(
-                        preferences.copyWith(
-                          chatEnabled: !preferences.chatEnabled,
-                        ),
-                      ),
-              ),
-              _SettingsPill(
-                icon: Icons.movie_filter_rounded,
-                label: ru ? 'Кастинги' : 'Castings',
-                value: preferences.castingEnabled,
-                onTap: busy || isError
-                    ? null
-                    : () => onChanged(
-                        preferences.copyWith(
-                          castingEnabled: !preferences.castingEnabled,
-                        ),
-                      ),
-              ),
-              _SettingsPill(
-                icon: Icons.badge_rounded,
-                label: ru ? 'Анкеты' : 'Profiles',
-                value: preferences.profileEnabled,
-                onTap: busy || isError
-                    ? null
-                    : () => onChanged(
-                        preferences.copyWith(
-                          profileEnabled: !preferences.profileEnabled,
-                        ),
-                      ),
-              ),
-              _SettingsPill(
-                icon: Icons.shield_rounded,
-                label: ru ? 'Системные' : 'System',
-                value: preferences.systemEnabled,
-                onTap: busy || isError
-                    ? null
-                    : () => onChanged(
-                        preferences.copyWith(
-                          systemEnabled: !preferences.systemEnabled,
-                        ),
-                      ),
-              ),
-            ],
-          ),
+          Wrap(spacing: kGap12, runSpacing: kGap12, children: toggles),
         ],
       ),
     );

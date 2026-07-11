@@ -136,6 +136,10 @@ class MyProfilePage extends ConsumerWidget {
     final unreadNotifications = ref
         .watch(unreadNotificationsCountProvider)
         .maybeWhen(data: (value) => value, orElse: () => 0);
+    final isAdmin = ref
+        .watch(isAdminProvider)
+        .maybeWhen(data: (value) => value, orElse: () => false);
+    final isRu = Localizations.localeOf(context).languageCode == 'ru';
     return [
       _BillingEntryCard(onTap: () => context.go(Routes.billing)),
       const SizedBox(height: kGap14),
@@ -171,12 +175,14 @@ class MyProfilePage extends ConsumerWidget {
       const SizedBox(height: kGap14),
       _AccountEntryCard(
         icon: Icons.security_rounded,
-        title: Localizations.localeOf(context).languageCode == 'ru'
-            ? 'БЕЗОПАСНОСТЬ'
-            : 'SECURITY',
-        subtitle: Localizations.localeOf(context).languageCode == 'ru'
-            ? '2FA для защиты входа и админ-доступа'
-            : '2FA for sign-in and admin access',
+        title: isRu ? 'БЕЗОПАСНОСТЬ' : 'SECURITY',
+        subtitle: isAdmin
+            ? (isRu
+                  ? '2FA для защиты входа и админ-доступа'
+                  : '2FA for sign-in and admin access')
+            : (isRu
+                  ? '2FA, коды восстановления и журнал входов'
+                  : '2FA, recovery codes and sign-in history'),
         onTap: () => context.go(Routes.accountMfa),
       ),
       const SizedBox(height: kGap14),
