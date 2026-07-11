@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/mfa_recovery_code_service.dart';
@@ -926,10 +927,55 @@ class _EnrollmentCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            isRussian ? 'SECRET ДЛЯ AUTHENTICATOR' : 'AUTHENTICATOR SECRET',
+            isRussian ? 'QR ДЛЯ AUTHENTICATOR' : 'AUTHENTICATOR QR',
             style: _titleStyle(),
           ),
           const SizedBox(height: 10),
+          Center(
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: Colors.black.withValues(alpha: 0.08)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.08),
+                    blurRadius: 18,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
+              ),
+              child: QrImageView(
+                data: enrollment.uri,
+                version: QrVersions.auto,
+                size: 210,
+                backgroundColor: Colors.white,
+                eyeStyle: const QrEyeStyle(
+                  eyeShape: QrEyeShape.square,
+                  color: kTextDark,
+                ),
+                dataModuleStyle: const QrDataModuleStyle(
+                  dataModuleShape: QrDataModuleShape.square,
+                  color: kTextDark,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            isRussian
+                ? 'Отсканируйте QR в Google Authenticator, 1Password, Authy или другом TOTP-клиенте.'
+                : 'Scan this QR in Google Authenticator, 1Password, Authy or another TOTP app.',
+            textAlign: TextAlign.center,
+            style: _bodyStyle(),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            isRussian ? 'SECRET ВРУЧНУЮ' : 'MANUAL SECRET',
+            style: _titleStyle(),
+          ),
+          const SizedBox(height: 8),
           SelectableText(
             enrollment.secret,
             style: const TextStyle(
