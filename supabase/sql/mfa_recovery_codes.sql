@@ -34,7 +34,7 @@ create or replace function public.rotate_my_mfa_recovery_codes(p_count int defau
 returns table(code text)
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 declare
   v_user_id uuid := auth.uid();
@@ -92,7 +92,7 @@ create or replace function public.consume_my_mfa_recovery_code(p_code text)
 returns boolean
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 declare
   v_user_id uuid := auth.uid();
