@@ -7,7 +7,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/mfa_recovery_code_service.dart';
 import '../../core/roles_provider.dart';
 import '../../core/router.dart';
-import '../../core/supabase_compat.dart';
 import '../../core/supabase_provider.dart';
 import '../../core/user_security_audit_service.dart';
 import '../../ui/brand/brand_admin_header.dart';
@@ -293,27 +292,18 @@ class _AccountMfaPageState extends ConsumerState<AccountMfaPage> {
   }
 
   Future<List<String>?> _rotateRecoveryCodesFromMfaFlow() async {
-    try {
-      final codes = await ref
-          .read(mfaRecoveryCodeServiceProvider)
-          .rotateCodes();
-      if (codes == null || codes.isEmpty) return null;
-      await ref
-          .read(userSecurityAuditServiceProvider)
-          .log(
-            eventType: UserSecurityAuditEvent.mfaRecoveryCodesGenerated,
-            label: _isRussian
-                ? 'Recovery codes созданы'
-                : 'Recovery codes generated',
-            metadata: {'count': codes.length},
-          );
-      return codes;
-    } on PostgrestException catch (e) {
-      if (SupabaseCompat.isMissingRpc(e, 'rotate_my_mfa_recovery_codes')) {
-        return null;
-      }
-      rethrow;
-    }
+    final codes = await ref.read(mfaRecoveryCodeServiceProvider).rotateCodes();
+    if (codes == null || codes.isEmpty) return null;
+    await ref
+        .read(userSecurityAuditServiceProvider)
+        .log(
+          eventType: UserSecurityAuditEvent.mfaRecoveryCodesGenerated,
+          label: _isRussian
+              ? 'Recovery codes созданы'
+              : 'Recovery codes generated',
+          metadata: {'count': codes.length},
+        );
+    return codes;
   }
 
   Future<void> _generateRecoveryCodes() async {
@@ -360,6 +350,9 @@ class _AccountMfaPageState extends ConsumerState<AccountMfaPage> {
   }
 
   String _errorText(Object error) {
+    if (error is PostgrestException) {
+      return _postgrestErrorText(error);
+    }
     final raw = error.toString();
     if (raw.contains('mfa_totp_enroll_not_enabled') ||
         raw.contains('MFA') && raw.contains('disabled')) {
@@ -377,6 +370,29 @@ class _AccountMfaPageState extends ConsumerState<AccountMfaPage> {
           : 'Recovery codes are not configured on the server yet. Apply mfa_recovery_codes.sql.';
     }
     return raw;
+  }
+
+  String _postgrestErrorText(PostgrestException error) {
+    final parts = <String>[];
+    if (error.code != null && error.code!.trim().isNotEmpty) {
+      parts.add('code: ${error.code}');
+    }
+    if (error.message.trim().isNotEmpty) {
+      parts.add('message: ${error.message}');
+    }
+    final details = error.details?.toString().trim() ?? '';
+    if (details.isNotEmpty) {
+      parts.add('details: $details');
+    }
+    final hint = error.hint?.toString().trim() ?? '';
+    if (hint.isNotEmpty) {
+      parts.add('hint: $hint');
+    }
+    final text = parts.join('\n');
+    if (text.isEmpty) return error.toString();
+    return _isRussian
+        ? 'Ошибка Supabase при операции безопасности:\n$text'
+        : 'Supabase error during security operation:\n$text';
   }
 
   @override

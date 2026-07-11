@@ -59,7 +59,7 @@ class MfaRecoveryCodeService {
         Map<String, dynamic>.from(rows.first as Map),
       );
     } on PostgrestException catch (e) {
-      if (SupabaseCompat.isMissingRpc(e, 'get_my_mfa_recovery_code_status')) {
+      if (_isMissingRpc(e, 'get_my_mfa_recovery_code_status')) {
         return null;
       }
       rethrow;
@@ -78,7 +78,7 @@ class MfaRecoveryCodeService {
           .where((code) => code.isNotEmpty)
           .toList(growable: false);
     } on PostgrestException catch (e) {
-      if (SupabaseCompat.isMissingRpc(e, 'rotate_my_mfa_recovery_codes')) {
+      if (_isMissingRpc(e, 'rotate_my_mfa_recovery_codes')) {
         return null;
       }
       rethrow;
@@ -98,4 +98,13 @@ class MfaRecoveryCodeService {
 int _intFrom(Object? value) {
   if (value is int) return value;
   return int.tryParse((value ?? '').toString()) ?? 0;
+}
+
+bool _isMissingRpc(PostgrestException error, String rpcName) {
+  final msg = SupabaseCompat.message(error);
+  if (error.code == 'PGRST202') return true;
+  if (!msg.contains(rpcName.toLowerCase())) return false;
+  return msg.contains('schema cache') ||
+      msg.contains('function') ||
+      msg.contains('not found');
 }
