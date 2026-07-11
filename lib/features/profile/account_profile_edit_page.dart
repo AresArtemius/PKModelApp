@@ -13,6 +13,7 @@ import '../../core/account_profile_service.dart';
 import '../../core/auth_providers.dart';
 import '../../core/router.dart';
 import '../../core/supabase_provider.dart';
+import '../../core/user_security_audit_service.dart';
 import '../../ui/brand/brand_admin_header.dart';
 import '../../ui/brand/brand_pill_button.dart';
 import '../../ui/brand/brand_theme.dart';
@@ -287,6 +288,15 @@ class _AccountProfileEditPageState
       await ref
           .read(securityNotificationsServiceProvider)
           .notifyEmailChangeRequested(email);
+      await ref
+          .read(userSecurityAuditServiceProvider)
+          .log(
+            eventType: UserSecurityAuditEvent.emailChangeRequested,
+            label: _isRussian
+                ? 'Запрошена смена email'
+                : 'Email change requested',
+            metadata: {'email': email},
+          );
       final updatedUser = _sb.auth.currentUser ?? user;
       await ref
           .read(accountProfileServiceProvider)
@@ -371,6 +381,12 @@ class _AccountProfileEditPageState
       await ref
           .read(securityNotificationsServiceProvider)
           .notifyPasswordChanged();
+      await ref
+          .read(userSecurityAuditServiceProvider)
+          .log(
+            eventType: UserSecurityAuditEvent.passwordChanged,
+            label: _isRussian ? 'Пароль изменен' : 'Password changed',
+          );
       if (!mounted) return;
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
@@ -652,6 +668,13 @@ class _AccountProfileEditPageState
       await ref
           .read(securityNotificationsServiceProvider)
           .notifyPhoneChanged(phone);
+      await ref
+          .read(userSecurityAuditServiceProvider)
+          .log(
+            eventType: UserSecurityAuditEvent.phoneChanged,
+            label: _isRussian ? 'Телефон изменен' : 'Phone changed',
+            metadata: {'phone': phone},
+          );
       if (!mounted) return;
       _phoneResendTimer?.cancel();
       setState(() {

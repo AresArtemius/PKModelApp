@@ -10,6 +10,7 @@ import '../../core/account_deletion_service.dart';
 import '../../core/router.dart';
 import '../../core/supabase_compat.dart';
 import '../../core/supabase_provider.dart';
+import '../../core/user_security_audit_service.dart';
 import '../../ui/brand/brand_admin_header.dart';
 import '../../ui/brand/brand_pill_button.dart';
 import '../../ui/brand/brand_theme.dart';
@@ -171,6 +172,13 @@ class _DataPrivacyPageState extends ConsumerState<DataPrivacyPage> {
           .buildExport();
       final json = const JsonEncoder.withIndent('  ').convert(data);
       await Clipboard.setData(ClipboardData(text: json));
+      await ref
+          .read(userSecurityAuditServiceProvider)
+          .log(
+            eventType: UserSecurityAuditEvent.dataExported,
+            label: _isRussian ? 'Данные экспортированы' : 'Data exported',
+            metadata: {'format': 'json', 'destination': 'clipboard'},
+          );
       if (!mounted) return;
       setState(() {
         _exportJson = json;
@@ -250,6 +258,14 @@ class _DataPrivacyPageState extends ConsumerState<DataPrivacyPage> {
     });
 
     try {
+      await ref
+          .read(userSecurityAuditServiceProvider)
+          .log(
+            eventType: UserSecurityAuditEvent.accountDeletionRequested,
+            label: _isRussian
+                ? 'Запрошено удаление аккаунта'
+                : 'Account deletion requested',
+          );
       await ref.read(accountDeletionServiceProvider).deleteMyAccount();
       await ref.read(supabaseProvider).auth.signOut();
       if (mounted) context.go(Routes.search);

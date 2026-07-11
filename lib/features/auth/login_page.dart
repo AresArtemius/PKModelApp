@@ -13,6 +13,7 @@ import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
 import '../../gen_l10n/app_localizations.dart';
 import '../../core/locale_provider.dart';
+import '../../core/user_security_audit_service.dart';
 import '../notifications/app_notifications.dart';
 import 'auth_rate_limiter.dart';
 import 'auth_controller.dart';
@@ -135,6 +136,13 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       await ref
           .read(securityNotificationsServiceProvider)
           .notifyNewLogin(method: 'email');
+      await ref
+          .read(userSecurityAuditServiceProvider)
+          .log(
+            eventType: UserSecurityAuditEvent.loginEmail,
+            label: isRussian ? 'Вход по email' : 'Email sign-in',
+            metadata: {'method': 'email'},
+          );
       if (!mounted) return;
       context.go(Routes.search);
     } on AuthException catch (e) {
@@ -257,6 +265,13 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       await ref
           .read(securityNotificationsServiceProvider)
           .notifyNewLogin(method: 'phone');
+      await ref
+          .read(userSecurityAuditServiceProvider)
+          .log(
+            eventType: UserSecurityAuditEvent.loginPhone,
+            label: isRussian ? 'Вход по телефону' : 'Phone sign-in',
+            metadata: {'method': 'phone'},
+          );
       if (!mounted) return;
       context.go(Routes.search);
     } on AuthException catch (e) {

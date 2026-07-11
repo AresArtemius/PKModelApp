@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/roles_provider.dart';
 import '../../core/router.dart';
 import '../../core/supabase_provider.dart';
+import '../../core/user_security_audit_service.dart';
 import '../../ui/brand/brand_admin_header.dart';
 import '../../ui/brand/brand_pill_button.dart';
 import '../../ui/brand/brand_theme.dart';
@@ -178,6 +179,13 @@ class _AccountMfaPageState extends ConsumerState<AccountMfaPage> {
       await ref
           .read(accountMfaServiceProvider)
           .verifyEnrollment(factorId: enrollment.factorId, code: code);
+      await ref
+          .read(userSecurityAuditServiceProvider)
+          .log(
+            eventType: UserSecurityAuditEvent.mfaEnabled,
+            label: _isRussian ? '2FA включена' : '2FA enabled',
+            metadata: {'factor_type': 'totp'},
+          );
       if (!mounted) return;
       _enrollCodeC.clear();
       setState(() {
@@ -204,6 +212,15 @@ class _AccountMfaPageState extends ConsumerState<AccountMfaPage> {
       await ref
           .read(accountMfaServiceProvider)
           .verifySession(factorId: factorId, code: code);
+      await ref
+          .read(userSecurityAuditServiceProvider)
+          .log(
+            eventType: UserSecurityAuditEvent.mfaSessionVerified,
+            label: _isRussian
+                ? 'Сессия подтверждена 2FA'
+                : 'Session verified with 2FA',
+            metadata: {'factor_type': 'totp'},
+          );
       if (!mounted) return;
       _sessionCodeC.clear();
       setState(() {
@@ -242,6 +259,13 @@ class _AccountMfaPageState extends ConsumerState<AccountMfaPage> {
             .verifySession(factorId: factor.id, code: code);
       }
       await ref.read(accountMfaServiceProvider).unenroll(factor.id);
+      await ref
+          .read(userSecurityAuditServiceProvider)
+          .log(
+            eventType: UserSecurityAuditEvent.mfaDisabled,
+            label: _isRussian ? '2FA отключена' : '2FA disabled',
+            metadata: {'factor_type': factor.factorType.name},
+          );
       if (!mounted) return;
       _sessionCodeC.clear();
       setState(() {
@@ -279,6 +303,7 @@ class _AccountMfaPageState extends ConsumerState<AccountMfaPage> {
   @override
   Widget build(BuildContext context) {
     final asyncStatus = ref.watch(accountMfaStatusProvider);
+    final asyncAudit = ref.watch(userSecurityAuditEntriesProvider);
     return Scaffold(
       body: Stack(
         children: [
@@ -357,12 +382,186 @@ class _AccountMfaPageState extends ConsumerState<AccountMfaPage> {
                     ),
                   ),
                 ],
+                const SizedBox(height: kGap14),
+                _SecurityAuditCard(
+                  entries: asyncAudit.valueOrNull ?? const [],
+                  loading: asyncAudit.isLoading,
+                  isRussian: _isRussian,
+                  onRefresh: () =>
+                      ref.invalidate(userSecurityAuditEntriesProvider),
+                ),
               ],
             ),
           ),
         ],
       ),
     );
+  }
+}
+
+class _SecurityAuditCard extends StatelessWidget {
+  const _SecurityAuditCard({
+    required this.entries,
+    required this.loading,
+    required this.isRussian,
+    required this.onRefresh,
+  });
+
+  final List<UserSecurityAuditEntry> entries;
+  final bool loading;
+  final bool isRussian;
+  final VoidCallback onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: catalogCardDecoration(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.history_rounded, color: kTextDark, size: 22),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  isRussian ? 'ЖУРНАЛ БЕЗОПАСНОСТИ' : 'SECURITY LOG',
+                  style: _titleStyle(),
+                ),
+              ),
+              IconButton(
+                tooltip: isRussian ? 'Обновить' : 'Refresh',
+                onPressed: onRefresh,
+                icon: const Icon(Icons.refresh_rounded, color: kTextDark),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (loading)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text(
+                isRussian ? 'Загрузка...' : 'Loading...',
+                style: _bodyStyle(),
+              ),
+            )
+          else if (entries.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text(
+                isRussian
+                    ? 'Пока нет событий. Если SQL еще не применен, журнал начнет заполняться после user_security_audit_events.sql.'
+                    : 'No events yet. If SQL is not applied yet, the log will start after user_security_audit_events.sql.',
+                style: _bodyStyle(),
+              ),
+            )
+          else
+            for (final entry in entries.take(12)) ...[
+              _SecurityAuditRow(entry: entry, isRussian: isRussian),
+              if (entry != entries.take(12).last)
+                Divider(color: Colors.black.withValues(alpha: 0.08)),
+            ],
+        ],
+      ),
+    );
+  }
+}
+
+class _SecurityAuditRow extends StatelessWidget {
+  const _SecurityAuditRow({required this.entry, required this.isRussian});
+
+  final UserSecurityAuditEntry entry;
+  final bool isRussian;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(_iconFor(entry.eventType), color: kTextDark, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _titleFor(entry, isRussian),
+                  style: _bodyStyle(color: kTextDark),
+                ),
+                const SizedBox(height: 3),
+                Text(_dateLabel(entry.createdAt), style: _bodyStyle(size: 12)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  IconData _iconFor(String eventType) {
+    switch (eventType) {
+      case UserSecurityAuditEvent.loginEmail:
+      case UserSecurityAuditEvent.loginPhone:
+        return Icons.login_rounded;
+      case UserSecurityAuditEvent.emailChangeRequested:
+        return Icons.alternate_email_rounded;
+      case UserSecurityAuditEvent.phoneChanged:
+        return Icons.phone_iphone_rounded;
+      case UserSecurityAuditEvent.passwordChanged:
+        return Icons.password_rounded;
+      case UserSecurityAuditEvent.mfaEnabled:
+      case UserSecurityAuditEvent.mfaSessionVerified:
+      case UserSecurityAuditEvent.mfaDisabled:
+        return Icons.verified_user_rounded;
+      case UserSecurityAuditEvent.dataExported:
+        return Icons.download_rounded;
+      case UserSecurityAuditEvent.accountDeletionRequested:
+        return Icons.delete_outline_rounded;
+      default:
+        return Icons.security_rounded;
+    }
+  }
+
+  String _titleFor(UserSecurityAuditEntry entry, bool isRussian) {
+    if (entry.eventLabel.isNotEmpty) return entry.eventLabel;
+    switch (entry.eventType) {
+      case UserSecurityAuditEvent.loginEmail:
+        return isRussian ? 'Вход по email' : 'Email sign-in';
+      case UserSecurityAuditEvent.loginPhone:
+        return isRussian ? 'Вход по телефону' : 'Phone sign-in';
+      case UserSecurityAuditEvent.emailChangeRequested:
+        return isRussian ? 'Запрошена смена email' : 'Email change requested';
+      case UserSecurityAuditEvent.phoneChanged:
+        return isRussian ? 'Телефон изменен' : 'Phone changed';
+      case UserSecurityAuditEvent.passwordChanged:
+        return isRussian ? 'Пароль изменен' : 'Password changed';
+      case UserSecurityAuditEvent.mfaEnabled:
+        return isRussian ? '2FA включена' : '2FA enabled';
+      case UserSecurityAuditEvent.mfaSessionVerified:
+        return isRussian
+            ? 'Сессия подтверждена 2FA'
+            : 'Session verified with 2FA';
+      case UserSecurityAuditEvent.mfaDisabled:
+        return isRussian ? '2FA отключена' : '2FA disabled';
+      case UserSecurityAuditEvent.dataExported:
+        return isRussian ? 'Данные экспортированы' : 'Data exported';
+      case UserSecurityAuditEvent.accountDeletionRequested:
+        return isRussian
+            ? 'Запрошено удаление аккаунта'
+            : 'Account deletion requested';
+      default:
+        return entry.eventType;
+    }
+  }
+
+  String _dateLabel(DateTime? value) {
+    if (value == null) return '';
+    final local = value.toLocal();
+    String two(int number) => number.toString().padLeft(2, '0');
+    return '${two(local.day)}.${two(local.month)}.${local.year} ${two(local.hour)}:${two(local.minute)}';
   }
 }
 
@@ -752,10 +951,10 @@ TextStyle _titleStyle({Color color = kTextDark}) {
   );
 }
 
-TextStyle _bodyStyle({Color color = kTextMuted}) {
+TextStyle _bodyStyle({Color color = kTextMuted, double size = 14}) {
   return TextStyle(
     color: color,
-    fontSize: 14,
+    fontSize: size,
     fontWeight: FontWeight.w600,
     height: 1.28,
   );
