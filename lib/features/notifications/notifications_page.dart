@@ -50,6 +50,7 @@ class NotificationsPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final t = AppLocalizations.of(context)!;
     final async = ref.watch(appNotificationsProvider);
+    final compact = MediaQuery.sizeOf(context).width < 560;
     final showPushQa = ref
         .watch(isAdminProvider)
         .maybeWhen(data: (isAdmin) => isAdmin, orElse: () => false);
@@ -180,7 +181,7 @@ class NotificationsPage extends ConsumerWidget {
                             physics: const AlwaysScrollableScrollPhysics(),
                             itemCount: items.length,
                             separatorBuilder: (_, _) =>
-                                const SizedBox(height: kGap12),
+                                SizedBox(height: compact ? 8 : kGap12),
                             itemBuilder: (context, index) {
                               final item = items[index];
                               return Dismissible(
@@ -1225,63 +1226,96 @@ class _NotificationCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final unread = !item.isRead;
+    final compact = MediaQuery.sizeOf(context).width < 560;
+    final iconSize = compact ? 44.0 : kProfileSummaryImageSize;
+    final radius = compact ? 14.0 : kProfileImageRadius;
+    final titleSize = compact ? 15.0 : 18.0;
+    final bodySize = compact ? 13.0 : 15.0;
+    final contentPad = compact
+        ? const EdgeInsets.fromLTRB(12, 10, 8, 10)
+        : kLoginCardPad;
+    final gap = compact ? 10.0 : kProfileSummaryGap;
+    final deleteSize = compact ? 34.0 : 48.0;
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(kCardRadius),
         onTap: onTap,
         child: Container(
-          padding: kLoginCardPad,
+          padding: contentPad,
           decoration: catalogCardDecoration().copyWith(
             border: Border.all(
               color: unread ? BrandTheme.redTop : kBorderColor,
-              width: unread ? 1.4 : 1,
+              width: unread ? (compact ? 1.2 : 1.4) : 1,
             ),
           ),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Container(
-                width: kProfileSummaryImageSize,
-                height: kProfileSummaryImageSize,
+                width: iconSize,
+                height: iconSize,
                 decoration: BoxDecoration(
                   gradient: unread
                       ? BrandTheme.darkPillGradient
                       : BrandTheme.lightPillGradient,
-                  borderRadius: BorderRadius.circular(kProfileImageRadius),
+                  borderRadius: BorderRadius.circular(radius),
                 ),
                 child: Icon(
                   unread
                       ? Icons.notifications_active_rounded
                       : Icons.notifications_none_rounded,
                   color: unread ? Colors.white : kTextMuted,
+                  size: compact ? 21 : 24,
                 ),
               ),
-              const SizedBox(width: kProfileSummaryGap),
+              SizedBox(width: gap),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
                       item.title.isEmpty ? 'ModelApp' : item.title,
+                      maxLines: compact ? 1 : 2,
+                      overflow: TextOverflow.ellipsis,
                       style: _notificationCommandStyle(
-                        size: 18,
-                        spacing: 1.4,
-                        weight: FontWeight.w700,
+                        size: titleSize,
+                        spacing: compact ? 1.0 : 1.4,
+                        weight: FontWeight.w800,
                       ),
                     ),
                     if (item.body.isNotEmpty) ...[
-                      const SizedBox(height: 6),
-                      Text(item.body, style: _notificationBodyStyle()),
+                      SizedBox(height: compact ? 3 : 6),
+                      Text(
+                        item.body,
+                        maxLines: compact ? 1 : 3,
+                        overflow: TextOverflow.ellipsis,
+                        style: _notificationBodyStyle(
+                          size: bodySize,
+                          height: compact ? 1.1 : 1.22,
+                        ),
+                      ),
                     ],
                   ],
                 ),
               ),
-              IconButton(
-                onPressed: onDelete,
-                icon: const Icon(
-                  Icons.delete_outline_rounded,
-                  color: BrandTheme.redTop,
+              SizedBox(
+                width: deleteSize,
+                height: deleteSize,
+                child: IconButton(
+                  padding: EdgeInsets.zero,
+                  constraints: BoxConstraints.tightFor(
+                    width: deleteSize,
+                    height: deleteSize,
+                  ),
+                  onPressed: onDelete,
+                  icon: Icon(
+                    Icons.delete_outline_rounded,
+                    color: BrandTheme.redTop,
+                    size: compact ? 22 : 24,
+                  ),
                 ),
               ),
             ],
