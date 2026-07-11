@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/app_error_mapper.dart';
 import '../../core/push_notifications_service.dart';
+import '../../core/roles_provider.dart';
 import '../../core/router.dart';
 import '../../gen_l10n/app_localizations.dart';
 import '../../ui/brand/brand_admin_header.dart';
@@ -49,6 +50,9 @@ class NotificationsPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final t = AppLocalizations.of(context)!;
     final async = ref.watch(appNotificationsProvider);
+    final showPushQa = ref
+        .watch(isAdminProvider)
+        .maybeWhen(data: (isAdmin) => isAdmin, orElse: () => false);
 
     Future<void> markAllRead() async {
       await ref.read(appNotificationsServiceProvider).markAllRead();
@@ -148,8 +152,10 @@ class NotificationsPage extends ConsumerWidget {
                   ),
                   const SizedBox(height: kGap16),
                   const _PushStatusCard(),
-                  const SizedBox(height: kGap12),
-                  const _PushQaCard(),
+                  if (showPushQa) ...[
+                    const SizedBox(height: kGap12),
+                    const _PushQaCard(),
+                  ],
                   const SizedBox(height: kGap12),
                   const _NotificationSettingsCard(),
                   const SizedBox(height: kGap16),
