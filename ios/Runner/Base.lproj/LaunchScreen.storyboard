@@ -16,6 +16,7 @@
                     <view key="view" contentMode="scaleToFill" id="Ze5-6b-2t3">
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
+                            <imageView opaque="NO" clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="scaleAspectFill" image="LaunchBackground" translatesAutoresizingMaskIntoConstraints="NO" id="BGD-LA-unch"/>
                             <imageView opaque="NO" clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="scaleAspectFit" image="LaunchImage" translatesAutoresizingMaskIntoConstraints="NO" id="YRO-k0-Ey4">
                                 <constraints>
                                     <constraint firstAttribute="width" constant="132" id="7wD-LS-xmb"/>
@@ -25,6 +26,10 @@
                         </subviews>
                         <color key="backgroundColor" red="0.0078431372549019607" green="0.0078431372549019607" blue="0.0078431372549019607" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                         <constraints>
+                            <constraint firstItem="BGD-LA-unch" firstAttribute="leading" secondItem="Ze5-6b-2t3" secondAttribute="leading" id="3cz-W8-Rf1"/>
+                            <constraint firstItem="BGD-LA-unch" firstAttribute="top" secondItem="Ze5-6b-2t3" secondAttribute="top" id="5Gb-vJ-Aq3"/>
+                            <constraint firstAttribute="bottom" secondItem="BGD-LA-unch" secondAttribute="bottom" id="D6x-C8-F7b"/>
+                            <constraint firstAttribute="trailing" secondItem="BGD-LA-unch" secondAttribute="trailing" id="P8a-yV-ycw"/>
                             <constraint firstItem="YRO-k0-Ey4" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="1a2-6s-vTC"/>
                             <constraint firstItem="YRO-k0-Ey4" firstAttribute="centerY" secondItem="Ze5-6b-2t3" secondAttribute="centerY" id="4X2-HB-R7a"/>
                         </constraints>
@@ -36,6 +41,7 @@
         </scene>
     </scenes>
     <resources>
+        <image name="LaunchBackground" width="430" height="932"/>
         <image name="LaunchImage" width="512" height="512"/>
     </resources>
 </document>
