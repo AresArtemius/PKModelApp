@@ -36,7 +36,7 @@ Widget _buildBaseApp({
       onGenerateTitle: onGenerateTitle,
       theme: buildModelAppTheme(),
       builder: (context, child) =>
-          _AppRootFrame(startupOverlay: startupOverlay, child: child),
+          _WebAppFrame(startupOverlay: startupOverlay, child: child),
       routerConfig: routerConfig,
     );
   }
@@ -49,7 +49,7 @@ Widget _buildBaseApp({
     onGenerateTitle: onGenerateTitle,
     theme: buildModelAppTheme(),
     builder: (context, child) =>
-        _AppRootFrame(startupOverlay: startupOverlay, child: child),
+        _WebAppFrame(startupOverlay: startupOverlay, child: child),
     home: home,
   );
 }
@@ -65,7 +65,7 @@ const int _kWebImageCacheCount = 450;
 const int _kMobileImageCacheCount = 280;
 const int _kWebImageCacheMb = 180;
 const int _kMobileImageCacheMb = 96;
-const Duration _kStartupSplashDuration = Duration(milliseconds: 1450);
+const Duration _kStartupSplashDuration = Duration(milliseconds: 2200);
 
 void _configureImageCache() {
   final imageCache = PaintingBinding.instance.imageCache;
@@ -76,32 +76,35 @@ void _configureImageCache() {
       (kIsWeb ? _kWebImageCacheMb : _kMobileImageCacheMb) * 1024 * 1024;
 }
 
-class _AppRootFrame extends StatelessWidget {
-  const _AppRootFrame({required this.child, this.startupOverlay});
+class _WebAppFrame extends StatelessWidget {
+  const _WebAppFrame({required this.child, this.startupOverlay});
 
   final Widget? child;
   final Widget? startupOverlay;
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
+    final app = Stack(
       fit: StackFit.expand,
       children: [
-        _WebAppFrame(child: child),
-        if (startupOverlay != null) Positioned.fill(child: startupOverlay!),
+        child ?? const SizedBox.shrink(),
+        Positioned.fill(
+          child: IgnorePointer(
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 360),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              child: startupOverlay == null
+                  ? const SizedBox.shrink(key: ValueKey('startup-empty'))
+                  : KeyedSubtree(
+                      key: const ValueKey('startup-splash'),
+                      child: startupOverlay!,
+                    ),
+            ),
+          ),
+        ),
       ],
     );
-  }
-}
-
-class _WebAppFrame extends StatelessWidget {
-  const _WebAppFrame({required this.child});
-
-  final Widget? child;
-
-  @override
-  Widget build(BuildContext context) {
-    final app = child ?? const SizedBox.shrink();
     if (!kIsWeb) return app;
 
     return ColoredBox(
@@ -271,7 +274,7 @@ class _StartupSplashScreenState extends State<_StartupSplashScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 1050),
+    duration: const Duration(milliseconds: 1320),
   )..forward();
 
   late final Animation<double> _fade = CurvedAnimation(
@@ -337,61 +340,58 @@ class _StartupSplashScreenState extends State<_StartupSplashScreen>
                   ),
                 ),
               ),
-              SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(28, 44, 28, 40),
-                  child: Column(
-                    children: [
-                      const Spacer(flex: 5),
-                      FadeTransition(
-                        opacity: _fade,
-                        child: ScaleTransition(
-                          scale: _scale,
-                          child: Container(
-                            width: 132,
-                            height: 132,
-                            padding: const EdgeInsets.all(18),
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: Colors.black.withValues(alpha: 0.32),
-                              border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.13),
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: BrandTheme.redTop.withValues(
-                                    alpha: 0.46,
-                                  ),
-                                  blurRadius: 42,
-                                  spreadRadius: 8,
-                                ),
-                              ],
-                            ),
-                            child: Image.asset(
-                              'assets/images/pk-logo-red-512.png',
-                              fit: BoxFit.contain,
-                            ),
+              Center(
+                child: FadeTransition(
+                  opacity: _fade,
+                  child: ScaleTransition(
+                    scale: _scale,
+                    child: Container(
+                      width: 132,
+                      height: 132,
+                      padding: const EdgeInsets.all(18),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.black.withValues(alpha: 0.32),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.13),
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: BrandTheme.redTop.withValues(alpha: 0.46),
+                            blurRadius: 42,
+                            spreadRadius: 8,
                           ),
+                        ],
+                      ),
+                      child: Image.asset(
+                        'assets/images/pk-logo-red-512.png',
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 24,
+                right: 24,
+                bottom: 48,
+                child: SafeArea(
+                  top: false,
+                  child: SlideTransition(
+                    position: _brandSlide,
+                    child: FadeTransition(
+                      opacity: _fade,
+                      child: Text(
+                        'PK MANAGEMENT',
+                        textAlign: TextAlign.center,
+                        style: BrandTheme.pillText.copyWith(
+                          color: Colors.white.withValues(alpha: 0.82),
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 3.4,
                         ),
                       ),
-                      const Spacer(flex: 4),
-                      SlideTransition(
-                        position: _brandSlide,
-                        child: FadeTransition(
-                          opacity: _fade,
-                          child: Text(
-                            'PK MANAGEMENT',
-                            textAlign: TextAlign.center,
-                            style: BrandTheme.pillText.copyWith(
-                              color: Colors.white.withValues(alpha: 0.82),
-                              fontSize: 18,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 3.4,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               ),
