@@ -422,25 +422,12 @@ class _UsersTablePanel extends StatelessWidget {
           return roleOk && searchOk;
         })
         .toList(growable: false);
-    final adminCount = users
-        .where((user) => user.primaryRole == 'admin')
-        .length;
-    final agentCount = users
-        .where((user) => user.primaryRole == 'casting_agent')
-        .length;
     final isDesktop =
         MediaQuery.sizeOf(context).width >= _kUsersDesktopBreakpoint;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _UsersSummaryBar(
-          total: users.length,
-          admins: adminCount,
-          agents: agentCount,
-          filtered: filtered.length,
-        ),
-        const SizedBox(height: 12),
         _UsersToolbar(
           controller: searchController,
           roleFilter: roleFilter,
@@ -661,37 +648,6 @@ class _UserMobileCard extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _UsersSummaryBar extends StatelessWidget {
-  const _UsersSummaryBar({
-    required this.total,
-    required this.admins,
-    required this.agents,
-    required this.filtered,
-  });
-
-  final int total;
-  final int admins;
-  final int agents;
-  final int filtered;
-
-  @override
-  Widget build(BuildContext context) {
-    final ru = Localizations.localeOf(context).languageCode == 'ru';
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: AdminCompactSummary(
-        title: ru ? 'Сводка' : 'Summary',
-        items: [
-          (ru ? 'Всего' : 'Total', total),
-          (ru ? 'В выборке' : 'Shown', filtered),
-          (ru ? 'Админы' : 'Admins', admins),
-          (ru ? 'Заказчики' : 'Clients', agents),
-        ],
       ),
     );
   }

@@ -468,32 +468,12 @@ class _SelectionsPanel extends StatelessWidget {
           return statusOk && publicOk && searchOk;
         })
         .toList(growable: false);
-    final publicCount = selections
-        .where((selection) => selection.isPublic)
-        .length;
-    final totalItems = selections.fold<int>(
-      0,
-      (sum, selection) => sum + selection.itemCount,
-    );
     final isDesktop =
         MediaQuery.sizeOf(context).width >= _kSelectionsDesktopBreakpoint;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Align(
-          alignment: Alignment.centerLeft,
-          child: AdminCompactSummary(
-            title: ru ? 'Сводка' : 'Summary',
-            items: [
-              (ru ? 'Всего' : 'Total', selections.length),
-              (ru ? 'В выборке' : 'Shown', filtered.length),
-              (ru ? 'Публичные' : 'Public', publicCount),
-              (ru ? 'Анкеты' : 'Profiles', totalItems),
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
         _SelectionsToolbar(
           controller: controller,
           statusFilter: statusFilter,
@@ -963,13 +943,21 @@ class _ToolbarFrame extends StatelessWidget {
             ),
           ),
         );
-        final chips = Wrap(spacing: 8, runSpacing: 8, children: filters);
+        final filterRow = Row(
+          children: [
+            for (var i = 0; i < filters.length; i++) ...[
+              Expanded(child: filters[i]),
+              if (i != filters.length - 1) const SizedBox(width: 8),
+            ],
+          ],
+        );
         if (compact) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [search, const SizedBox(height: 10), chips],
+            children: [search, const SizedBox(height: 10), filterRow],
           );
         }
+        final chips = Wrap(spacing: 8, runSpacing: 8, children: filters);
         return Row(
           children: [
             Expanded(child: search),

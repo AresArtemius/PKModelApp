@@ -447,29 +447,12 @@ class _ProfilesTablePanel extends StatelessWidget {
           return statusOk && roleOk && searchOk;
         })
         .toList(growable: false);
-    final approved = profiles
-        .where((profile) => profile.status == ProfileStatus.approved)
-        .length;
-    final pending = profiles
-        .where((profile) => profile.status == ProfileStatus.pending)
-        .length;
-    final draft = profiles
-        .where((profile) => profile.status == ProfileStatus.draft)
-        .length;
     final isDesktop =
         MediaQuery.sizeOf(context).width >= _kProfilesDesktopBreakpoint;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _ProfilesSummaryBar(
-          total: profiles.length,
-          filtered: filtered.length,
-          approved: approved,
-          pending: pending,
-          draft: draft,
-        ),
-        const SizedBox(height: 12),
         _ProfilesToolbar(
           controller: searchController,
           statusFilter: statusFilter,
@@ -693,40 +676,6 @@ class _ProfileMobileCard extends StatelessWidget {
   }
 }
 
-class _ProfilesSummaryBar extends StatelessWidget {
-  const _ProfilesSummaryBar({
-    required this.total,
-    required this.filtered,
-    required this.approved,
-    required this.pending,
-    required this.draft,
-  });
-
-  final int total;
-  final int filtered;
-  final int approved;
-  final int pending;
-  final int draft;
-
-  @override
-  Widget build(BuildContext context) {
-    final ru = Localizations.localeOf(context).languageCode == 'ru';
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: AdminCompactSummary(
-        title: ru ? 'Сводка' : 'Summary',
-        items: [
-          (ru ? 'Всего' : 'Total', total),
-          (ru ? 'В выборке' : 'Shown', filtered),
-          (ru ? 'Утвержденные' : 'Approved', approved),
-          (ru ? 'На проверке' : 'Pending', pending),
-          (ru ? 'Черновики' : 'Drafts', draft),
-        ],
-      ),
-    );
-  }
-}
-
 class _ProfilesToolbar extends StatelessWidget {
   const _ProfilesToolbar({
     required this.controller,
@@ -783,47 +732,51 @@ class _ProfilesToolbar extends StatelessWidget {
             ),
           ),
         );
-        final filters = Wrap(
-          spacing: 8,
-          runSpacing: 8,
+        final filters = <Widget>[
+          AdminMenuFilter<_AdminProfileStatusFilter>(
+            label: ru ? 'Статус' : 'Status',
+            valueLabel: statusFilter.label(ru),
+            options: [
+              for (final filter in _AdminProfileStatusFilter.values)
+                AdminMenuOption(value: filter, label: filter.label(ru)),
+            ],
+            onSelected: onStatusFilterChanged,
+          ),
+          AdminMenuFilter<ProfessionalProfileType?>(
+            label: ru ? 'Роль' : 'Role',
+            valueLabel: roleFilter == null
+                ? (ru ? 'Все роли' : 'All roles')
+                : _roleLabel(roleFilter!, ru),
+            options: [
+              AdminMenuOption<ProfessionalProfileType?>(
+                value: null,
+                label: ru ? 'Все роли' : 'All roles',
+              ),
+              for (final role in ProfessionalProfileType.values)
+                AdminMenuOption(value: role, label: _roleLabel(role, ru)),
+            ],
+            onSelected: onRoleFilterChanged,
+          ),
+        ];
+        final filterRow = Row(
           children: [
-            AdminMenuFilter<_AdminProfileStatusFilter>(
-              label: ru ? 'Статус' : 'Status',
-              valueLabel: statusFilter.label(ru),
-              options: [
-                for (final filter in _AdminProfileStatusFilter.values)
-                  AdminMenuOption(value: filter, label: filter.label(ru)),
-              ],
-              onSelected: onStatusFilterChanged,
-            ),
-            AdminMenuFilter<ProfessionalProfileType?>(
-              label: ru ? 'Роль' : 'Role',
-              valueLabel: roleFilter == null
-                  ? (ru ? 'Все роли' : 'All roles')
-                  : _roleLabel(roleFilter!, ru),
-              options: [
-                AdminMenuOption<ProfessionalProfileType?>(
-                  value: null,
-                  label: ru ? 'Все роли' : 'All roles',
-                ),
-                for (final role in ProfessionalProfileType.values)
-                  AdminMenuOption(value: role, label: _roleLabel(role, ru)),
-              ],
-              onSelected: onRoleFilterChanged,
-            ),
+            for (var i = 0; i < filters.length; i++) ...[
+              Expanded(child: filters[i]),
+              if (i != filters.length - 1) const SizedBox(width: 8),
+            ],
           ],
         );
         if (compact) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [search, const SizedBox(height: 10), filters],
+            children: [search, const SizedBox(height: 10), filterRow],
           );
         }
         return Row(
           children: [
             Expanded(child: search),
             const SizedBox(width: 12),
-            Flexible(child: filters),
+            Flexible(child: Wrap(spacing: 8, runSpacing: 8, children: filters)),
           ],
         );
       },

@@ -1828,48 +1828,103 @@ class _AdminWorkspaceFilters extends StatelessWidget {
         label: ru ? 'БЕЗОПАСНОСТЬ' : 'SAFETY',
       ),
     ];
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: [
-        ChoiceChip(
-          selected: mineOnly,
-          label: Text(ru ? 'МОИ' : 'MINE'),
-          onSelected: onMineOnlyChanged,
-          selectedColor: BrandTheme.redTop,
-          backgroundColor: Colors.white.withValues(alpha: 0.72),
-          labelStyle: adminCommandStyle(
-            size: 11,
-            letterSpacing: 0.9,
-            color: mineOnly ? Colors.white : kTextDark,
-          ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(999),
-            side: BorderSide(
-              color: mineOnly ? BrandTheme.redTop : kBorderColor,
+    Widget mineChip() => _AdminWorkspaceChip(
+      label: ru ? 'МОИ' : 'MINE',
+      selected: mineOnly,
+      selectedColor: BrandTheme.redTop,
+      onTap: () => onMineOnlyChanged(!mineOnly),
+    );
+
+    Widget filterChip(({_AdminWorkspaceFilter value, String label}) item) {
+      return _AdminWorkspaceChip(
+        label: item.label,
+        selected: selected == item.value,
+        selectedColor: kTextDark,
+        onTap: () => onChanged(item.value),
+      );
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 620;
+        if (!compact) {
+          return Row(
+            children: [
+              Flexible(child: mineChip()),
+              const SizedBox(width: 8),
+              for (final item in items) ...[
+                Flexible(child: filterChip(item)),
+                if (item != items.last) const SizedBox(width: 8),
+              ],
+            ],
+          );
+        }
+
+        return Column(
+          children: [
+            Row(
+              children: [
+                Expanded(child: mineChip()),
+                const SizedBox(width: 8),
+                Expanded(child: filterChip(items[0])),
+              ],
             ),
-          ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(child: filterChip(items[1])),
+                const SizedBox(width: 8),
+                Expanded(child: filterChip(items[2])),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(children: [Expanded(child: filterChip(items[3]))]),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _AdminWorkspaceChip extends StatelessWidget {
+  const _AdminWorkspaceChip({
+    required this.label,
+    required this.selected,
+    required this.selectedColor,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final Color selectedColor;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return ChoiceChip(
+      selected: selected,
+      showCheckmark: false,
+      label: SizedBox(
+        width: double.infinity,
+        child: Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
         ),
-        for (final item in items)
-          ChoiceChip(
-            selected: selected == item.value,
-            label: Text(item.label),
-            onSelected: (_) => onChanged(item.value),
-            selectedColor: kTextDark,
-            backgroundColor: Colors.white.withValues(alpha: 0.72),
-            labelStyle: adminCommandStyle(
-              size: 11,
-              letterSpacing: 0.9,
-              color: selected == item.value ? Colors.white : kTextDark,
-            ),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(999),
-              side: BorderSide(
-                color: selected == item.value ? kTextDark : kBorderColor,
-              ),
-            ),
-          ),
-      ],
+      ),
+      onSelected: (_) => onTap(),
+      selectedColor: selectedColor,
+      backgroundColor: Colors.white.withValues(alpha: 0.72),
+      labelStyle: adminCommandStyle(
+        size: 11,
+        letterSpacing: 0.9,
+        color: selected ? Colors.white : kTextDark,
+      ),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(999),
+        side: BorderSide(color: selected ? selectedColor : kBorderColor),
+      ),
     );
   }
 }

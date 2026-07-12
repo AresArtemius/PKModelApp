@@ -433,32 +433,12 @@ class _CastingsPanel extends StatelessWidget {
           return stageOk && searchOk;
         })
         .toList(growable: false);
-    final activeCount = castings
-        .where((casting) => casting.stage != CastingProjectStage.completed)
-        .length;
-    final totalResponses = castings.fold<int>(
-      0,
-      (sum, casting) => sum + casting.responseCount,
-    );
     final isDesktop =
         MediaQuery.sizeOf(context).width >= _kCastingsDesktopBreakpoint;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Align(
-          alignment: Alignment.centerLeft,
-          child: AdminCompactSummary(
-            title: ru ? 'Сводка' : 'Summary',
-            items: [
-              (ru ? 'Всего' : 'Total', castings.length),
-              (ru ? 'В выборке' : 'Shown', filtered.length),
-              (ru ? 'Активные' : 'Active', activeCount),
-              (ru ? 'Отклики' : 'Responses', totalResponses),
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
         _CastingsToolbar(
           controller: controller,
           stageFilter: stageFilter,
@@ -884,13 +864,21 @@ class _ToolbarFrame extends StatelessWidget {
             ),
           ),
         );
-        final chips = Wrap(spacing: 8, runSpacing: 8, children: filters);
+        final filterRow = Row(
+          children: [
+            for (var i = 0; i < filters.length; i++) ...[
+              Expanded(child: filters[i]),
+              if (i != filters.length - 1) const SizedBox(width: 8),
+            ],
+          ],
+        );
         if (compact) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [search, const SizedBox(height: 10), chips],
+            children: [search, const SizedBox(height: 10), filterRow],
           );
         }
+        final chips = Wrap(spacing: 8, runSpacing: 8, children: filters);
         return Row(
           children: [
             Expanded(child: search),
