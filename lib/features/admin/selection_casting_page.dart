@@ -531,33 +531,21 @@ class SelectionCastingPage extends ConsumerWidget {
                     trailing: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        IconButton(
+                        _HeaderActionButton(
                           onPressed: () {
                             ref.invalidate(castingResponsesProvider(castingId));
                           },
-                          icon: const Icon(
-                            Icons.refresh_rounded,
-                            color: BrandTheme.redTop,
-                          ),
-                          splashRadius: 22,
+                          icon: Icons.refresh_rounded,
                         ),
-                        IconButton(
+                        _HeaderActionButton(
                           onPressed: exportItems.isEmpty
                               ? null
                               : choosePdfExport,
-                          icon: const Icon(
-                            Icons.picture_as_pdf_rounded,
-                            color: BrandTheme.redTop,
-                          ),
-                          splashRadius: 22,
+                          icon: Icons.picture_as_pdf_rounded,
                         ),
-                        IconButton(
+                        _HeaderActionButton(
                           onPressed: items.isEmpty ? null : copyCsvExport,
-                          icon: const Icon(
-                            Icons.table_chart_rounded,
-                            color: BrandTheme.redTop,
-                          ),
-                          splashRadius: 22,
+                          icon: Icons.table_chart_rounded,
                         ),
                       ],
                     ),
@@ -622,6 +610,25 @@ class _CardPill extends StatelessWidget {
         boxShadow: BrandTheme.basePillShadow(isDark: false),
       ),
       child: child,
+    );
+  }
+}
+
+class _HeaderActionButton extends StatelessWidget {
+  const _HeaderActionButton({required this.icon, required this.onPressed});
+
+  final IconData icon;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      onPressed: onPressed,
+      icon: Icon(icon, color: BrandTheme.redTop, size: 22),
+      splashRadius: 18,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints.tightFor(width: 34, height: 44),
+      visualDensity: VisualDensity.compact,
     );
   }
 }
@@ -912,6 +919,7 @@ class _CastingShortlistBoardState extends State<_CastingShortlistBoard> {
                   onNoteChanged: widget.onNoteChanged,
                   allStatuses: statuses,
                   t: t,
+                  compact: compact,
                 )
               : Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -928,6 +936,7 @@ class _CastingShortlistBoardState extends State<_CastingShortlistBoard> {
                           onNoteChanged: widget.onNoteChanged,
                           allStatuses: statuses,
                           t: t,
+                          compact: compact,
                         ),
                       ),
                       if (column != columns.last) const SizedBox(width: 10),
@@ -1021,75 +1030,130 @@ class _StatusSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 46,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: columns.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 8),
-        itemBuilder: (context, index) {
-          final column = columns[index];
-          final active = column.status == selected;
-          return InkWell(
-            borderRadius: BorderRadius.circular(999),
-            onTap: () => onChanged(column.status),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 160),
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              decoration: BoxDecoration(
-                color: active ? BrandTheme.redTop : Colors.white,
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(
-                  color: active ? BrandTheme.redTop : kBorderColor,
-                ),
-                boxShadow: active
-                    ? BrandTheme.basePillShadow(isDark: false)
-                    : null,
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    column.icon,
-                    color: active ? Colors.white : BrandTheme.redTop,
-                    size: 18,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    column.title,
-                    style: TextStyle(
-                      color: active ? Colors.white : _text,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 1,
-                      fontSize: 12,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final tight = constraints.maxWidth < 520;
+        if (tight) {
+          return SizedBox(
+            height: 46,
+            child: Row(
+              children: [
+                for (var index = 0; index < columns.length; index++) ...[
+                  Expanded(
+                    child: _StatusSelectorChip(
+                      column: columns[index],
+                      active: columns[index].status == selected,
+                      count: counts[columns[index].status] ?? 0,
+                      tight: true,
+                      onTap: () => onChanged(columns[index].status),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 7,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: active
-                          ? Colors.white.withValues(alpha: 0.22)
-                          : BrandTheme.redTop,
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      '${counts[column.status] ?? 0}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w900,
-                        height: 1,
-                      ),
-                    ),
-                  ),
+                  if (index != columns.length - 1) const SizedBox(width: 6),
                 ],
-              ),
+              ],
             ),
           );
-        },
+        }
+
+        return SizedBox(
+          height: 46,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: columns.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 8),
+            itemBuilder: (context, index) {
+              final column = columns[index];
+              return _StatusSelectorChip(
+                column: column,
+                active: column.status == selected,
+                count: counts[column.status] ?? 0,
+                onTap: () => onChanged(column.status),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _StatusSelectorChip extends StatelessWidget {
+  const _StatusSelectorChip({
+    required this.column,
+    required this.active,
+    required this.count,
+    required this.onTap,
+    this.tight = false,
+  });
+
+  final _BoardColumnSpec column;
+  final bool active;
+  final int count;
+  final VoidCallback onTap;
+  final bool tight;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(999),
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: EdgeInsets.symmetric(horizontal: tight ? 9 : 14),
+        decoration: BoxDecoration(
+          color: active ? BrandTheme.redTop : Colors.white,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: active ? BrandTheme.redTop : kBorderColor),
+          boxShadow: active ? BrandTheme.basePillShadow(isDark: false) : null,
+        ),
+        child: Row(
+          mainAxisAlignment: tight
+              ? MainAxisAlignment.center
+              : MainAxisAlignment.start,
+          children: [
+            Icon(
+              column.icon,
+              color: active ? Colors.white : BrandTheme.redTop,
+              size: tight ? 16 : 18,
+            ),
+            SizedBox(width: tight ? 5 : 8),
+            Flexible(
+              child: Text(
+                column.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: active ? Colors.white : _text,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: tight ? 0.4 : 1,
+                  fontSize: tight ? 10 : 12,
+                ),
+              ),
+            ),
+            SizedBox(width: tight ? 5 : 8),
+            Container(
+              padding: EdgeInsets.symmetric(
+                horizontal: tight ? 6 : 7,
+                vertical: tight ? 3 : 4,
+              ),
+              decoration: BoxDecoration(
+                color: active
+                    ? Colors.white.withValues(alpha: 0.22)
+                    : BrandTheme.redTop,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                '$count',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: tight ? 10 : 11,
+                  fontWeight: FontWeight.w900,
+                  height: 1,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1106,6 +1170,7 @@ class _CastingBoardColumn extends StatelessWidget {
     required this.onNoteChanged,
     required this.allStatuses,
     required this.t,
+    required this.compact,
   });
 
   final _BoardColumnSpec spec;
@@ -1122,6 +1187,7 @@ class _CastingBoardColumn extends StatelessWidget {
   onNoteChanged;
   final List<CastingResponseStatus> allStatuses;
   final AppLocalizations t;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -1217,6 +1283,7 @@ class _CastingBoardColumn extends StatelessWidget {
                       onStatusChanged: onStatusChanged,
                       onNoteChanged: onNoteChanged,
                       t: t,
+                      compact: compact,
                     ),
                     if (i != items.length - 1) const SizedBox(height: 10),
                   ],
@@ -1378,6 +1445,7 @@ class _CastingBoardCard extends StatelessWidget {
     required this.onStatusChanged,
     required this.onNoteChanged,
     required this.t,
+    required this.compact,
   });
 
   final Map<String, dynamic> row;
@@ -1394,6 +1462,7 @@ class _CastingBoardCard extends StatelessWidget {
   final Future<void> Function({required String profileId, required String note})
   onNoteChanged;
   final AppLocalizations t;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -1434,7 +1503,7 @@ class _CastingBoardCard extends StatelessWidget {
         ),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(10),
+        padding: EdgeInsets.all(compact ? 8 : 10),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -1457,8 +1526,8 @@ class _CastingBoardCard extends StatelessWidget {
                     materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     visualDensity: VisualDensity.compact,
                   ),
-                  _SelectionProfileThumb(url: thumbUrl),
-                  const SizedBox(width: 10),
+                  _SelectionProfileThumb(url: thumbUrl, compact: compact),
+                  SizedBox(width: compact ? 8 : 10),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1520,6 +1589,7 @@ class _CastingBoardCard extends StatelessWidget {
                           onSave: (note) =>
                               onNoteChanged(profileId: profileId, note: note),
                         ),
+                  compact: compact,
                 ),
                 for (final status in allStatuses)
                   if (status != currentStatus)
@@ -1531,6 +1601,7 @@ class _CastingBoardCard extends StatelessWidget {
                               profileId: profileId,
                               status: status,
                             ),
+                      compact: compact,
                     ),
               ],
             ),
@@ -1815,12 +1886,14 @@ class _StatusMoveChip extends StatelessWidget {
     required this.onTap,
     this.tone = _StatusMoveChipTone.neutral,
     this.icon,
+    this.compact = false,
   });
 
   final String label;
   final VoidCallback? onTap;
   final _StatusMoveChipTone tone;
   final IconData? icon;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -1828,7 +1901,10 @@ class _StatusMoveChip extends StatelessWidget {
       borderRadius: BorderRadius.circular(999),
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+        padding: EdgeInsets.symmetric(
+          horizontal: compact ? 8 : 9,
+          vertical: compact ? 5 : 6,
+        ),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(999),
           color: tone == _StatusMoveChipTone.danger
@@ -1850,12 +1926,12 @@ class _StatusMoveChip extends StatelessWidget {
             if (icon != null) ...[
               Icon(
                 icon,
-                size: 14,
+                size: compact ? 13 : 14,
                 color: tone == _StatusMoveChipTone.neutral
                     ? _text
                     : BrandTheme.redTop,
               ),
-              const SizedBox(width: 5),
+              SizedBox(width: compact ? 4 : 5),
             ],
             Text(
               label,
@@ -1865,7 +1941,7 @@ class _StatusMoveChip extends StatelessWidget {
                         tone == _StatusMoveChipTone.note
                     ? BrandTheme.redTop
                     : _text,
-                fontSize: 11,
+                fontSize: compact ? 10 : 11,
                 fontWeight: FontWeight.w900,
               ),
             ),
@@ -1877,17 +1953,18 @@ class _StatusMoveChip extends StatelessWidget {
 }
 
 class _SelectionProfileThumb extends StatelessWidget {
-  const _SelectionProfileThumb({required this.url});
+  const _SelectionProfileThumb({required this.url, this.compact = false});
 
   final String url;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
       child: SizedBox(
-        width: 56,
-        height: 56,
+        width: compact ? 48 : 56,
+        height: compact ? 48 : 56,
         child: url.trim().isEmpty
             ? Container(
                 color: const Color(0x14000000),
