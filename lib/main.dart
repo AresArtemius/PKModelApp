@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/account_profile_service.dart';
@@ -13,12 +14,14 @@ import 'core/push_notifications_service.dart';
 import 'gen_l10n/app_localizations.dart';
 import 'core/locale_provider.dart';
 import 'ui/brand/app_theme.dart';
+import 'ui/brand/brand_theme.dart';
 
 Widget _buildBaseApp({
   required Locale? locale,
   Widget? home,
   RouterConfig<Object>? routerConfig,
   String Function(BuildContext)? onGenerateTitle,
+  Widget? startupOverlay,
 }) {
   assert(
     (routerConfig != null) ^ (home != null),
@@ -32,7 +35,8 @@ Widget _buildBaseApp({
       localizationsDelegates: _kLocalizationsDelegates,
       onGenerateTitle: onGenerateTitle,
       theme: buildModelAppTheme(),
-      builder: (context, child) => _WebAppFrame(child: child),
+      builder: (context, child) =>
+          _AppRootFrame(startupOverlay: startupOverlay, child: child),
       routerConfig: routerConfig,
     );
   }
@@ -44,7 +48,8 @@ Widget _buildBaseApp({
     localizationsDelegates: _kLocalizationsDelegates,
     onGenerateTitle: onGenerateTitle,
     theme: buildModelAppTheme(),
-    builder: (context, child) => _WebAppFrame(child: child),
+    builder: (context, child) =>
+        _AppRootFrame(startupOverlay: startupOverlay, child: child),
     home: home,
   );
 }
@@ -60,6 +65,7 @@ const int _kWebImageCacheCount = 450;
 const int _kMobileImageCacheCount = 280;
 const int _kWebImageCacheMb = 180;
 const int _kMobileImageCacheMb = 96;
+const Duration _kStartupSplashDuration = Duration(milliseconds: 1450);
 
 void _configureImageCache() {
   final imageCache = PaintingBinding.instance.imageCache;
@@ -68,6 +74,24 @@ void _configureImageCache() {
       : _kMobileImageCacheCount;
   imageCache.maximumSizeBytes =
       (kIsWeb ? _kWebImageCacheMb : _kMobileImageCacheMb) * 1024 * 1024;
+}
+
+class _AppRootFrame extends StatelessWidget {
+  const _AppRootFrame({required this.child, this.startupOverlay});
+
+  final Widget? child;
+  final Widget? startupOverlay;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        _WebAppFrame(child: child),
+        if (startupOverlay != null) Positioned.fill(child: startupOverlay!),
+      ],
+    );
+  }
 }
 
 class _WebAppFrame extends StatelessWidget {
@@ -195,11 +219,29 @@ Future<void> main() async {
   );
 }
 
-class MyApp extends ConsumerWidget {
+class MyApp extends ConsumerStatefulWidget {
   const MyApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends ConsumerState<MyApp> {
+  bool _showStartupSplash = true;
+
+  @override
+  void initState() {
+    super.initState();
+    if (!kIsWeb) {
+      unawaited(HapticFeedback.lightImpact());
+    }
+    Future<void>.delayed(_kStartupSplashDuration, () {
+      if (mounted) setState(() => _showStartupSplash = false);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final router = ref.watch(goRouterProvider);
     final locale = ref.watch(localeProvider);
     ref.watch(accountProfileSyncProvider);
@@ -213,6 +255,150 @@ class MyApp extends ConsumerWidget {
       locale: locale,
       routerConfig: router,
       onGenerateTitle: (context) => AppLocalizations.of(context)!.appTitle,
+      startupOverlay: _showStartupSplash ? const _StartupSplashScreen() : null,
+    );
+  }
+}
+
+class _StartupSplashScreen extends StatefulWidget {
+  const _StartupSplashScreen();
+
+  @override
+  State<_StartupSplashScreen> createState() => _StartupSplashScreenState();
+}
+
+class _StartupSplashScreenState extends State<_StartupSplashScreen>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1050),
+  )..forward();
+
+  late final Animation<double> _fade = CurvedAnimation(
+    parent: _controller,
+    curve: const Interval(0.0, 0.7, curve: Curves.easeOutCubic),
+  );
+
+  late final Animation<double> _scale = Tween<double>(begin: 0.94, end: 1)
+      .animate(
+        CurvedAnimation(
+          parent: _controller,
+          curve: const Interval(0.0, 0.85, curve: Curves.easeOutBack),
+        ),
+      );
+
+  late final Animation<Offset> _brandSlide =
+      Tween<Offset>(begin: const Offset(0, 0.35), end: Offset.zero).animate(
+        CurvedAnimation(
+          parent: _controller,
+          curve: const Interval(0.28, 1, curve: Curves.easeOutCubic),
+        ),
+      );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Material(
+        color: Colors.transparent,
+        child: DecoratedBox(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Color(0xFF020202),
+                Color(0xFF140507),
+                Color(0xFF42000A),
+                Color(0xFF760012),
+              ],
+              stops: [0.0, 0.46, 0.78, 1.0],
+            ),
+          ),
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: RadialGradient(
+                      center: const Alignment(0, 0.18),
+                      radius: 0.72,
+                      colors: [
+                        BrandTheme.redTop.withValues(alpha: 0.34),
+                        Colors.transparent,
+                      ],
+                      stops: const [0.0, 1.0],
+                    ),
+                  ),
+                ),
+              ),
+              SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(28, 44, 28, 40),
+                  child: Column(
+                    children: [
+                      const Spacer(flex: 5),
+                      FadeTransition(
+                        opacity: _fade,
+                        child: ScaleTransition(
+                          scale: _scale,
+                          child: Container(
+                            width: 132,
+                            height: 132,
+                            padding: const EdgeInsets.all(18),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Colors.black.withValues(alpha: 0.32),
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.13),
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: BrandTheme.redTop.withValues(
+                                    alpha: 0.46,
+                                  ),
+                                  blurRadius: 42,
+                                  spreadRadius: 8,
+                                ),
+                              ],
+                            ),
+                            child: Image.asset(
+                              'assets/images/pk-logo-red-512.png',
+                              fit: BoxFit.contain,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const Spacer(flex: 4),
+                      SlideTransition(
+                        position: _brandSlide,
+                        child: FadeTransition(
+                          opacity: _fade,
+                          child: Text(
+                            'PK MANAGEMENT',
+                            textAlign: TextAlign.center,
+                            style: BrandTheme.pillText.copyWith(
+                              color: Colors.white.withValues(alpha: 0.82),
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 3.4,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
