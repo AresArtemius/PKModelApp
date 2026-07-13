@@ -1016,32 +1016,10 @@ class _StatusSelector extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final tight = constraints.maxWidth < 520;
-        if (tight) {
-          return SizedBox(
-            height: 46,
-            child: Row(
-              children: [
-                for (var index = 0; index < columns.length; index++) ...[
-                  Expanded(
-                    child: _StatusSelectorChip(
-                      column: columns[index],
-                      active: columns[index].status == selected,
-                      count: counts[columns[index].status] ?? 0,
-                      tight: true,
-                      onTap: () => onChanged(columns[index].status),
-                    ),
-                  ),
-                  if (index != columns.length - 1) const SizedBox(width: 6),
-                ],
-              ],
-            ),
-          );
-        }
-
         return SizedBox(
           height: 46,
           child: ListView.separated(
+            padding: const EdgeInsets.symmetric(horizontal: 1),
             scrollDirection: Axis.horizontal,
             itemCount: columns.length,
             separatorBuilder: (_, _) => const SizedBox(width: 8),
@@ -1067,14 +1045,12 @@ class _StatusSelectorChip extends StatelessWidget {
     required this.active,
     required this.count,
     required this.onTap,
-    this.tight = false,
   });
 
   final _BoardColumnSpec column;
   final bool active;
   final int count;
   final VoidCallback onTap;
-  final bool tight;
 
   @override
   Widget build(BuildContext context) {
@@ -1083,7 +1059,7 @@ class _StatusSelectorChip extends StatelessWidget {
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 160),
-        padding: EdgeInsets.symmetric(horizontal: tight ? 9 : 14),
+        padding: const EdgeInsets.symmetric(horizontal: 14),
         decoration: BoxDecoration(
           color: active ? BrandTheme.redTop : Colors.white,
           borderRadius: BorderRadius.circular(999),
@@ -1091,16 +1067,13 @@ class _StatusSelectorChip extends StatelessWidget {
           boxShadow: active ? BrandTheme.basePillShadow(isDark: false) : null,
         ),
         child: Row(
-          mainAxisAlignment: tight
-              ? MainAxisAlignment.center
-              : MainAxisAlignment.start,
           children: [
             Icon(
               column.icon,
               color: active ? Colors.white : BrandTheme.redTop,
-              size: tight ? 16 : 18,
+              size: 18,
             ),
-            SizedBox(width: tight ? 5 : 8),
+            const SizedBox(width: 8),
             Flexible(
               child: Text(
                 column.title,
@@ -1109,17 +1082,14 @@ class _StatusSelectorChip extends StatelessWidget {
                 style: TextStyle(
                   color: active ? Colors.white : _text,
                   fontWeight: FontWeight.w900,
-                  letterSpacing: tight ? 0.4 : 1,
-                  fontSize: tight ? 10 : 12,
+                  letterSpacing: 1,
+                  fontSize: 12,
                 ),
               ),
             ),
-            SizedBox(width: tight ? 5 : 8),
+            const SizedBox(width: 8),
             Container(
-              padding: EdgeInsets.symmetric(
-                horizontal: tight ? 6 : 7,
-                vertical: tight ? 3 : 4,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
               decoration: BoxDecoration(
                 color: active
                     ? Colors.white.withValues(alpha: 0.22)
@@ -1130,7 +1100,7 @@ class _StatusSelectorChip extends StatelessWidget {
                 '$count',
                 style: TextStyle(
                   color: Colors.white,
-                  fontSize: tight ? 10 : 11,
+                  fontSize: 11,
                   fontWeight: FontWeight.w900,
                   height: 1,
                 ),
@@ -1476,6 +1446,34 @@ class _CastingBoardCard extends StatelessWidget {
     final selected = selectedProfileIds.contains(profileId);
     final adminNote = (row['admin_note'] ?? '').toString().trim();
     final hasNote = adminNote.isNotEmpty;
+    final actionChips = [
+      _StatusMoveChip(
+        label: Localizations.localeOf(context).languageCode == 'ru'
+            ? (hasNote ? 'Заметка есть' : 'Заметка')
+            : (hasNote ? 'Has note' : 'Note'),
+        icon: hasNote ? Icons.sticky_note_2_rounded : Icons.note_add_rounded,
+        tone: hasNote ? _StatusMoveChipTone.note : _StatusMoveChipTone.neutral,
+        onTap: profileId.isEmpty
+            ? null
+            : () => _editCandidateNote(
+                context: context,
+                profileName: name.isNotEmpty ? name : t.profileUpper,
+                initialNote: adminNote,
+                onSave: (note) =>
+                    onNoteChanged(profileId: profileId, note: note),
+              ),
+        compact: compact,
+      ),
+      for (final status in allStatuses)
+        if (status != currentStatus)
+          _StatusMoveChip(
+            label: castingResponseStatusLabel(t, status),
+            onTap: profileId.isEmpty
+                ? null
+                : () => onStatusChanged(profileId: profileId, status: status),
+            compact: compact,
+          ),
+    ];
 
     final card = Container(
       decoration: BoxDecoration(
@@ -1550,45 +1548,18 @@ class _CastingBoardCard extends StatelessWidget {
               _CandidateNotePreview(note: adminNote),
               const SizedBox(height: 8),
             ],
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: [
-                _StatusMoveChip(
-                  label: Localizations.localeOf(context).languageCode == 'ru'
-                      ? (hasNote ? 'Заметка есть' : 'Заметка')
-                      : (hasNote ? 'Has note' : 'Note'),
-                  icon: hasNote
-                      ? Icons.sticky_note_2_rounded
-                      : Icons.note_add_rounded,
-                  tone: hasNote
-                      ? _StatusMoveChipTone.note
-                      : _StatusMoveChipTone.neutral,
-                  onTap: profileId.isEmpty
-                      ? null
-                      : () => _editCandidateNote(
-                          context: context,
-                          profileName: name.isNotEmpty ? name : t.profileUpper,
-                          initialNote: adminNote,
-                          onSave: (note) =>
-                              onNoteChanged(profileId: profileId, note: note),
-                        ),
-                  compact: compact,
+            if (compact)
+              SizedBox(
+                height: 32,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: actionChips.length,
+                  separatorBuilder: (_, _) => const SizedBox(width: 6),
+                  itemBuilder: (context, index) => actionChips[index],
                 ),
-                for (final status in allStatuses)
-                  if (status != currentStatus)
-                    _StatusMoveChip(
-                      label: castingResponseStatusLabel(t, status),
-                      onTap: profileId.isEmpty
-                          ? null
-                          : () => onStatusChanged(
-                              profileId: profileId,
-                              status: status,
-                            ),
-                      compact: compact,
-                    ),
-              ],
-            ),
+              )
+            else
+              Wrap(spacing: 6, runSpacing: 6, children: actionChips),
           ],
         ),
       ),

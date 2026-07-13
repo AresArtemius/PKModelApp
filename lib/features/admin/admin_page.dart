@@ -1860,26 +1860,19 @@ class _AdminWorkspaceFilters extends StatelessWidget {
           );
         }
 
-        return Column(
-          children: [
-            Row(
-              children: [
-                Expanded(child: mineChip()),
-                const SizedBox(width: 8),
-                Expanded(child: filterChip(items[0])),
-              ],
+        final chips = [mineChip(), for (final item in items) filterChip(item)];
+        return SizedBox(
+          height: 42,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 1),
+            itemCount: chips.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 8),
+            itemBuilder: (context, index) => SizedBox(
+              width: index == chips.length - 1 ? 156 : 98,
+              child: chips[index],
             ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(child: filterChip(items[1])),
-                const SizedBox(width: 8),
-                Expanded(child: filterChip(items[2])),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(children: [Expanded(child: filterChip(items[3]))]),
-          ],
+          ),
         );
       },
     );

@@ -2024,31 +2024,44 @@ class _SelectionStatusPanel extends StatelessWidget {
     final t = AppLocalizations.of(context)!;
 
     return _CardPill(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            t.selectionStatusUpper,
-            style: const TextStyle(
-              color: _text,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 1.1,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 520;
+          final chips = [
+            for (final item in SelectionStatus.values)
+              _SelectionStatusChip(
+                status: item,
+                selected: item == status,
+                onTap: () => onChanged(item),
+              ),
+          ];
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              for (final item in SelectionStatus.values)
-                _SelectionStatusChip(
-                  status: item,
-                  selected: item == status,
-                  onTap: () => onChanged(item),
+              Text(
+                t.selectionStatusUpper,
+                style: const TextStyle(
+                  color: _text,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.1,
                 ),
+              ),
+              const SizedBox(height: 10),
+              if (compact)
+                SizedBox(
+                  height: 38,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: chips.length,
+                    separatorBuilder: (_, _) => const SizedBox(width: 8),
+                    itemBuilder: (context, index) => chips[index],
+                  ),
+                )
+              else
+                Wrap(spacing: 8, runSpacing: 8, children: chips),
             ],
-          ),
-        ],
+          );
+        },
       ),
     );
   }
