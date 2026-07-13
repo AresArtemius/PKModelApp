@@ -684,7 +684,9 @@ class _CastingMobileCard extends StatelessWidget {
       subtitle: casting.id,
       badge: _StageBadge(stage: casting.stage),
       meta: meta,
-      onOpen: () => context.go('${Routes.adminSelection}/${casting.id}'),
+      onOpen: () => context.go(
+        '${Routes.adminSelection}/${casting.id}?from=admin_castings',
+      ),
       action: _CastingActionsMenu(
         casting: casting,
         onDeleteCasting: onDeleteCasting,
@@ -709,7 +711,9 @@ class _CastingActionsMenu extends StatelessWidget {
       onSelected: (value) {
         switch (value) {
           case 'open':
-            context.go('${Routes.adminSelection}/${casting.id}');
+            context.go(
+              '${Routes.adminSelection}/${casting.id}?from=admin_castings',
+            );
             return;
           case 'delete':
             onDeleteCasting(casting);

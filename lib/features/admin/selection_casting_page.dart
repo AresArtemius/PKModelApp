@@ -523,11 +523,11 @@ class SelectionCastingPage extends ConsumerWidget {
                 children: [
                   BrandAdminHeader(
                     title: t.responsesUpper,
-                    onBack: () => context.go(
-                      from == 'castings'
-                          ? Routes.castings
-                          : Routes.adminSelection,
-                    ),
+                    onBack: () => context.go(switch (from) {
+                      'castings' => Routes.castings,
+                      'admin_castings' => Routes.adminCastings,
+                      _ => Routes.adminSelection,
+                    }),
                     sideWidth: 104,
                     trailing: BrandAdminHeaderActions(
                       actions: [

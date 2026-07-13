@@ -211,10 +211,12 @@ class SelectionProjectPage extends ConsumerWidget {
     super.key,
     required this.selectionId,
     this.isPublic = false,
+    this.from,
   });
 
   final String selectionId;
   final bool isPublic;
+  final String? from;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -400,7 +402,11 @@ class SelectionProjectPage extends ConsumerWidget {
                     title: title.isNotEmpty ? title : t.selectionUpper,
                     onBack: isPublic
                         ? () => context.go(Routes.search)
-                        : () => context.go(Routes.adminSelection),
+                        : () => context.go(
+                            from == 'admin_selections_table'
+                                ? Routes.adminSelectionsTable
+                                : Routes.adminSelection,
+                          ),
                     trailing: isPublic
                         ? null
                         : IconButton(

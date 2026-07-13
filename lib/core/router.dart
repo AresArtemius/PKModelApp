@@ -790,7 +790,10 @@ final List<RouteBase> appRoutes = [
         path: '${Routes.adminSelectionProject}/:$_routeParamId',
         builder: (context, state) {
           final id = state.pathParameters[_routeParamId] ?? '';
-          return SelectionProjectPage(selectionId: id);
+          return SelectionProjectPage(
+            selectionId: id,
+            from: state.uri.queryParameters['from'],
+          );
         },
       ),
     ],

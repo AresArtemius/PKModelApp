@@ -749,8 +749,9 @@ class _SelectionMobileCard extends StatelessWidget {
       subtitle: selection.id,
       badge: _SelectionStatusBadge(status: selection.status),
       meta: meta,
-      onOpen: () =>
-          context.go('${Routes.adminSelectionProject}/${selection.id}'),
+      onOpen: () => context.go(
+        '${Routes.adminSelectionProject}/${selection.id}?from=admin_selections_table',
+      ),
       action: _SelectionActionsMenu(
         selection: selection,
         onDeleteSelection: onDeleteSelection,
@@ -775,7 +776,9 @@ class _SelectionActionsMenu extends StatelessWidget {
       onSelected: (value) {
         switch (value) {
           case 'open':
-            context.go('${Routes.adminSelectionProject}/${selection.id}');
+            context.go(
+              '${Routes.adminSelectionProject}/${selection.id}?from=admin_selections_table',
+            );
             return;
           case 'delete':
             onDeleteSelection(selection);
