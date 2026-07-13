@@ -70,3 +70,115 @@ class BrandAdminHeader extends StatelessWidget {
     );
   }
 }
+
+class BrandAdminHeaderAction {
+  const BrandAdminHeaderAction({
+    required this.label,
+    required this.icon,
+    required this.onPressed,
+    this.destructive = false,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback? onPressed;
+  final bool destructive;
+}
+
+class BrandAdminHeaderActions extends StatelessWidget {
+  const BrandAdminHeaderActions({
+    super.key,
+    required this.actions,
+    this.maxVisible = 2,
+  });
+
+  final List<BrandAdminHeaderAction> actions;
+  final int maxVisible;
+
+  @override
+  Widget build(BuildContext context) {
+    final visibleCount = actions.length <= maxVisible
+        ? actions.length
+        : maxVisible.clamp(0, actions.length - 1).toInt();
+    final visible = actions.take(visibleCount).toList(growable: false);
+    final overflow = actions.skip(visibleCount).toList(growable: false);
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (final action in visible)
+          _BrandAdminHeaderIconButton(action: action),
+        if (overflow.isNotEmpty)
+          PopupMenuButton<int>(
+            tooltip: 'Действия',
+            color: Colors.white,
+            elevation: 10,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+              side: const BorderSide(color: kBorderColor),
+            ),
+            icon: const Icon(Icons.more_horiz_rounded, color: kTextDark),
+            iconSize: 22,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints.tightFor(width: 34, height: 44),
+            position: PopupMenuPosition.under,
+            onSelected: (index) => overflow[index].onPressed?.call(),
+            itemBuilder: (context) => [
+              for (var i = 0; i < overflow.length; i++)
+                PopupMenuItem<int>(
+                  value: i,
+                  enabled: overflow[i].onPressed != null,
+                  child: Row(
+                    children: [
+                      Icon(
+                        overflow[i].icon,
+                        size: 18,
+                        color: overflow[i].destructive
+                            ? BrandTheme.redTop
+                            : kTextDark,
+                      ),
+                      const SizedBox(width: 10),
+                      Flexible(
+                        child: Text(
+                          overflow[i].label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: BrandTheme.pillText.copyWith(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0,
+                            color: overflow[i].destructive
+                                ? BrandTheme.redTop
+                                : kTextDark,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+      ],
+    );
+  }
+}
+
+class _BrandAdminHeaderIconButton extends StatelessWidget {
+  const _BrandAdminHeaderIconButton({required this.action});
+
+  final BrandAdminHeaderAction action;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: action.label,
+      onPressed: action.onPressed,
+      icon: Icon(action.icon, color: BrandTheme.redTop, size: 22),
+      splashRadius: 18,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints.tightFor(width: 34, height: 44),
+      visualDensity: VisualDensity.compact,
+    );
+  }
+}

@@ -195,6 +195,7 @@ class SelectionCastingPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final t = AppLocalizations.of(context)!;
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
     final res = ref.watch(castingResponsesProvider(castingId));
 
     return Scaffold(
@@ -528,24 +529,26 @@ class SelectionCastingPage extends ConsumerWidget {
                           : Routes.adminSelection,
                     ),
                     sideWidth: 104,
-                    trailing: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        _HeaderActionButton(
+                    trailing: BrandAdminHeaderActions(
+                      actions: [
+                        BrandAdminHeaderAction(
+                          label: ru ? 'Обновить' : 'Refresh',
+                          icon: Icons.refresh_rounded,
                           onPressed: () {
                             ref.invalidate(castingResponsesProvider(castingId));
                           },
-                          icon: Icons.refresh_rounded,
                         ),
-                        _HeaderActionButton(
+                        BrandAdminHeaderAction(
+                          label: 'PDF',
+                          icon: Icons.picture_as_pdf_rounded,
                           onPressed: exportItems.isEmpty
                               ? null
                               : choosePdfExport,
-                          icon: Icons.picture_as_pdf_rounded,
                         ),
-                        _HeaderActionButton(
-                          onPressed: items.isEmpty ? null : copyCsvExport,
+                        BrandAdminHeaderAction(
+                          label: ru ? 'Таблица' : 'Table',
                           icon: Icons.table_chart_rounded,
+                          onPressed: items.isEmpty ? null : copyCsvExport,
                         ),
                       ],
                     ),
@@ -610,25 +613,6 @@ class _CardPill extends StatelessWidget {
         boxShadow: BrandTheme.basePillShadow(isDark: false),
       ),
       child: child,
-    );
-  }
-}
-
-class _HeaderActionButton extends StatelessWidget {
-  const _HeaderActionButton({required this.icon, required this.onPressed});
-
-  final IconData icon;
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return IconButton(
-      onPressed: onPressed,
-      icon: Icon(icon, color: BrandTheme.redTop, size: 22),
-      splashRadius: 18,
-      padding: EdgeInsets.zero,
-      constraints: const BoxConstraints.tightFor(width: 34, height: 44),
-      visualDensity: VisualDensity.compact,
     );
   }
 }
