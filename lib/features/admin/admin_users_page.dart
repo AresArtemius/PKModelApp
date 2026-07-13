@@ -669,43 +669,13 @@ class _UsersToolbar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ru = Localizations.localeOf(context).languageCode == 'ru';
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final compact = constraints.maxWidth < 760;
-        final search = TextField(
-          controller: controller,
-          onChanged: (_) => onSearchChanged(),
-          style: adminBodyStyle(color: kTextDark),
-          decoration: InputDecoration(
-            hintText: ru ? 'Поиск по имени, email, телефону, tag' : 'Search',
-            prefixIcon: const Icon(Icons.search_rounded),
-            suffixIcon: controller.text.trim().isEmpty
-                ? null
-                : IconButton(
-                    onPressed: () {
-                      controller.clear();
-                      onSearchChanged();
-                    },
-                    icon: const Icon(Icons.close_rounded),
-                    tooltip: ru ? 'Очистить' : 'Clear',
-                  ),
-            filled: true,
-            fillColor: Colors.white,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(18),
-              borderSide: const BorderSide(color: kBorderColor),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(18),
-              borderSide: const BorderSide(color: kBorderColor),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(18),
-              borderSide: const BorderSide(color: kTextDark, width: 1.2),
-            ),
-          ),
-        );
-        final filters = AdminMenuFilter<_AdminUserRoleFilter>(
+    return AdminMobileToolbar(
+      controller: controller,
+      hintText: ru ? 'Поиск по имени, email, телефону, tag' : 'Search',
+      onSearchChanged: onSearchChanged,
+      compactBreakpoint: 760,
+      filters: [
+        AdminMenuFilter<_AdminUserRoleFilter>(
           label: ru ? 'Роль' : 'Role',
           valueLabel: roleFilter.label(ru),
           options: [
@@ -713,21 +683,8 @@ class _UsersToolbar extends StatelessWidget {
               AdminMenuOption(value: filter, label: filter.label(ru)),
           ],
           onSelected: onRoleFilterChanged,
-        );
-        if (compact) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [search, const SizedBox(height: 10), filters],
-          );
-        }
-        return Row(
-          children: [
-            Expanded(child: search),
-            const SizedBox(width: 12),
-            Flexible(child: filters),
-          ],
-        );
-      },
+        ),
+      ],
     );
   }
 }

@@ -696,90 +696,36 @@ class _ProfilesToolbar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ru = Localizations.localeOf(context).languageCode == 'ru';
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final compact = constraints.maxWidth < 820;
-        final search = TextField(
-          controller: controller,
-          onChanged: (_) => onSearchChanged(),
-          style: adminBodyStyle(color: kTextDark),
-          decoration: InputDecoration(
-            hintText: ru ? 'Поиск по имени, городу, владельцу' : 'Search',
-            prefixIcon: const Icon(Icons.search_rounded),
-            suffixIcon: controller.text.trim().isEmpty
-                ? null
-                : IconButton(
-                    onPressed: () {
-                      controller.clear();
-                      onSearchChanged();
-                    },
-                    icon: const Icon(Icons.close_rounded),
-                    tooltip: ru ? 'Очистить' : 'Clear',
-                  ),
-            filled: true,
-            fillColor: Colors.white,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(18),
-              borderSide: const BorderSide(color: kBorderColor),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(18),
-              borderSide: const BorderSide(color: kBorderColor),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(18),
-              borderSide: const BorderSide(color: kTextDark, width: 1.2),
-            ),
-          ),
-        );
-        final filters = <Widget>[
-          AdminMenuFilter<_AdminProfileStatusFilter>(
-            label: ru ? 'Статус' : 'Status',
-            valueLabel: statusFilter.label(ru),
-            options: [
-              for (final filter in _AdminProfileStatusFilter.values)
-                AdminMenuOption(value: filter, label: filter.label(ru)),
-            ],
-            onSelected: onStatusFilterChanged,
-          ),
-          AdminMenuFilter<ProfessionalProfileType?>(
-            label: ru ? 'Роль' : 'Role',
-            valueLabel: roleFilter == null
-                ? (ru ? 'Все роли' : 'All roles')
-                : _roleLabel(roleFilter!, ru),
-            options: [
-              AdminMenuOption<ProfessionalProfileType?>(
-                value: null,
-                label: ru ? 'Все роли' : 'All roles',
-              ),
-              for (final role in ProfessionalProfileType.values)
-                AdminMenuOption(value: role, label: _roleLabel(role, ru)),
-            ],
-            onSelected: onRoleFilterChanged,
-          ),
-        ];
-        final filterRow = Row(
-          children: [
-            for (var i = 0; i < filters.length; i++) ...[
-              Expanded(child: filters[i]),
-              if (i != filters.length - 1) const SizedBox(width: 8),
-            ],
+    return AdminMobileToolbar(
+      controller: controller,
+      hintText: ru ? 'Поиск по имени, городу, владельцу' : 'Search',
+      onSearchChanged: onSearchChanged,
+      filters: [
+        AdminMenuFilter<_AdminProfileStatusFilter>(
+          label: ru ? 'Статус' : 'Status',
+          valueLabel: statusFilter.label(ru),
+          options: [
+            for (final filter in _AdminProfileStatusFilter.values)
+              AdminMenuOption(value: filter, label: filter.label(ru)),
           ],
-        );
-        if (compact) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [search, const SizedBox(height: 10), filterRow],
-          );
-        }
-        return Row(
-          children: [
-            Expanded(child: search),
-            const SizedBox(width: 12),
-            Flexible(child: Wrap(spacing: 8, runSpacing: 8, children: filters)),
+          onSelected: onStatusFilterChanged,
+        ),
+        AdminMenuFilter<ProfessionalProfileType?>(
+          label: ru ? 'Роль' : 'Role',
+          valueLabel: roleFilter == null
+              ? (ru ? 'Все роли' : 'All roles')
+              : _roleLabel(roleFilter!, ru),
+          options: [
+            AdminMenuOption<ProfessionalProfileType?>(
+              value: null,
+              label: ru ? 'Все роли' : 'All roles',
+            ),
+            for (final role in ProfessionalProfileType.values)
+              AdminMenuOption(value: role, label: _roleLabel(role, ru)),
           ],
-        );
-      },
+          onSelected: onRoleFilterChanged,
+        ),
+      ],
     );
   }
 }

@@ -829,64 +829,11 @@ class _ToolbarFrame extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final compact = constraints.maxWidth < 820;
-        final search = TextField(
-          controller: controller,
-          onChanged: (_) => onSearchChanged(),
-          style: adminBodyStyle(color: kTextDark),
-          decoration: InputDecoration(
-            hintText: hintText,
-            prefixIcon: const Icon(Icons.search_rounded),
-            suffixIcon: controller.text.trim().isEmpty
-                ? null
-                : IconButton(
-                    onPressed: () {
-                      controller.clear();
-                      onSearchChanged();
-                    },
-                    icon: const Icon(Icons.close_rounded),
-                  ),
-            filled: true,
-            fillColor: Colors.white,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(18),
-              borderSide: const BorderSide(color: kBorderColor),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(18),
-              borderSide: const BorderSide(color: kBorderColor),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(18),
-              borderSide: const BorderSide(color: kTextDark, width: 1.2),
-            ),
-          ),
-        );
-        final filterRow = Row(
-          children: [
-            for (var i = 0; i < filters.length; i++) ...[
-              Expanded(child: filters[i]),
-              if (i != filters.length - 1) const SizedBox(width: 8),
-            ],
-          ],
-        );
-        if (compact) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [search, const SizedBox(height: 10), filterRow],
-          );
-        }
-        final chips = Wrap(spacing: 8, runSpacing: 8, children: filters);
-        return Row(
-          children: [
-            Expanded(child: search),
-            const SizedBox(width: 12),
-            Flexible(child: chips),
-          ],
-        );
-      },
+    return AdminMobileToolbar(
+      controller: controller,
+      hintText: hintText,
+      onSearchChanged: onSearchChanged,
+      filters: filters,
     );
   }
 }

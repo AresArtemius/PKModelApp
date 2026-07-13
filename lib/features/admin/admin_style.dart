@@ -258,6 +258,152 @@ class AdminLoadMoreFooter extends StatelessWidget {
   }
 }
 
+class AdminMobileToolbar extends StatelessWidget {
+  const AdminMobileToolbar({
+    super.key,
+    required this.controller,
+    required this.hintText,
+    required this.onSearchChanged,
+    required this.filters,
+    this.compactBreakpoint = 820,
+  });
+
+  final TextEditingController controller;
+  final String hintText;
+  final VoidCallback onSearchChanged;
+  final List<Widget> filters;
+  final double compactBreakpoint;
+
+  @override
+  Widget build(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < compactBreakpoint;
+        final search = _AdminSearchField(
+          controller: controller,
+          hintText: hintText,
+          clearTooltip: ru ? 'Очистить' : 'Clear',
+          onSearchChanged: onSearchChanged,
+        );
+
+        if (compact) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              search,
+              if (filters.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                _AdminMobileFilterGrid(filters: filters),
+              ],
+            ],
+          );
+        }
+
+        return Row(
+          children: [
+            Expanded(child: search),
+            if (filters.isNotEmpty) ...[
+              const SizedBox(width: 12),
+              Flexible(
+                child: Wrap(spacing: 8, runSpacing: 8, children: filters),
+              ),
+            ],
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _AdminSearchField extends StatelessWidget {
+  const _AdminSearchField({
+    required this.controller,
+    required this.hintText,
+    required this.clearTooltip,
+    required this.onSearchChanged,
+  });
+
+  final TextEditingController controller;
+  final String hintText;
+  final String clearTooltip;
+  final VoidCallback onSearchChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      onChanged: (_) => onSearchChanged(),
+      style: adminBodyStyle(color: kTextDark),
+      decoration: InputDecoration(
+        hintText: hintText,
+        prefixIcon: const Icon(Icons.search_rounded),
+        suffixIcon: controller.text.trim().isEmpty
+            ? null
+            : IconButton(
+                onPressed: () {
+                  controller.clear();
+                  onSearchChanged();
+                },
+                icon: const Icon(Icons.close_rounded),
+                tooltip: clearTooltip,
+              ),
+        filled: true,
+        fillColor: Colors.white,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: const BorderSide(color: kBorderColor),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: const BorderSide(color: kBorderColor),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: const BorderSide(color: kTextDark, width: 1.2),
+        ),
+      ),
+    );
+  }
+}
+
+class _AdminMobileFilterGrid extends StatelessWidget {
+  const _AdminMobileFilterGrid({required this.filters});
+
+  final List<Widget> filters;
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = <Widget>[];
+    for (var i = 0; i < filters.length; i += 2) {
+      final hasPair = i + 1 < filters.length;
+      rows.add(
+        Row(
+          children: [
+            Expanded(child: filters[i]),
+            if (hasPair) ...[
+              const SizedBox(width: 8),
+              Expanded(child: filters[i + 1]),
+            ],
+          ],
+        ),
+      );
+      if (i + 2 < filters.length) {
+        rows.add(const SizedBox(height: 8));
+      }
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: rows,
+    );
+  }
+}
+
 class AdminPopupMenuButton<T> extends StatelessWidget {
   const AdminPopupMenuButton({
     super.key,
