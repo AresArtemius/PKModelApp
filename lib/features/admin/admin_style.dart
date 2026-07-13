@@ -316,6 +316,120 @@ class AdminMobileToolbar extends StatelessWidget {
   }
 }
 
+class AdminMobileCard extends StatelessWidget {
+  const AdminMobileCard({
+    super.key,
+    required this.title,
+    required this.subtitle,
+    required this.meta,
+    this.leading,
+    this.badge,
+    this.action,
+    this.onOpen,
+  });
+
+  final String title;
+  final String subtitle;
+  final String meta;
+  final Widget? leading;
+  final Widget? badge;
+  final Widget? action;
+  final VoidCallback? onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final content = DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: kBorderColor),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (leading != null) ...[leading!, const SizedBox(width: 10)],
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          title.trim().isEmpty ? '—' : title.trim(),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: adminCommandStyle(
+                            size: 14,
+                            letterSpacing: 0.1,
+                            weight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      if (badge != null) ...[
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Align(
+                            alignment: Alignment.topRight,
+                            child: badge!,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  if (subtitle.trim().isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: adminBodyStyle(size: 11),
+                    ),
+                  ],
+                  if (meta.trim().isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      meta,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: adminBodyStyle(size: 12, color: kTextDark),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            if (action != null) ...[
+              const SizedBox(width: 4),
+              SizedBox(width: 40, height: 40, child: action!),
+            ],
+          ],
+        ),
+      ),
+    );
+
+    if (onOpen == null) return content;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(24),
+        onTap: onOpen,
+        child: content,
+      ),
+    );
+  }
+}
+
 class _AdminSearchField extends StatelessWidget {
   const _AdminSearchField({
     required this.controller,

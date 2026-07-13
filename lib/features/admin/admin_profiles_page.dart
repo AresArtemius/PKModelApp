@@ -612,65 +612,15 @@ class _ProfileMobileCard extends StatelessWidget {
       profile.basicsLabel(ru),
       profile.mediaLabel(ru),
     ].where((part) => part.trim().isNotEmpty).join(' • ');
-    return DecoratedBox(
-      decoration: catalogCardDecoration().copyWith(
-        border: Border.all(color: kBorderColor),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _ProfileCover(profile: profile),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          profile.displayName(ru),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: adminCommandStyle(
-                            size: 14,
-                            letterSpacing: 0.1,
-                            weight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      _StatusBadge(status: profile.status),
-                    ],
-                  ),
-                  const SizedBox(height: 5),
-                  Text(
-                    profile.id,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: adminBodyStyle(size: 11),
-                  ),
-                  if (meta.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      meta,
-                      maxLines: 4,
-                      overflow: TextOverflow.ellipsis,
-                      style: adminBodyStyle(size: 12, color: kTextDark),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            _ProfileActionsMenu(
-              profile: profile,
-              onDeleteProfile: onDeleteProfile,
-            ),
-          ],
-        ),
+    return AdminMobileCard(
+      leading: _ProfileCover(profile: profile),
+      title: profile.displayName(ru),
+      subtitle: profile.id,
+      meta: meta,
+      badge: _StatusBadge(status: profile.status),
+      action: _ProfileActionsMenu(
+        profile: profile,
+        onDeleteProfile: onDeleteProfile,
       ),
     );
   }

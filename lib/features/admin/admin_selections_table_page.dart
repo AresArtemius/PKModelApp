@@ -744,7 +744,7 @@ class _SelectionMobileCard extends StatelessWidget {
       '${ru ? 'Анкеты' : 'Profiles'}: ${selection.itemCount}',
       selection.isPublic ? (ru ? 'Публичная' : 'Public') : '',
     ].where((part) => part.trim().isNotEmpty).join(' • ');
-    return _MobileCard(
+    return AdminMobileCard(
       title: selection.title,
       subtitle: selection.id,
       badge: _SelectionStatusBadge(status: selection.status),
@@ -1015,89 +1015,6 @@ class _SoftBadge extends StatelessWidget {
               color: filled ? Colors.white : color,
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _MobileCard extends StatelessWidget {
-  const _MobileCard({
-    required this.title,
-    required this.subtitle,
-    required this.badge,
-    required this.meta,
-    required this.onOpen,
-    this.action,
-  });
-
-  final String title;
-  final String subtitle;
-  final Widget badge;
-  final String meta;
-  final VoidCallback onOpen;
-  final Widget? action;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: catalogCardDecoration().copyWith(
-        border: Border.all(color: kBorderColor),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          title.trim().isEmpty ? '—' : title.trim(),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: adminCommandStyle(
-                            size: 14,
-                            letterSpacing: 0.1,
-                            weight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      badge,
-                    ],
-                  ),
-                  const SizedBox(height: 5),
-                  Text(
-                    subtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: adminBodyStyle(size: 11),
-                  ),
-                  if (meta.trim().isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      meta,
-                      maxLines: 4,
-                      overflow: TextOverflow.ellipsis,
-                      style: adminBodyStyle(size: 12, color: kTextDark),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            action ??
-                IconButton(
-                  onPressed: onOpen,
-                  icon: const Icon(Icons.open_in_new_rounded),
-                  color: kTextDark,
-                ),
-          ],
         ),
       ),
     );

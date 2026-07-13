@@ -588,66 +588,16 @@ class _UserMobileCard extends StatelessWidget {
       user.locationLabel,
       user.activityLabel(ru),
     ].where((part) => part.trim().isNotEmpty).join(' • ');
-    return DecoratedBox(
-      decoration: catalogCardDecoration().copyWith(
-        border: Border.all(color: kBorderColor),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _UserAvatar(user: user),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          user.displayName,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: adminCommandStyle(
-                            size: 14,
-                            letterSpacing: 0.1,
-                            weight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      _RoleBadge(role: user.primaryRole),
-                    ],
-                  ),
-                  const SizedBox(height: 5),
-                  Text(
-                    user.handleOrId,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: adminBodyStyle(size: 12),
-                  ),
-                  if (meta.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      meta,
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                      style: adminBodyStyle(size: 12, color: kTextDark),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            _UserActionsMenu(
-              user: user,
-              onSetRole: onSetRole,
-              onDeleteUserProfile: onDeleteUserProfile,
-            ),
-          ],
-        ),
+    return AdminMobileCard(
+      leading: _UserAvatar(user: user),
+      title: user.displayName,
+      subtitle: user.handleOrId,
+      meta: meta,
+      badge: _RoleBadge(role: user.primaryRole),
+      action: _UserActionsMenu(
+        user: user,
+        onSetRole: onSetRole,
+        onDeleteUserProfile: onDeleteUserProfile,
       ),
     );
   }
