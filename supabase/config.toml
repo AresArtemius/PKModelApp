@@ -1,2 +1,5 @@
 [functions.send-sms-aero-otp]
 verify_jwt = false
+
+[functions.yookassa-webhook]
+verify_jwt = false
