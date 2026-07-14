@@ -297,9 +297,9 @@ Future<Map<String, _AdminProfileBilling>> _loadBillingByProfileId(
   if (ids.isEmpty) return const <String, _AdminProfileBilling>{};
   try {
     final rows = await sb
-        .from('billing_profile_subscriptions')
+        .from('billing_entitlements')
         .select(
-          'profile_id,status,source,product_code,current_period_start,current_period_end,updated_at',
+          'profile_id,status,source,product_code,current_period_start,current_period_end,is_active,updated_at',
         )
         .inFilter('profile_id', ids);
     return {
@@ -311,9 +311,7 @@ Future<Map<String, _AdminProfileBilling>> _loadBillingByProfileId(
         ),
     };
   } on PostgrestException catch (e) {
-    if (SupabaseCompat.isMissingRelation(e, const [
-      'billing_profile_subscriptions',
-    ])) {
+    if (SupabaseCompat.isMissingRelation(e, const ['billing_entitlements'])) {
       return const <String, _AdminProfileBilling>{};
     }
     rethrow;
@@ -1326,6 +1324,7 @@ class _AdminProfileBilling {
     required this.productCode,
     required this.currentPeriodStart,
     required this.currentPeriodEnd,
+    required this.isActiveNow,
   });
 
   factory _AdminProfileBilling.empty(String profileId) {
@@ -1336,6 +1335,7 @@ class _AdminProfileBilling {
       productCode: '',
       currentPeriodStart: null,
       currentPeriodEnd: null,
+      isActiveNow: false,
     );
   }
 
@@ -1351,6 +1351,7 @@ class _AdminProfileBilling {
       currentPeriodEnd: DateTime.tryParse(
         (map['current_period_end'] ?? '').toString(),
       ),
+      isActiveNow: _boolFromMap(map['is_active']),
     );
   }
 
@@ -1360,10 +1361,14 @@ class _AdminProfileBilling {
   final String productCode;
   final DateTime? currentPeriodStart;
   final DateTime? currentPeriodEnd;
+  final bool isActiveNow;
 
   bool get isActive {
     final end = currentPeriodEnd;
-    return status == 'active' && end != null && end.isAfter(DateTime.now());
+    return isActiveNow ||
+        ((status == 'active_paid' || status == 'trial_active') &&
+            end != null &&
+            end.isAfter(DateTime.now()));
   }
 
   String badgeLabel(bool ru) {
@@ -1373,7 +1378,7 @@ class _AdminProfileBilling {
           : 'Active until ${_shortDate(currentPeriodEnd!)}';
     }
     if (status == 'canceled') return ru ? 'Отключена' : 'Disabled';
-    if (status == 'expired') return ru ? 'Истекла' : 'Expired';
+    if (status == 'payment_overdue') return ru ? 'Истекла' : 'Expired';
     return ru ? 'Не активна' : 'Inactive';
   }
 
