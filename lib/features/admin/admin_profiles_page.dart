@@ -71,15 +71,22 @@ final _adminProfilesProvider = FutureProvider.autoDispose
             .range(0, params.limit);
         final ownersByUserId = await _loadOwnersByUserId(sb);
         final list = rows as List;
+        final profileMaps = list
+            .take(params.limit)
+            .map((row) => Map<String, dynamic>.from(row as Map))
+            .toList(growable: false);
+        final billingByProfileId = await _loadBillingByProfileId(
+          sb,
+          profileMaps.map((map) => (map['id'] ?? '').toString()),
+        );
         return _AdminProfilesPageData(
           hasMore: list.length > params.limit,
-          rows: list
-              .take(params.limit)
-              .map((row) {
-                final map = Map<String, dynamic>.from(row as Map);
+          rows: profileMaps
+              .map((map) {
                 return _AdminProfileRow.fromMap(
                   map,
                   owner: ownersByUserId[(map['user_id'] ?? '').toString()],
+                  billing: billingByProfileId[(map['id'] ?? '').toString()],
                 );
               })
               .toList(growable: false),
@@ -100,15 +107,22 @@ final _adminProfilesProvider = FutureProvider.autoDispose
               .range(0, params.limit);
           final ownersByUserId = await _loadOwnersByUserId(sb);
           final list = rows as List;
+          final profileMaps = list
+              .take(params.limit)
+              .map((row) => Map<String, dynamic>.from(row as Map))
+              .toList(growable: false);
+          final billingByProfileId = await _loadBillingByProfileId(
+            sb,
+            profileMaps.map((map) => (map['id'] ?? '').toString()),
+          );
           return _AdminProfilesPageData(
             hasMore: list.length > params.limit,
-            rows: list
-                .take(params.limit)
-                .map((row) {
-                  final map = Map<String, dynamic>.from(row as Map);
+            rows: profileMaps
+                .map((map) {
                   return _AdminProfileRow.fromMap(
                     map,
                     owner: ownersByUserId[(map['user_id'] ?? '').toString()],
+                    billing: billingByProfileId[(map['id'] ?? '').toString()],
                   );
                 })
                 .toList(growable: false),
@@ -271,6 +285,41 @@ Future<Map<String, _AdminProfileOwner>> _loadOwnersByUserId(
   }
 }
 
+Future<Map<String, _AdminProfileBilling>> _loadBillingByProfileId(
+  SupabaseClient sb,
+  Iterable<String> profileIds,
+) async {
+  final ids = profileIds
+      .map((id) => id.trim())
+      .where((id) => id.isNotEmpty)
+      .toSet()
+      .toList(growable: false);
+  if (ids.isEmpty) return const <String, _AdminProfileBilling>{};
+  try {
+    final rows = await sb
+        .from('billing_profile_subscriptions')
+        .select(
+          'profile_id,status,source,product_code,current_period_start,current_period_end,updated_at',
+        )
+        .inFilter('profile_id', ids);
+    return {
+      for (final row in rows as List)
+        _AdminProfileBilling.fromMap(
+          Map<String, dynamic>.from(row as Map),
+        ).profileId: _AdminProfileBilling.fromMap(
+          Map<String, dynamic>.from(row),
+        ),
+    };
+  } on PostgrestException catch (e) {
+    if (SupabaseCompat.isMissingRelation(e, const [
+      'billing_profile_subscriptions',
+    ])) {
+      return const <String, _AdminProfileBilling>{};
+    }
+    rethrow;
+  }
+}
+
 class AdminProfilesPage extends ConsumerStatefulWidget {
   const AdminProfilesPage({super.key});
 
@@ -290,13 +339,18 @@ class _AdminProfilesPageState extends ConsumerState<AdminProfilesPage> {
     super.dispose();
   }
 
-  Future<bool> _confirm(String title, String message) async {
+  Future<bool> _confirm(
+    String title,
+    String message, {
+    String confirmLabel = 'Удалить',
+    bool destructive = true,
+  }) async {
     return showAdminConfirmDialog(
       context: context,
       title: title,
       message: message,
-      confirmLabel: 'Удалить',
-      destructive: true,
+      confirmLabel: confirmLabel,
+      destructive: destructive,
     );
   }
 
@@ -321,6 +375,53 @@ class _AdminProfilesPageState extends ConsumerState<AdminProfilesPage> {
       _snack('Анкета удалена');
     } catch (e) {
       _snack(_adminProfilesActionError(e, 'Не удалось удалить анкету'));
+    }
+  }
+
+  Future<void> _grantProfileBilling(
+    _AdminProfileRow profile,
+    int months,
+  ) async {
+    try {
+      await ref
+          .read(supabaseProvider)
+          .rpc(
+            'admin_grant_profile_billing',
+            params: {
+              'p_profile_id': profile.id,
+              'p_duration_months': months,
+              'p_admin_note': 'Ручное продление из back-office',
+            },
+          );
+      ref.invalidate(_adminProfilesProvider);
+      _snack('Размещение анкеты продлено на $months мес.');
+    } catch (e) {
+      _snack(_adminProfilesActionError(e, 'Не удалось продлить размещение'));
+    }
+  }
+
+  Future<void> _revokeProfileBilling(_AdminProfileRow profile) async {
+    final confirmed = await _confirm(
+      'Отключить размещение',
+      'Отключить активное размещение анкеты ${profile.displayName(true)}?',
+      confirmLabel: 'Отключить',
+      destructive: true,
+    );
+    if (!confirmed) return;
+    try {
+      await ref
+          .read(supabaseProvider)
+          .rpc(
+            'admin_revoke_profile_billing',
+            params: {
+              'p_profile_id': profile.id,
+              'p_admin_note': 'Отключено вручную из back-office',
+            },
+          );
+      ref.invalidate(_adminProfilesProvider);
+      _snack('Размещение анкеты отключено');
+    } catch (e) {
+      _snack(_adminProfilesActionError(e, 'Не удалось отключить размещение'));
     }
   }
 
@@ -394,6 +495,8 @@ class _AdminProfilesPageState extends ConsumerState<AdminProfilesPage> {
                           () => _profilesLimit += _kProfilesPageSize,
                         ),
                         onDeleteProfile: _deleteProfile,
+                        onGrantBilling: _grantProfileBilling,
+                        onRevokeBilling: _revokeProfileBilling,
                       ),
                     );
                   },
@@ -419,6 +522,8 @@ class _ProfilesTablePanel extends StatelessWidget {
     required this.onSearchChanged,
     required this.onLoadMore,
     required this.onDeleteProfile,
+    required this.onGrantBilling,
+    required this.onRevokeBilling,
   });
 
   final List<_AdminProfileRow> profiles;
@@ -431,6 +536,8 @@ class _ProfilesTablePanel extends StatelessWidget {
   final VoidCallback onSearchChanged;
   final VoidCallback onLoadMore;
   final ValueChanged<_AdminProfileRow> onDeleteProfile;
+  final void Function(_AdminProfileRow profile, int months) onGrantBilling;
+  final ValueChanged<_AdminProfileRow> onRevokeBilling;
 
   @override
   Widget build(BuildContext context) {
@@ -489,7 +596,7 @@ class _ProfilesTablePanel extends StatelessWidget {
                       scrollDirection: Axis.horizontal,
                       child: ConstrainedBox(
                         constraints: BoxConstraints(
-                          minWidth: isDesktop ? 1160 : 1040,
+                          minWidth: isDesktop ? 1330 : 1180,
                         ),
                         child: ListView.separated(
                           // ignore: deprecated_member_use
@@ -511,6 +618,8 @@ class _ProfilesTablePanel extends StatelessWidget {
                             return _ProfileTableRow(
                               profile: filtered[index - 1],
                               onDeleteProfile: onDeleteProfile,
+                              onGrantBilling: onGrantBilling,
+                              onRevokeBilling: onRevokeBilling,
                             );
                           },
                         ),
@@ -523,6 +632,8 @@ class _ProfilesTablePanel extends StatelessWidget {
                   hasMore: hasMore,
                   onLoadMore: onLoadMore,
                   onDeleteProfile: onDeleteProfile,
+                  onGrantBilling: onGrantBilling,
+                  onRevokeBilling: onRevokeBilling,
                 ),
         ),
       ],
@@ -561,12 +672,16 @@ class _ProfilesMobileList extends StatelessWidget {
     required this.hasMore,
     required this.onLoadMore,
     required this.onDeleteProfile,
+    required this.onGrantBilling,
+    required this.onRevokeBilling,
   });
 
   final List<_AdminProfileRow> profiles;
   final bool hasMore;
   final VoidCallback onLoadMore;
   final ValueChanged<_AdminProfileRow> onDeleteProfile;
+  final void Function(_AdminProfileRow profile, int months) onGrantBilling;
+  final ValueChanged<_AdminProfileRow> onRevokeBilling;
 
   @override
   Widget build(BuildContext context) {
@@ -587,6 +702,8 @@ class _ProfilesMobileList extends StatelessWidget {
         return _ProfileMobileCard(
           profile: profiles[index],
           onDeleteProfile: onDeleteProfile,
+          onGrantBilling: onGrantBilling,
+          onRevokeBilling: onRevokeBilling,
         );
       },
     );
@@ -597,10 +714,14 @@ class _ProfileMobileCard extends StatelessWidget {
   const _ProfileMobileCard({
     required this.profile,
     required this.onDeleteProfile,
+    required this.onGrantBilling,
+    required this.onRevokeBilling,
   });
 
   final _AdminProfileRow profile;
   final ValueChanged<_AdminProfileRow> onDeleteProfile;
+  final void Function(_AdminProfileRow profile, int months) onGrantBilling;
+  final ValueChanged<_AdminProfileRow> onRevokeBilling;
 
   @override
   Widget build(BuildContext context) {
@@ -611,6 +732,7 @@ class _ProfileMobileCard extends StatelessWidget {
       profile.locationLabel,
       profile.basicsLabel(ru),
       profile.mediaLabel(ru),
+      profile.billing.mobileMetaLabel(ru),
     ].where((part) => part.trim().isNotEmpty).join(' • ');
     return AdminMobileCard(
       leading: _ProfileCover(profile: profile),
@@ -621,6 +743,8 @@ class _ProfileMobileCard extends StatelessWidget {
       action: _ProfileActionsMenu(
         profile: profile,
         onDeleteProfile: onDeleteProfile,
+        onGrantBilling: onGrantBilling,
+        onRevokeBilling: onRevokeBilling,
       ),
     );
   }
@@ -692,6 +816,7 @@ class _ProfilesTableHeader extends StatelessWidget {
         children: [
           _HeaderCell(width: 310, text: ru ? 'Анкета' : 'Profile'),
           _HeaderCell(width: 132, text: ru ? 'Статус' : 'Status'),
+          _HeaderCell(width: 170, text: ru ? 'Размещение' : 'Placement'),
           _HeaderCell(width: 180, text: ru ? 'Роли' : 'Roles'),
           _HeaderCell(width: 180, text: ru ? 'Владелец' : 'Owner'),
           _HeaderCell(width: 160, text: ru ? 'Город' : 'City'),
@@ -730,10 +855,14 @@ class _ProfileTableRow extends StatelessWidget {
   const _ProfileTableRow({
     required this.profile,
     required this.onDeleteProfile,
+    required this.onGrantBilling,
+    required this.onRevokeBilling,
   });
 
   final _AdminProfileRow profile;
   final ValueChanged<_AdminProfileRow> onDeleteProfile;
+  final void Function(_AdminProfileRow profile, int months) onGrantBilling;
+  final ValueChanged<_AdminProfileRow> onRevokeBilling;
 
   @override
   Widget build(BuildContext context) {
@@ -777,6 +906,7 @@ class _ProfileTableRow extends StatelessWidget {
             ),
           ),
           SizedBox(width: 132, child: _StatusBadge(status: profile.status)),
+          SizedBox(width: 170, child: _BillingBadge(billing: profile.billing)),
           _BodyCell(width: 180, text: profile.rolesLabel(ru)),
           _BodyCell(width: 180, text: profile.ownerLabel),
           _BodyCell(width: 160, text: profile.locationLabel),
@@ -789,6 +919,8 @@ class _ProfileTableRow extends StatelessWidget {
               child: _ProfileActionsMenu(
                 profile: profile,
                 onDeleteProfile: onDeleteProfile,
+                onGrantBilling: onGrantBilling,
+                onRevokeBilling: onRevokeBilling,
               ),
             ),
           ),
@@ -802,10 +934,14 @@ class _ProfileActionsMenu extends StatelessWidget {
   const _ProfileActionsMenu({
     required this.profile,
     required this.onDeleteProfile,
+    required this.onGrantBilling,
+    required this.onRevokeBilling,
   });
 
   final _AdminProfileRow profile;
   final ValueChanged<_AdminProfileRow> onDeleteProfile;
+  final void Function(_AdminProfileRow profile, int months) onGrantBilling;
+  final ValueChanged<_AdminProfileRow> onRevokeBilling;
 
   @override
   Widget build(BuildContext context) {
@@ -823,6 +959,21 @@ class _ProfileActionsMenu extends StatelessWidget {
           case 'delete':
             onDeleteProfile(profile);
             return;
+          case 'billing_1':
+            onGrantBilling(profile, 1);
+            return;
+          case 'billing_3':
+            onGrantBilling(profile, 3);
+            return;
+          case 'billing_6':
+            onGrantBilling(profile, 6);
+            return;
+          case 'billing_12':
+            onGrantBilling(profile, 12);
+            return;
+          case 'billing_revoke':
+            onRevokeBilling(profile);
+            return;
         }
       },
       options: [
@@ -838,6 +989,33 @@ class _ProfileActionsMenu extends StatelessWidget {
             icon: Icons.verified_user_rounded,
           ),
         AdminMenuOption(
+          value: 'billing_1',
+          label: ru ? 'Размещение: +1 мес' : 'Placement: +1 mo',
+          icon: Icons.payments_rounded,
+        ),
+        AdminMenuOption(
+          value: 'billing_3',
+          label: ru ? 'Размещение: +3 мес' : 'Placement: +3 mo',
+          icon: Icons.payments_rounded,
+        ),
+        AdminMenuOption(
+          value: 'billing_6',
+          label: ru ? 'Размещение: +6 мес' : 'Placement: +6 mo',
+          icon: Icons.payments_rounded,
+        ),
+        AdminMenuOption(
+          value: 'billing_12',
+          label: ru ? 'Размещение: +12 мес' : 'Placement: +12 mo',
+          icon: Icons.payments_rounded,
+        ),
+        AdminMenuOption(
+          value: 'billing_revoke',
+          label: ru ? 'Отключить размещение' : 'Disable placement',
+          icon: Icons.money_off_csred_outlined,
+          destructive: true,
+          enabled: profile.billing.isActive,
+        ),
+        AdminMenuOption(
           value: 'delete',
           label: ru ? 'Удалить' : 'Delete',
           icon: Icons.delete_outline_rounded,
@@ -845,6 +1023,44 @@ class _ProfileActionsMenu extends StatelessWidget {
         ),
       ],
       child: const _AdminActionDots(),
+    );
+  }
+}
+
+class _BillingBadge extends StatelessWidget {
+  const _BillingBadge({required this.billing});
+
+  final _AdminProfileBilling billing;
+
+  @override
+  Widget build(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final active = billing.isActive;
+    final text = billing.badgeLabel(ru);
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: active ? const Color(0xFFEAF7EE) : const Color(0xFFF4F4F4),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: active ? const Color(0xFF6DAA7C) : kBorderColor,
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+          child: Text(
+            text,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: adminCommandStyle(
+              size: 10,
+              letterSpacing: 0.2,
+              color: active ? const Color(0xFF255E32) : kTextMuted,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -979,11 +1195,13 @@ class _AdminProfileRow {
     required this.updatedAt,
     required this.createdAt,
     required this.owner,
+    required this.billing,
   });
 
   factory _AdminProfileRow.fromMap(
     Map<String, dynamic> map, {
     _AdminProfileOwner? owner,
+    _AdminProfileBilling? billing,
   }) {
     final profileType = profileTypeFromString(map['profile_type']?.toString());
     return _AdminProfileRow(
@@ -1009,6 +1227,8 @@ class _AdminProfileRow {
       updatedAt: DateTime.tryParse((map['updated_at'] ?? '').toString()),
       createdAt: DateTime.tryParse((map['created_at'] ?? '').toString()),
       owner: owner ?? const _AdminProfileOwner.empty(),
+      billing:
+          billing ?? _AdminProfileBilling.empty((map['id'] ?? '').toString()),
     );
   }
 
@@ -1032,6 +1252,7 @@ class _AdminProfileRow {
   final DateTime? updatedAt;
   final DateTime? createdAt;
   final _AdminProfileOwner owner;
+  final _AdminProfileBilling billing;
 
   String displayName(bool ru) {
     if (fullName.isNotEmpty) return fullName;
@@ -1095,6 +1316,71 @@ class _AdminProfileRow {
   String get searchable =>
       '$id $userId $fullName $city $country ${owner.searchable} ${roles.map((r) => r.storageValue).join(' ')} ${status.name}'
           .toLowerCase();
+}
+
+class _AdminProfileBilling {
+  const _AdminProfileBilling({
+    required this.profileId,
+    required this.status,
+    required this.source,
+    required this.productCode,
+    required this.currentPeriodStart,
+    required this.currentPeriodEnd,
+  });
+
+  factory _AdminProfileBilling.empty(String profileId) {
+    return _AdminProfileBilling(
+      profileId: profileId,
+      status: '',
+      source: '',
+      productCode: '',
+      currentPeriodStart: null,
+      currentPeriodEnd: null,
+    );
+  }
+
+  factory _AdminProfileBilling.fromMap(Map<String, dynamic> map) {
+    return _AdminProfileBilling(
+      profileId: (map['profile_id'] ?? '').toString().trim(),
+      status: (map['status'] ?? '').toString().trim(),
+      source: (map['source'] ?? '').toString().trim(),
+      productCode: (map['product_code'] ?? '').toString().trim(),
+      currentPeriodStart: DateTime.tryParse(
+        (map['current_period_start'] ?? '').toString(),
+      ),
+      currentPeriodEnd: DateTime.tryParse(
+        (map['current_period_end'] ?? '').toString(),
+      ),
+    );
+  }
+
+  final String profileId;
+  final String status;
+  final String source;
+  final String productCode;
+  final DateTime? currentPeriodStart;
+  final DateTime? currentPeriodEnd;
+
+  bool get isActive {
+    final end = currentPeriodEnd;
+    return status == 'active' && end != null && end.isAfter(DateTime.now());
+  }
+
+  String badgeLabel(bool ru) {
+    if (isActive) {
+      return ru
+          ? 'Активна до ${_shortDate(currentPeriodEnd!)}'
+          : 'Active until ${_shortDate(currentPeriodEnd!)}';
+    }
+    if (status == 'canceled') return ru ? 'Отключена' : 'Disabled';
+    if (status == 'expired') return ru ? 'Истекла' : 'Expired';
+    return ru ? 'Не активна' : 'Inactive';
+  }
+
+  String mobileMetaLabel(bool ru) {
+    final label = badgeLabel(ru);
+    return ru ? 'Размещение: $label' : 'Placement: $label';
+  }
 }
 
 class _AdminProfileOwner {
@@ -1188,6 +1474,13 @@ String _roleLabel(ProfessionalProfileType role, bool ru) => switch (role) {
   ProfessionalProfileType.makeupArtist => ru ? 'Визажист' : 'Makeup',
   ProfessionalProfileType.hairStylist => ru ? 'Hair-стилист' : 'Hair',
 };
+
+String _shortDate(DateTime date) {
+  final local = date.toLocal();
+  final day = local.day.toString().padLeft(2, '0');
+  final month = local.month.toString().padLeft(2, '0');
+  return '$day.$month.${local.year}';
+}
 
 int _intFromMap(Object? value) {
   if (value is int) return value;
