@@ -18,6 +18,25 @@ const _kProfilesPad = 16.0;
 const _kProfilesDesktopBreakpoint = 920.0;
 const _kProfilesListCacheExtent = 900.0;
 const _kProfilesPageSize = 80;
+const _kProfileColProfile = 280.0;
+const _kProfileColStatus = 112.0;
+const _kProfileColBilling = 126.0;
+const _kProfileColRoles = 96.0;
+const _kProfileColOwner = 152.0;
+const _kProfileColCity = 126.0;
+const _kProfileColBasics = 78.0;
+const _kProfileColMedia = 70.0;
+const _kProfileColActions = 42.0;
+const _kProfilesTableWidth =
+    _kProfileColProfile +
+    _kProfileColStatus +
+    _kProfileColBilling +
+    _kProfileColRoles +
+    _kProfileColOwner +
+    _kProfileColCity +
+    _kProfileColBasics +
+    _kProfileColMedia +
+    _kProfileColActions;
 
 class _AdminProfilesPageData {
   const _AdminProfilesPageData({required this.rows, required this.hasMore});
@@ -592,10 +611,8 @@ class _ProfilesTablePanel extends StatelessWidget {
                     thumbVisibility: isDesktop,
                     child: SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(
-                          minWidth: isDesktop ? 1330 : 1180,
-                        ),
+                      child: SizedBox(
+                        width: _kProfilesTableWidth,
                         child: ListView.separated(
                           // ignore: deprecated_member_use
                           cacheExtent: _kProfilesListCacheExtent,
@@ -812,15 +829,30 @@ class _ProfilesTableHeader extends StatelessWidget {
       height: 42,
       child: Row(
         children: [
-          _HeaderCell(width: 310, text: ru ? 'Анкета' : 'Profile'),
-          _HeaderCell(width: 132, text: ru ? 'Статус' : 'Status'),
-          _HeaderCell(width: 170, text: ru ? 'Размещение' : 'Placement'),
-          _HeaderCell(width: 180, text: ru ? 'Роли' : 'Roles'),
-          _HeaderCell(width: 180, text: ru ? 'Владелец' : 'Owner'),
-          _HeaderCell(width: 160, text: ru ? 'Город' : 'City'),
-          _HeaderCell(width: 110, text: ru ? 'Параметры' : 'Basics'),
-          _HeaderCell(width: 96, text: ru ? 'Медиа' : 'Media'),
-          const SizedBox(width: 96),
+          _HeaderCell(
+            width: _kProfileColProfile,
+            text: ru ? 'Анкета' : 'Profile',
+          ),
+          _HeaderCell(
+            width: _kProfileColStatus,
+            text: ru ? 'Статус' : 'Status',
+          ),
+          _HeaderCell(
+            width: _kProfileColBilling,
+            text: ru ? 'Размещение' : 'Placement',
+          ),
+          _HeaderCell(width: _kProfileColRoles, text: ru ? 'Роли' : 'Roles'),
+          _HeaderCell(
+            width: _kProfileColOwner,
+            text: ru ? 'Владелец' : 'Owner',
+          ),
+          _HeaderCell(width: _kProfileColCity, text: ru ? 'Город' : 'City'),
+          _HeaderCell(
+            width: _kProfileColBasics,
+            text: ru ? 'Парам.' : 'Basics',
+          ),
+          _HeaderCell(width: _kProfileColMedia, text: ru ? 'Медиа' : 'Media'),
+          const SizedBox(width: _kProfileColActions),
         ],
       ),
     );
@@ -870,7 +902,7 @@ class _ProfileTableRow extends StatelessWidget {
       child: Row(
         children: [
           SizedBox(
-            width: 310,
+            width: _kProfileColProfile,
             child: Row(
               children: [
                 _ProfileCover(profile: profile),
@@ -903,15 +935,21 @@ class _ProfileTableRow extends StatelessWidget {
               ],
             ),
           ),
-          SizedBox(width: 132, child: _StatusBadge(status: profile.status)),
-          SizedBox(width: 170, child: _BillingBadge(billing: profile.billing)),
-          _BodyCell(width: 180, text: profile.rolesLabel(ru)),
-          _BodyCell(width: 180, text: profile.ownerLabel),
-          _BodyCell(width: 160, text: profile.locationLabel),
-          _BodyCell(width: 110, text: profile.basicsLabel(ru)),
-          _BodyCell(width: 96, text: profile.mediaLabel(ru)),
           SizedBox(
-            width: 96,
+            width: _kProfileColStatus,
+            child: _StatusBadge(status: profile.status),
+          ),
+          SizedBox(
+            width: _kProfileColBilling,
+            child: _BillingBadge(billing: profile.billing),
+          ),
+          _BodyCell(width: _kProfileColRoles, text: profile.rolesLabel(ru)),
+          _BodyCell(width: _kProfileColOwner, text: profile.ownerLabel),
+          _BodyCell(width: _kProfileColCity, text: profile.locationLabel),
+          _BodyCell(width: _kProfileColBasics, text: profile.basicsLabel(ru)),
+          _BodyCell(width: _kProfileColMedia, text: profile.mediaLabel(ru)),
+          SizedBox(
+            width: _kProfileColActions,
             child: Align(
               alignment: Alignment.centerRight,
               child: _ProfileActionsMenu(
