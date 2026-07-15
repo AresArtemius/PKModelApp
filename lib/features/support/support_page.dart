@@ -453,71 +453,163 @@ class _TicketCard extends StatelessWidget {
   );
 }
 
-class _SupportTicketDialog extends ConsumerWidget {
+class _SupportTicketDialog extends ConsumerStatefulWidget {
   const _SupportTicketDialog({required this.ticket, required this.ru});
   final SupportTicket ticket;
   final bool ru;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final messages = ref.watch(supportTicketMessagesProvider(ticket.id));
+  ConsumerState<_SupportTicketDialog> createState() =>
+      _SupportTicketDialogState();
+}
+
+class _SupportTicketDialogState extends ConsumerState<_SupportTicketDialog> {
+  final _replyController = TextEditingController();
+  bool _sending = false;
+
+  @override
+  void dispose() {
+    _replyController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _sendReply() async {
+    final body = _replyController.text.trim();
+    if (body.isEmpty || _sending) return;
+    setState(() => _sending = true);
+    try {
+      final sb = ref.read(supabaseProvider);
+      await sb.from('support_messages').insert({
+        'ticket_id': widget.ticket.id,
+        'author_id': sb.auth.currentUser?.id,
+        'author_kind': 'user',
+        'body': body,
+        'source': 'in_app',
+      });
+      _replyController.clear();
+      ref.invalidate(supportTicketMessagesProvider(widget.ticket.id));
+      ref.invalidate(supportTicketsProvider);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            widget.ru
+                ? 'Ответ отправлен администратору.'
+                : 'Your reply was sent to the administrator.',
+          ),
+        ),
+      );
+    } on PostgrestException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            widget.ru
+                ? 'Не удалось отправить ответ: ${error.message}'
+                : 'Could not send reply: ${error.message}',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final messages = ref.watch(supportTicketMessagesProvider(widget.ticket.id));
     return AlertDialog(
-      title: Text(ticket.subject),
+      title: Text(widget.ticket.subject),
       content: SizedBox(
         width: 620,
-        height: 420,
-        child: messages.when(
-          data: (items) => items.isEmpty
-              ? Center(
-                  child: Text(ru ? 'Сообщений пока нет.' : 'No messages yet.'),
-                )
-              : ListView.separated(
-                  itemCount: items.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 10),
-                  itemBuilder: (_, index) {
-                    final message = items[index];
-                    final admin = message.authorKind == 'admin';
-                    return Align(
-                      alignment: admin
-                          ? Alignment.centerLeft
-                          : Alignment.centerRight,
-                      child: Container(
-                        constraints: const BoxConstraints(maxWidth: 500),
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: admin ? Colors.white : const Color(0xFFEDEDED),
-                          border: Border.all(color: kBorderColor),
-                          borderRadius: BorderRadius.circular(14),
+        height: 520,
+        child: Column(
+          children: [
+            Expanded(
+              child: messages.when(
+                data: (items) => items.isEmpty
+                    ? Center(
+                        child: Text(
+                          widget.ru
+                              ? 'Сообщений пока нет.'
+                              : 'No messages yet.',
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              admin
-                                  ? (ru ? 'Поддержка' : 'Support')
-                                  : (ru ? 'Вы' : 'You'),
-                              style: TextStyle(
-                                color: admin ? BrandTheme.redTop : kTextMuted,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w800,
+                      )
+                    : ListView.separated(
+                        itemCount: items.length,
+                        separatorBuilder: (_, _) => const SizedBox(height: 10),
+                        itemBuilder: (_, index) {
+                          final message = items[index];
+                          final admin = message.authorKind == 'admin';
+                          return Align(
+                            alignment: admin
+                                ? Alignment.centerLeft
+                                : Alignment.centerRight,
+                            child: Container(
+                              constraints: const BoxConstraints(maxWidth: 500),
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: admin
+                                    ? Colors.white
+                                    : const Color(0xFFEDEDED),
+                                border: Border.all(color: kBorderColor),
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    admin
+                                        ? (widget.ru ? 'Поддержка' : 'Support')
+                                        : (widget.ru ? 'Вы' : 'You'),
+                                    style: TextStyle(
+                                      color: admin
+                                          ? BrandTheme.redTop
+                                          : kTextMuted,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(message.body),
+                                ],
                               ),
                             ),
-                            const SizedBox(height: 4),
-                            Text(message.body),
-                          ],
-                        ),
+                          );
+                        },
                       ),
-                    );
-                  },
-                ),
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (error, _) => Center(child: Text('$error')),
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (error, _) => Center(child: Text('$error')),
+              ),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: _replyController,
+              minLines: 2,
+              maxLines: 4,
+              maxLength: 5000,
+              decoration: InputDecoration(
+                hintText: widget.ru
+                    ? 'Ответить администратору…'
+                    : 'Reply to the administrator…',
+              ),
+            ),
+          ],
         ),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: Text(ru ? 'ЗАКРЫТЬ' : 'CLOSE'),
+          child: Text(widget.ru ? 'ЗАКРЫТЬ' : 'CLOSE'),
+        ),
+        FilledButton.icon(
+          onPressed: _sending ? null : _sendReply,
+          icon: const Icon(Icons.send_rounded),
+          label: Text(
+            _sending
+                ? (widget.ru ? 'ОТПРАВКА…' : 'SENDING…')
+                : (widget.ru ? 'ОТПРАВИТЬ' : 'SEND'),
+          ),
         ),
       ],
     );
