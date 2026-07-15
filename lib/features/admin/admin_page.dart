@@ -234,6 +234,15 @@ class AdminPage extends ConsumerWidget {
                     onTap: () => context.go(Routes.moderationAdmin),
                   ),
                   _AdminAction(
+                    label: ru ? 'ПОДДЕРЖКА' : 'SUPPORT',
+                    description: ru
+                        ? 'Обращения и ответы пользователям'
+                        : 'Requests and user replies',
+                    icon: Icons.support_agent_rounded,
+                    group: _AdminActionGroup.queue,
+                    onTap: () => context.go(Routes.adminSupport),
+                  ),
+                  _AdminAction(
                     label: t.adminAgentApplicationsUpper,
                     description: ru
                         ? 'Статусы заказчиков'

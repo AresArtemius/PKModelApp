@@ -343,6 +343,8 @@ class PushNotificationsService {
   bool _isAllowedRoute(String route) {
     return route == Routes.invitations ||
         route == Routes.me ||
+        route == Routes.support ||
+        route == Routes.adminSupport ||
         route.startsWith(Routes.chatPrefix);
   }
 

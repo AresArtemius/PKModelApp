@@ -30,6 +30,17 @@ final supportTicketsProvider = FutureProvider.autoDispose<List<SupportTicket>>((
   }
 });
 
+final supportTicketMessagesProvider = FutureProvider.autoDispose
+    .family<List<SupportTicketMessage>, String>((ref, ticketId) async {
+      final rows = await ref
+          .read(supabaseProvider)
+          .from('support_messages')
+          .select('id,author_kind,body,created_at')
+          .eq('ticket_id', ticketId)
+          .order('created_at');
+      return rows.map(SupportTicketMessage.fromMap).toList(growable: false);
+    });
+
 class SupportSetupRequiredException implements Exception {
   const SupportSetupRequiredException();
 }
@@ -56,6 +67,19 @@ class SupportTicket {
   final String subject;
   final String status;
   final DateTime? updatedAt;
+}
+
+class SupportTicketMessage {
+  const SupportTicketMessage({required this.authorKind, required this.body});
+
+  factory SupportTicketMessage.fromMap(Map<String, dynamic> map) =>
+      SupportTicketMessage(
+        authorKind: (map['author_kind'] ?? 'user').toString(),
+        body: (map['body'] ?? '').toString(),
+      );
+
+  final String authorKind;
+  final String body;
 }
 
 class SupportPage extends ConsumerWidget {
@@ -177,6 +201,14 @@ class SupportPage extends ConsumerWidget {
                                                 child: _TicketCard(
                                                   ticket: ticket,
                                                   ru: ru,
+                                                  onTap: () => showDialog<void>(
+                                                    context: context,
+                                                    builder: (_) =>
+                                                        _SupportTicketDialog(
+                                                          ticket: ticket,
+                                                          ru: ru,
+                                                        ),
+                                                  ),
                                                 ),
                                               ),
                                             )
@@ -313,40 +345,124 @@ class _FaqTile extends StatelessWidget {
 }
 
 class _TicketCard extends StatelessWidget {
-  const _TicketCard({required this.ticket, required this.ru});
+  const _TicketCard({
+    required this.ticket,
+    required this.ru,
+    required this.onTap,
+  });
+  final SupportTicket ticket;
+  final bool ru;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: Colors.transparent,
+    child: InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: catalogCardDecoration(),
+        child: Row(
+          children: [
+            const Icon(Icons.forum_rounded, color: BrandTheme.redTop),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    ticket.subject,
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _statusLabel(ticket.status, ru),
+                    style: const TextStyle(
+                      color: kTextMuted,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded, color: kTextMuted),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class _SupportTicketDialog extends ConsumerWidget {
+  const _SupportTicketDialog({required this.ticket, required this.ru});
   final SupportTicket ticket;
   final bool ru;
 
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(16),
-    decoration: catalogCardDecoration(),
-    child: Row(
-      children: [
-        const Icon(Icons.forum_rounded, color: BrandTheme.redTop),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                ticket.subject,
-                style: const TextStyle(fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                _statusLabel(ticket.status, ru),
-                style: const TextStyle(
-                  color: kTextMuted,
-                  fontWeight: FontWeight.w600,
+  Widget build(BuildContext context, WidgetRef ref) {
+    final messages = ref.watch(supportTicketMessagesProvider(ticket.id));
+    return AlertDialog(
+      title: Text(ticket.subject),
+      content: SizedBox(
+        width: 620,
+        height: 420,
+        child: messages.when(
+          data: (items) => items.isEmpty
+              ? Center(
+                  child: Text(ru ? 'Сообщений пока нет.' : 'No messages yet.'),
+                )
+              : ListView.separated(
+                  itemCount: items.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 10),
+                  itemBuilder: (_, index) {
+                    final message = items[index];
+                    final admin = message.authorKind == 'admin';
+                    return Align(
+                      alignment: admin
+                          ? Alignment.centerLeft
+                          : Alignment.centerRight,
+                      child: Container(
+                        constraints: const BoxConstraints(maxWidth: 500),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: admin ? Colors.white : const Color(0xFFEDEDED),
+                          border: Border.all(color: kBorderColor),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              admin
+                                  ? (ru ? 'Поддержка' : 'Support')
+                                  : (ru ? 'Вы' : 'You'),
+                              style: TextStyle(
+                                color: admin ? BrandTheme.redTop : kTextMuted,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(message.body),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
                 ),
-              ),
-            ],
-          ),
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (error, _) => Center(child: Text('$error')),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(ru ? 'ЗАКРЫТЬ' : 'CLOSE'),
         ),
       ],
-    ),
-  );
+    );
+  }
 }
 
 class _InfoCard extends StatelessWidget {
