@@ -17,6 +17,7 @@ import '../../ui/brand/brand_pill_button.dart';
 import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
 import '../notifications/app_notifications.dart';
+import '../support/support_unread_provider.dart';
 import 'account_profile_edit_page.dart';
 import 'my_profile_controller.dart';
 import 'my_profile_edit_page.dart';
@@ -153,6 +154,7 @@ class MyProfilePage extends ConsumerWidget {
     final unreadNotifications = ref
         .watch(unreadNotificationsCountProvider)
         .maybeWhen(data: (value) => value, orElse: () => 0);
+    final unreadSupport = ref.watch(supportUnreadTotalProvider);
     final isAdmin = ref
         .watch(isAdminProvider)
         .maybeWhen(data: (value) => value, orElse: () => false);
@@ -185,6 +187,7 @@ class MyProfilePage extends ConsumerWidget {
         subtitle: isRu
             ? 'Ответы на вопросы и связь с администратором'
             : 'Answers and contact with an administrator',
+        badge: unreadSupport,
         onTap: () => context.go(Routes.support),
       ),
       const SizedBox(height: kGap14),

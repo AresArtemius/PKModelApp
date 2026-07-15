@@ -20,6 +20,7 @@ import 'selection_providers.dart';
 import 'casting_agent_applications_page.dart';
 import 'moderation_admin_page.dart';
 import '../profile/profile_model.dart';
+import '../support/support_unread_provider.dart';
 import 'safety_admin_page.dart';
 
 const _kAdminBg = BrandTheme.greyMid;
@@ -161,6 +162,7 @@ class AdminPage extends ConsumerWidget {
               final selectionCount = ref
                   .watch(adminSelectionCountProvider)
                   .maybeWhen(data: (value) => value, orElse: () => 0);
+              final unreadSupport = ref.watch(supportUnreadTotalProvider);
               return _AdminHome(
                 exitLabel: t.adminExitUpper,
                 counts: countsAsync.maybeWhen(
@@ -240,6 +242,7 @@ class AdminPage extends ConsumerWidget {
                         : 'Requests and user replies',
                     icon: Icons.support_agent_rounded,
                     group: _AdminActionGroup.queue,
+                    badge: unreadSupport,
                     onTap: () => context.go(Routes.adminSupport),
                   ),
                   _AdminAction(

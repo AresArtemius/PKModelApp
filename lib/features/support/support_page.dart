@@ -10,6 +10,7 @@ import '../../ui/brand/brand_admin_header.dart';
 import '../../ui/brand/brand_pill_button.dart';
 import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
+import 'support_unread_provider.dart';
 
 final supportTicketsProvider = FutureProvider.autoDispose<List<SupportTicket>>((
   ref,
@@ -176,6 +177,9 @@ class SupportPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final ru = Localizations.localeOf(context).languageCode == 'ru';
     final tickets = ref.watch(supportTicketsProvider);
+    final unreadByTicket = ref
+        .watch(supportUnreadByTicketProvider)
+        .maybeWhen(data: (value) => value, orElse: () => const <String, int>{});
     final compact = MediaQuery.sizeOf(context).width < 720;
 
     return Scaffold(
@@ -248,6 +252,10 @@ class SupportPage extends ConsumerWidget {
                                                 child: _TicketCard(
                                                   ticket: ticket,
                                                   ru: ru,
+                                                  unreadCount:
+                                                      unreadByTicket[ticket
+                                                          .id] ??
+                                                      0,
                                                   onTap: () => showDialog<void>(
                                                     context: context,
                                                     builder: (_) =>
@@ -400,11 +408,13 @@ class _TicketCard extends StatelessWidget {
   const _TicketCard({
     required this.ticket,
     required this.ru,
+    required this.unreadCount,
     required this.onTap,
     required this.onDelete,
   });
   final SupportTicket ticket;
   final bool ru;
+  final int unreadCount;
   final VoidCallback onTap;
   final VoidCallback onDelete;
 
@@ -440,6 +450,10 @@ class _TicketCard extends StatelessWidget {
                 ],
               ),
             ),
+            if (unreadCount > 0) ...[
+              _UnreadBadge(count: unreadCount),
+              const SizedBox(width: 8),
+            ],
             IconButton(
               tooltip: ru ? 'Удалить обращение' : 'Delete request',
               onPressed: onDelete,
@@ -463,9 +477,42 @@ class _SupportTicketDialog extends ConsumerStatefulWidget {
       _SupportTicketDialogState();
 }
 
+class _UnreadBadge extends StatelessWidget {
+  const _UnreadBadge({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+    alignment: Alignment.center,
+    decoration: const BoxDecoration(
+      color: BrandTheme.redTop,
+      borderRadius: BorderRadius.all(Radius.circular(999)),
+    ),
+    child: Text(
+      count > 99 ? '99+' : '$count',
+      style: const TextStyle(
+        color: Colors.white,
+        fontSize: 12,
+        fontWeight: FontWeight.w800,
+      ),
+    ),
+  );
+}
+
 class _SupportTicketDialogState extends ConsumerState<_SupportTicketDialog> {
   final _replyController = TextEditingController();
   bool _sending = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) markSupportTicketRead(ref, widget.ticket.id);
+    });
+  }
 
   @override
   void dispose() {

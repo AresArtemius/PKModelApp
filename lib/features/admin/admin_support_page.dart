@@ -8,6 +8,7 @@ import '../../core/supabase_provider.dart';
 import '../../ui/brand/brand_admin_header.dart';
 import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
+import '../support/support_unread_provider.dart';
 
 final adminSupportAccessProvider = FutureProvider.autoDispose<bool>((
   ref,
@@ -171,6 +172,9 @@ class _AdminSupportPageState extends ConsumerState<AdminSupportPage> {
       );
     }
     final ticketsAsync = ref.watch(adminSupportTicketsProvider(_filter));
+    final unreadByTicket = ref
+        .watch(supportUnreadByTicketProvider)
+        .maybeWhen(data: (value) => value, orElse: () => const <String, int>{});
     final width = MediaQuery.sizeOf(context).width;
     final split = width >= 900;
 
@@ -208,8 +212,11 @@ class _AdminSupportPageState extends ConsumerState<AdminSupportPage> {
                               ? _TicketList(
                                   tickets: tickets,
                                   selectedId: _selectedId,
-                                  onSelect: (ticket) =>
-                                      setState(() => _selectedId = ticket.id),
+                                  unreadByTicket: unreadByTicket,
+                                  onSelect: (ticket) {
+                                    setState(() => _selectedId = ticket.id);
+                                    markSupportTicketRead(ref, ticket.id);
+                                  },
                                 )
                               : _TicketDetail(
                                   ticket: selected,
@@ -230,8 +237,11 @@ class _AdminSupportPageState extends ConsumerState<AdminSupportPage> {
                               child: _TicketList(
                                 tickets: tickets,
                                 selectedId: _selectedId,
-                                onSelect: (ticket) =>
-                                    setState(() => _selectedId = ticket.id),
+                                unreadByTicket: unreadByTicket,
+                                onSelect: (ticket) {
+                                  setState(() => _selectedId = ticket.id);
+                                  markSupportTicketRead(ref, ticket.id);
+                                },
                               ),
                             ),
                             const SizedBox(width: 14),
@@ -309,10 +319,12 @@ class _TicketList extends StatelessWidget {
   const _TicketList({
     required this.tickets,
     required this.selectedId,
+    required this.unreadByTicket,
     required this.onSelect,
   });
   final List<_AdminSupportTicket> tickets;
   final String? selectedId;
+  final Map<String, int> unreadByTicket;
   final ValueChanged<_AdminSupportTicket> onSelect;
 
   @override
@@ -326,6 +338,7 @@ class _TicketList extends StatelessWidget {
       itemBuilder: (context, index) {
         final ticket = tickets[index];
         final selected = ticket.id == selectedId;
+        final unreadCount = unreadByTicket[ticket.id] ?? 0;
         return Material(
           color: Colors.transparent,
           child: InkWell(
@@ -353,6 +366,10 @@ class _TicketList extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 8),
+                      if (unreadCount > 0) ...[
+                        _AdminUnreadBadge(count: unreadCount),
+                        const SizedBox(width: 8),
+                      ],
                       _PriorityDot(priority: ticket.priority),
                     ],
                   ),
@@ -380,6 +397,31 @@ class _TicketList extends StatelessWidget {
       },
     );
   }
+}
+
+class _AdminUnreadBadge extends StatelessWidget {
+  const _AdminUnreadBadge({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+    alignment: Alignment.center,
+    decoration: const BoxDecoration(
+      color: BrandTheme.redTop,
+      borderRadius: BorderRadius.all(Radius.circular(999)),
+    ),
+    child: Text(
+      count > 99 ? '99+' : '$count',
+      style: const TextStyle(
+        color: Colors.white,
+        fontSize: 12,
+        fontWeight: FontWeight.w800,
+      ),
+    ),
+  );
 }
 
 class _TicketDetail extends ConsumerWidget {
