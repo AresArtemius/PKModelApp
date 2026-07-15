@@ -134,9 +134,14 @@ const legalDocuments = <LegalDocument>[
             'Анкеты могут относиться к моделям, актерам, фотографам, видеографам, стилистам, визажистам и другим ролям. Пользователь подтверждает, что информация в анкете актуальна, а материалы можно использовать в рамках каталога, кастингов, подборок и коммуникации в приложении.',
       ),
       LegalDocumentSection(
+        title: 'Требования к анкетам моделей',
+        body:
+            'Модерацию для размещения в каталоге проходят только анкеты профессиональных моделей. Анкета модели должна содержать достоверные и актуальные персональные данные и параметры, корректно указанную дату рождения, рост и другие запрашиваемые характеристики, а также качественное актуальное портфолио, позволяющее оценить внешность и профессиональный опыт. Тестовые, дублирующие, неполные, любительские анкеты, анкеты с недостоверными данными, чужими материалами или портфолио недостаточного качества могут быть отклонены. Для несовершеннолетней модели данные и материалы предоставляет родитель или законный представитель либо они размещаются с его явного согласия. Анкеты других профессиональных ролей оцениваются по полноте профильных данных, опыту и релевантным примерам работ.',
+      ),
+      LegalDocumentSection(
         title: 'Модерация и ограничения',
         body:
-            'Администрация может проверять, скрывать, отклонять, ограничивать или удалять материалы, анкеты, кастинги, подборки и аккаунты при нарушениях правил, рисках безопасности, жалобах, спорных ситуациях или запросах правообладателей.',
+            'Прохождение модерации не гарантируется и определяется администрацией по совокупности данных и материалов анкеты. Администрация может запросить уточнения или дополнительные материалы, а также проверять, скрывать, отклонять, ограничивать или удалять материалы, анкеты, кастинги, подборки и аккаунты при несоответствии профессиональным требованиям, нарушениях правил, рисках безопасности, жалобах, спорных ситуациях или запросах правообладателей.',
       ),
       LegalDocumentSection(
         title: 'Кастинги и договоренности',
@@ -181,9 +186,14 @@ const legalDocuments = <LegalDocument>[
             'Profiles may represent models, actors, photographers, videographers, stylists, makeup artists and other roles. The user confirms that profile information is accurate and materials may be used within the catalogue, castings, selections and in-app communication.',
       ),
       LegalDocumentSection(
+        title: 'Requirements for model profiles',
+        body:
+            'Only professional model profiles are eligible to pass moderation for catalogue placement. A model profile must contain accurate and current personal information and measurements, a correctly stated date of birth, height and other requested characteristics, and a high-quality current portfolio sufficient to assess appearance and professional experience. Test, duplicate, incomplete or amateur profiles, profiles containing inaccurate data, third-party materials or an insufficient-quality portfolio may be rejected. For a minor model, data and materials must be provided by a parent or legal guardian or published with their explicit consent. Profiles for other professional roles are assessed based on complete role-specific information, experience and relevant work samples.',
+      ),
+      LegalDocumentSection(
         title: 'Moderation and restrictions',
         body:
-            'Administration may review, hide, reject, restrict or remove materials, profiles, castings, selections and accounts when rules are violated, safety risks appear, complaints are received, disputes arise or rights-holder requests are made.',
+            'Passing moderation is not guaranteed and is determined by the administration based on the profile data and materials as a whole. Administration may request clarifications or additional materials and may review, hide, reject, restrict or remove materials, profiles, castings, selections and accounts when professional requirements are not met, rules are violated, safety risks appear, complaints are received, disputes arise or rights-holder requests are made.',
       ),
       LegalDocumentSection(
         title: 'Castings and agreements',
