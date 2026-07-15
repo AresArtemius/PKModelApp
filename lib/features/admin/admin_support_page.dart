@@ -92,6 +92,31 @@ class _AdminSupportPageState extends ConsumerState<AdminSupportPage> {
     }
   }
 
+  Future<void> _claimTicket(_AdminSupportTicket ticket) async {
+    try {
+      final claimed = await ref
+          .read(supabaseProvider)
+          .rpc('claim_support_ticket', params: {'p_ticket_id': ticket.id});
+      ref.invalidate(adminSupportTicketsProvider(_filter));
+      ref.invalidate(supportUnreadByTicketProvider);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            claimed == true
+                ? 'Обращение назначено вам.'
+                : 'Обращение уже взял другой администратор.',
+          ),
+        ),
+      );
+    } on PostgrestException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Не удалось назначить: ${error.message}')),
+      );
+    }
+  }
+
   Future<void> _changeStatus(_AdminSupportTicket ticket, String status) async {
     final values = <String, dynamic>{
       'status': status,
@@ -172,6 +197,8 @@ class _AdminSupportPageState extends ConsumerState<AdminSupportPage> {
       );
     }
     final ticketsAsync = ref.watch(adminSupportTicketsProvider(_filter));
+    final currentAdminId =
+        ref.read(supabaseProvider).auth.currentUser?.id ?? '';
     final unreadByTicket = ref
         .watch(supportUnreadByTicketProvider)
         .maybeWhen(data: (value) => value, orElse: () => const <String, int>{});
@@ -222,6 +249,8 @@ class _AdminSupportPageState extends ConsumerState<AdminSupportPage> {
                                   ticket: selected,
                                   replyController: _replyController,
                                   sending: _sending,
+                                  currentAdminId: currentAdminId,
+                                  onClaim: () => _claimTicket(selected),
                                   onBack: () =>
                                       setState(() => _selectedId = null),
                                   onReply: () => _sendReply(selected),
@@ -252,6 +281,8 @@ class _AdminSupportPageState extends ConsumerState<AdminSupportPage> {
                                       ticket: selected,
                                       replyController: _replyController,
                                       sending: _sending,
+                                      currentAdminId: currentAdminId,
+                                      onClaim: () => _claimTicket(selected),
                                       onReply: () => _sendReply(selected),
                                       onStatus: (status) =>
                                           _changeStatus(selected, status),
@@ -429,6 +460,8 @@ class _TicketDetail extends ConsumerWidget {
     required this.ticket,
     required this.replyController,
     required this.sending,
+    required this.currentAdminId,
+    required this.onClaim,
     required this.onReply,
     required this.onStatus,
     required this.onDelete,
@@ -437,6 +470,8 @@ class _TicketDetail extends ConsumerWidget {
   final _AdminSupportTicket ticket;
   final TextEditingController replyController;
   final bool sending;
+  final String currentAdminId;
+  final VoidCallback onClaim;
   final VoidCallback onReply;
   final ValueChanged<String> onStatus;
   final VoidCallback onDelete;
@@ -445,6 +480,9 @@ class _TicketDetail extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final messages = ref.watch(adminSupportMessagesProvider(ticket.id));
+    final assignedToMe = ticket.assignedTo == currentAdminId;
+    final assignedElsewhere =
+        ticket.assignedTo != null && ticket.assignedTo != currentAdminId;
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: catalogCardDecoration(),
@@ -492,13 +530,55 @@ class _TicketDetail extends ConsumerWidget {
                       ),
                     )
                     .toList(growable: false),
-                onChanged: (value) {
-                  if (value != null) onStatus(value);
-                },
+                onChanged: assignedToMe
+                    ? (value) {
+                        if (value != null) onStatus(value);
+                      }
+                    : null,
               ),
             ],
           ),
           const Divider(height: 24),
+          if (!assignedToMe) ...[
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: assignedElsewhere
+                    ? const Color(0xFFF3F3F3)
+                    : BrandTheme.redTop.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: kBorderColor),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      assignedElsewhere
+                          ? 'Обращение назначено другому администратору.'
+                          : 'Обращение пока никому не назначено.',
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  if (!assignedElsewhere)
+                    FilledButton(
+                      onPressed: onClaim,
+                      child: const Text('ВЗЯТЬ В РАБОТУ'),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+          ] else ...[
+            const Text(
+              'НАЗНАЧЕНО ВАМ',
+              style: TextStyle(
+                color: BrandTheme.redTop,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
           Expanded(
             child: messages.when(
               data: (items) => ListView.separated(
@@ -524,7 +604,7 @@ class _TicketDetail extends ConsumerWidget {
           ),
           const SizedBox(height: 8),
           FilledButton.icon(
-            onPressed: sending ? null : onReply,
+            onPressed: sending || !assignedToMe ? null : onReply,
             icon: const Icon(Icons.send_rounded),
             label: Text(sending ? 'ОТПРАВКА…' : 'ОТПРАВИТЬ ОТВЕТ'),
           ),
@@ -614,6 +694,7 @@ class _AdminSupportTicket {
     required this.subject,
     required this.status,
     required this.priority,
+    required this.assignedTo,
   });
 
   factory _AdminSupportTicket.fromMap(Map<String, dynamic> map) =>
@@ -624,6 +705,7 @@ class _AdminSupportTicket {
         subject: (map['subject'] ?? '').toString(),
         status: (map['status'] ?? 'new').toString(),
         priority: (map['priority'] ?? 'normal').toString(),
+        assignedTo: (map['assigned_to'] as String?)?.trim(),
       );
 
   final String id;
@@ -632,6 +714,7 @@ class _AdminSupportTicket {
   final String subject;
   final String status;
   final String priority;
+  final String? assignedTo;
 }
 
 class _AdminSupportMessage {
