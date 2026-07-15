@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/router.dart';
 import '../../core/supabase_compat.dart';
@@ -41,6 +42,22 @@ final supportTicketMessagesProvider = FutureProvider.autoDispose
           .order('created_at', ascending: true);
       return rows.map(SupportTicketMessage.fromMap).toList(growable: false);
     });
+
+final telegramSupportLinkProvider = FutureProvider.autoDispose<bool>((
+  ref,
+) async {
+  try {
+    final row = await ref
+        .read(supabaseProvider)
+        .from('telegram_support_links')
+        .select('user_id')
+        .isFilter('revoked_at', null)
+        .maybeSingle();
+    return row != null;
+  } on PostgrestException {
+    return false;
+  }
+});
 
 class SupportSetupRequiredException implements Exception {
   const SupportSetupRequiredException();
@@ -85,6 +102,94 @@ class SupportTicketMessage {
 
 class SupportPage extends ConsumerWidget {
   const SupportPage({super.key});
+
+  static const _telegramBotUsername = 'pkmodelapp_bot';
+
+  Future<void> _connectTelegram(BuildContext context, WidgetRef ref) async {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    try {
+      final raw = await ref
+          .read(supabaseProvider)
+          .rpc('create_telegram_support_link_code');
+      final code = (raw ?? '').toString().trim();
+      if (code.isEmpty) throw StateError('Empty Telegram link code');
+      if (!context.mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(ru ? 'Подключить Telegram' : 'Connect Telegram'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                ru
+                    ? 'Код действует 10 минут. Нажмите кнопку ниже — бот получит код автоматически.'
+                    : 'The code is valid for 10 minutes. Tap below and the bot will receive it automatically.',
+              ),
+              const SizedBox(height: 14),
+              SelectableText(
+                code,
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 3,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: Text(ru ? 'ОТМЕНА' : 'CANCEL'),
+            ),
+            FilledButton.icon(
+              onPressed: () async {
+                final uri = Uri.parse(
+                  'https://t.me/$_telegramBotUsername?start=$code',
+                );
+                final opened = await launchUrl(
+                  uri,
+                  mode: LaunchMode.externalApplication,
+                );
+                if (opened && dialogContext.mounted) {
+                  Navigator.of(dialogContext).pop();
+                }
+              },
+              icon: const Icon(Icons.telegram_rounded),
+              label: Text(ru ? 'ОТКРЫТЬ БОТА' : 'OPEN BOT'),
+            ),
+          ],
+        ),
+      );
+      ref.invalidate(telegramSupportLinkProvider);
+    } on PostgrestException catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            ru
+                ? 'Telegram-поддержка ещё настраивается: ${error.message}'
+                : 'Telegram support is still being configured: ${error.message}',
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _disconnectTelegram(BuildContext context, WidgetRef ref) async {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    await ref.read(supabaseProvider).rpc('revoke_my_telegram_support_link');
+    ref.invalidate(telegramSupportLinkProvider);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          ru ? 'Telegram отключён от поддержки.' : 'Telegram disconnected.',
+        ),
+      ),
+    );
+  }
 
   Future<void> _deleteTicket(
     BuildContext context,
@@ -180,6 +285,9 @@ class SupportPage extends ConsumerWidget {
     final unreadByTicket = ref
         .watch(supportUnreadByTicketProvider)
         .maybeWhen(data: (value) => value, orElse: () => const <String, int>{});
+    final telegramLinked = ref
+        .watch(telegramSupportLinkProvider)
+        .maybeWhen(data: (value) => value, orElse: () => false);
     final compact = MediaQuery.sizeOf(context).width < 720;
 
     return Scaffold(
@@ -208,6 +316,14 @@ class SupportPage extends ConsumerWidget {
                                 compact: compact,
                                 ru: ru,
                                 onContact: () => _createTicket(context, ref),
+                              ),
+                              const SizedBox(height: kGap12),
+                              _TelegramSupportCard(
+                                ru: ru,
+                                linked: telegramLinked,
+                                onConnect: () => _connectTelegram(context, ref),
+                                onDisconnect: () =>
+                                    _disconnectTelegram(context, ref),
                               ),
                               const SizedBox(height: kGap16),
                               Text(
@@ -305,6 +421,65 @@ class SupportPage extends ConsumerWidget {
       ),
     );
   }
+}
+
+class _TelegramSupportCard extends StatelessWidget {
+  const _TelegramSupportCard({
+    required this.ru,
+    required this.linked,
+    required this.onConnect,
+    required this.onDisconnect,
+  });
+
+  final bool ru;
+  final bool linked;
+  final VoidCallback onConnect;
+  final VoidCallback onDisconnect;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(16),
+    decoration: catalogCardDecoration(),
+    child: Row(
+      children: [
+        const Icon(Icons.telegram_rounded, color: Color(0xFF229ED9), size: 30),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                ru ? 'TELEGRAM-ПОДДЕРЖКА' : 'TELEGRAM SUPPORT',
+                style: const TextStyle(fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                linked
+                    ? (ru
+                          ? 'Подключено к @pkmodelapp_bot'
+                          : 'Connected to @pkmodelapp_bot')
+                    : (ru
+                          ? 'Быстрые ответы и связь с администратором'
+                          : 'Quick answers and administrator contact'),
+                style: const TextStyle(color: kTextMuted),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 12),
+        if (linked)
+          OutlinedButton(
+            onPressed: onDisconnect,
+            child: Text(ru ? 'ОТКЛЮЧИТЬ' : 'DISCONNECT'),
+          )
+        else
+          FilledButton(
+            onPressed: onConnect,
+            child: Text(ru ? 'ПОДКЛЮЧИТЬ' : 'CONNECT'),
+          ),
+      ],
+    ),
+  );
 }
 
 class _SupportHero extends StatelessWidget {
