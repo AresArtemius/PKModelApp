@@ -71,13 +71,30 @@ final castingResponsesProvider = FutureProvider.autoDispose
       }
 
       Future<Map<String, dynamic>> loadCastingMeta() async {
+        final data = <String, dynamic>{};
         try {
           final row = await sb
               .from('castings')
-              .select('title,reference_media')
+              .select('title')
               .eq('id', castingId)
               .maybeSingle();
-          final data = Map<String, dynamic>.from(row ?? const {});
+          data['title'] = (row?['title'] ?? '').toString().trim();
+        } on PostgrestException catch (e) {
+          final msg = '${e.message} ${e.details ?? ''} ${e.hint ?? ''}'
+              .toLowerCase();
+          if (!msg.contains('title') &&
+              !msg.contains('schema cache') &&
+              !msg.contains('does not exist')) {
+            rethrow;
+          }
+        }
+
+        try {
+          final row = await sb
+              .from('castings')
+              .select('reference_media')
+              .eq('id', castingId)
+              .maybeSingle();
           final raw = row?['reference_media'];
           data['references'] = raw is List
               ? raw
@@ -90,11 +107,11 @@ final castingResponsesProvider = FutureProvider.autoDispose
         } on PostgrestException catch (e) {
           final msg = '${e.message} ${e.details ?? ''} ${e.hint ?? ''}'
               .toLowerCase();
-          if (msg.contains('title') ||
-              msg.contains('reference_media') ||
+          if (msg.contains('reference_media') ||
               msg.contains('schema cache') ||
               msg.contains('does not exist')) {
-            return const <String, dynamic>{};
+            data['references'] = const <CastingReferenceMedia>[];
+            return data;
           }
           rethrow;
         }
