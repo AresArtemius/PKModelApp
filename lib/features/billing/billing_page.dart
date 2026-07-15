@@ -46,26 +46,26 @@ const List<_BillingProduct> _billingProducts = [
   _BillingProduct(
     code: 'profile_active_1m',
     months: 1,
-    priceRub: 500,
-    savingRub: 0,
+    priceRub: 499,
+    discountPercent: 0,
   ),
   _BillingProduct(
     code: 'profile_active_3m',
     months: 3,
-    priceRub: 1400,
-    savingRub: 100,
+    priceRub: 1422,
+    discountPercent: 5,
   ),
   _BillingProduct(
     code: 'profile_active_6m',
     months: 6,
-    priceRub: 2400,
-    savingRub: 600,
+    priceRub: 2784,
+    discountPercent: 7,
   ),
   _BillingProduct(
     code: 'profile_active_12m',
     months: 12,
-    priceRub: 4000,
-    savingRub: 2000,
+    priceRub: 5389,
+    discountPercent: 10,
   ),
 ];
 
@@ -781,7 +781,7 @@ class _CheckoutSummary extends StatelessWidget {
               ],
             ),
           ),
-          if (product.savingRub > 0)
+          if (product.discountPercent > 0)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
               decoration: BoxDecoration(
@@ -790,8 +790,8 @@ class _CheckoutSummary extends StatelessWidget {
               ),
               child: Text(
                 ru
-                    ? 'ВЫГОДА ${product.savingRub} ₽'
-                    : 'SAVE ${product.savingRub} ₽',
+                    ? 'СКИДКА ${product.discountPercent}%'
+                    : '${product.discountPercent}% OFF',
                 style: _billingCommandStyle(
                   color: Colors.white,
                   size: 10,
@@ -931,13 +931,13 @@ class _BillingProduct {
     required this.code,
     required this.months,
     required this.priceRub,
-    required this.savingRub,
+    required this.discountPercent,
   });
 
   final String code;
   final int months;
   final int priceRub;
-  final int savingRub;
+  final int discountPercent;
 
   String get priceLabel => '$priceRub ₽';
 

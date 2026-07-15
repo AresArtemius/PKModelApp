@@ -35,44 +35,44 @@ values
     'Активная анкета на 1 месяц',
     'Размещение одной анкеты в активной базе PK Management на 1 месяц.',
     1,
-    50000,
+    49900,
     'RUB',
     true,
     10,
-    jsonb_build_object('saving_minor', 0)
+    jsonb_build_object('discount_percent', 0, 'base_monthly_minor', 49900)
   ),
   (
     'profile_active_3m',
     'Активная анкета на 3 месяца',
     'Размещение одной анкеты в активной базе PK Management на 3 месяца.',
     3,
-    140000,
+    142200,
     'RUB',
     true,
     20,
-    jsonb_build_object('saving_minor', 10000)
+    jsonb_build_object('discount_percent', 5, 'base_monthly_minor', 49900)
   ),
   (
     'profile_active_6m',
     'Активная анкета на 6 месяцев',
     'Размещение одной анкеты в активной базе PK Management на 6 месяцев.',
     6,
-    240000,
+    278400,
     'RUB',
     true,
     30,
-    jsonb_build_object('saving_minor', 60000)
+    jsonb_build_object('discount_percent', 7, 'base_monthly_minor', 49900)
   ),
   (
     'profile_active_12m',
     'Активная анкета на 12 месяцев',
     'Размещение одной анкеты в активной базе PK Management на 12 месяцев.',
     12,
-    400000,
+    538900,
     'RUB',
     true,
     40,
-    jsonb_build_object('saving_minor', 200000)
+    jsonb_build_object('discount_percent', 10, 'base_monthly_minor', 49900)
   )
 on conflict (code) do update
 set

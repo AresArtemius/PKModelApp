@@ -151,7 +151,7 @@ const legalDocuments = <LegalDocument>[
       LegalDocumentSection(
         title: 'Платное размещение в базе',
         body:
-            'Платная услуга PK Management — размещение утвержденной анкеты в базе на выбранный срок: 1 месяц — 500 ₽, 3 месяца — 1400 ₽, 6 месяцев — 2400 ₽, 12 месяцев — 4000 ₽. Оплата относится к конкретной анкете, а не ко всему аккаунту. После успешной оплаты размещение активируется автоматически на оплаченный период.',
+            'Платная услуга PK Management — размещение утвержденной анкеты в базе на выбранный срок: 1 месяц — 499 ₽ без скидки, 3 месяца — 1422 ₽ со скидкой 5%, 6 месяцев — 2784 ₽ со скидкой 7%, 12 месяцев — 5389 ₽ со скидкой 10%. Оплата относится к конкретной анкете, а не ко всему аккаунту. После успешной оплаты размещение активируется автоматически на оплаченный период.',
       ),
       LegalDocumentSection(
         title: 'Оплата и платежные данные',
@@ -198,7 +198,7 @@ const legalDocuments = <LegalDocument>[
       LegalDocumentSection(
         title: 'Paid profile placement',
         body:
-            'PK Management paid service is placement of an approved profile in the database for the selected period: 1 month — 500 ₽, 3 months — 1400 ₽, 6 months — 2400 ₽, 12 months — 4000 ₽. Payment applies to a specific profile, not to the whole account. After a successful payment, placement is activated automatically for the paid period.',
+            'PK Management paid service is placement of an approved profile in the database for the selected period: 1 month — 499 ₽ without a discount, 3 months — 1422 ₽ with a 5% discount, 6 months — 2784 ₽ with a 7% discount, 12 months — 5389 ₽ with a 10% discount. Payment applies to a specific profile, not to the whole account. After a successful payment, placement is activated automatically for the paid period.',
       ),
       LegalDocumentSection(
         title: 'Payments and card data',
@@ -361,7 +361,7 @@ const legalDocuments = <LegalDocument>[
       LegalDocumentSection(
         title: 'Платная услуга',
         body:
-            'Размещение утвержденной анкеты в базе PK Management на выбранный период: 1 месяц — 500 ₽, 3 месяца — 1400 ₽, 6 месяцев — 2400 ₽, 12 месяцев — 4000 ₽. Услуга оплачивается отдельно для каждой анкеты.',
+            'Размещение утвержденной анкеты в базе PK Management на выбранный период: 1 месяц — 499 ₽ без скидки, 3 месяца — 1422 ₽ со скидкой 5%, 6 месяцев — 2784 ₽ со скидкой 7%, 12 месяцев — 5389 ₽ со скидкой 10%. Услуга оплачивается отдельно для каждой анкеты.',
       ),
       LegalDocumentSection(
         title: 'Контакты',
@@ -393,7 +393,7 @@ const legalDocuments = <LegalDocument>[
       LegalDocumentSection(
         title: 'Paid service',
         body:
-            'Placement of an approved profile in the PK Management database for the selected period: 1 month — 500 ₽, 3 months — 1400 ₽, 6 months — 2400 ₽, 12 months — 4000 ₽. The service is paid separately for each profile.',
+            'Placement of an approved profile in the PK Management database for the selected period: 1 month — 499 ₽ without a discount, 3 months — 1422 ₽ with a 5% discount, 6 months — 2784 ₽ with a 7% discount, 12 months — 5389 ₽ with a 10% discount. The service is paid separately for each profile.',
       ),
       LegalDocumentSection(
         title: 'Contacts',
