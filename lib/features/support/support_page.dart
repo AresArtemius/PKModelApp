@@ -85,6 +85,53 @@ class SupportTicketMessage {
 class SupportPage extends ConsumerWidget {
   const SupportPage({super.key});
 
+  Future<void> _deleteTicket(
+    BuildContext context,
+    WidgetRef ref,
+    SupportTicket ticket,
+  ) async {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(ru ? 'Удалить обращение?' : 'Delete request?'),
+        content: Text(
+          ru
+              ? 'Обращение и вся переписка будут удалены без восстановления.'
+              : 'The request and its message history will be permanently deleted.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(ru ? 'ОТМЕНА' : 'CANCEL'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(ru ? 'УДАЛИТЬ' : 'DELETE'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    try {
+      await ref
+          .read(supabaseProvider)
+          .from('support_tickets')
+          .delete()
+          .eq('id', ticket.id);
+      ref.invalidate(supportTicketsProvider);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(ru ? 'Обращение удалено.' : 'Request deleted.')),
+      );
+    } on PostgrestException catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Не удалось удалить: ${error.message}')),
+      );
+    }
+  }
+
   Future<void> _createTicket(BuildContext context, WidgetRef ref) async {
     final draft = await showDialog<_SupportDraft>(
       context: context,
@@ -209,6 +256,11 @@ class SupportPage extends ConsumerWidget {
                                                           ru: ru,
                                                         ),
                                                   ),
+                                                  onDelete: () => _deleteTicket(
+                                                    context,
+                                                    ref,
+                                                    ticket,
+                                                  ),
                                                 ),
                                               ),
                                             )
@@ -286,7 +338,7 @@ class _SupportHero extends StatelessWidget {
       ],
     );
     final button = BrandPillButton(
-      label: ru ? 'НАПИСАТЬ АДМИНУ' : 'CONTACT ADMIN',
+      label: ru ? 'НАПИСАТЬ АДМИНИСТРАТОРУ' : 'CONTACT ADMINISTRATOR',
       style: BrandPillStyle.dark,
       onTap: onContact,
     );
@@ -303,7 +355,7 @@ class _SupportHero extends StatelessWidget {
               children: [
                 Expanded(child: text),
                 const SizedBox(width: 24),
-                SizedBox(width: 280, child: button),
+                SizedBox(width: 350, child: button),
               ],
             ),
     );
@@ -349,10 +401,12 @@ class _TicketCard extends StatelessWidget {
     required this.ticket,
     required this.ru,
     required this.onTap,
+    required this.onDelete,
   });
   final SupportTicket ticket;
   final bool ru;
   final VoidCallback onTap;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) => Material(
@@ -385,6 +439,11 @@ class _TicketCard extends StatelessWidget {
                   ),
                 ],
               ),
+            ),
+            IconButton(
+              tooltip: ru ? 'Удалить обращение' : 'Delete request',
+              onPressed: onDelete,
+              icon: const Icon(Icons.delete_outline_rounded, color: kTextMuted),
             ),
             const Icon(Icons.chevron_right_rounded, color: kTextMuted),
           ],

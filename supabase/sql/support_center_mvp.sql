@@ -83,6 +83,16 @@ create policy "Support staff can update tickets"
   using (public.current_user_is_support_staff())
   with check (public.current_user_is_support_staff());
 
+drop policy if exists "Users can delete own support tickets" on public.support_tickets;
+create policy "Users can delete own support tickets"
+  on public.support_tickets for delete
+  using (user_id = auth.uid());
+
+drop policy if exists "Support staff can delete tickets" on public.support_tickets;
+create policy "Support staff can delete tickets"
+  on public.support_tickets for delete
+  using (public.current_user_is_support_staff());
+
 drop policy if exists "Ticket participants can read messages" on public.support_messages;
 create policy "Ticket participants can read messages"
   on public.support_messages for select
@@ -154,3 +164,4 @@ grant execute on function public.create_support_ticket(text, text, text)
 grant select on public.support_tickets to authenticated;
 grant select, insert on public.support_messages to authenticated;
 grant update on public.support_tickets to authenticated;
+grant delete on public.support_tickets to authenticated;

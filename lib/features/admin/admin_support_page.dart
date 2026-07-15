@@ -9,6 +9,15 @@ import '../../ui/brand/brand_admin_header.dart';
 import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
 
+final adminSupportAccessProvider = FutureProvider.autoDispose<bool>((
+  ref,
+) async {
+  final result = await ref
+      .read(supabaseProvider)
+      .rpc('current_user_is_support_staff');
+  return result == true;
+});
+
 final adminSupportTicketsProvider = FutureProvider.autoDispose
     .family<List<_AdminSupportTicket>, String>((ref, status) async {
       var query = ref
@@ -100,9 +109,67 @@ class _AdminSupportPageState extends ConsumerState<AdminSupportPage> {
     if (mounted) setState(() {});
   }
 
+  Future<void> _deleteTicket(_AdminSupportTicket ticket) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Удалить обращение?'),
+        content: const Text(
+          'Обращение и вся переписка будут удалены без восстановления.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('ОТМЕНА'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('УДАЛИТЬ'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await ref
+          .read(supabaseProvider)
+          .from('support_tickets')
+          .delete()
+          .eq('id', ticket.id);
+      ref.invalidate(adminSupportTicketsProvider(_filter));
+      setState(() => _selectedId = null);
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Обращение удалено.')));
+    } on PostgrestException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Не удалось удалить: ${error.message}')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final access = ref.watch(adminSupportAccessProvider);
+    final allowed = access.valueOrNull;
+    if (allowed != true) {
+      if (allowed == false) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) context.go(Routes.support);
+        });
+      }
+      return const Scaffold(
+        body: Stack(
+          children: [
+            BrandBackground(),
+            Center(child: CircularProgressIndicator()),
+          ],
+        ),
+      );
+    }
     final ticketsAsync = ref.watch(adminSupportTicketsProvider(_filter));
     final width = MediaQuery.sizeOf(context).width;
     final split = width >= 900;
@@ -153,6 +220,7 @@ class _AdminSupportPageState extends ConsumerState<AdminSupportPage> {
                                   onReply: () => _sendReply(selected),
                                   onStatus: (status) =>
                                       _changeStatus(selected, status),
+                                  onDelete: () => _deleteTicket(selected),
                                 );
                         }
                         return Row(
@@ -177,6 +245,7 @@ class _AdminSupportPageState extends ConsumerState<AdminSupportPage> {
                                       onReply: () => _sendReply(selected),
                                       onStatus: (status) =>
                                           _changeStatus(selected, status),
+                                      onDelete: () => _deleteTicket(selected),
                                     ),
                             ),
                           ],
@@ -320,6 +389,7 @@ class _TicketDetail extends ConsumerWidget {
     required this.sending,
     required this.onReply,
     required this.onStatus,
+    required this.onDelete,
     this.onBack,
   });
   final _AdminSupportTicket ticket;
@@ -327,6 +397,7 @@ class _TicketDetail extends ConsumerWidget {
   final bool sending;
   final VoidCallback onReply;
   final ValueChanged<String> onStatus;
+  final VoidCallback onDelete;
   final VoidCallback? onBack;
 
   @override
@@ -364,6 +435,11 @@ class _TicketDetail extends ConsumerWidget {
                 ),
               ),
               const SizedBox(width: 12),
+              IconButton(
+                tooltip: 'Удалить обращение',
+                onPressed: onDelete,
+                icon: const Icon(Icons.delete_outline_rounded),
+              ),
               DropdownButton<String>(
                 value: ticket.status,
                 items: _editableStatuses
