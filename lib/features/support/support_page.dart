@@ -254,7 +254,7 @@ class _SupportHero extends StatelessWidget {
       ],
     );
     final button = BrandPillButton(
-      label: ru ? 'НАПИСАТЬ АДМИНИСТРАТОРУ' : 'CONTACT ADMIN',
+      label: ru ? 'НАПИСАТЬ АДМИНУ' : 'CONTACT ADMIN',
       style: BrandPillStyle.dark,
       onTap: onContact,
     );
