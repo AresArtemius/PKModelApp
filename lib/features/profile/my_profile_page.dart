@@ -30,6 +30,23 @@ const double _kAccountDesktopBreakpoint = 900.0;
 const double _kAccountDesktopMaxWidth = 1360.0;
 const EdgeInsets _kAccountDesktopPad = EdgeInsets.fromLTRB(32, 28, 32, 32);
 
+final _accountProfilePlacementProvider = FutureProvider.autoDispose
+    .family<DateTime?, String>((ref, profileId) async {
+      final data = await ref
+          .read(supabaseProvider)
+          .rpc(
+            'my_profile_billing_summary',
+            params: {'p_profile_id': profileId},
+          );
+      final rows = data is List ? data : const [];
+      if (rows.isEmpty || rows.first is! Map) return null;
+      final row = Map<String, dynamic>.from(rows.first as Map);
+      if (row['is_active'] != true) return null;
+      return DateTime.tryParse(
+        (row['current_period_end'] ?? '').toString(),
+      )?.toLocal();
+    });
+
 TextStyle _accountCommandStyle({
   Color color = kTextDark,
   double size = 16,
@@ -219,6 +236,7 @@ class MyProfilePage extends ConsumerWidget {
         Padding(
           padding: const EdgeInsets.only(bottom: kProfileItemBottomGap),
           child: _ProfileSummaryCard(
+            profileId: p.id,
             fullName: p.fullName.trim(),
             status: p.status,
             moderationComment: p.moderationComment ?? '',
@@ -1251,8 +1269,9 @@ class _EmptyProfileImagePlaceholder extends StatelessWidget {
   }
 }
 
-class _ProfileSummaryCard extends StatelessWidget {
+class _ProfileSummaryCard extends ConsumerWidget {
   const _ProfileSummaryCard({
+    required this.profileId,
     required this.fullName,
     required this.status,
     required this.moderationComment,
@@ -1265,6 +1284,7 @@ class _ProfileSummaryCard extends StatelessWidget {
     required this.onDismissUpload,
   });
 
+  final String profileId;
   final String fullName;
   final ProfileStatus status;
   final String moderationComment;
@@ -1290,12 +1310,18 @@ class _ProfileSummaryCard extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final t = AppLocalizations.of(context)!;
     final hasPhoto = photoUrl?.trim().isNotEmpty ?? false;
     final title = fullName.trim().isEmpty ? '—' : fullName.trim();
     final statusLabel = _statusLabel(t);
     final correctionText = moderationComment.trim();
+    final placementEnd = ref
+        .watch(_accountProfilePlacementProvider(profileId))
+        .maybeWhen(data: (value) => value, orElse: () => null);
+    final placementDate = placementEnd == null
+        ? ''
+        : '${placementEnd.day.toString().padLeft(2, '0')}.${placementEnd.month.toString().padLeft(2, '0')}.${placementEnd.year}';
 
     return GestureDetector(
       onTap: onTap,
@@ -1331,6 +1357,24 @@ class _ProfileSummaryCard extends StatelessWidget {
                       weight: FontWeight.w700,
                     ),
                   ),
+                  if (placementDate.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      _accountLocaleText(
+                        context,
+                        'РАЗМЕЩЕНА ДО $placementDate',
+                        'PLACED UNTIL $placementDate',
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: _accountCommandStyle(
+                        color: const Color(0xFF2E7D32),
+                        size: 11,
+                        spacing: 1.0,
+                        weight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 6),
                   Text(
                     statusLabel,
