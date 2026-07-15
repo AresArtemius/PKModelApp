@@ -18,6 +18,7 @@ import 'package:video_player/video_player.dart';
 import 'package:video_thumbnail/video_thumbnail.dart';
 
 import '../../core/app_error_mapper.dart';
+import '../../core/content_safety_filter.dart';
 import '../../core/auth_providers.dart';
 import '../../core/entitlements_provider.dart';
 import '../../core/protected_media_url.dart';
@@ -244,6 +245,23 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     final attachment = _pendingAttachment;
     if (text.isEmpty && attachment == null) return;
     final body = text.isEmpty ? '' : _composeOutgoingBody(text);
+    final contentIssue = ContentSafetyFilter.firstIssue({
+      _isRussian ? 'сообщение' : 'message': text,
+    });
+    if (contentIssue != null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            ContentSafetyFilter.message(
+              isRussian: _isRussian,
+              fieldLabel: contentIssue.fieldLabel,
+            ),
+          ),
+        ),
+      );
+      return;
+    }
 
     setState(() => _sending = true);
     try {

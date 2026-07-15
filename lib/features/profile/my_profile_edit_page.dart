@@ -12,6 +12,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../core/app_logger.dart';
+import '../../core/content_safety_filter.dart';
 import '../../core/roles_provider.dart';
 import '../../core/supabase_provider.dart';
 import '../../gen_l10n/app_localizations.dart';
@@ -927,6 +928,33 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
     if (nn == null) {
       if (mounted) {
         setState(() => _saving = false);
+      }
+      return null;
+    }
+
+    final isRussian =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ru';
+    final contentIssue = ContentSafetyFilter.firstIssue({
+      isRussian ? 'имя' : 'name': nn.name,
+      isRussian ? 'фамилия' : 'surname': nn.surname,
+      isRussian ? 'город' : 'city': _cityC.text,
+      isRussian ? 'страна' : 'country': _countryC.text,
+      isRussian ? 'резюме' : 'resume': _resumeC.text,
+      isRussian ? 'опыт' : 'experience': _experienceC.text,
+      isRussian ? 'навыки' : 'skills': _skillsC.text,
+      isRussian ? 'услуги' : 'services': _servicesC.text,
+      isRussian ? 'жанры' : 'genres': _genresC.text,
+      isRussian ? 'оборудование' : 'equipment': _equipmentC.text,
+    });
+    if (contentIssue != null) {
+      if (mounted) {
+        setState(() {
+          _error = ContentSafetyFilter.message(
+            isRussian: isRussian,
+            fieldLabel: contentIssue.fieldLabel,
+          );
+          _saving = false;
+        });
       }
       return null;
     }
