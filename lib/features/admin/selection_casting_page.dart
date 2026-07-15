@@ -70,27 +70,31 @@ final castingResponsesProvider = FutureProvider.autoDispose
             .limit(400);
       }
 
-      Future<List<CastingReferenceMedia>> loadCastingReferences() async {
+      Future<Map<String, dynamic>> loadCastingMeta() async {
         try {
           final row = await sb
               .from('castings')
-              .select('reference_media')
+              .select('title,reference_media')
               .eq('id', castingId)
               .maybeSingle();
+          final data = Map<String, dynamic>.from(row ?? const {});
           final raw = row?['reference_media'];
-          if (raw is! List) return const <CastingReferenceMedia>[];
-          return raw
-              .whereType<Map>()
-              .map((e) => CastingReferenceMedia.fromJson(Map.from(e)))
-              .where((e) => e.url.trim().isNotEmpty)
-              .toList(growable: false);
+          data['references'] = raw is List
+              ? raw
+                    .whereType<Map>()
+                    .map((e) => CastingReferenceMedia.fromJson(Map.from(e)))
+                    .where((e) => e.url.trim().isNotEmpty)
+                    .toList(growable: false)
+              : const <CastingReferenceMedia>[];
+          return data;
         } on PostgrestException catch (e) {
           final msg = '${e.message} ${e.details ?? ''} ${e.hint ?? ''}'
               .toLowerCase();
-          if (msg.contains('reference_media') ||
+          if (msg.contains('title') ||
+              msg.contains('reference_media') ||
               msg.contains('schema cache') ||
               msg.contains('does not exist')) {
-            return const <CastingReferenceMedia>[];
+            return const <String, dynamic>{};
           }
           rethrow;
         }
@@ -148,12 +152,15 @@ final castingResponsesProvider = FutureProvider.autoDispose
           )
           .map(SelectionExportItem.fromProfileMap)
           .toList(growable: false);
-      final references = await loadCastingReferences();
+      final castingMeta = await loadCastingMeta();
 
       return {
+        'castingTitle': (castingMeta['title'] ?? '').toString().trim(),
         'items': items,
         'exportItems': exportItems,
-        'references': references,
+        'references':
+            castingMeta['references'] as List<CastingReferenceMedia>? ??
+            const <CastingReferenceMedia>[],
       };
     });
 
@@ -233,6 +240,9 @@ class SelectionCastingPage extends ConsumerWidget {
                       ?.whereType<CastingReferenceMedia>()
                       .toList(growable: false) ??
                   const <CastingReferenceMedia>[];
+              final castingTitle = (data['castingTitle'] ?? '')
+                  .toString()
+                  .trim();
 
               List<Map<String, dynamic>> rowsForStatus(
                 CastingResponseStatus status,
@@ -309,6 +319,9 @@ class SelectionCastingPage extends ConsumerWidget {
 
               Future<void> choosePdfExport() async {
                 final ru = Localizations.localeOf(context).languageCode == 'ru';
+                final basePdfTitle = castingTitle.isNotEmpty
+                    ? castingTitle
+                    : t.responsesUpper;
                 final scope = await showModalBottomSheet<_PdfExportScope>(
                   context: context,
                   backgroundColor: Colors.transparent,
@@ -320,13 +333,13 @@ class SelectionCastingPage extends ConsumerWidget {
                 switch (scope) {
                   case _PdfExportScope.all:
                     await openPdf(
-                      title: t.responsesUpper,
+                      title: basePdfTitle,
                       scopedItems: exportItems,
                     );
                     break;
                   case _PdfExportScope.shortlist:
                     await openPdf(
-                      title: ru ? 'Шортлист' : 'Shortlist',
+                      title: '$basePdfTitle - ${ru ? 'Шортлист' : 'Shortlist'}',
                       scopedItems: exportItemsFor(
                         CastingResponseStatus.shortlist,
                       ),
@@ -334,7 +347,8 @@ class SelectionCastingPage extends ConsumerWidget {
                     break;
                   case _PdfExportScope.approved:
                     await openPdf(
-                      title: ru ? 'Утвержденные' : 'Approved',
+                      title:
+                          '$basePdfTitle - ${ru ? 'Утвержденные' : 'Approved'}',
                       scopedItems: exportItemsFor(
                         CastingResponseStatus.approved,
                       ),

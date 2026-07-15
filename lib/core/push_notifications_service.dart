@@ -308,20 +308,34 @@ class PushNotificationsService {
 
     final messenger = ScaffoldMessenger.maybeOf(context);
     if (messenger == null) return;
+    final isRussian = Localizations.localeOf(context).languageCode == 'ru';
+    final canOpen = route.isNotEmpty && _isAllowedRoute(route);
 
     messenger
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
-          content: Text(text),
+          content: Row(
+            children: [
+              Expanded(child: Text(text)),
+              TextButton(
+                onPressed: messenger.hideCurrentSnackBar,
+                style: TextButton.styleFrom(foregroundColor: Colors.white70),
+                child: Text(isRussian ? 'СКРЫТЬ' : 'HIDE'),
+              ),
+              if (canOpen)
+                TextButton(
+                  onPressed: () {
+                    messenger.hideCurrentSnackBar();
+                    router.go(route);
+                  },
+                  style: TextButton.styleFrom(foregroundColor: Colors.white),
+                  child: Text(isRussian ? 'ОТКРЫТЬ' : 'OPEN'),
+                ),
+            ],
+          ),
           behavior: SnackBarBehavior.floating,
           duration: const Duration(seconds: 5),
-          action: route.isNotEmpty && _isAllowedRoute(route)
-              ? SnackBarAction(
-                  label: 'ОТКРЫТЬ',
-                  onPressed: () => router.go(route),
-                )
-              : null,
         ),
       );
   }

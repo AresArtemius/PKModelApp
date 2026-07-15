@@ -259,20 +259,20 @@ class SelectionPdfService {
           child: pw.UrlLink(
             destination: trimmed,
             child: pw.SizedBox(
-              width: 118,
-              height: 30,
+              width: 150,
+              height: 36,
               child: pw.Container(
                 alignment: pw.Alignment.center,
                 decoration: pw.BoxDecoration(
-                  color: PdfColors.grey200,
-                  border: pw.Border.all(color: PdfColors.grey400),
+                  color: PdfColors.blue50,
+                  border: pw.Border.all(color: PdfColors.blue700, width: 1.2),
                   borderRadius: pw.BorderRadius.circular(6),
                 ),
                 child: pw.Text(
                   'ОТКРЫТЬ МОДЕЛЬ',
                   style: pw.TextStyle(
                     font: boldFont,
-                    fontSize: 10,
+                    fontSize: 12,
                     color: PdfColors.blue700,
                     decoration: pw.TextDecoration.underline,
                   ),
