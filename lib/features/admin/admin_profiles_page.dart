@@ -1410,6 +1410,9 @@ class _AdminProfileBilling {
   }
 
   String badgeLabel(bool ru) {
+    if (status == 'admin_free') {
+      return ru ? 'Бесплатно • админ' : 'Free • admin';
+    }
     if (isActive) {
       return ru
           ? 'Активна до ${_shortDate(currentPeriodEnd!)}'

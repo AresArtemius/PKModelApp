@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/supabase_provider.dart';
+import '../../core/roles_provider.dart';
 import '../../ui/brand/brand_admin_header.dart';
 import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
@@ -201,6 +202,9 @@ class _BillingPageState extends ConsumerState<BillingPage> {
   @override
   Widget build(BuildContext context) {
     final profilesAsync = ref.watch(myProfileProvider);
+    final isAdmin = ref
+        .watch(isAdminProvider)
+        .maybeWhen(data: (value) => value, orElse: () => false);
     final ru = _isRussian;
 
     return Scaffold(
@@ -223,115 +227,133 @@ class _BillingPageState extends ConsumerState<BillingPage> {
                   ),
                   const SizedBox(height: kGap12),
                   Expanded(
-                    child: profilesAsync.when(
-                      loading: () => const Center(
-                        child: CircularProgressIndicator(color: kTextDark),
-                      ),
-                      error: (error, _) => _MessageCard(
-                        text: ru
-                            ? 'Не удалось загрузить анкеты: $error'
-                            : 'Could not load profiles: $error',
-                      ),
-                      data: (profiles) {
-                        final savedProfiles = profiles
-                            .where((profile) => profile.id.trim().isNotEmpty)
-                            .toList(growable: false);
-                        if (savedProfiles.isEmpty) {
-                          return _MessageCard(
+                    child: isAdmin
+                        ? _MessageCard(
                             text: ru
-                                ? 'Сначала создайте и сохраните анкету. После модерации ее можно будет оплатить и активировать в базе.'
-                                : 'Create and save a profile first. After moderation you can pay for placement.',
-                          );
-                        }
-
-                        final selectedProfile = _selectedProfile(savedProfiles);
-                        return LayoutBuilder(
-                          builder: (context, constraints) {
-                            final wide = constraints.maxWidth >= 900;
-                            final content = wide
-                                ? Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Expanded(
-                                        flex: 5,
-                                        child: _ProfilesPanel(
-                                          profiles: savedProfiles,
-                                          selectedId: selectedProfile.id,
-                                          onSelected: (id) => setState(() {
-                                            _selectedProfileId = id;
-                                            _errorText = '';
-                                            _infoText = '';
-                                          }),
-                                        ),
-                                      ),
-                                      const SizedBox(width: kGap12),
-                                      Expanded(
-                                        flex: 4,
-                                        child: _PaymentPanel(
-                                          profile: selectedProfile,
-                                          selectedProductCode:
-                                              _selectedProductCode,
-                                          onProductSelected: (code) => setState(
-                                            () => _selectedProductCode = code,
-                                          ),
-                                          onPay: _isSubmitting
-                                              ? null
-                                              : () => _startPayment(
-                                                  selectedProfile,
-                                                ),
-                                          isSubmitting: _isSubmitting,
-                                          errorText: _errorText,
-                                          infoText: _infoText,
-                                        ),
-                                      ),
-                                    ],
-                                  )
-                                : ListView(
-                                    padding: EdgeInsets.zero,
-                                    children: [
-                                      _ProfilesPanel(
-                                        profiles: savedProfiles,
-                                        selectedId: selectedProfile.id,
-                                        onSelected: (id) => setState(() {
-                                          _selectedProfileId = id;
-                                          _errorText = '';
-                                          _infoText = '';
-                                        }),
-                                      ),
-                                      const SizedBox(height: kGap12),
-                                      _PaymentPanel(
-                                        profile: selectedProfile,
-                                        selectedProductCode:
-                                            _selectedProductCode,
-                                        onProductSelected: (code) => setState(
-                                          () => _selectedProductCode = code,
-                                        ),
-                                        onPay: _isSubmitting
-                                            ? null
-                                            : () => _startPayment(
-                                                selectedProfile,
-                                              ),
-                                        isSubmitting: _isSubmitting,
-                                        errorText: _errorText,
-                                        infoText: _infoText,
-                                      ),
-                                    ],
-                                  );
-
-                            return Align(
-                              alignment: Alignment.topCenter,
-                              child: ConstrainedBox(
-                                constraints: const BoxConstraints(
-                                  maxWidth: 1180,
-                                ),
-                                child: content,
+                                ? 'Анкеты администраторов размещаются в каталоге бесплатно и не требуют оплаты.'
+                                : 'Administrator profiles are listed for free and do not require payment.',
+                          )
+                        : profilesAsync.when(
+                            loading: () => const Center(
+                              child: CircularProgressIndicator(
+                                color: kTextDark,
                               ),
-                            );
-                          },
-                        );
-                      },
-                    ),
+                            ),
+                            error: (error, _) => _MessageCard(
+                              text: ru
+                                  ? 'Не удалось загрузить анкеты: $error'
+                                  : 'Could not load profiles: $error',
+                            ),
+                            data: (profiles) {
+                              final savedProfiles = profiles
+                                  .where(
+                                    (profile) => profile.id.trim().isNotEmpty,
+                                  )
+                                  .toList(growable: false);
+                              if (savedProfiles.isEmpty) {
+                                return _MessageCard(
+                                  text: ru
+                                      ? 'Сначала создайте и сохраните анкету. После модерации ее можно будет оплатить и активировать в базе.'
+                                      : 'Create and save a profile first. After moderation you can pay for placement.',
+                                );
+                              }
+
+                              final selectedProfile = _selectedProfile(
+                                savedProfiles,
+                              );
+                              return LayoutBuilder(
+                                builder: (context, constraints) {
+                                  final wide = constraints.maxWidth >= 900;
+                                  final content = wide
+                                      ? Row(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Expanded(
+                                              flex: 5,
+                                              child: _ProfilesPanel(
+                                                profiles: savedProfiles,
+                                                selectedId: selectedProfile.id,
+                                                onSelected: (id) =>
+                                                    setState(() {
+                                                      _selectedProfileId = id;
+                                                      _errorText = '';
+                                                      _infoText = '';
+                                                    }),
+                                              ),
+                                            ),
+                                            const SizedBox(width: kGap12),
+                                            Expanded(
+                                              flex: 4,
+                                              child: _PaymentPanel(
+                                                profile: selectedProfile,
+                                                selectedProductCode:
+                                                    _selectedProductCode,
+                                                onProductSelected: (code) =>
+                                                    setState(
+                                                      () =>
+                                                          _selectedProductCode =
+                                                              code,
+                                                    ),
+                                                onPay: _isSubmitting
+                                                    ? null
+                                                    : () => _startPayment(
+                                                        selectedProfile,
+                                                      ),
+                                                isSubmitting: _isSubmitting,
+                                                errorText: _errorText,
+                                                infoText: _infoText,
+                                              ),
+                                            ),
+                                          ],
+                                        )
+                                      : ListView(
+                                          padding: EdgeInsets.zero,
+                                          children: [
+                                            _ProfilesPanel(
+                                              profiles: savedProfiles,
+                                              selectedId: selectedProfile.id,
+                                              onSelected: (id) => setState(() {
+                                                _selectedProfileId = id;
+                                                _errorText = '';
+                                                _infoText = '';
+                                              }),
+                                            ),
+                                            const SizedBox(height: kGap12),
+                                            _PaymentPanel(
+                                              profile: selectedProfile,
+                                              selectedProductCode:
+                                                  _selectedProductCode,
+                                              onProductSelected: (code) =>
+                                                  setState(
+                                                    () => _selectedProductCode =
+                                                        code,
+                                                  ),
+                                              onPay: _isSubmitting
+                                                  ? null
+                                                  : () => _startPayment(
+                                                      selectedProfile,
+                                                    ),
+                                              isSubmitting: _isSubmitting,
+                                              errorText: _errorText,
+                                              infoText: _infoText,
+                                            ),
+                                          ],
+                                        );
+
+                                  return Align(
+                                    alignment: Alignment.topCenter,
+                                    child: ConstrainedBox(
+                                      constraints: const BoxConstraints(
+                                        maxWidth: 1180,
+                                      ),
+                                      child: content,
+                                    ),
+                                  );
+                                },
+                              );
+                            },
+                          ),
                   ),
                 ],
               ),

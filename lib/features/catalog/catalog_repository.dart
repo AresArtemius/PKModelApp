@@ -16,6 +16,7 @@ class CatalogRepository {
   static const int _dailyFeeFallbackMin = 0;
   static const int _dailyFeeFallbackMax = 100000;
   static const Duration _filterBoundsCacheTtl = Duration(minutes: 15);
+  static const String _catalogTable = 'catalog_profiles';
 
   CatalogFilterBounds? _filterBoundsCache;
   DateTime? _filterBoundsCachedAt;
@@ -56,7 +57,7 @@ class CatalogRepository {
       required bool includeCoverPhoto,
     }) async {
       PostgrestFilterBuilder<List<Map<String, dynamic>>> q = _client
-          .from(ProfileSupabaseSchema.table)
+          .from(_catalogTable)
           .select(
             ProfileSupabaseSchema.selectCatalog(
               includeBirthDate: includeBirthDate,
@@ -66,8 +67,6 @@ class CatalogRepository {
               includeCoverPhoto: includeCoverPhoto,
             ),
           );
-
-      q = q.eq('status', 'approved');
 
       q = _applyIntRangeFilter(q, 'age', ageFrom, ageTo);
       q = _applyIntRangeFilter(q, 'height', heightFrom, heightTo);
@@ -227,9 +226,8 @@ class CatalogRepository {
 
   Future<int?> _edgeOf(String column, {required bool ascending}) async {
     final rows = await _client
-        .from(ProfileSupabaseSchema.table)
+        .from(_catalogTable)
         .select(column)
-        .eq('status', 'approved')
         .not(column, 'is', null)
         .order(column, ascending: ascending)
         .limit(1);

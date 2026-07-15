@@ -141,8 +141,10 @@ class MyProfilePage extends ConsumerWidget {
         .maybeWhen(data: (value) => value, orElse: () => false);
     final isRu = Localizations.localeOf(context).languageCode == 'ru';
     return [
-      _BillingEntryCard(onTap: () => context.go(Routes.billing)),
-      const SizedBox(height: kGap14),
+      if (!isAdmin) ...[
+        _BillingEntryCard(onTap: () => context.go(Routes.billing)),
+        const SizedBox(height: kGap14),
+      ],
       _AccountEntryCard(
         icon: Icons.notifications_rounded,
         title: AppLocalizations.of(context)!.notificationsUpper,
