@@ -18,6 +18,7 @@ const publicAppUrl = trimTrailingSlash(Deno.env.get('PUBLIC_APP_URL') ?? '');
 const yookassaReturnUrl =
   Deno.env.get('YOOKASSA_RETURN_URL') ??
   (publicAppUrl ? `${publicAppUrl}/#/billing?payment=return` : '');
+const yookassaVatCode = 1; // Без НДС, confirmed by the merchant.
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return corsResponse();
@@ -50,6 +51,18 @@ Deno.serve(async (req) => {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) {
+      return json({ error: 'Could not resolve authenticated user' }, 401);
+    }
+    const customer = receiptCustomer(authData.user.email, authData.user.phone);
+    if (!customer) {
+      return json(
+        { error: 'Email or phone is required to issue a receipt' },
+        400,
+      );
+    }
+
     const { data: orderData, error: orderError } = await supabase.rpc(
       'create_yookassa_profile_payment_order',
       {
@@ -64,7 +77,7 @@ Deno.serve(async (req) => {
       return json({ error: 'Payment order was not created' }, 500);
     }
 
-    const payment = await createYooKassaPayment(order);
+    const payment = await createYooKassaPayment(order, customer);
     const confirmationUrl = payment.confirmation?.confirmation_url ?? '';
     if (!payment.id || !confirmationUrl) {
       return json({ error: 'YooKassa did not return confirmation_url' }, 502);
@@ -93,7 +106,14 @@ Deno.serve(async (req) => {
   }
 });
 
-async function createYooKassaPayment(order: PaymentOrder) {
+async function createYooKassaPayment(
+  order: PaymentOrder,
+  customer: Record<string, string>,
+) {
+  const amount = {
+    value: formatRub(order.amount_minor),
+    currency: order.currency || 'RUB',
+  };
   const response = await fetch('https://api.yookassa.ru/v3/payments', {
     method: 'POST',
     headers: {
@@ -103,8 +123,7 @@ async function createYooKassaPayment(order: PaymentOrder) {
     },
     body: JSON.stringify({
       amount: {
-        value: formatRub(order.amount_minor),
-        currency: order.currency || 'RUB',
+        ...amount,
       },
       capture: true,
       confirmation: {
@@ -112,6 +131,20 @@ async function createYooKassaPayment(order: PaymentOrder) {
         return_url: yookassaReturnUrl,
       },
       description: order.description.slice(0, 128),
+      receipt: {
+        customer,
+        items: [
+          {
+            description: order.description.slice(0, 128),
+            quantity: '1.00',
+            amount,
+            vat_code: yookassaVatCode,
+            payment_mode: 'full_prepayment',
+            payment_subject: 'service',
+          },
+        ],
+        internet: true,
+      },
       metadata: {
         order_id: order.order_id,
         profile_id: order.profile_id,
@@ -127,6 +160,17 @@ async function createYooKassaPayment(order: PaymentOrder) {
     );
   }
   return body as Record<string, any>;
+}
+
+function receiptCustomer(
+  email: string | undefined,
+  phone: string | undefined,
+): Record<string, string> | null {
+  const normalizedEmail = (email ?? '').trim();
+  if (normalizedEmail) return { email: normalizedEmail };
+  const normalizedPhone = (phone ?? '').replace(/\D/g, '');
+  if (normalizedPhone) return { phone: normalizedPhone };
+  return null;
 }
 
 function firstRow<T>(value: unknown): T | null {
