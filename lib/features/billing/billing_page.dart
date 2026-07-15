@@ -173,7 +173,13 @@ class _BillingPageState extends ConsumerState<BillingPage> {
           ? 'Платежная функция еще не развернута в Supabase. Нужно deploy create-yookassa-payment.'
           : 'Payment function is not deployed yet.';
     }
-    if (lower.contains('credentials') || lower.contains('yookassa')) {
+    if (error is FunctionException) {
+      final details = error.details ?? error.reasonPhrase ?? error.toString();
+      return _isRussian
+          ? 'Ошибка платежной функции: $details'
+          : 'Payment function error: $details';
+    }
+    if (lower.contains('credentials')) {
       return _isRussian
           ? 'ЮKassa еще не настроена на сервере: проверьте SHOP_ID, SECRET_KEY и redeploy Edge Function.'
           : 'YooKassa is not configured on the server.';
@@ -188,11 +194,6 @@ class _BillingPageState extends ConsumerState<BillingPage> {
       return _isRussian
           ? 'Не удалось создать оплату для этой анкеты: нет доступа или анкета не найдена.'
           : 'Could not create payment for this profile.';
-    }
-    if (error is FunctionException) {
-      return _isRussian
-          ? 'Ошибка платежной функции: ${error.details ?? error.reasonPhrase ?? error.toString()}'
-          : 'Payment function error: ${error.details ?? error.reasonPhrase ?? error.toString()}';
     }
     return _isRussian
         ? 'Не удалось начать оплату: $raw'
