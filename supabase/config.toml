@@ -3,3 +3,6 @@ verify_jwt = false
 
 [functions.yookassa-webhook]
 verify_jwt = false
+
+[functions.telegram-support]
+verify_jwt = false
