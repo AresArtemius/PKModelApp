@@ -21,7 +21,11 @@ Deno.serve(async (req) => {
       );
     }
 
-    if (webhookSecret && !isSecretValid(req)) {
+    if (!webhookSecret) {
+      return json({ error: 'Webhook secret is not configured' }, 503);
+    }
+
+    if (!isSecretValid(req)) {
       return json({ error: 'Webhook secret mismatch' }, 401);
     }
 
