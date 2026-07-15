@@ -37,7 +37,7 @@ final supportTicketMessagesProvider = FutureProvider.autoDispose
           .from('support_messages')
           .select('id,author_kind,body,created_at')
           .eq('ticket_id', ticketId)
-          .order('created_at');
+          .order('created_at', ascending: true);
       return rows.map(SupportTicketMessage.fromMap).toList(growable: false);
     });
 

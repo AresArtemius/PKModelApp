@@ -38,7 +38,7 @@ final adminSupportMessagesProvider = FutureProvider.autoDispose
           .from('support_messages')
           .select('id,author_kind,body,is_internal,created_at')
           .eq('ticket_id', ticketId)
-          .order('created_at');
+          .order('created_at', ascending: true);
       return rows.map(_AdminSupportMessage.fromMap).toList(growable: false);
     });
 
