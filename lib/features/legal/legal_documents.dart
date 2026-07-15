@@ -366,7 +366,7 @@ const legalDocuments = <LegalDocument>[
       LegalDocumentSection(
         title: 'Контакты',
         body:
-            'Поддержка и вопросы по оплате обрабатываются через доступные каналы связи PK Management, указанные в приложении и сервисных уведомлениях. Перед финальной проверкой ЮKassa нужно добавить официальный email или телефон поддержки.',
+            'Email: info@president-kids.ru, artem@president-kids.ru. Телефоны: +7 925 507-86-93, +7 925 542-09-23.',
       ),
     ],
     sectionsEn: [
@@ -398,7 +398,7 @@ const legalDocuments = <LegalDocument>[
       LegalDocumentSection(
         title: 'Contacts',
         body:
-            'Support and payment questions are handled through PK Management communication channels shown in the app and service notifications. Before the final YooKassa review, an official support email or phone number should be added.',
+            'Email: info@president-kids.ru, artem@president-kids.ru. Phones: +7 925 507-86-93, +7 925 542-09-23.',
       ),
     ],
   ),

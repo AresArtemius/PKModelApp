@@ -88,16 +88,6 @@ class LegalDocumentPage extends StatelessWidget {
                           fontWeight: FontWeight.w700,
                         ),
                       ),
-                      const SizedBox(height: 10),
-                      Text(
-                        isRu
-                            ? 'Launch-draft для текущей версии приложения. Документ нужно обновлять при изменении продукта, реквизитов или правил обработки данных.'
-                            : 'Launch draft for the current app version. This document should be updated when the product, legal details or data processing rules change.',
-                        style: _bodyStyle(
-                          color: BrandTheme.redTop,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
                       const SizedBox(height: 20),
                       for (final section in sections) ...[
                         Text(section.title, style: _titleStyle()),

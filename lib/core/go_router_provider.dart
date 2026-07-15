@@ -21,6 +21,7 @@ const _publicPaths = <String>{
   Routes.termsOfService,
   Routes.cookiePolicy,
   Routes.processingNotice,
+  Routes.requisites,
   Routes.search,
   Routes.castings,
   Routes.authRequired,

@@ -499,6 +499,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                                   ),
                                 ],
                               ),
+                              const SizedBox(height: 14),
+                              _LoginLegalLinks(isRussian: lang == 'ru'),
                             ],
                           ),
                         ),
@@ -511,6 +513,53 @@ class _LoginPageState extends ConsumerState<LoginPage> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _LoginLegalLinks extends StatelessWidget {
+  const _LoginLegalLinks({required this.isRussian});
+
+  final bool isRussian;
+
+  @override
+  Widget build(BuildContext context) {
+    final links = <({String label, String route})>[
+      (label: isRussian ? 'Условия' : 'Terms', route: Routes.termsOfService),
+      (
+        label: isRussian ? 'Реквизиты' : 'Legal details',
+        route: Routes.requisites,
+      ),
+      (
+        label: isRussian ? 'Конфиденциальность' : 'Privacy',
+        route: Routes.privacyPolicy,
+      ),
+    ];
+
+    return Wrap(
+      alignment: WrapAlignment.center,
+      spacing: 10,
+      runSpacing: 4,
+      children: [
+        for (final link in links)
+          InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: () => context.push(link.route),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+              child: Text(
+                link.label,
+                style: TextStyle(
+                  color: kTextMuted,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  decoration: TextDecoration.underline,
+                  decorationColor: kTextMuted.withValues(alpha: 0.45),
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
