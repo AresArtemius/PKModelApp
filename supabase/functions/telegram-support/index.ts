@@ -166,6 +166,29 @@ async function handleDatabaseWebhook(payload: Record<string, unknown>) {
   if (link?.telegram_chat_id) await sendMessage(link.telegram_chat_id, `Ответ администратора:\n${record.body}`);
 }
 
+async function configureWebhooks() {
+  const webhookUrl = `${supabaseUrl}/functions/v1/telegram-support`;
+  const response = await fetch(`https://api.telegram.org/bot${botToken}/setWebhook`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      url: webhookUrl,
+      secret_token: telegramSecret,
+      allowed_updates: ["message"],
+      drop_pending_updates: false,
+    }),
+  });
+  const telegramResult = await response.json();
+  if (!response.ok || telegramResult?.ok !== true) {
+    throw new Error(`Telegram webhook setup failed: ${response.status}`);
+  }
+  const { error } = await supabase.rpc("configure_telegram_support_delivery", {
+    p_secret: dbWebhookSecret,
+  });
+  if (error) throw error;
+  return { ok: true, webhook: webhookUrl };
+}
+
 Deno.serve(async (request) => {
   if (request.method !== "POST") return new Response("Method not allowed", { status: 405 });
   if (!botToken || !telegramSecret || !dbWebhookSecret) {
@@ -176,7 +199,9 @@ Deno.serve(async (request) => {
     const telegramHeader = request.headers.get("x-telegram-bot-api-secret-token");
     const dbHeader = request.headers.get("x-support-webhook-secret");
     if (telegramHeader === telegramSecret) await handleTelegramUpdate(payload);
-    else if (dbHeader === dbWebhookSecret) await handleDatabaseWebhook(payload);
+    else if (dbHeader === dbWebhookSecret && payload.action === "configure") {
+      return Response.json(await configureWebhooks());
+    } else if (dbHeader === dbWebhookSecret) await handleDatabaseWebhook(payload);
     else return new Response("Unauthorized", { status: 401 });
     return Response.json({ ok: true });
   } catch (error) {

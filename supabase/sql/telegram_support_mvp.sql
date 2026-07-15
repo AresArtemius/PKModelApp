@@ -37,6 +37,12 @@ create table if not exists public.telegram_support_updates (
   received_at timestamptz not null default now()
 );
 
+create table if not exists public.telegram_support_runtime_config (
+  id boolean primary key default true check (id),
+  db_webhook_secret text not null,
+  updated_at timestamptz not null default now()
+);
+
 alter table public.telegram_support_updates
   add column if not exists telegram_chat_id bigint;
 create index if not exists telegram_support_updates_chat_time_idx
@@ -46,6 +52,7 @@ alter table public.support_faq enable row level security;
 alter table public.telegram_support_links enable row level security;
 alter table public.telegram_support_link_codes enable row level security;
 alter table public.telegram_support_updates enable row level security;
+alter table public.telegram_support_runtime_config enable row level security;
 
 drop policy if exists "Anyone can read active support FAQ" on public.support_faq;
 create policy "Anyone can read active support FAQ"
@@ -163,3 +170,72 @@ revoke all on function public.revoke_my_telegram_support_link() from public;
 grant execute on function public.create_telegram_support_link_code() to authenticated;
 grant execute on function public.revoke_my_telegram_support_link() to authenticated;
 grant execute on function public.consume_telegram_support_link_code(text,bigint,bigint,text) to service_role;
+
+create or replace function public.configure_telegram_support_delivery(p_secret text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if current_setting('role', true) <> 'service_role' then
+    raise exception 'Access denied';
+  end if;
+  if char_length(coalesce(p_secret, '')) < 32 then
+    raise exception 'Invalid delivery secret';
+  end if;
+  insert into public.telegram_support_runtime_config (id, db_webhook_secret)
+  values (true, p_secret)
+  on conflict (id) do update set
+    db_webhook_secret = excluded.db_webhook_secret,
+    updated_at = now();
+end;
+$$;
+
+revoke all on function public.configure_telegram_support_delivery(text) from public;
+grant execute on function public.configure_telegram_support_delivery(text) to service_role;
+
+create extension if not exists pg_net;
+
+create or replace function public.deliver_support_admin_reply_to_telegram()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, net
+as $$
+declare
+  v_secret text;
+begin
+  if new.author_kind <> 'admin' or new.is_internal then return new; end if;
+  if not exists (
+    select 1 from public.support_tickets
+    where id = new.ticket_id and channel = 'telegram'
+  ) then return new; end if;
+
+  select db_webhook_secret into v_secret
+  from public.telegram_support_runtime_config
+  where id = true;
+  if v_secret is null then return new; end if;
+
+  perform net.http_post(
+    url := 'https://dherzlobdrknoajeidbz.supabase.co/functions/v1/telegram-support',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'x-support-webhook-secret', v_secret
+    ),
+    body := jsonb_build_object(
+      'type', 'INSERT',
+      'table', 'support_messages',
+      'schema', 'public',
+      'record', to_jsonb(new)
+    ),
+    timeout_milliseconds := 5000
+  );
+  return new;
+end;
+$$;
+
+drop trigger if exists support_admin_reply_telegram_delivery on public.support_messages;
+create trigger support_admin_reply_telegram_delivery
+after insert on public.support_messages
+for each row execute function public.deliver_support_admin_reply_to_telegram();
