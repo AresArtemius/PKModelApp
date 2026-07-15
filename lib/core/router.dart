@@ -42,6 +42,7 @@ import '../features/profile/account_devices_page.dart';
 import '../features/profile/account_mfa_page.dart';
 import '../features/profile/data_privacy_page.dart';
 import '../features/profile/public_account_profile_page.dart';
+import '../features/support/support_page.dart';
 import '../features/legal/legal_document_page.dart';
 import '../features/legal/legal_documents.dart';
 import '../gen_l10n/app_localizations.dart';
@@ -73,6 +74,7 @@ abstract class Routes {
   static const accountDevices = '/account_devices';
   static const accountMfa = '/account_mfa';
   static const dataPrivacy = '/data_privacy';
+  static const support = '/support';
   static const publicAccountPrefix = '/@';
   static const publicAccount = '/@:tag';
 
@@ -125,6 +127,7 @@ class AppShell extends StatelessWidget {
     if (path.startsWith(Routes.accountDevices)) return 3;
     if (path.startsWith(Routes.accountMfa)) return 3;
     if (path.startsWith(Routes.dataPrivacy)) return 3;
+    if (path.startsWith(Routes.support)) return 3;
     if (path.startsWith(Routes.me)) return 3;
     if (path.startsWith(Routes.admin)) return 4;
     if (path.startsWith(Routes.catalogAdmin)) return 4;
@@ -729,6 +732,10 @@ final List<RouteBase> appRoutes = [
       GoRoute(
         path: Routes.profileAnalytics,
         builder: (context, state) => const ProfileAnalyticsPage(),
+      ),
+      GoRoute(
+        path: Routes.support,
+        builder: (context, state) => const SupportPage(),
       ),
       GoRoute(
         path: Routes.admin,

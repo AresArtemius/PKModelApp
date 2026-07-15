@@ -162,6 +162,15 @@ class MyProfilePage extends ConsumerWidget {
         onTap: () => context.go(Routes.profileAnalytics),
       ),
       const SizedBox(height: kGap14),
+      _AccountEntryCard(
+        icon: Icons.support_agent_rounded,
+        title: isRu ? 'ПОМОЩЬ И ПОДДЕРЖКА' : 'HELP & SUPPORT',
+        subtitle: isRu
+            ? 'Ответы на вопросы и связь с администратором'
+            : 'Answers and contact with an administrator',
+        onTap: () => context.go(Routes.support),
+      ),
+      const SizedBox(height: kGap14),
       const _OwnerProfileEntryCard(),
       const SizedBox(height: kGap14),
       _AccountEntryCard(
