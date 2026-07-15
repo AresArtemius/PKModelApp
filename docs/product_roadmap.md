@@ -12,6 +12,7 @@
 
 ## Журнал изменений
 
+- 2026-07-15: первый клиентский content safety filter закреплен unit-тестами для чатов и текстовых полей анкет: проверены запрещенные RU/EN формулировки, регистр/пунктуация, определение проблемного поля и нормальные тексты без ложной блокировки.
 - 2026-07-14: подготовлен MVP SQL-слой оплаты активной анкеты: `billing_products`, `billing_payment_orders`, `billing_payments`, `billing_profile_subscriptions`, `billing_webhook_events`, `billing_entitlements`, стартовые цены 1/3/6/12 месяцев и ручной admin override для продления/отключения размещения; SQL `profile_billing_mvp.sql`.
 - 2026-07-11: в roadmap добавлен pre-launch блок платных услуг: до финального запуска нужно определить модель монетизации, провайдера оплаты, изменения в UX/документах, роли доступа, возвраты и операционную поддержку; commit `e37be86`.
 - 2026-07-11: подключение Authenticator стало удобнее: экран 2FA теперь показывает локально сгенерированный QR-код для TOTP URI, а ручной secret остается fallback; commit `47c6296`.
@@ -331,7 +332,15 @@ Changelog:
 
 ## 12. Платные услуги и монетизация
 
-Статус: pre-launch discovery -> MVP architecture. Этот блок нужно разобрать перед финальным pre-launch QA, потому что платные услуги меняют продуктовую логику, юридические документы, поддержку и админские процессы.
+Статус: MVP architecture и клиентский checkout реализованы; перед включением реальных денег нужны применение production SQL, deploy Edge Functions, secrets/webhook ЮKassa и end-to-end QA.
+
+Уже реализовано:
+- SQL-слой `billing_*`, RLS, entitlement и ручной admin override в `profile_billing_mvp.sql`.
+- RPC и идемпотентная обработка статусов ЮKassa в `yookassa_billing_flow.sql`.
+- Edge Functions `create-yookassa-payment` и `yookassa-webhook`.
+- Экран оплаты конкретной анкеты с тарифами 1/3/6/12 месяцев, переходом на confirmation URL, статусом подписки и историей платежей.
+- Платежные статусы, фильтры и ручные действия в back-office анкет.
+- Публичные цены, описание услуги, legal-документы, контакты и реквизиты для проверки сайта ЮKassa.
 
 Рекомендуемая MVP-модель для PK Management:
 - Вход в приложение и создание аккаунта остаются бесплатными.
@@ -413,4 +422,4 @@ Changelog:
 - Встроенные покупки iOS/Android, если сначала идем через web/payment-link и юридически трактуем оплату как сервис агентства.
 - Платные функции для заказчиков/кастинг-агентов: публикация кастинга, доступ к расширенным контактам, premium-подборки.
 
-Следующий шаг по блоку: спроектировать SQL-слой `billing_*` и ручной admin override до подключения реальных платежей.
+Следующий шаг по блоку: применить `profile_billing_mvp.sql` и `yookassa_billing_flow.sql` в production, задать `YOOKASSA_SHOP_ID`, `YOOKASSA_SECRET_KEY`, `PUBLIC_APP_URL`/`YOOKASSA_RETURN_URL` и `YOOKASSA_WEBHOOK_SECRET`, задеплоить обе Edge Functions, зарегистрировать webhook URL и провести успешный/отмененный/повторный тестовые платежи.
