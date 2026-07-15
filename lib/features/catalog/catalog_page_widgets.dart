@@ -2138,6 +2138,7 @@ class _QuickAddSheet extends StatelessWidget {
     required this.onCreateSelection,
     required this.onCreateFolder,
     required this.onAddToFolder,
+    this.onMessage,
   });
 
   final String modelName;
@@ -2146,6 +2147,7 @@ class _QuickAddSheet extends StatelessWidget {
   final VoidCallback onCreateSelection;
   final VoidCallback onCreateFolder;
   final ValueChanged<AgentFolder> onAddToFolder;
+  final VoidCallback? onMessage;
 
   @override
   Widget build(BuildContext context) {
@@ -2204,6 +2206,19 @@ class _QuickAddSheet extends StatelessWidget {
                   ),
                 ],
               ),
+              if (onMessage != null) ...[
+                const SizedBox(height: kGap10),
+                _QuickAddMainAction(
+                  icon: Icons.chat_bubble_rounded,
+                  label:
+                      Localizations.localeOf(
+                        context,
+                      ).languageCode.toLowerCase().startsWith('ru')
+                      ? 'НАПИСАТЬ'
+                      : 'MESSAGE',
+                  onTap: onMessage!,
+                ),
+              ],
               const SizedBox(height: kGap14),
               Row(
                 children: [

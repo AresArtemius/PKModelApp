@@ -19,6 +19,7 @@ import '../../ui/brand/brand_logo.dart';
 import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
 import '../analytics/profile_analytics.dart';
+import '../chat/chat_providers.dart';
 import '../profile/profile_model.dart';
 import 'catalog_controller.dart';
 import 'advanced_search_dialog.dart';
@@ -644,8 +645,13 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
   Future<void> _openQuickAdd(ModelVm model) async {
     _unfocus();
 
-    final folders = await ref.read(agentFoldersProvider.future);
+    final results = await Future.wait<dynamic>([
+      ref.read(agentFoldersProvider.future),
+      ref.read(isAdminProvider.future),
+    ]);
     if (!mounted) return;
+    final folders = results[0] as List<AgentFolder>;
+    final isAdmin = results[1] as bool;
 
     await showModalBottomSheet<void>(
       context: context,
@@ -670,8 +676,103 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
           Navigator.of(context).pop();
           await _addModelToFolder(model.id, folder);
         },
+        onMessage: isAdmin
+            ? () async {
+                Navigator.of(context).pop();
+                await _openModelChat(model);
+              }
+            : null,
       ),
     );
+  }
+
+  Future<void> _openModelChat(ModelVm model) async {
+    final t = AppLocalizations.of(context)!;
+    final currentUserId = Supabase.instance.client.auth.currentUser?.id ?? '';
+    final modelUserId = model.userId.trim();
+    if (currentUserId.isEmpty || modelUserId.isEmpty) {
+      _showSnack(t.unknownError);
+      return;
+    }
+    if (currentUserId == modelUserId) {
+      _showSnack(
+        t.localeName.toLowerCase().startsWith('ru')
+            ? 'Это ваша анкета'
+            : 'This is your own profile',
+      );
+      return;
+    }
+
+    try {
+      final selectionId = await _ensureQuickContactSelection(model.id);
+      if (selectionId.isEmpty) return;
+      final chatId = await ref
+          .read(chatServiceProvider)
+          .ensureSelectionChat(
+            selectionId: selectionId,
+            profileId: model.id,
+            modelUserId: modelUserId,
+          );
+      if (!mounted || chatId.isEmpty) return;
+      ref.invalidate(myChatsProvider(false));
+      context.push('${Routes.chatPrefix}$chatId');
+    } catch (e) {
+      assert(() {
+        AppLogger.error('Catalog quick message failed', error: e);
+        return true;
+      }());
+      if (!mounted) return;
+      _showSnack(AppErrorMapper.message(e, t));
+    }
+  }
+
+  Future<String> _ensureQuickContactSelection(String profileId) async {
+    final sb = Supabase.instance.client;
+    final uid = sb.auth.currentUser?.id;
+    if (uid == null || uid.isEmpty) return '';
+    final isRussian = AppLocalizations.of(
+      context,
+    )!.localeName.toLowerCase().startsWith('ru');
+    final title = isRussian ? 'Быстрые контакты' : 'Quick contacts';
+
+    String selectionId = '';
+    try {
+      final existing = await sb
+          .from('selections')
+          .select('id')
+          .eq('created_by', uid)
+          .eq('title', title)
+          .order('created_at', ascending: false)
+          .limit(1);
+      if (existing.isNotEmpty) {
+        selectionId = ((existing.first as Map)['id'] ?? '').toString();
+      }
+    } on PostgrestException {
+      // Older schemas can still create the service selection below.
+    }
+
+    if (selectionId.isEmpty) {
+      final inserted = await sb
+          .from('selections')
+          .insert({'title': title, 'created_by': uid})
+          .select('id')
+          .single();
+      selectionId = (inserted['id'] ?? '').toString();
+    }
+    if (selectionId.isEmpty) return '';
+
+    try {
+      await sb.from('selection_items').insert({
+        'selection_id': selectionId,
+        'profile_id': profileId,
+      });
+    } on PostgrestException catch (e) {
+      if (e.code != '23505') {
+        final message = '${e.message} ${e.details ?? ''}'.toLowerCase();
+        if (!message.contains('duplicate')) rethrow;
+      }
+    }
+    return selectionId;
   }
 
   Future<void> _addModelToFavorite(String profileId) async {
