@@ -1321,6 +1321,12 @@ class _LegalConsentBox extends StatelessWidget {
                           LegalDocumentKind.processingNotice,
                         ).route,
                       ),
+                      _LegalLink(
+                        label: isRu ? 'Реквизиты' : 'Legal details',
+                        route: legalDocumentByKind(
+                          LegalDocumentKind.requisites,
+                        ).route,
+                      ),
                     ],
                   ),
                 ],

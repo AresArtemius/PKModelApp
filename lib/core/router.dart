@@ -58,6 +58,7 @@ abstract class Routes {
   static const termsOfService = '/terms';
   static const cookiePolicy = '/cookies';
   static const processingNotice = '/processing-notice';
+  static const requisites = '/requisites';
 
   static const castings = '/castings';
   static const search = '/search';
@@ -616,6 +617,11 @@ final List<RouteBase> appRoutes = [
     path: Routes.processingNotice,
     builder: (context, state) =>
         const LegalDocumentPage(kind: LegalDocumentKind.processingNotice),
+  ),
+  GoRoute(
+    path: Routes.requisites,
+    builder: (context, state) =>
+        const LegalDocumentPage(kind: LegalDocumentKind.requisites),
   ),
 
   GoRoute(

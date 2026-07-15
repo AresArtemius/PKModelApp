@@ -10,6 +10,7 @@ import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
 import '../profile/my_profile_controller.dart';
 import '../profile/profile_model.dart';
+import '../legal/legal_documents.dart';
 
 TextStyle _billingCommandStyle({
   Color color = kTextDark,
@@ -478,7 +479,60 @@ class _PaymentPanel extends ConsumerWidget {
                 : (ru ? 'ПЕРЕЙТИ К ОПЛАТЕ' : 'GO TO PAYMENT'),
             onTap: canPay && !isSubmitting ? onPay : null,
           ),
+          const SizedBox(height: kGap10),
+          _PaymentLegalLinks(ru: ru),
         ],
+      ),
+    );
+  }
+}
+
+class _PaymentLegalLinks extends StatelessWidget {
+  const _PaymentLegalLinks({required this.ru});
+
+  final bool ru;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      alignment: WrapAlignment.center,
+      spacing: kGap10,
+      runSpacing: kGap6,
+      children: [
+        _PaymentLegalLink(
+          label: ru ? 'Условия' : 'Terms',
+          route: legalDocumentByKind(LegalDocumentKind.terms).route,
+        ),
+        _PaymentLegalLink(
+          label: ru ? 'Реквизиты' : 'Legal details',
+          route: legalDocumentByKind(LegalDocumentKind.requisites).route,
+        ),
+      ],
+    );
+  }
+}
+
+class _PaymentLegalLink extends StatelessWidget {
+  const _PaymentLegalLink({required this.label, required this.route});
+
+  final String label;
+  final String route;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => context.push(route),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
+        child: Text(
+          label,
+          style: _billingBodyStyle(
+            color: BrandTheme.redTop,
+            size: 12,
+            weight: FontWeight.w800,
+          ),
+        ),
       ),
     );
   }

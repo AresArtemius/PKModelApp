@@ -1,6 +1,6 @@
-const kLegalVersion = '2026-07-11';
+const kLegalVersion = '2026-07-15';
 
-enum LegalDocumentKind { privacy, terms, cookies, processingNotice }
+enum LegalDocumentKind { privacy, terms, cookies, processingNotice, requisites }
 
 class LegalDocumentSection {
   const LegalDocumentSection({required this.title, required this.body});
@@ -149,6 +149,16 @@ const legalDocuments = <LegalDocument>[
             'Сообщения, голосовые, файлы и подборки должны использоваться только для рабочих целей, связанных с кастингами, коммуникацией и согласованным подбором. Нельзя распространять материалы из приложения вне разрешенного контекста без согласия правообладателя или участника.',
       ),
       LegalDocumentSection(
+        title: 'Платное размещение в базе',
+        body:
+            'Платная услуга PK Management — размещение утвержденной анкеты в базе на выбранный срок: 1 месяц — 500 ₽, 3 месяца — 1400 ₽, 6 месяцев — 2400 ₽, 12 месяцев — 4000 ₽. Оплата относится к конкретной анкете, а не ко всему аккаунту. После успешной оплаты размещение активируется автоматически на оплаченный период.',
+      ),
+      LegalDocumentSection(
+        title: 'Оплата и платежные данные',
+        body:
+            'Платежи обрабатываются через платежного провайдера ЮKassa. PK Management не получает и не хранит данные банковской карты. Возвраты, отмены и спорные ситуации обрабатываются через поддержку с учетом фактически оказанной услуги и применимых правил платежного провайдера.',
+      ),
+      LegalDocumentSection(
         title: 'Безопасность аккаунта',
         body:
             'Пользователь должен защищать доступ к аккаунту, не передавать пароль и коды восстановления третьим лицам и своевременно сообщать о подозрительной активности. Администраторы и важные пользователи могут использовать 2FA для дополнительной защиты.',
@@ -184,6 +194,16 @@ const legalDocuments = <LegalDocument>[
         title: 'Chats and selections',
         body:
             'Messages, voice notes, files and selections must be used only for work purposes related to castings, communication and agreed selection workflows. Materials from the app must not be distributed outside the allowed context without consent from the rights holder or participant.',
+      ),
+      LegalDocumentSection(
+        title: 'Paid profile placement',
+        body:
+            'PK Management paid service is placement of an approved profile in the database for the selected period: 1 month — 500 ₽, 3 months — 1400 ₽, 6 months — 2400 ₽, 12 months — 4000 ₽. Payment applies to a specific profile, not to the whole account. After a successful payment, placement is activated automatically for the paid period.',
+      ),
+      LegalDocumentSection(
+        title: 'Payments and card data',
+        body:
+            'Payments are processed by the YooKassa payment provider. PK Management does not receive or store bank card details. Refunds, cancellations and disputes are handled through support, taking into account the actually provided service and applicable payment provider rules.',
       ),
       LegalDocumentSection(
         title: 'Account security',
@@ -309,6 +329,76 @@ const legalDocuments = <LegalDocument>[
         title: 'Withdrawal',
         body:
             'A user can request account or data deletion. Some technical records may be retained for a limited period for safety, proof of consent, history of important actions, mandatory requirements or dispute handling.',
+      ),
+    ],
+  ),
+
+  LegalDocument(
+    kind: LegalDocumentKind.requisites,
+    titleRu: 'Реквизиты и контакты',
+    titleEn: 'Legal Details and Contacts',
+    route: '/requisites',
+    sectionsRu: [
+      LegalDocumentSection(
+        title: 'Исполнитель и оператор сервиса',
+        body:
+            'Полное наименование: Общество с ограниченной ответственностью «Модельное агентство “Биг Вест”». Сокращенное наименование: ООО «Модельное агентство “Биг Вест”».',
+      ),
+      LegalDocumentSection(
+        title: 'Регистрационные данные',
+        body:
+            'ИНН: 7719223552. КПП: 771901001. ОГРН: 1027739885667. Директор: Кухарь Лариса Анатольевна.',
+      ),
+      LegalDocumentSection(
+        title: 'Юридический адрес',
+        body: '105215, Москва г, Парковая 9-я ул, дом № 66, корпус 2, к.112.',
+      ),
+      LegalDocumentSection(
+        title: 'Банковские реквизиты',
+        body:
+            'Расчетный счет: 40702810200000080651. Банк: Филиал “Центральный” Банка ВТБ (ПАО) в г. Москве. Корреспондентский счет: 30101810145250000411 в Главном управлении Банка России по Центральному федеральному округу г. Москва. БИК: 044525411.',
+      ),
+      LegalDocumentSection(
+        title: 'Платная услуга',
+        body:
+            'Размещение утвержденной анкеты в базе PK Management на выбранный период: 1 месяц — 500 ₽, 3 месяца — 1400 ₽, 6 месяцев — 2400 ₽, 12 месяцев — 4000 ₽. Услуга оплачивается отдельно для каждой анкеты.',
+      ),
+      LegalDocumentSection(
+        title: 'Контакты',
+        body:
+            'Поддержка и вопросы по оплате обрабатываются через доступные каналы связи PK Management, указанные в приложении и сервисных уведомлениях. Перед финальной проверкой ЮKassa нужно добавить официальный email или телефон поддержки.',
+      ),
+    ],
+    sectionsEn: [
+      LegalDocumentSection(
+        title: 'Service operator',
+        body:
+            'Full legal name: Limited Liability Company “Model Agency Big West”. Short legal name: LLC “Model Agency Big West”.',
+      ),
+      LegalDocumentSection(
+        title: 'Registration details',
+        body:
+            'Tax ID: 7719223552. Tax registration code: 771901001. Primary state registration number: 1027739885667. Director: Larisa Anatolyevna Kukhar.',
+      ),
+      LegalDocumentSection(
+        title: 'Legal address',
+        body:
+            '105215, Moscow, 9th Parkovaya Street, building 66, building 2, office 112, Russia.',
+      ),
+      LegalDocumentSection(
+        title: 'Bank details',
+        body:
+            'Settlement account: 40702810200000080651. Bank: Central Branch of VTB Bank (PJSC) in Moscow. Correspondent account: 30101810145250000411 at the Main Department of the Bank of Russia for the Central Federal District, Moscow. BIC: 044525411.',
+      ),
+      LegalDocumentSection(
+        title: 'Paid service',
+        body:
+            'Placement of an approved profile in the PK Management database for the selected period: 1 month — 500 ₽, 3 months — 1400 ₽, 6 months — 2400 ₽, 12 months — 4000 ₽. The service is paid separately for each profile.',
+      ),
+      LegalDocumentSection(
+        title: 'Contacts',
+        body:
+            'Support and payment questions are handled through PK Management communication channels shown in the app and service notifications. Before the final YooKassa review, an official support email or phone number should be added.',
       ),
     ],
   ),
