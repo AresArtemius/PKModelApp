@@ -102,9 +102,13 @@ begin
   delete from public.telegram_support_link_codes
   where user_id = auth.uid() and consumed_at is null;
 
-  v_code := upper(encode(gen_random_bytes(4), 'hex'));
+  v_code := upper(encode(extensions.gen_random_bytes(4), 'hex'));
   insert into public.telegram_support_link_codes (user_id, code_hash, expires_at)
-  values (auth.uid(), encode(digest(v_code, 'sha256'), 'hex'), now() + interval '10 minutes');
+  values (
+    auth.uid(),
+    encode(extensions.digest(v_code, 'sha256'), 'hex'),
+    now() + interval '10 minutes'
+  );
   return v_code;
 end;
 $$;
@@ -125,7 +129,10 @@ declare
 begin
   select user_id into v_user_id
   from public.telegram_support_link_codes
-  where code_hash = encode(digest(upper(trim(p_code)), 'sha256'), 'hex')
+  where code_hash = encode(
+      extensions.digest(upper(trim(p_code)), 'sha256'),
+      'hex'
+    )
     and consumed_at is null and expires_at > now()
   for update;
 

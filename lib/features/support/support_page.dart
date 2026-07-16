@@ -165,12 +165,13 @@ class SupportPage extends ConsumerWidget {
       ref.invalidate(telegramSupportLinkProvider);
     } on PostgrestException catch (error) {
       if (!context.mounted) return;
+      debugPrint('Telegram support link failed: ${error.message}');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             ru
-                ? 'Telegram-поддержка ещё настраивается: ${error.message}'
-                : 'Telegram support is still being configured: ${error.message}',
+                ? 'Не удалось создать код подключения. Попробуйте ещё раз.'
+                : 'Could not create a connection code. Please try again.',
           ),
         ),
       );
