@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/router.dart';
 import '../../core/supabase_provider.dart';
@@ -41,6 +42,27 @@ final adminSupportMessagesProvider = FutureProvider.autoDispose
           .eq('ticket_id', ticketId)
           .order('created_at', ascending: true);
       return rows.map(_AdminSupportMessage.fromMap).toList(growable: false);
+    });
+
+final adminSupportAttachmentsProvider = FutureProvider.autoDispose
+    .family<List<_AdminSupportAttachment>, String>((ref, ticketId) async {
+      final sb = ref.read(supabaseProvider);
+      final rows = await sb
+          .from('support_attachments')
+          .select(
+            'id,original_name,mime_type,size_bytes,storage_path,created_at',
+          )
+          .eq('ticket_id', ticketId)
+          .order('created_at', ascending: true);
+      return Future.wait(
+        rows.map((row) async {
+          final path = row['storage_path'] as String;
+          final signedUrl = await sb.storage
+              .from('support-attachments')
+              .createSignedUrl(path, 900);
+          return _AdminSupportAttachment.fromMap(row, signedUrl);
+        }),
+      );
     });
 
 final adminSupportFaqProvider =
@@ -714,6 +736,7 @@ class _TicketDetail extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final messages = ref.watch(adminSupportMessagesProvider(ticket.id));
+    final attachments = ref.watch(adminSupportAttachmentsProvider(ticket.id));
     final assignedToMe = ticket.assignedTo == currentAdminId;
     final assignedElsewhere =
         ticket.assignedTo != null && ticket.assignedTo != currentAdminId;
@@ -825,6 +848,25 @@ class _TicketDetail extends ConsumerWidget {
               error: (error, _) => Center(child: Text('$error')),
             ),
           ),
+          attachments.when(
+            data: (items) => items.isEmpty
+                ? const SizedBox.shrink()
+                : Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: SizedBox(
+                      height: 112,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: items.length,
+                        separatorBuilder: (_, _) => const SizedBox(width: 10),
+                        itemBuilder: (_, index) =>
+                            _AttachmentCard(attachment: items[index]),
+                      ),
+                    ),
+                  ),
+            loading: () => const SizedBox.shrink(),
+            error: (_, _) => const SizedBox.shrink(),
+          ),
           const SizedBox(height: 12),
           TextField(
             controller: replyController,
@@ -843,6 +885,61 @@ class _TicketDetail extends ConsumerWidget {
             label: Text(sending ? 'ОТПРАВКА…' : 'ОТПРАВИТЬ ОТВЕТ'),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _AttachmentCard extends StatelessWidget {
+  const _AttachmentCard({required this.attachment});
+
+  final _AdminSupportAttachment attachment;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () => launchUrl(
+        Uri.parse(attachment.signedUrl),
+        mode: LaunchMode.externalApplication,
+      ),
+      child: Container(
+        width: 150,
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          border: Border.all(color: kBorderColor),
+          borderRadius: BorderRadius.circular(12),
+          color: const Color(0xFFF5F5F5),
+        ),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Image.network(
+              attachment.signedUrl,
+              fit: BoxFit.cover,
+              errorBuilder: (_, _, _) =>
+                  const Center(child: Icon(Icons.image_not_supported_outlined)),
+            ),
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                color: Colors.black.withValues(alpha: 0.72),
+                child: Text(
+                  attachment.originalName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -952,6 +1049,35 @@ class _AdminSupportTicket {
   final String status;
   final String priority;
   final String? assignedTo;
+}
+
+class _AdminSupportAttachment {
+  const _AdminSupportAttachment({
+    required this.id,
+    required this.originalName,
+    required this.mimeType,
+    required this.sizeBytes,
+    required this.signedUrl,
+  });
+
+  factory _AdminSupportAttachment.fromMap(
+    Map<String, dynamic> map,
+    String signedUrl,
+  ) {
+    return _AdminSupportAttachment(
+      id: map['id'] as String,
+      originalName: map['original_name'] as String,
+      mimeType: map['mime_type'] as String,
+      sizeBytes: (map['size_bytes'] as num).toInt(),
+      signedUrl: signedUrl,
+    );
+  }
+
+  final String id;
+  final String originalName;
+  final String mimeType;
+  final int sizeBytes;
+  final String signedUrl;
 }
 
 class _AdminSupportMessage {

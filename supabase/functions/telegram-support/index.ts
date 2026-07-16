@@ -13,6 +13,16 @@ type TelegramMessage = {
   chat?: { id?: number };
   from?: { id?: number; username?: string };
   text?: string;
+  caption?: string;
+  photo?: Array<{ file_id?: string; file_size?: number; width?: number; height?: number }>;
+  document?: { file_id?: string; file_name?: string; mime_type?: string; file_size?: number };
+};
+
+type TelegramIncomingFile = {
+  fileId: string;
+  name: string;
+  mimeType: string;
+  declaredSize?: number;
 };
 
 type TelegramCallback = {
@@ -87,7 +97,82 @@ async function linkedUser(chatId: number): Promise<string | null> {
   return data?.user_id ?? null;
 }
 
-async function escalate(userId: string, chatId: number, body: string) {
+async function supportAvailabilityText() {
+  const { data } = await supabase.from("support_service_settings")
+    .select("timezone,open_hour,close_hour,response_text").eq("id", true).maybeSingle();
+  const timezone = data?.timezone ?? "Europe/Moscow";
+  const openHour = data?.open_hour ?? 10;
+  const closeHour = data?.close_hour ?? 22;
+  const hour = Number(new Intl.DateTimeFormat("ru-RU", {
+    timeZone: timezone,
+    hour: "2-digit",
+    hourCycle: "h23",
+  }).format(new Date()));
+  return hour >= openHour && hour < closeHour
+    ? `Поддержка сейчас работает. Обычно отвечаем в порядке очереди до ${closeHour}:00 по Москве.`
+    : `Сейчас поддержка не работает. Мы на связи ежедневно с ${openHour}:00 до ${closeHour}:00 по Москве и ответим после открытия.`;
+}
+
+function incomingFile(message?: TelegramMessage): TelegramIncomingFile | null {
+  const photos = message?.photo ?? [];
+  const photo = photos.at(-1);
+  if (photo?.file_id) {
+    return { fileId: photo.file_id, name: `telegram_${Date.now()}.jpg`,
+      mimeType: "image/jpeg", declaredSize: photo.file_size };
+  }
+  const document = message?.document;
+  if (document?.file_id && document.mime_type?.startsWith("image/")) {
+    return { fileId: document.file_id,
+      name: document.file_name ?? `telegram_${Date.now()}`,
+      mimeType: document.mime_type, declaredSize: document.file_size };
+  }
+  return null;
+}
+
+async function storeTelegramAttachment(
+  file: TelegramIncomingFile,
+  ticketId: string,
+  messageId: string,
+  userId: string,
+) {
+  if ((file.declaredSize ?? 0) > 10 * 1024 * 1024) {
+    throw new Error("Telegram attachment is too large");
+  }
+  const fileResponse = await fetch(`https://api.telegram.org/bot${botToken}/getFile?file_id=${file.fileId}`);
+  const fileResult = await fileResponse.json();
+  const filePath = fileResult?.result?.file_path as string | undefined;
+  if (!fileResponse.ok || !filePath) throw new Error("Telegram getFile failed");
+  const download = await fetch(`https://api.telegram.org/file/bot${botToken}/${filePath}`);
+  if (!download.ok) throw new Error("Telegram file download failed");
+  const bytes = new Uint8Array(await download.arrayBuffer());
+  if (bytes.byteLength === 0 || bytes.byteLength > 10 * 1024 * 1024) {
+    throw new Error("Invalid Telegram attachment size");
+  }
+  const safeName = file.name.replace(/[^a-zA-Zа-яА-Я0-9._-]/g, "_");
+  const storagePath = `${ticketId}/${messageId}/${safeName}`;
+  const { error: uploadError } = await supabase.storage
+    .from("support-attachments")
+    .upload(storagePath, bytes, { contentType: file.mimeType, upsert: false });
+  if (uploadError) throw uploadError;
+  const { error: rowError } = await supabase.from("support_attachments").insert({
+    ticket_id: ticketId,
+    message_id: messageId,
+    uploader_id: userId,
+    source: "telegram",
+    storage_path: storagePath,
+    original_name: file.name,
+    mime_type: file.mimeType,
+    size_bytes: bytes.byteLength,
+  });
+  if (rowError) throw rowError;
+}
+
+async function escalate(
+  userId: string,
+  chatId: number,
+  body: string,
+  file?: TelegramIncomingFile | null,
+) {
   const { data: existing } = await supabase
     .from("support_tickets")
     .select("id")
@@ -112,15 +197,18 @@ async function escalate(userId: string, chatId: number, body: string) {
     if (error) throw error;
     ticketId = data.id;
   }
-  const { error } = await supabase.from("support_messages").insert({
+  const { data: messageRow, error } = await supabase.from("support_messages").insert({
     ticket_id: ticketId,
     author_id: userId,
     author_kind: "user",
     body,
     source: "telegram",
-  });
+  }).select("id").single();
   if (error) throw error;
-  await sendMessage(chatId, "Передал вопрос администратору. Ответ придёт сюда и сохранится в истории поддержки приложения.");
+  if (file) await storeTelegramAttachment(file, ticketId!, messageRow.id, userId);
+  const availability = await supportAvailabilityText();
+  await sendMessage(chatId,
+    `Передал обращение администратору. Ответ придёт сюда и сохранится в приложении.\n\n${availability}`);
 }
 
 async function handleTelegramUpdate(payload: Record<string, unknown>) {
@@ -128,8 +216,9 @@ async function handleTelegramUpdate(payload: Record<string, unknown>) {
   const message = payload.message as TelegramMessage | undefined;
   const callback = payload.callback_query as TelegramCallback | undefined;
   const chatId = message?.chat?.id ?? callback?.message?.chat?.id;
-  const text = message?.text?.trim();
-  if (!updateId || !chatId || (!text && !callback?.data)) return;
+  const file = incomingFile(message);
+  const text = (message?.text ?? message?.caption)?.trim();
+  if (!updateId || !chatId || (!text && !file && !callback?.data)) return;
 
   const { error: updateError } = await supabase
     .from("telegram_support_updates")
@@ -164,9 +253,9 @@ async function handleTelegramUpdate(payload: Record<string, unknown>) {
     }
   }
 
-  if (!text) return;
+  if (!text && !file) return;
 
-  const startCode = text.match(/^\/start(?:\s+([A-Fa-f0-9]{8}))?$/)?.[1];
+  const startCode = text?.match(/^\/start(?:\s+([A-Fa-f0-9]{8}))?$/)?.[1];
   if (startCode) {
     const { data } = await supabase.rpc("consume_telegram_support_link_code", {
       p_code: startCode,
@@ -181,14 +270,16 @@ async function handleTelegramUpdate(payload: Record<string, unknown>) {
   }
 
   if (text === "/start" || text === "/help") {
+    const availability = await supportAvailabilityText();
     await sendMessage(chatId,
-      "Выберите тему или задайте вопрос текстом. Если ответа не хватит, подключу администратора. Для персонального обращения сначала привяжите Telegram в разделе поддержки приложения.", true);
+      `Выберите тему или задайте вопрос текстом. Если ответа не хватит, подключу администратора. Для персонального обращения сначала привяжите Telegram в разделе поддержки приложения.\n\n${availability}`, true);
     return;
   }
 
   const userId = await linkedUser(chatId);
-  const wantsAdmin = /(^|\s)(администратор|оператор|человек|поддержка)(\s|$)/i.test(text);
-  const answer = wantsAdmin ? null : await faqAnswer(text);
+  const body = text || "Пользователь отправил скриншот.";
+  const wantsAdmin = file != null || /(^|\s)(администратор|оператор|человек|поддержка)(\s|$)/i.test(body);
+  const answer = wantsAdmin ? null : await faqAnswer(body);
   if (answer) {
     await sendMessage(chatId, `${answer}\n\nЕсли это не помогло, выберите связь с администратором.`, true);
     return;
@@ -198,7 +289,7 @@ async function handleTelegramUpdate(payload: Record<string, unknown>) {
       "Для передачи вопроса администратору привяжите Telegram в разделе «Помощь и поддержка» приложения. Привязка нужна, чтобы защитить данные вашего аккаунта.");
     return;
   }
-  await escalate(userId, chatId, text);
+  await escalate(userId, chatId, body, file);
 }
 
 async function handleDatabaseWebhook(payload: Record<string, unknown>) {
