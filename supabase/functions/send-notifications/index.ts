@@ -546,19 +546,105 @@ function renderEmailHtml(notification: AppNotification, text: string): string {
   const url = route && publicAppUrl
     ? `${publicAppUrl.replace(/\/$/, '')}/#${route.startsWith('/') ? route : `/${route}`}`
     : '';
-  const cta = url
-    ? `<p style="margin:28px 0 0"><a href="${escapeHtml(url)}" style="background:#1f1f1f;border-radius:999px;color:#fff;display:inline-block;font-family:Arial,sans-serif;font-size:14px;font-weight:700;letter-spacing:2px;padding:14px 24px;text-decoration:none;text-transform:uppercase">Открыть</a></p>`
+  const appBaseUrl = publicAppUrl.replace(/\/$/, '');
+  const logoUrl = appBaseUrl
+    ? `${appBaseUrl}/assets/assets/images/pk-logo-red-512.png`
     : '';
+  const isRussian = /[А-Яа-яЁё]/.test(`${notification.title} ${text}`);
+  const ctaLabel = isRussian ? 'Открыть в приложении' : 'Open in app';
+  const footerText = isRussian
+    ? 'Это сервисное уведомление PK Management. Настройки уведомлений можно изменить в личном кабинете.'
+    : 'This is a service notification from PK Management. You can change notification settings in your account.';
+  const preheader = text.replace(/\s+/g, ' ').trim().slice(0, 140);
+  const typeLabel = emailTypeLabel(notification.type, isRussian);
+  const safeTitle = escapeHtml(notification.title);
+  const safeText = escapeHtml(text).replaceAll('\n', '<br>');
+  const safeUrl = escapeHtml(url);
+  const safeLogoUrl = escapeHtml(logoUrl);
+  const cta = url
+    ? `
+      <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:28px 0 0;width:auto">
+        <tr>
+          <td bgcolor="#1d1d1d" style="border-radius:999px;text-align:center">
+            <a href="${safeUrl}" style="border:1px solid #1d1d1d;border-radius:999px;color:#ffffff;display:inline-block;font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:700;letter-spacing:1.7px;line-height:18px;padding:14px 25px;text-decoration:none;text-transform:uppercase">${ctaLabel}</a>
+          </td>
+        </tr>
+      </table>`
+    : '';
+  const brand = logoUrl
+    ? `<img src="${safeLogoUrl}" width="54" height="54" alt="PK Management" style="border:0;display:block;height:54px;max-width:54px;object-fit:contain;width:54px">`
+    : `<div style="color:#c60000;font-family:Arial,Helvetica,sans-serif;font-size:28px;font-weight:800;line-height:54px">PK</div>`;
 
-  return `
-    <div style="background:#f4f4f4;padding:32px">
-      <div style="background:#fff;border-radius:18px;color:#1f1f1f;font-family:Arial,sans-serif;margin:0 auto;max-width:560px;padding:32px">
-        <h1 style="font-size:22px;letter-spacing:2px;margin:0 0 18px;text-transform:uppercase">${escapeHtml(notification.title)}</h1>
-        <p style="font-size:16px;line-height:1.6;margin:0;white-space:pre-line">${escapeHtml(text)}</p>
-        ${cta}
-      </div>
-    </div>
-  `;
+  return `<!doctype html>
+<html lang="${isRussian ? 'ru' : 'en'}">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="x-apple-disable-message-reformatting">
+    <title>${safeTitle}</title>
+  </head>
+  <body style="background:#eeeeee;margin:0;padding:0;width:100%">
+    <div style="display:none;font-size:1px;color:#eeeeee;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden">${escapeHtml(preheader)}&#847;&zwnj;&nbsp;&#847;&zwnj;&nbsp;</div>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#eeeeee;border-collapse:collapse;width:100%">
+      <tr>
+        <td align="center" style="padding:24px 12px 36px">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border-collapse:separate;max-width:600px;width:100%">
+            <tr>
+              <td style="background:#242424;border-radius:22px 22px 0 0;padding:22px 26px">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                  <tr>
+                    <td width="68" valign="middle">${brand}</td>
+                    <td valign="middle">
+                      <div style="color:#ffffff;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:800;letter-spacing:2.2px;line-height:20px">PK MANAGEMENT</div>
+                      <div style="color:#bdbdbd;font-family:Arial,Helvetica,sans-serif;font-size:11px;letter-spacing:1.2px;line-height:18px;text-transform:uppercase">Model &amp; casting platform</div>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td style="background:#ffffff;border-left:1px solid #dedede;border-right:1px solid #dedede;padding:34px 34px 36px">
+                <div style="color:#c60000;font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:800;letter-spacing:1.8px;line-height:16px;margin:0 0 14px;text-transform:uppercase">${escapeHtml(typeLabel)}</div>
+                <h1 style="color:#202020;font-family:Arial,Helvetica,sans-serif;font-size:24px;font-weight:800;letter-spacing:1.2px;line-height:31px;margin:0 0 18px;text-transform:uppercase">${safeTitle}</h1>
+                <div style="background:#f6f6f6;border-left:4px solid #c60000;border-radius:0 14px 14px 0;color:#404040;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:25px;padding:20px 22px">${safeText}</div>
+                ${cta}
+              </td>
+            </tr>
+            <tr>
+              <td style="background:#f8f8f8;border:1px solid #dedede;border-radius:0 0 22px 22px;border-top:0;padding:21px 34px 24px">
+                <p style="color:#777777;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;margin:0">${footerText}</p>
+                <p style="color:#aaaaaa;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:17px;margin:10px 0 0">© ${new Date().getUTCFullYear()} PK Management · <a href="${escapeHtml(appBaseUrl)}" style="color:#777777;text-decoration:underline">app.pk.management</a></p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+}
+
+function emailTypeLabel(type: string, isRussian: boolean): string {
+  const normalized = type.trim().toLowerCase();
+  if (normalized.includes('support')) {
+    return isRussian ? 'Поддержка' : 'Support';
+  }
+  if (normalized.includes('casting')) {
+    return isRussian ? 'Кастинг' : 'Casting';
+  }
+  if (normalized.includes('chat') || normalized.includes('message')) {
+    return isRussian ? 'Новое сообщение' : 'New message';
+  }
+  if (normalized.includes('profile') || normalized.includes('moderation')) {
+    return isRussian ? 'Анкета' : 'Profile';
+  }
+  if (normalized.includes('security') || normalized.includes('email_change')) {
+    return isRussian ? 'Безопасность' : 'Security';
+  }
+  if (normalized.includes('payment') || normalized.includes('billing')) {
+    return isRussian ? 'Оплата' : 'Billing';
+  }
+  return isRussian ? 'Уведомление' : 'Notification';
 }
 
 async function getFcmAccessToken(): Promise<string> {
