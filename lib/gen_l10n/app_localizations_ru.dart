@@ -9,7 +9,7 @@ class AppLocalizationsRu extends AppLocalizations {
   AppLocalizationsRu([String locale = 'ru']) : super(locale);
 
   @override
-  String get appTitle => 'ModelApp';
+  String get appTitle => 'PK Management';
 
   @override
   String get loginTitle => 'Вход';

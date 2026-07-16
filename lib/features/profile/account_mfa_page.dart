@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/app_logger.dart';
 import '../../core/mfa_recovery_code_service.dart';
 import '../../core/roles_provider.dart';
 import '../../core/router.dart';
@@ -371,43 +372,48 @@ class _AccountMfaPageState extends ConsumerState<AccountMfaPage> {
     final raw = error.toString();
     if (raw.contains('mfa_totp_enroll_not_enabled') ||
         raw.contains('MFA') && raw.contains('disabled')) {
+      final reference = AppLogger.report(
+        'TOTP MFA is unavailable',
+        error: error,
+        prefix: 'SEC',
+      );
       return _isRussian
-          ? 'TOTP MFA не включена в настройках Supabase Auth.'
-          : 'TOTP MFA is not enabled in Supabase Auth settings.';
+          ? 'Двухфакторная защита временно недоступна. Код: $reference'
+          : 'Two-factor authentication is temporarily unavailable. Code: $reference';
     }
     if (raw.contains('mfa_verification_failed')) {
       return _isRussian ? 'Неверный 2FA код.' : 'Invalid 2FA code.';
     }
     if (raw.contains('rotate_my_mfa_recovery_codes') ||
         raw.contains('mfa_recovery_codes')) {
+      final reference = AppLogger.report(
+        'MFA recovery codes are unavailable',
+        error: error,
+        prefix: 'SEC',
+      );
       return _isRussian
-          ? 'Recovery codes пока не настроены на сервере. Нужно применить mfa_recovery_codes.sql.'
-          : 'Recovery codes are not configured on the server yet. Apply mfa_recovery_codes.sql.';
+          ? 'Резервные коды временно недоступны. Код: $reference'
+          : 'Recovery codes are temporarily unavailable. Code: $reference';
     }
-    return raw;
+    final reference = AppLogger.report(
+      'Account security operation failed',
+      error: error,
+      prefix: 'SEC',
+    );
+    return _isRussian
+        ? 'Не удалось выполнить операцию безопасности. Код: $reference'
+        : 'Could not complete the security operation. Code: $reference';
   }
 
   String _postgrestErrorText(PostgrestException error) {
-    final parts = <String>[];
-    if (error.code != null && error.code!.trim().isNotEmpty) {
-      parts.add('code: ${error.code}');
-    }
-    if (error.message.trim().isNotEmpty) {
-      parts.add('message: ${error.message}');
-    }
-    final details = error.details?.toString().trim() ?? '';
-    if (details.isNotEmpty) {
-      parts.add('details: $details');
-    }
-    final hint = error.hint?.toString().trim() ?? '';
-    if (hint.isNotEmpty) {
-      parts.add('hint: $hint');
-    }
-    final text = parts.join('\n');
-    if (text.isEmpty) return error.toString();
+    final reference = AppLogger.report(
+      'Account security database operation failed',
+      error: error,
+      prefix: 'SEC',
+    );
     return _isRussian
-        ? 'Ошибка Supabase при операции безопасности:\n$text'
-        : 'Supabase error during security operation:\n$text';
+        ? 'Не удалось выполнить операцию безопасности. Код: $reference'
+        : 'Could not complete the security operation. Code: $reference';
   }
 
   @override

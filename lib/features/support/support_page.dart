@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/app_logger.dart';
 import '../../core/router.dart';
 import '../../core/supabase_compat.dart';
 import '../../core/supabase_provider.dart';
@@ -302,8 +303,19 @@ class SupportPage extends ConsumerWidget {
       );
     } on PostgrestException catch (error) {
       if (!context.mounted) return;
+      final reference = AppLogger.report(
+        'Support ticket delete failed',
+        error: error,
+        prefix: 'SUP',
+      );
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Не удалось удалить: ${error.message}')),
+        SnackBar(
+          content: Text(
+            ru
+                ? 'Не удалось удалить обращение. Код: $reference'
+                : 'Could not delete request. Code: $reference',
+          ),
+        ),
       );
     }
   }
@@ -343,12 +355,17 @@ class SupportPage extends ConsumerWidget {
       final setupRequired =
           SupabaseCompat.isMissingRelation(error, const ['support_tickets']) ||
           SupabaseCompat.isMissingRpc(error, 'create_support_ticket');
+      final reference = AppLogger.report(
+        'Support ticket creation failed',
+        error: error,
+        prefix: 'SUP',
+      );
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             setupRequired
-                ? 'Центр поддержки еще настраивается. Примените support_center_mvp.sql.'
-                : 'Не удалось отправить обращение. Попробуйте еще раз.',
+                ? 'Центр поддержки временно недоступен. Код: $reference'
+                : 'Не удалось отправить обращение. Код: $reference',
           ),
         ),
       );
@@ -815,12 +832,17 @@ class _SupportTicketDialogState extends ConsumerState<_SupportTicketDialog> {
       );
     } on PostgrestException catch (error) {
       if (!mounted) return;
+      final reference = AppLogger.report(
+        'Support reply failed',
+        error: error,
+        prefix: 'SUP',
+      );
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             widget.ru
-                ? 'Не удалось отправить ответ: ${error.message}'
-                : 'Could not send reply: ${error.message}',
+                ? 'Не удалось отправить ответ. Код: $reference'
+                : 'Could not send reply. Code: $reference',
           ),
         ),
       );

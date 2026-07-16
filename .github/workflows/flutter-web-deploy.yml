@@ -93,6 +93,15 @@ jobs:
           --dart-define=FIREBASE_WEB_MEASUREMENT_ID=$FIREBASE_WEB_MEASUREMENT_ID
           --dart-define=FIREBASE_WEB_VAPID_KEY=$FIREBASE_WEB_VAPID_KEY
 
+      - name: Enforce web bundle budget
+        run: |
+          main_js_bytes=$(stat -c%s build/web/main.dart.js)
+          echo "main.dart.js: $main_js_bytes bytes"
+          if [ "$main_js_bytes" -gt 8000000 ]; then
+            echo "main.dart.js exceeded the 8 MB release budget."
+            exit 1
+          fi
+
       - name: Configure custom domain
         run: printf 'app.pk.management\n' > build/web/CNAME
 
@@ -113,6 +122,23 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
+      - name: Checkout smoke tests
+        uses: actions/checkout@v4
+
       - name: Deploy Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+      - name: Smoke test production
+        run: bash tool/web_smoke.sh https://app.pk.management
+
+      - name: Install production browser tests
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run production browser smoke
+        env:
+          WEB_BASE_URL: https://app.pk.management
+        run: npm run test:e2e

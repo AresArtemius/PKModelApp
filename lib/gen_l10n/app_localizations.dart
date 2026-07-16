@@ -101,7 +101,7 @@ abstract class AppLocalizations {
   /// No description provided for @appTitle.
   ///
   /// In en, this message translates to:
-  /// **'ModelApp'**
+  /// **'PK Management'**
   String get appTitle;
 
   /// No description provided for @loginTitle.

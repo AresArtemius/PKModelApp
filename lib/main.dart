@@ -65,7 +65,7 @@ const int _kWebImageCacheCount = 450;
 const int _kMobileImageCacheCount = 280;
 const int _kWebImageCacheMb = 180;
 const int _kMobileImageCacheMb = 96;
-const Duration _kStartupSplashDuration = Duration(milliseconds: 2200);
+const Duration _kStartupSplashDuration = Duration(milliseconds: 700);
 
 void _configureImageCache() {
   final imageCache = PaintingBinding.instance.imageCache;
@@ -152,8 +152,8 @@ void _runBootstrap(_BootstrapErrorKind kind, {String? details}) {
       return (
         title: t.bootstrapInitErrorTitle,
         message: d.isEmpty
-            ? '${t.bootstrapInitErrorMessage}\nДетали: неизвестная ошибка инициализации.'
-            : '${t.bootstrapInitErrorMessage}\n$d',
+            ? t.bootstrapInitErrorMessage
+            : '${t.bootstrapInitErrorMessage}\nКод: $d',
       );
   }
 }
@@ -192,12 +192,13 @@ Future<void> main() async {
           anonKey: AppConfig.supabaseAnonKey,
         );
       } catch (e, stack) {
-        AppLogger.error(
+        final reference = AppLogger.report(
           'Supabase initialization failed',
           error: e,
           stackTrace: stack,
+          prefix: 'INI',
         );
-        _runBootstrap(_BootstrapErrorKind.init, details: e.toString());
+        _runBootstrap(_BootstrapErrorKind.init, details: reference);
         return;
       }
 
@@ -205,9 +206,14 @@ Future<void> main() async {
       appStarted = true;
     },
     (error, stack) {
-      AppLogger.error('App zone error', error: error, stackTrace: stack);
+      final reference = AppLogger.report(
+        'App zone error',
+        error: error,
+        stackTrace: stack,
+        prefix: 'APP',
+      );
       if (!appStarted) {
-        _runBootstrap(_BootstrapErrorKind.init, details: error.toString());
+        _runBootstrap(_BootstrapErrorKind.init, details: reference);
         return;
       }
       FlutterError.reportError(

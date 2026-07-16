@@ -32,8 +32,41 @@
 
   <title>PK Management</title>
   <link rel="manifest" href="manifest.json">
+  <style>
+    html, body { height: 100%; margin: 0; background: #e7e7e7; }
+    #app-loading {
+      align-items: center;
+      color: #252525;
+      display: flex;
+      font: 600 14px/1.4 Arial, sans-serif;
+      inset: 0;
+      justify-content: center;
+      letter-spacing: 1.2px;
+      position: fixed;
+    }
+    #app-loading::before {
+      animation: loading-pulse 1s ease-in-out infinite alternate;
+      background: #be0000;
+      border-radius: 50%;
+      content: '';
+      height: 12px;
+      margin-right: 12px;
+      width: 12px;
+    }
+    @keyframes loading-pulse { to { opacity: .28; transform: scale(.82); } }
+  </style>
 </head>
 <body>
+  <div id="app-loading" role="status" aria-live="polite">PK MANAGEMENT ЗАГРУЖАЕТСЯ</div>
+  <script>
+    const loadingObserver = new MutationObserver(() => {
+      if (document.querySelector('flutter-view')) {
+        document.getElementById('app-loading')?.remove();
+        loadingObserver.disconnect();
+      }
+    });
+    loadingObserver.observe(document.body, { childList: true, subtree: true });
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

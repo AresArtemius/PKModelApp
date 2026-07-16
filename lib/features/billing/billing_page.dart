@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/app_logger.dart';
 import '../../core/supabase_provider.dart';
 import '../../core/roles_provider.dart';
 import '../../ui/brand/brand_admin_header.dart';
@@ -167,27 +168,31 @@ class _BillingPageState extends ConsumerState<BillingPage> {
   String _paymentErrorText(Object error) {
     final raw = error.toString();
     final lower = raw.toLowerCase();
+    final reference = AppLogger.report(
+      'Payment creation failed',
+      error: error,
+      prefix: 'PAY',
+    );
     if (lower.contains('function not found') ||
         lower.contains('failed to send a request')) {
       return _isRussian
-          ? 'Платежная функция еще не развернута в Supabase. Нужно deploy create-yookassa-payment.'
-          : 'Payment function is not deployed yet.';
+          ? 'Сервис оплаты временно недоступен. Попробуйте позже. Код: $reference'
+          : 'Payment service is temporarily unavailable. Code: $reference';
     }
     if (error is FunctionException) {
-      final details = error.details ?? error.reasonPhrase ?? error.toString();
       return _isRussian
-          ? 'Ошибка платежной функции: $details'
-          : 'Payment function error: $details';
+          ? 'Не удалось начать оплату. Попробуйте ещё раз. Код: $reference'
+          : 'Could not start payment. Please try again. Code: $reference';
     }
     if (lower.contains('credentials')) {
       return _isRussian
-          ? 'ЮKassa еще не настроена на сервере: проверьте SHOP_ID, SECRET_KEY и redeploy Edge Function.'
-          : 'YooKassa is not configured on the server.';
+          ? 'Сервис оплаты временно недоступен. Код: $reference'
+          : 'Payment service is temporarily unavailable. Code: $reference';
     }
     if (lower.contains('billing product not found')) {
       return _isRussian
-          ? 'Тариф не найден в базе. Проверьте, что yookassa_billing_flow.sql и profile_billing_mvp.sql применены.'
-          : 'Billing product was not found.';
+          ? 'Выбранный тариф временно недоступен. Код: $reference'
+          : 'The selected plan is temporarily unavailable. Code: $reference';
     }
     if (lower.contains('profile not found') ||
         lower.contains('access denied')) {
@@ -196,8 +201,8 @@ class _BillingPageState extends ConsumerState<BillingPage> {
           : 'Could not create payment for this profile.';
     }
     return _isRussian
-        ? 'Не удалось начать оплату: $raw'
-        : 'Could not start payment: $raw';
+        ? 'Не удалось начать оплату. Попробуйте ещё раз. Код: $reference'
+        : 'Could not start payment. Please try again. Code: $reference';
   }
 
   @override
