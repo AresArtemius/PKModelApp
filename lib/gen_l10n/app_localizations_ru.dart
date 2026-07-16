@@ -1010,7 +1010,7 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get profileErrorLimitReached =>
-      'Лимит анкет по текущему тарифу исчерпан. Перейдите на Model Pro или удалите лишнюю анкету.';
+      'Достигнут лимит анкет. Запросите дополнительное место у администратора.';
 
   @override
   String get profileErrorNoUser => 'Нет пользователя';

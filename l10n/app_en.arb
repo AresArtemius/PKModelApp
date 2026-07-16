@@ -350,7 +350,7 @@
 "profileErrorNameRequired": "Enter your name",
 "profileErrorSaveFailed": "Couldn’t save. Please try again.",
 "profileErrorDeleteFailed": "Couldn’t delete. Please try again.",
-"profileErrorLimitReached": "Your current plan profile limit is reached. Upgrade to Model Pro or remove an extra profile.",
+"profileErrorLimitReached": "Your profile limit is reached. Ask an administrator for an extra slot.",
 "profileErrorNoUser": "No user",
 "profileErrorFullNameRequired": "Fill in your full name before submitting",
 "profileErrorAgeRequired": "Add birth date",

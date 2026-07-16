@@ -14,6 +14,7 @@ import '../features/admin/selection_admin_page.dart';
 import '../features/admin/selection_casting_page.dart';
 import '../features/admin/safety_admin_page.dart';
 import '../features/admin/casting_agent_applications_page.dart';
+import '../features/admin/profile_slot_requests_page.dart';
 import '../features/analytics/profile_analytics_page.dart';
 import '../features/auth/email_verification_page.dart';
 import '../features/auth/login_page.dart';
@@ -85,6 +86,7 @@ abstract class Routes {
   static const castingAgentApplicationsAdmin =
       '/casting_agent_applications_admin';
   static const accountMergeRequestsAdmin = '/account_merge_requests_admin';
+  static const profileSlotRequestsAdmin = '/profile_slot_requests_admin';
   static const adminUsers = '/admin_users';
   static const adminProfiles = '/admin_profiles';
   static const adminSupport = '/admin_support';
@@ -136,6 +138,7 @@ class AppShell extends StatelessWidget {
     if (path.startsWith(Routes.moderationAdmin)) return 4;
     if (path.startsWith(Routes.castingAgentApplicationsAdmin)) return 4;
     if (path.startsWith(Routes.accountMergeRequestsAdmin)) return 4;
+    if (path.startsWith(Routes.profileSlotRequestsAdmin)) return 4;
     if (path.startsWith(Routes.adminUsers)) return 4;
     if (path.startsWith(Routes.adminProfiles)) return 4;
     if (path.startsWith(Routes.adminSupport)) return 4;
@@ -759,6 +762,10 @@ final List<RouteBase> appRoutes = [
       GoRoute(
         path: Routes.accountMergeRequestsAdmin,
         builder: (context, state) => const AccountMergeRequestsPage(),
+      ),
+      GoRoute(
+        path: Routes.profileSlotRequestsAdmin,
+        builder: (context, state) => const ProfileSlotRequestsPage(),
       ),
       GoRoute(
         path: Routes.adminUsers,

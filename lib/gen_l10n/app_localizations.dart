@@ -1967,7 +1967,7 @@ abstract class AppLocalizations {
   /// No description provided for @profileErrorLimitReached.
   ///
   /// In en, this message translates to:
-  /// **'Your current plan profile limit is reached. Upgrade to Model Pro or remove an extra profile.'**
+  /// **'Your profile limit is reached. Ask an administrator for an extra slot.'**
   String get profileErrorLimitReached;
 
   /// No description provided for @profileErrorNoUser.

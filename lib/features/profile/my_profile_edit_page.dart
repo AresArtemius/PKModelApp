@@ -900,13 +900,10 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
 
   Future<void> _saveExistingProfile(MyProfileState base) async {
     await _runIfIdle(() async {
-      await _saveAndMaybeSubmit(base, submitForReview: false);
-    });
-  }
-
-  Future<void> _submitExistingProfile(MyProfileState base) async {
-    await _runIfIdle(() async {
-      await _saveAndMaybeSubmit(base, submitForReview: true);
+      await _saveAndMaybeSubmit(
+        base,
+        submitForReview: base.status != ProfileStatus.approved,
+      );
     });
   }
 
@@ -1724,11 +1721,6 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
         style: BrandPillStyle.dark,
         onTap: _isBusy ? null : () => _saveExistingProfile(base),
       );
-      addButton(
-        label: t.profileSubmitUpper,
-        style: BrandPillStyle.light,
-        onTap: _isBusy ? null : () => _submitExistingProfile(base),
-      );
       if (showDelete) {
         addButton(
           label: t.profileDeleteUpper,
@@ -2256,18 +2248,6 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
                                       onTap: _isBusy
                                           ? null
                                           : () => _saveExistingProfile(base),
-                                    ),
-                                  ),
-                                  const SizedBox(height: kGap10),
-                                  SizedBox(
-                                    width: double.infinity,
-                                    height: BrandTheme.pillHeight,
-                                    child: BrandPillButton(
-                                      label: t.profileSubmitUpper,
-                                      style: BrandPillStyle.light,
-                                      onTap: _isBusy
-                                          ? null
-                                          : () => _submitExistingProfile(base),
                                     ),
                                   ),
                                   if (showDelete) ...[

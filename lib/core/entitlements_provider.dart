@@ -40,7 +40,6 @@ class AccountEntitlements {
     required this.canUseAgentNotes,
     required this.canBoostProfiles,
     required this.canUseSelectionChat,
-    required this.maxPublishedProfiles,
     required this.includedProfileBoosts,
   });
 
@@ -54,7 +53,6 @@ class AccountEntitlements {
   final bool canUseAgentNotes;
   final bool canBoostProfiles;
   final bool canUseSelectionChat;
-  final int? maxPublishedProfiles;
   final int includedProfileBoosts;
 
   bool get hasSelectionSizeLimit => maxProfilesPerSelection != null;
@@ -77,7 +75,6 @@ class AccountEntitlements {
       canUseAgentNotes: false,
       canBoostProfiles: false,
       canUseSelectionChat: false,
-      maxPublishedProfiles: 2,
       includedProfileBoosts: 0,
     );
   }
@@ -99,7 +96,6 @@ class AccountEntitlements {
         canUseAgentNotes: true,
         canBoostProfiles: true,
         canUseSelectionChat: true,
-        maxPublishedProfiles: null,
         includedProfileBoosts: 10,
       );
     }
@@ -118,7 +114,6 @@ class AccountEntitlements {
         canUseAgentNotes: false,
         canBoostProfiles: true,
         canUseSelectionChat: true,
-        maxPublishedProfiles: 5,
         includedProfileBoosts: 3,
       ),
       BillingPlan.castingAgentPro => AccountEntitlements(
@@ -132,7 +127,6 @@ class AccountEntitlements {
         canUseAgentNotes: true,
         canBoostProfiles: false,
         canUseSelectionChat: true,
-        maxPublishedProfiles: null,
         includedProfileBoosts: 0,
       ),
       BillingPlan.agencyAdmin => AccountEntitlements(
@@ -146,7 +140,6 @@ class AccountEntitlements {
         canUseAgentNotes: true,
         canBoostProfiles: true,
         canUseSelectionChat: true,
-        maxPublishedProfiles: null,
         includedProfileBoosts: 10,
       ),
       BillingPlan.free => AccountEntitlements.free(role),

@@ -275,6 +275,19 @@ class AdminPage extends ConsumerWidget {
                     onTap: () => context.go(Routes.accountMergeRequestsAdmin),
                   ),
                   _AdminAction(
+                    label: ru ? 'ДОПОЛНИТЕЛЬНЫЕ АНКЕТЫ' : 'EXTRA PROFILES',
+                    description: ru
+                        ? 'Запросы на увеличение лимита'
+                        : 'Profile limit requests',
+                    icon: Icons.library_add_rounded,
+                    group: _AdminActionGroup.queue,
+                    badge: countsAsync.maybeWhen(
+                      data: (value) => value.profileSlotRequests,
+                      orElse: () => 0,
+                    ),
+                    onTap: () => context.go(Routes.profileSlotRequestsAdmin),
+                  ),
+                  _AdminAction(
                     label: t.safetyAdminUpper,
                     description: ru
                         ? 'Жалобы и проверки'

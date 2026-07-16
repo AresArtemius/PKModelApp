@@ -1009,7 +1009,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get profileErrorLimitReached =>
-      'Your current plan profile limit is reached. Upgrade to Model Pro or remove an extra profile.';
+      'Your profile limit is reached. Ask an administrator for an extra slot.';
 
   @override
   String get profileErrorNoUser => 'No user';

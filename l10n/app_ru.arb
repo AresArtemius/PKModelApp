@@ -351,7 +351,7 @@
 "profileErrorNameRequired": "Заполни имя",
 "profileErrorSaveFailed": "Не удалось сохранить. Попробуйте ещё раз.",
 "profileErrorDeleteFailed": "Не удалось удалить. Попробуйте ещё раз.",
-"profileErrorLimitReached": "Лимит анкет по текущему тарифу исчерпан. Перейдите на Model Pro или удалите лишнюю анкету.",
+"profileErrorLimitReached": "Достигнут лимит анкет. Запросите дополнительное место у администратора.",
 "profileErrorNoUser": "Нет пользователя",
 "profileErrorFullNameRequired": "Заполни ФИО перед отправкой",
 "profileErrorAgeRequired": "Добавьте дату рождения",

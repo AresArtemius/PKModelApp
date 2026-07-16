@@ -9,6 +9,7 @@ class AdminDashboardCounts {
     this.moderation = 0,
     this.agentApplications = 0,
     this.accountMerges = 0,
+    this.profileSlotRequests = 0,
     this.safety = 0,
     this.overdueTasks = 0,
     this.criticalTasks = 0,
@@ -18,12 +19,18 @@ class AdminDashboardCounts {
   final int moderation;
   final int agentApplications;
   final int accountMerges;
+  final int profileSlotRequests;
   final int safety;
   final int overdueTasks;
   final int criticalTasks;
   final int myOverdueTasks;
 
-  int get total => moderation + agentApplications + accountMerges + safety;
+  int get total =>
+      moderation +
+      agentApplications +
+      accountMerges +
+      profileSlotRequests +
+      safety;
 }
 
 final adminDashboardCountsProvider =
@@ -35,6 +42,7 @@ final adminDashboardCountsProvider =
         _countPendingProfiles(sb),
         _countPendingRows(sb, 'casting_agent_applications'),
         _countPendingRows(sb, 'account_merge_requests'),
+        _countPendingRows(sb, 'profile_slot_requests'),
         _countOpenSafetyReports(sb),
         _countOverdueAdminTasks(sb),
         _countCriticalAdminTasks(sb),
@@ -45,10 +53,11 @@ final adminDashboardCountsProvider =
         moderation: values[0],
         agentApplications: values[1],
         accountMerges: values[2],
-        safety: values[3],
-        overdueTasks: values[4],
-        criticalTasks: values[5],
-        myOverdueTasks: values[6],
+        profileSlotRequests: values[3],
+        safety: values[4],
+        overdueTasks: values[5],
+        criticalTasks: values[6],
+        myOverdueTasks: values[7],
       );
     });
 

@@ -4,7 +4,6 @@ import 'package:modelapp/features/profile/profile_model.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/auth_providers.dart';
-import '../../core/entitlements_provider.dart';
 import '../../core/roles_provider.dart';
 import '../../core/supabase_compat.dart';
 import 'profile_supabase_schema.dart';
@@ -53,6 +52,7 @@ class MyProfileController
   static const int _heightMax = 220;
   static const int _measureMin = 10;
   static const int _measureMax = 200;
+  static const int defaultProfileLimit = 4;
 
   SupabaseClient get _sb => ref.read(supabaseProvider);
 
@@ -175,9 +175,19 @@ class MyProfileController
     final isAdmin = await ref.read(isAdminProvider.future);
     if (isAdmin) return;
 
-    final entitlements = await ref.read(accountEntitlementsProvider.future);
-    final limit = entitlements.maxPublishedProfiles;
-    if (limit == null) return;
+    var limit = defaultProfileLimit;
+    try {
+      final data = await _sb.rpc('my_profile_creation_capacity');
+      final rows = data is List ? data : const [];
+      if (rows.isNotEmpty && rows.first is Map) {
+        final row = Map<String, dynamic>.from(rows.first as Map);
+        limit = (row['profile_limit'] as num?)?.toInt() ?? limit;
+      }
+    } on PostgrestException catch (e) {
+      if (!SupabaseCompat.isMissingRpc(e, 'my_profile_creation_capacity')) {
+        rethrow;
+      }
+    }
 
     final count = await _sb
         .from(ProfileSupabaseSchema.table)

@@ -22,6 +22,7 @@ import 'account_profile_edit_page.dart';
 import 'my_profile_controller.dart';
 import 'my_profile_edit_page.dart';
 import 'profile_media_upload_queue.dart';
+import 'profile_capacity_provider.dart';
 import 'profile_model.dart';
 import 'profile_type_selection_page.dart';
 
@@ -137,7 +138,29 @@ class MyProfilePage extends ConsumerWidget {
     );
   }
 
-  Future<void> _openTypeSelector(BuildContext context) async {
+  Future<void> _openTypeSelector(BuildContext context, WidgetRef ref) async {
+    final isAdmin = await ref.read(isAdminProvider.future);
+    if (!context.mounted) return;
+    if (isAdmin) {
+      final selected = await Navigator.of(context)
+          .push<ProfessionalProfileType>(
+            MaterialPageRoute(builder: (_) => const ProfileTypeSelectionPage()),
+          );
+      if (!context.mounted || selected == null) return;
+      _openEditor(
+        context,
+        startBlank: true,
+        initial: null,
+        initialProfileType: selected,
+      );
+      return;
+    }
+    final capacity = await ref.read(profileCreationCapacityProvider.future);
+    if (!context.mounted) return;
+    if (!capacity.canCreate) {
+      await _showProfileLimitDialog(context, ref, capacity);
+      return;
+    }
     final selected = await Navigator.of(context).push<ProfessionalProfileType>(
       MaterialPageRoute(builder: (_) => const ProfileTypeSelectionPage()),
     );
@@ -147,6 +170,68 @@ class MyProfilePage extends ConsumerWidget {
       startBlank: true,
       initial: null,
       initialProfileType: selected,
+    );
+  }
+
+  Future<void> _showProfileLimitDialog(
+    BuildContext context,
+    WidgetRef ref,
+    ProfileCreationCapacity capacity,
+  ) async {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(ru ? 'Лимит анкет' : 'Profile limit'),
+        content: Text(
+          capacity.pendingRequest
+              ? (ru
+                    ? 'Запрос на дополнительное место уже отправлен администратору.'
+                    : 'Your request for an extra slot is already pending.')
+              : (ru
+                    ? 'Можно создать до ${capacity.limit} анкет. Отправьте запрос администратору, чтобы добавить ещё одну.'
+                    : 'You can create up to ${capacity.limit} profiles. Ask an administrator for one more slot.'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text(ru ? 'ЗАКРЫТЬ' : 'CLOSE'),
+          ),
+          if (!capacity.pendingRequest)
+            FilledButton(
+              onPressed: () async {
+                try {
+                  await requestExtraProfileSlot(ref);
+                  if (dialogContext.mounted) Navigator.of(dialogContext).pop();
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          ru
+                              ? 'Запрос отправлен администратору.'
+                              : 'Request sent to the administrator.',
+                        ),
+                      ),
+                    );
+                  }
+                } catch (_) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          ru
+                              ? 'Не удалось отправить запрос. Попробуйте позже.'
+                              : 'Could not send the request. Try again later.',
+                        ),
+                      ),
+                    );
+                  }
+                }
+              },
+              child: Text(ru ? 'ОТПРАВИТЬ ЗАПРОС' : 'SEND REQUEST'),
+            ),
+        ],
+      ),
     );
   }
 
@@ -278,7 +363,7 @@ class MyProfilePage extends ConsumerWidget {
       children: [
         _AddProfileAction(
           label: profiles.isEmpty ? t.profileCreateUpper : t.addProfileUpper,
-          onTap: () => _openTypeSelector(context),
+          onTap: () => _openTypeSelector(context, ref),
           onLogout: logout,
           logoutLabel: t.logoutUpper,
         ),
@@ -328,7 +413,7 @@ class MyProfilePage extends ConsumerWidget {
                         label: profiles.isEmpty
                             ? t.profileCreateUpper
                             : t.addProfileUpper,
-                        onTap: () => _openTypeSelector(context),
+                        onTap: () => _openTypeSelector(context, ref),
                         onLogout: logout,
                         logoutLabel: t.logoutUpper,
                       ),
@@ -336,7 +421,7 @@ class MyProfilePage extends ConsumerWidget {
                       if (profiles.isEmpty)
                         _DesktopEmptyProfilesCard(
                           title: t.profileCreateUpper,
-                          onTap: () => _openTypeSelector(context),
+                          onTap: () => _openTypeSelector(context, ref),
                         )
                       else
                         ..._profileCards(context, profiles, uploads, ref),
