@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -41,6 +42,28 @@ final supportTicketMessagesProvider = FutureProvider.autoDispose
           .eq('ticket_id', ticketId)
           .order('created_at', ascending: true);
       return rows.map(SupportTicketMessage.fromMap).toList(growable: false);
+    });
+
+final supportTicketAttachmentsProvider = FutureProvider.autoDispose
+    .family<List<SupportAttachment>, String>((ref, ticketId) async {
+      final sb = ref.read(supabaseProvider);
+      final rows = await sb
+          .from('support_attachments')
+          .select('id,original_name,storage_path,created_at')
+          .eq('ticket_id', ticketId)
+          .order('created_at', ascending: true);
+      return Future.wait(
+        rows.map((row) async {
+          final path = row['storage_path'] as String;
+          final url = await sb.storage
+              .from('support-attachments')
+              .createSignedUrl(path, 900);
+          return SupportAttachment(
+            name: row['original_name'] as String,
+            signedUrl: url,
+          );
+        }),
+      );
     });
 
 final telegramSupportLinkProvider = FutureProvider.autoDispose<bool>((
@@ -98,6 +121,52 @@ class SupportTicketMessage {
 
   final String authorKind;
   final String body;
+}
+
+class SupportAttachment {
+  const SupportAttachment({required this.name, required this.signedUrl});
+
+  final String name;
+  final String signedUrl;
+}
+
+Future<void> _uploadSupportAttachment(
+  SupabaseClient sb,
+  String ticketId,
+  PlatformFile file, {
+  String? messageId,
+}) async {
+  final bytes = file.bytes;
+  if (bytes == null || bytes.isEmpty || bytes.length > 10 * 1024 * 1024) {
+    throw const FormatException('Invalid support attachment');
+  }
+  final userId = sb.auth.currentUser!.id;
+  final safeName = file.name.replaceAll(RegExp(r'[^a-zA-Zа-яА-Я0-9._-]'), '_');
+  final path =
+      '$ticketId/$userId/${DateTime.now().microsecondsSinceEpoch}_$safeName';
+  final mimeType = switch (file.extension?.toLowerCase()) {
+    'png' => 'image/png',
+    'webp' => 'image/webp',
+    'heic' => 'image/heic',
+    _ => 'image/jpeg',
+  };
+  await sb.storage
+      .from('support-attachments')
+      .uploadBinary(
+        path,
+        bytes,
+        fileOptions: FileOptions(contentType: mimeType),
+      );
+  await sb.from('support_attachments').insert({
+    'ticket_id': ticketId,
+    'message_id': messageId,
+    'uploader_id': userId,
+    'source': 'in_app',
+    'storage_path': path,
+    'original_name': file.name,
+    'mime_type': mimeType,
+    'size_bytes': bytes.length,
+  });
 }
 
 class SupportPage extends ConsumerWidget {
@@ -247,7 +316,7 @@ class SupportPage extends ConsumerWidget {
     if (draft == null || !context.mounted) return;
 
     try {
-      await ref
+      final ticketId = await ref
           .read(supabaseProvider)
           .rpc(
             'create_support_ticket',
@@ -257,6 +326,13 @@ class SupportPage extends ConsumerWidget {
               'p_message': draft.message,
             },
           );
+      if (draft.attachment != null) {
+        await _uploadSupportAttachment(
+          ref.read(supabaseProvider),
+          ticketId.toString(),
+          draft.attachment!,
+        );
+      }
       ref.invalidate(supportTicketsProvider);
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -681,6 +757,7 @@ class _UnreadBadge extends StatelessWidget {
 class _SupportTicketDialogState extends ConsumerState<_SupportTicketDialog> {
   final _replyController = TextEditingController();
   bool _sending = false;
+  PlatformFile? _attachment;
 
   @override
   void initState() {
@@ -698,19 +775,33 @@ class _SupportTicketDialogState extends ConsumerState<_SupportTicketDialog> {
 
   Future<void> _sendReply() async {
     final body = _replyController.text.trim();
-    if (body.isEmpty || _sending) return;
+    if ((body.isEmpty && _attachment == null) || _sending) return;
     setState(() => _sending = true);
     try {
       final sb = ref.read(supabaseProvider);
-      await sb.from('support_messages').insert({
-        'ticket_id': widget.ticket.id,
-        'author_id': sb.auth.currentUser?.id,
-        'author_kind': 'user',
-        'body': body,
-        'source': 'in_app',
-      });
+      final row = await sb
+          .from('support_messages')
+          .insert({
+            'ticket_id': widget.ticket.id,
+            'author_id': sb.auth.currentUser?.id,
+            'author_kind': 'user',
+            'body': body.isEmpty ? 'Пользователь отправил скриншот.' : body,
+            'source': 'in_app',
+          })
+          .select('id')
+          .single();
+      if (_attachment != null) {
+        await _uploadSupportAttachment(
+          sb,
+          widget.ticket.id,
+          _attachment!,
+          messageId: row['id'] as String,
+        );
+      }
       _replyController.clear();
+      setState(() => _attachment = null);
       ref.invalidate(supportTicketMessagesProvider(widget.ticket.id));
+      ref.invalidate(supportTicketAttachmentsProvider(widget.ticket.id));
       ref.invalidate(supportTicketsProvider);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -741,6 +832,9 @@ class _SupportTicketDialogState extends ConsumerState<_SupportTicketDialog> {
   @override
   Widget build(BuildContext context) {
     final messages = ref.watch(supportTicketMessagesProvider(widget.ticket.id));
+    final attachments = ref.watch(
+      supportTicketAttachmentsProvider(widget.ticket.id),
+    );
     return AlertDialog(
       title: Text(widget.ticket.subject),
       content: SizedBox(
@@ -805,6 +899,22 @@ class _SupportTicketDialogState extends ConsumerState<_SupportTicketDialog> {
                 error: (error, _) => Center(child: Text('$error')),
               ),
             ),
+            attachments.when(
+              data: (items) => items.isEmpty
+                  ? const SizedBox.shrink()
+                  : SizedBox(
+                      height: 92,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: items.length,
+                        separatorBuilder: (_, _) => const SizedBox(width: 8),
+                        itemBuilder: (_, index) =>
+                            _SupportAttachmentTile(attachment: items[index]),
+                      ),
+                    ),
+              loading: () => const SizedBox.shrink(),
+              error: (_, _) => const SizedBox.shrink(),
+            ),
             const SizedBox(height: 14),
             TextField(
               controller: _replyController,
@@ -816,6 +926,47 @@ class _SupportTicketDialogState extends ConsumerState<_SupportTicketDialog> {
                     ? 'Ответить администратору…'
                     : 'Reply to the administrator…',
               ),
+            ),
+            Row(
+              children: [
+                TextButton.icon(
+                  onPressed: _sending
+                      ? null
+                      : () async {
+                          final result = await FilePicker.platform.pickFiles(
+                            type: FileType.image,
+                            allowMultiple: false,
+                            withData: true,
+                          );
+                          final file = result?.files.first;
+                          if (file == null || !context.mounted) return;
+                          if (file.size > 10 * 1024 * 1024) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Файл должен быть не больше 10 МБ.',
+                                ),
+                              ),
+                            );
+                            return;
+                          }
+                          setState(() => _attachment = file);
+                        },
+                  icon: const Icon(Icons.attach_file_rounded),
+                  label: Text(
+                    _attachment?.name ??
+                        (widget.ru
+                            ? 'ПРИЛОЖИТЬ СКРИНШОТ'
+                            : 'ATTACH SCREENSHOT'),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (_attachment != null)
+                  IconButton(
+                    onPressed: () => setState(() => _attachment = null),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+              ],
             ),
           ],
         ),
@@ -855,6 +1006,49 @@ class _InfoCard extends StatelessWidget {
   );
 }
 
+class _SupportAttachmentTile extends StatelessWidget {
+  const _SupportAttachmentTile({required this.attachment});
+
+  final SupportAttachment attachment;
+
+  @override
+  Widget build(BuildContext context) => InkWell(
+    onTap: () => launchUrl(
+      Uri.parse(attachment.signedUrl),
+      mode: LaunchMode.externalApplication,
+    ),
+    borderRadius: BorderRadius.circular(10),
+    child: Container(
+      width: 125,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        border: Border.all(color: kBorderColor),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          Image.network(attachment.signedUrl, fit: BoxFit.cover),
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: Container(
+              width: double.infinity,
+              color: Colors.black.withValues(alpha: 0.7),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+              child: Text(
+                attachment.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: Colors.white, fontSize: 10),
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
 class _NewSupportTicketDialog extends StatefulWidget {
   const _NewSupportTicketDialog();
 
@@ -867,6 +1061,7 @@ class _NewSupportTicketDialogState extends State<_NewSupportTicketDialog> {
   final _subject = TextEditingController();
   final _message = TextEditingController();
   String _category = 'other';
+  PlatformFile? _attachment;
 
   @override
   void dispose() {
@@ -916,6 +1111,50 @@ class _NewSupportTicketDialogState extends State<_NewSupportTicketDialog> {
                 alignLabelWithHint: true,
               ),
             ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Row(
+                children: [
+                  Flexible(
+                    child: TextButton.icon(
+                      onPressed: () async {
+                        final result = await FilePicker.platform.pickFiles(
+                          type: FileType.image,
+                          allowMultiple: false,
+                          withData: true,
+                        );
+                        final file = result?.files.first;
+                        if (file == null || !context.mounted) return;
+                        if (file.size > 10 * 1024 * 1024) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                ru
+                                    ? 'Файл должен быть не больше 10 МБ.'
+                                    : 'The file must be no larger than 10 MB.',
+                              ),
+                            ),
+                          );
+                          return;
+                        }
+                        setState(() => _attachment = file);
+                      },
+                      icon: const Icon(Icons.attach_file_rounded),
+                      label: Text(
+                        _attachment?.name ??
+                            (ru ? 'ПРИЛОЖИТЬ СКРИНШОТ' : 'ATTACH SCREENSHOT'),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+                  if (_attachment != null)
+                    IconButton(
+                      onPressed: () => setState(() => _attachment = null),
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+                ],
+              ),
+            ),
           ],
         ),
       ),
@@ -934,6 +1173,7 @@ class _NewSupportTicketDialogState extends State<_NewSupportTicketDialog> {
                 category: _category,
                 subject: subject,
                 message: message,
+                attachment: _attachment,
               ),
             );
           },
@@ -949,10 +1189,12 @@ class _SupportDraft {
     required this.category,
     required this.subject,
     required this.message,
+    this.attachment,
   });
   final String category;
   final String subject;
   final String message;
+  final PlatformFile? attachment;
 }
 
 List<(String, String)> _categories(bool ru) => [

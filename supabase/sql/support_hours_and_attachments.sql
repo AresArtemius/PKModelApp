@@ -57,8 +57,20 @@ create policy "Ticket participants can read support attachments"
     )
   );
 
+drop policy if exists "Ticket owners can add support attachments" on public.support_attachments;
+create policy "Ticket owners can add support attachments"
+  on public.support_attachments for insert to authenticated
+  with check (
+    uploader_id = auth.uid()
+    and exists (
+      select 1 from public.support_tickets t
+      where t.id = ticket_id and t.user_id = auth.uid()
+    )
+  );
+
 grant select on public.support_service_settings to anon, authenticated;
 grant select on public.support_attachments to authenticated;
+grant insert on public.support_attachments to authenticated;
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values (
@@ -81,5 +93,17 @@ create policy "Ticket participants can read support files"
       join public.support_tickets t on t.id = a.ticket_id
       where a.storage_path = name
         and (t.user_id = auth.uid() or public.current_user_is_support_staff())
+    )
+  );
+
+drop policy if exists "Ticket owners can upload support files" on storage.objects;
+create policy "Ticket owners can upload support files"
+  on storage.objects for insert to authenticated
+  with check (
+    bucket_id = 'support-attachments'
+    and exists (
+      select 1 from public.support_tickets t
+      where t.id::text = (storage.foldername(name))[1]
+        and t.user_id = auth.uid()
     )
   );
