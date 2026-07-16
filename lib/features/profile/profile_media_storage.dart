@@ -67,8 +67,10 @@ class ProfileMediaResumableProgress {
 class ProfileMediaStorage {
   const ProfileMediaStorage(this._sb);
 
-  static const _maxPhotoSide = 2048;
-  static const _photoJpegQuality = 86;
+  // Large enough for portfolio review and PDF exports, while keeping mobile
+  // catalogue traffic predictable on plans without Storage image transforms.
+  static const _maxPhotoSide = 1600;
+  static const _photoJpegQuality = 82;
   static const _tusVersion = '1.0.0';
   static const _tusChunkSize = 6 * 1024 * 1024;
   static const _uploadResponseTimeout = Duration(minutes: 3);

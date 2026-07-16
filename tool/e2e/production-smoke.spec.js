@@ -40,6 +40,29 @@ test('anonymous user is redirected away from admin', async ({ page }) => {
   await expect.poll(() => new URL(page.url()).hash).toContain('/login');
 });
 
+test('catalog cold start renders within the mobile budget', async ({
+  browser,
+}) => {
+  const context = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    deviceScaleFactor: 2,
+    isMobile: true,
+    hasTouch: true,
+  });
+  const page = await context.newPage();
+  const startedAt = Date.now();
+
+  await page.goto('/#/search', { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('flutter-view')).toBeAttached();
+  await expect.poll(() => new URL(page.url()).hash).toContain('/search');
+
+  const renderMs = Date.now() - startedAt;
+  expect(renderMs, `cold catalogue render took ${renderMs} ms`).toBeLessThan(
+    15_000,
+  );
+  await context.close();
+});
+
 test('required static assets are available', async ({ request }) => {
   for (const path of [
     '/',
