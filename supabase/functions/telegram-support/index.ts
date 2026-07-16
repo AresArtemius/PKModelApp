@@ -15,13 +15,45 @@ type TelegramMessage = {
   text?: string;
 };
 
-async function sendMessage(chatId: number, text: string) {
+type TelegramCallback = {
+  id?: string;
+  from?: { id?: number; username?: string };
+  message?: TelegramMessage;
+  data?: string;
+};
+
+const quickKeyboard = {
+  inline_keyboard: [
+    [{ text: "Анкета в каталоге", callback_data: "faq:profile_hidden" },
+     { text: "Модерация", callback_data: "faq:moderation_time" }],
+    [{ text: "Оплата размещения", callback_data: "faq:placement_payment" },
+     { text: "Отклик на кастинг", callback_data: "faq:casting_response" }],
+    [{ text: "Написать администратору", callback_data: "support:admin" }],
+  ],
+};
+
+async function sendMessage(chatId: number, text: string, withKeyboard = false) {
   const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ chat_id: chatId, text, disable_web_page_preview: true }),
+    body: JSON.stringify({ chat_id: chatId, text, disable_web_page_preview: true,
+      ...(withKeyboard ? { reply_markup: quickKeyboard } : {}) }),
   });
   if (!response.ok) throw new Error(`Telegram send failed: ${response.status}`);
+}
+
+async function answerCallback(callbackId: string) {
+  await fetch(`https://api.telegram.org/bot${botToken}/answerCallbackQuery`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ callback_query_id: callbackId }),
+  });
+}
+
+async function faqAnswerBySlug(slug: string): Promise<string | null> {
+  const { data } = await supabase.from("support_faq").select("answer")
+    .eq("slug", slug).eq("is_active", true).maybeSingle();
+  return data?.answer ?? null;
 }
 
 function normalize(value: string) {
@@ -94,9 +126,10 @@ async function escalate(userId: string, chatId: number, body: string) {
 async function handleTelegramUpdate(payload: Record<string, unknown>) {
   const updateId = payload.update_id as number | undefined;
   const message = payload.message as TelegramMessage | undefined;
-  const chatId = message?.chat?.id;
+  const callback = payload.callback_query as TelegramCallback | undefined;
+  const chatId = message?.chat?.id ?? callback?.message?.chat?.id;
   const text = message?.text?.trim();
-  if (!updateId || !chatId || !text) return;
+  if (!updateId || !chatId || (!text && !callback?.data)) return;
 
   const { error: updateError } = await supabase
     .from("telegram_support_updates")
@@ -111,6 +144,27 @@ async function handleTelegramUpdate(payload: Record<string, unknown>) {
     .eq("telegram_chat_id", chatId)
     .gte("received_at", since);
   if ((count ?? 0) > 12) return;
+
+  if (callback?.id && callback.data) {
+    await answerCallback(callback.id);
+    if (callback.data.startsWith("faq:")) {
+      const answer = await faqAnswerBySlug(callback.data.slice(4));
+      await sendMessage(chatId, answer ?? "Ответ временно недоступен.", true);
+      return;
+    }
+    if (callback.data === "support:admin") {
+      const userId = await linkedUser(chatId);
+      if (!userId) {
+        await sendMessage(chatId,
+          "Сначала привяжите Telegram в разделе «Помощь и поддержка» приложения.", true);
+        return;
+      }
+      await escalate(userId, chatId, "Пользователь запросил помощь администратора.");
+      return;
+    }
+  }
+
+  if (!text) return;
 
   const startCode = text.match(/^\/start(?:\s+([A-Fa-f0-9]{8}))?$/)?.[1];
   if (startCode) {
@@ -128,7 +182,7 @@ async function handleTelegramUpdate(payload: Record<string, unknown>) {
 
   if (text === "/start" || text === "/help") {
     await sendMessage(chatId,
-      "Я отвечаю на вопросы об анкетах, модерации, оплате и кастингах. Если ответа не хватит, напишите «администратор». Для персонального обращения сначала привяжите Telegram в разделе поддержки приложения.");
+      "Выберите тему или задайте вопрос текстом. Если ответа не хватит, подключу администратора. Для персонального обращения сначала привяжите Telegram в разделе поддержки приложения.", true);
     return;
   }
 
@@ -136,7 +190,7 @@ async function handleTelegramUpdate(payload: Record<string, unknown>) {
   const wantsAdmin = /(^|\s)(администратор|оператор|человек|поддержка)(\s|$)/i.test(text);
   const answer = wantsAdmin ? null : await faqAnswer(text);
   if (answer) {
-    await sendMessage(chatId, `${answer}\n\nЕсли это не помогло, напишите «администратор».`);
+    await sendMessage(chatId, `${answer}\n\nЕсли это не помогло, выберите связь с администратором.`, true);
     return;
   }
   if (!userId) {
@@ -174,7 +228,7 @@ async function configureWebhooks() {
     body: JSON.stringify({
       url: webhookUrl,
       secret_token: telegramSecret,
-      allowed_updates: ["message"],
+      allowed_updates: ["message", "callback_query"],
       drop_pending_updates: false,
     }),
   });

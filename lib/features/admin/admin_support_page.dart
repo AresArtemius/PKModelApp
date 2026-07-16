@@ -25,7 +25,7 @@ final adminSupportTicketsProvider = FutureProvider.autoDispose
           .read(supabaseProvider)
           .from('support_tickets')
           .select(
-            'id,user_id,category,subject,status,priority,assigned_to,created_at,updated_at',
+            'id,user_id,channel,category,subject,status,priority,assigned_to,created_at,updated_at',
           );
       if (status != 'all') query = query.eq('status', status);
       final rows = await query.order('updated_at', ascending: false).limit(200);
@@ -41,6 +41,16 @@ final adminSupportMessagesProvider = FutureProvider.autoDispose
           .eq('ticket_id', ticketId)
           .order('created_at', ascending: true);
       return rows.map(_AdminSupportMessage.fromMap).toList(growable: false);
+    });
+
+final adminSupportFaqProvider =
+    FutureProvider.autoDispose<List<_SupportFaqItem>>((ref) async {
+      final rows = await ref
+          .read(supabaseProvider)
+          .from('support_faq')
+          .select('id,slug,question,answer,keywords,is_active,sort_order')
+          .order('sort_order');
+      return rows.map(_SupportFaqItem.fromMap).toList(growable: false);
     });
 
 class AdminSupportPage extends ConsumerStatefulWidget {
@@ -219,13 +229,28 @@ class _AdminSupportPageState extends ConsumerState<AdminSupportPage> {
                     onBack: () => context.go(Routes.admin),
                   ),
                   const SizedBox(height: 14),
-                  _FilterBar(
-                    value: _filter,
-                    ru: ru,
-                    onChanged: (value) => setState(() {
-                      _filter = value;
-                      _selectedId = null;
-                    }),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _FilterBar(
+                          value: _filter,
+                          ru: ru,
+                          onChanged: (value) => setState(() {
+                            _filter = value;
+                            _selectedId = null;
+                          }),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      OutlinedButton.icon(
+                        onPressed: () => showDialog<void>(
+                          context: context,
+                          builder: (_) => const _FaqAdminDialog(),
+                        ),
+                        icon: const Icon(Icons.quiz_outlined),
+                        label: const Text('FAQ'),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 14),
                   Expanded(
@@ -406,7 +431,7 @@ class _TicketList extends StatelessWidget {
                   ),
                   const SizedBox(height: 7),
                   Text(
-                    '${_categoryLabel(ticket.category)} • ${_supportStatus(ticket.status, true)}',
+                    '${_channelLabel(ticket.channel)} • ${_categoryLabel(ticket.category)} • ${_supportStatus(ticket.status, true)}',
                     style: const TextStyle(
                       color: kTextMuted,
                       fontSize: 12,
@@ -452,6 +477,215 @@ class _AdminUnreadBadge extends StatelessWidget {
         fontWeight: FontWeight.w800,
       ),
     ),
+  );
+}
+
+class _FaqAdminDialog extends ConsumerWidget {
+  const _FaqAdminDialog();
+
+  Future<void> _edit(
+    BuildContext context,
+    WidgetRef ref, [
+    _SupportFaqItem? item,
+  ]) async {
+    final draft = await showDialog<_FaqDraft>(
+      context: context,
+      builder: (_) => _FaqEditDialog(item: item),
+    );
+    if (draft == null) return;
+    final values = {
+      'question': draft.question,
+      'answer': draft.answer,
+      'keywords': draft.keywords,
+      'is_active': draft.active,
+      'sort_order': draft.sortOrder,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    };
+    final table = ref.read(supabaseProvider).from('support_faq');
+    if (item == null) {
+      await table.insert({
+        ...values,
+        'slug': 'admin_${DateTime.now().microsecondsSinceEpoch}',
+      });
+    } else {
+      await table.update(values).eq('id', item.id);
+    }
+    ref.invalidate(adminSupportFaqProvider);
+  }
+
+  Future<void> _delete(WidgetRef ref, _SupportFaqItem item) async {
+    await ref
+        .read(supabaseProvider)
+        .from('support_faq')
+        .delete()
+        .eq('id', item.id);
+    ref.invalidate(adminSupportFaqProvider);
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final items = ref.watch(adminSupportFaqProvider);
+    return AlertDialog(
+      title: const Text('FAQ ПОДДЕРЖКИ'),
+      content: SizedBox(
+        width: 760,
+        height: 560,
+        child: items.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (error, _) => Center(child: Text('Ошибка загрузки: $error')),
+          data: (rows) => rows.isEmpty
+              ? const Center(child: Text('Вопросов пока нет.'))
+              : ListView.separated(
+                  itemCount: rows.length,
+                  separatorBuilder: (_, _) => const Divider(),
+                  itemBuilder: (_, index) {
+                    final item = rows[index];
+                    return ListTile(
+                      leading: Icon(
+                        item.active
+                            ? Icons.check_circle_rounded
+                            : Icons.pause_circle_rounded,
+                        color: item.active ? Colors.green : kTextMuted,
+                      ),
+                      title: Text(
+                        item.question,
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                      subtitle: Text(
+                        item.answer,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      onTap: () => _edit(context, ref, item),
+                      trailing: IconButton(
+                        tooltip: 'Удалить FAQ',
+                        onPressed: () => _delete(ref, item),
+                        icon: const Icon(Icons.delete_outline_rounded),
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('ЗАКРЫТЬ'),
+        ),
+        FilledButton.icon(
+          onPressed: () => _edit(context, ref),
+          icon: const Icon(Icons.add_rounded),
+          label: const Text('ДОБАВИТЬ ВОПРОС'),
+        ),
+      ],
+    );
+  }
+}
+
+class _FaqEditDialog extends StatefulWidget {
+  const _FaqEditDialog({this.item});
+  final _SupportFaqItem? item;
+
+  @override
+  State<_FaqEditDialog> createState() => _FaqEditDialogState();
+}
+
+class _FaqEditDialogState extends State<_FaqEditDialog> {
+  late final TextEditingController _question;
+  late final TextEditingController _answer;
+  late final TextEditingController _keywords;
+  late final TextEditingController _sortOrder;
+  late bool _active;
+
+  @override
+  void initState() {
+    super.initState();
+    final item = widget.item;
+    _question = TextEditingController(text: item?.question ?? '');
+    _answer = TextEditingController(text: item?.answer ?? '');
+    _keywords = TextEditingController(text: item?.keywords.join(', ') ?? '');
+    _sortOrder = TextEditingController(text: '${item?.sortOrder ?? 100}');
+    _active = item?.active ?? true;
+  }
+
+  @override
+  void dispose() {
+    _question.dispose();
+    _answer.dispose();
+    _keywords.dispose();
+    _sortOrder.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    final question = _question.text.trim();
+    final answer = _answer.text.trim();
+    if (question.length < 3 || answer.length < 3) return;
+    Navigator.of(context).pop(
+      _FaqDraft(
+        question: question,
+        answer: answer,
+        keywords: _keywords.text
+            .split(',')
+            .map((value) => value.trim().toLowerCase())
+            .where((value) => value.isNotEmpty)
+            .toList(growable: false),
+        active: _active,
+        sortOrder: int.tryParse(_sortOrder.text.trim()) ?? 100,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: Text(widget.item == null ? 'НОВЫЙ ВОПРОС' : 'РЕДАКТИРОВАТЬ FAQ'),
+    content: SizedBox(
+      width: 620,
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _question,
+              decoration: const InputDecoration(labelText: 'Вопрос'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _answer,
+              minLines: 4,
+              maxLines: 8,
+              decoration: const InputDecoration(labelText: 'Ответ'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _keywords,
+              decoration: const InputDecoration(
+                labelText: 'Ключевые слова через запятую',
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _sortOrder,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'Порядок'),
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              value: _active,
+              onChanged: (value) => setState(() => _active = value),
+              title: const Text('Активный вопрос'),
+            ),
+          ],
+        ),
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.of(context).pop(),
+        child: const Text('ОТМЕНА'),
+      ),
+      FilledButton(onPressed: _save, child: const Text('СОХРАНИТЬ')),
+    ],
   );
 }
 
@@ -508,7 +742,7 @@ class _TicketDetail extends ConsumerWidget {
                       ),
                     ),
                     Text(
-                      '${_categoryLabel(ticket.category)} • ${ticket.userId}',
+                      '${_channelLabel(ticket.channel)} • ${_categoryLabel(ticket.category)} • ${ticket.userId}',
                       style: const TextStyle(color: kTextMuted, fontSize: 12),
                     ),
                   ],
@@ -690,6 +924,7 @@ class _AdminSupportTicket {
   const _AdminSupportTicket({
     required this.id,
     required this.userId,
+    required this.channel,
     required this.category,
     required this.subject,
     required this.status,
@@ -701,6 +936,7 @@ class _AdminSupportTicket {
       _AdminSupportTicket(
         id: (map['id'] ?? '').toString(),
         userId: (map['user_id'] ?? '').toString(),
+        channel: (map['channel'] ?? 'in_app').toString(),
         category: (map['category'] ?? 'other').toString(),
         subject: (map['subject'] ?? '').toString(),
         status: (map['status'] ?? 'new').toString(),
@@ -710,6 +946,7 @@ class _AdminSupportTicket {
 
   final String id;
   final String userId;
+  final String channel;
   final String category;
   final String subject;
   final String status;
@@ -728,6 +965,51 @@ class _AdminSupportMessage {
 
   final String authorKind;
   final String body;
+}
+
+class _SupportFaqItem {
+  const _SupportFaqItem({
+    required this.id,
+    required this.question,
+    required this.answer,
+    required this.keywords,
+    required this.active,
+    required this.sortOrder,
+  });
+
+  factory _SupportFaqItem.fromMap(Map<String, dynamic> map) => _SupportFaqItem(
+    id: (map['id'] ?? '').toString(),
+    question: (map['question'] ?? '').toString(),
+    answer: (map['answer'] ?? '').toString(),
+    keywords: (map['keywords'] as List? ?? const [])
+        .map((value) => value.toString())
+        .toList(growable: false),
+    active: map['is_active'] == true,
+    sortOrder: int.tryParse((map['sort_order'] ?? 100).toString()) ?? 100,
+  );
+
+  final String id;
+  final String question;
+  final String answer;
+  final List<String> keywords;
+  final bool active;
+  final int sortOrder;
+}
+
+class _FaqDraft {
+  const _FaqDraft({
+    required this.question,
+    required this.answer,
+    required this.keywords,
+    required this.active,
+    required this.sortOrder,
+  });
+
+  final String question;
+  final String answer;
+  final List<String> keywords;
+  final bool active;
+  final int sortOrder;
 }
 
 const _filterStatuses = [
@@ -767,4 +1049,11 @@ String _categoryLabel(String category) => switch (category) {
   'casting' => 'Кастинги',
   'security' => 'Безопасность',
   _ => 'Другое',
+};
+
+String _channelLabel(String channel) => switch (channel) {
+  'telegram' => 'Telegram',
+  'email' => 'Email',
+  'admin' => 'Админ',
+  _ => 'Приложение',
 };
