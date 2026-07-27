@@ -321,6 +321,7 @@ class SupportPage extends ConsumerWidget {
   }
 
   Future<void> _createTicket(BuildContext context, WidgetRef ref) async {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
     final draft = await showDialog<_SupportDraft>(
       context: context,
       builder: (_) => const _NewSupportTicketDialog(),
@@ -348,7 +349,13 @@ class SupportPage extends ConsumerWidget {
       ref.invalidate(supportTicketsProvider);
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Обращение отправлено администратору.')),
+        SnackBar(
+          content: Text(
+            ru
+                ? 'Обращение отправлено администратору.'
+                : 'Your request was sent to the administrator.',
+          ),
+        ),
       );
     } on PostgrestException catch (error) {
       if (!context.mounted) return;
@@ -364,8 +371,12 @@ class SupportPage extends ConsumerWidget {
         SnackBar(
           content: Text(
             setupRequired
-                ? 'Центр поддержки временно недоступен. Код: $reference'
-                : 'Не удалось отправить обращение. Код: $reference',
+                ? (ru
+                      ? 'Центр поддержки временно недоступен. Код: $reference'
+                      : 'The support center is temporarily unavailable. Code: $reference')
+                : (ru
+                      ? 'Не удалось отправить обращение. Код: $reference'
+                      : 'Could not send your request. Code: $reference'),
           ),
         ),
       );
@@ -802,7 +813,11 @@ class _SupportTicketDialogState extends ConsumerState<_SupportTicketDialog> {
             'ticket_id': widget.ticket.id,
             'author_id': sb.auth.currentUser?.id,
             'author_kind': 'user',
-            'body': body.isEmpty ? 'Пользователь отправил скриншот.' : body,
+            'body': body.isEmpty
+                ? (widget.ru
+                      ? 'Пользователь отправил скриншот.'
+                      : 'The user sent a screenshot.')
+                : body,
             'source': 'in_app',
           })
           .select('id')
@@ -918,7 +933,13 @@ class _SupportTicketDialogState extends ConsumerState<_SupportTicketDialog> {
                         },
                       ),
                 loading: () => const Center(child: CircularProgressIndicator()),
-                error: (error, _) => Center(child: Text('$error')),
+                error: (_, _) => Center(
+                  child: Text(
+                    widget.ru
+                        ? 'Не удалось загрузить переписку.'
+                        : 'Could not load the conversation.',
+                  ),
+                ),
               ),
             ),
             attachments.when(
@@ -964,9 +985,11 @@ class _SupportTicketDialogState extends ConsumerState<_SupportTicketDialog> {
                           if (file == null || !context.mounted) return;
                           if (file.size > 10 * 1024 * 1024) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
+                              SnackBar(
                                 content: Text(
-                                  'Файл должен быть не больше 10 МБ.',
+                                  widget.ru
+                                      ? 'Файл должен быть не больше 10 МБ.'
+                                      : 'The file must not exceed 10 MB.',
                                 ),
                               ),
                             );

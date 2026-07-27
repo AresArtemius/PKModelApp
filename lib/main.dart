@@ -153,7 +153,8 @@ void _runBootstrap(_BootstrapErrorKind kind, {String? details}) {
         title: t.bootstrapInitErrorTitle,
         message: d.isEmpty
             ? t.bootstrapInitErrorMessage
-            : '${t.bootstrapInitErrorMessage}\nКод: $d',
+            : '${t.bootstrapInitErrorMessage}\n'
+                  '${t.localeName == 'ru' ? 'Код' : 'Code'}: $d',
       );
   }
 }

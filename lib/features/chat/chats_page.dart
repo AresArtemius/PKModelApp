@@ -25,11 +25,11 @@ enum _ChatRoleFilter {
   model,
   client;
 
-  String get label {
+  String label(bool ru) {
     return switch (this) {
-      _ChatRoleFilter.all => 'ВСЕ',
-      _ChatRoleFilter.model => 'КАК МОДЕЛЬ',
-      _ChatRoleFilter.client => 'КАК ЗАКАЗЧИК',
+      _ChatRoleFilter.all => ru ? 'ВСЕ' : 'ALL',
+      _ChatRoleFilter.model => ru ? 'КАК МОДЕЛЬ' : 'AS MODEL',
+      _ChatRoleFilter.client => ru ? 'КАК ЗАКАЗЧИК' : 'AS CLIENT',
     };
   }
 
@@ -43,22 +43,30 @@ enum _ChatRoleFilter {
     };
   }
 
-  String get emptyTitle {
+  String emptyTitle(bool ru) {
     return switch (this) {
-      _ChatRoleFilter.all => 'ЧАТОВ НЕТ',
-      _ChatRoleFilter.model => 'ЧАТОВ КАК МОДЕЛЬ НЕТ',
-      _ChatRoleFilter.client => 'ЧАТОВ КАК ЗАКАЗЧИК НЕТ',
+      _ChatRoleFilter.all => ru ? 'ЧАТОВ НЕТ' : 'NO CHATS',
+      _ChatRoleFilter.model =>
+        ru ? 'ЧАТОВ КАК МОДЕЛЬ НЕТ' : 'NO CHATS AS MODEL',
+      _ChatRoleFilter.client =>
+        ru ? 'ЧАТОВ КАК ЗАКАЗЧИК НЕТ' : 'NO CHATS AS CLIENT',
     };
   }
 
-  String get emptyMessage {
+  String emptyMessage(bool ru) {
     return switch (this) {
       _ChatRoleFilter.all =>
-        'Откройте приглашение или подборку, чтобы начать диалог.',
+        ru
+            ? 'Откройте приглашение или подборку, чтобы начать диалог.'
+            : 'Open an invitation or selection to start a conversation.',
       _ChatRoleFilter.model =>
-        'Здесь будут диалоги, где пишут по вашим анкетам.',
+        ru
+            ? 'Здесь будут диалоги, где пишут по вашим анкетам.'
+            : 'Conversations about your profiles will appear here.',
       _ChatRoleFilter.client =>
-        'Здесь будут диалоги, которые вы начали как заказчик.',
+        ru
+            ? 'Здесь будут диалоги, которые вы начали как заказчик.'
+            : 'Conversations you started as a client will appear here.',
     };
   }
 }
@@ -71,14 +79,14 @@ enum _ChatContentFilter {
   files,
   voice;
 
-  String get label {
+  String label(bool ru) {
     return switch (this) {
-      _ChatContentFilter.all => 'ВСЕ СООБЩЕНИЯ',
-      _ChatContentFilter.unread => 'НОВЫЕ',
-      _ChatContentFilter.pinned => 'ЗАКРЕП',
-      _ChatContentFilter.media => 'МЕДИА',
-      _ChatContentFilter.files => 'ФАЙЛЫ',
-      _ChatContentFilter.voice => 'ГОЛОСОВЫЕ',
+      _ChatContentFilter.all => ru ? 'ВСЕ СООБЩЕНИЯ' : 'ALL MESSAGES',
+      _ChatContentFilter.unread => ru ? 'НОВЫЕ' : 'UNREAD',
+      _ChatContentFilter.pinned => ru ? 'ЗАКРЕП' : 'PINNED',
+      _ChatContentFilter.media => ru ? 'МЕДИА' : 'MEDIA',
+      _ChatContentFilter.files => ru ? 'ФАЙЛЫ' : 'FILES',
+      _ChatContentFilter.voice => ru ? 'ГОЛОСОВЫЕ' : 'VOICE',
     };
   }
 
@@ -222,6 +230,7 @@ class _ChatsPageState extends ConsumerState<ChatsPage> {
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
     final chats = ref.watch(myChatsProvider(_archived));
     final isDesktop =
         MediaQuery.sizeOf(context).width >= _chatsDesktopBreakpoint;
@@ -298,15 +307,19 @@ class _ChatsPageState extends ConsumerState<ChatsPage> {
                         if (visible.isEmpty) {
                           return _ChatsEmptyState(
                             title: _archived
-                                ? 'АРХИВ ПУСТ'
+                                ? (ru ? 'АРХИВ ПУСТ' : 'ARCHIVE IS EMPTY')
                                 : _contentFilter == _ChatContentFilter.all
-                                ? _roleFilter.emptyTitle
-                                : 'НИЧЕГО НЕ НАЙДЕНО',
+                                ? _roleFilter.emptyTitle(ru)
+                                : (ru ? 'НИЧЕГО НЕ НАЙДЕНО' : 'NOTHING FOUND'),
                             message: _archived
-                                ? 'Архивированные диалоги появятся здесь.'
+                                ? (ru
+                                      ? 'Архивированные диалоги появятся здесь.'
+                                      : 'Archived conversations will appear here.')
                                 : _contentFilter != _ChatContentFilter.all
-                                ? 'Попробуйте другой фильтр или очистите поиск.'
-                                : _roleFilter.emptyMessage,
+                                ? (ru
+                                      ? 'Попробуйте другой фильтр или очистите поиск.'
+                                      : 'Try another filter or clear the search.')
+                                : _roleFilter.emptyMessage(ru),
                           );
                         }
                         if (isDesktop) {
@@ -375,15 +388,19 @@ class _ChatsHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
     return Row(
       children: [
         Expanded(
-          child: Text('ЧАТЫ', style: _chatTitleStyle(size: 24, spacing: 4)),
+          child: Text(
+            ru ? 'ЧАТЫ' : 'CHATS',
+            style: _chatTitleStyle(size: 24, spacing: 4),
+          ),
         ),
         SizedBox(
           height: 44,
           child: BrandPillButton(
-            label: 'ПРИГЛАШЕНИЯ',
+            label: ru ? 'ПРИГЛАШЕНИЯ' : 'INVITATIONS',
             style: BrandPillStyle.light,
             onTap: onInvitations,
           ),
@@ -432,6 +449,7 @@ class _ChatsSearch extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
     return Container(
       height: 52,
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -443,9 +461,9 @@ class _ChatsSearch extends StatelessWidget {
           Expanded(
             child: TextField(
               controller: controller,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 border: InputBorder.none,
-                hintText: 'Поиск по чатам',
+                hintText: ru ? 'Поиск по чатам' : 'Search chats',
               ),
             ),
           ),
@@ -538,6 +556,7 @@ class _ChatRoleSegments extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
@@ -558,7 +577,7 @@ class _ChatRoleSegments extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       decoration: pillDecoration(isDark: selected, radius: 999),
                       child: Text(
-                        filter.label,
+                        filter.label(ru),
                         style: _chatTitleStyle(
                           color: selected ? Colors.white : kTextMuted,
                           size: 11,
@@ -585,6 +604,7 @@ class _ChatContentSegments extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
@@ -627,7 +647,7 @@ class _ChatContentSegments extends StatelessWidget {
                           ),
                           const SizedBox(width: 6),
                           Text(
-                            filter.label,
+                            filter.label(ru),
                             style: _chatTitleStyle(
                               color: selected ? Colors.white : kTextMuted,
                               size: 10,
@@ -931,9 +951,12 @@ class _ChatContextSummary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isClient = item.participantRole == ChatParticipantRole.client;
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
     final intent = isClient
-        ? 'Ваш запрос по анкете / кастингу'
-        : 'Пишут по вашей анкете';
+        ? (ru
+              ? 'Ваш запрос по анкете / кастингу'
+              : 'Your profile / casting request')
+        : (ru ? 'Пишут по вашей анкете' : 'A message about your profile');
     final parts = _contextParts();
 
     return Column(
@@ -983,11 +1006,12 @@ class _ChatRoleBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isClient = role == ChatParticipantRole.client;
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: pillDecoration(isDark: isClient, radius: 999),
       child: Text(
-        role.label,
+        role.label(ru),
         style: _chatTitleStyle(
           color: isClient ? Colors.white : kTextMuted,
           size: 9,

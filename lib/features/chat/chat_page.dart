@@ -2178,6 +2178,7 @@ class _ChatContextCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isRussian = Localizations.localeOf(context).languageCode == 'ru';
     final profileName = summary.profileName.trim();
     final selectionTitle = summary.selectionTitle.trim();
     final hasProfile = summary.profileId.trim().isNotEmpty;
@@ -2226,8 +2227,8 @@ class _ChatContextCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text(
-                      'КОНТЕКСТ ДИАЛОГА',
+                    Text(
+                      isRussian ? 'КОНТЕКСТ ДИАЛОГА' : 'CHAT CONTEXT',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -2239,9 +2240,15 @@ class _ChatContextCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 5),
                     if (profileName.isNotEmpty)
-                      _ContextLine(label: 'Анкета', value: profileName),
+                      _ContextLine(
+                        label: isRussian ? 'Анкета' : 'Profile',
+                        value: profileName,
+                      ),
                     if (selectionTitle.isNotEmpty)
-                      _ContextLine(label: 'Кастинг', value: selectionTitle),
+                      _ContextLine(
+                        label: isRussian ? 'Кастинг' : 'Casting',
+                        value: selectionTitle,
+                      ),
                   ],
                 ),
               ),
@@ -2252,7 +2259,7 @@ class _ChatContextCard extends StatelessWidget {
                   if (hasProfile)
                     _ContextIconButton(
                       icon: Icons.badge_rounded,
-                      tooltip: 'Открыть анкету',
+                      tooltip: isRussian ? 'Открыть анкету' : 'Open profile',
                       onTap: () => context.push(
                         '${Routes.modelPrefix}${summary.profileId}',
                       ),
@@ -2261,7 +2268,7 @@ class _ChatContextCard extends StatelessWidget {
                   if (hasSelection)
                     _ContextIconButton(
                       icon: Icons.video_camera_front_rounded,
-                      tooltip: 'Открыть кастинг',
+                      tooltip: isRussian ? 'Открыть кастинг' : 'Open casting',
                       onTap: () => context.push(
                         '${Routes.publicSelectionPrefix}${summary.selectionId}',
                       ),
@@ -2274,12 +2281,12 @@ class _ChatContextCard extends StatelessWidget {
             const SizedBox(height: 12),
             Container(height: 1, color: kBorderColor),
             const SizedBox(height: 10),
-            const Row(
+            Row(
               children: [
                 Icon(Icons.history_rounded, size: 15, color: kTextMuted),
                 SizedBox(width: 6),
                 Text(
-                  'ИСТОРИЯ КОНТЕКСТОВ',
+                  isRussian ? 'ИСТОРИЯ КОНТЕКСТОВ' : 'CONTEXT HISTORY',
                   style: TextStyle(
                     color: kTextMuted,
                     fontSize: 10,
@@ -2308,6 +2315,7 @@ class _ContextHistoryRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isRussian = Localizations.localeOf(context).languageCode == 'ru';
     final profileName = entry.profileName.trim();
     final selectionTitle = entry.selectionTitle.trim();
     final date = _shortDate(entry.createdAt);
@@ -2363,7 +2371,7 @@ class _ContextHistoryRow extends StatelessWidget {
             if (entry.profileId.trim().isNotEmpty)
               _ContextMiniButton(
                 icon: Icons.badge_rounded,
-                tooltip: 'Открыть анкету',
+                tooltip: isRussian ? 'Открыть анкету' : 'Open profile',
                 onTap: () =>
                     context.push('${Routes.modelPrefix}${entry.profileId}'),
               ),
@@ -2373,7 +2381,7 @@ class _ContextHistoryRow extends StatelessWidget {
             if (entry.selectionId.trim().isNotEmpty)
               _ContextMiniButton(
                 icon: Icons.video_camera_front_rounded,
-                tooltip: 'Открыть кастинг',
+                tooltip: isRussian ? 'Открыть кастинг' : 'Open casting',
                 onTap: () => context.push(
                   '${Routes.publicSelectionPrefix}${entry.selectionId}',
                 ),
@@ -3271,8 +3279,15 @@ class _AudioMessagePlayerState extends ConsumerState<_AudioMessagePlayer> {
       _markListenedOnce();
     } catch (_) {
       if (!mounted) return;
+      final isRussian = Localizations.localeOf(context).languageCode == 'ru';
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Не удалось воспроизвести аудио')),
+        SnackBar(
+          content: Text(
+            isRussian
+                ? 'Не удалось воспроизвести аудио'
+                : 'Could not play audio',
+          ),
+        ),
       );
     }
   }
@@ -3285,6 +3300,7 @@ class _AudioMessagePlayerState extends ConsumerState<_AudioMessagePlayer> {
 
   @override
   Widget build(BuildContext context) {
+    final isRussian = Localizations.localeOf(context).languageCode == 'ru';
     final knownDuration = _duration.inMilliseconds > 0
         ? _duration
         : widget.message.audioDuration ?? Duration.zero;
@@ -3298,10 +3314,10 @@ class _AudioMessagePlayerState extends ConsumerState<_AudioMessagePlayer> {
     final listened = widget.message.listenedAt != null;
     final read = widget.message.readAt != null;
     final statusText = listened
-        ? 'прослушано'
+        ? (isRussian ? 'прослушано' : 'listened')
         : read
-        ? 'прочитано'
-        : 'доставлено';
+        ? (isRussian ? 'прочитано' : 'read')
+        : (isRussian ? 'доставлено' : 'delivered');
     return Container(
       width: 232,
       padding: const EdgeInsets.fromLTRB(10, 10, 12, 10),
@@ -3347,9 +3363,9 @@ class _AudioMessagePlayerState extends ConsumerState<_AudioMessagePlayer> {
                   children: [
                     const Icon(Icons.mic_rounded, size: 14, color: kTextDark),
                     const SizedBox(width: 4),
-                    const Expanded(
+                    Expanded(
                       child: Text(
-                        'Голосовое',
+                        isRussian ? 'Голосовое' : 'Voice message',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
@@ -4010,6 +4026,8 @@ class _VoiceRecorderSheetState extends State<_VoiceRecorderSheet> {
   String _error = '';
   final List<double> _levels = List<double>.filled(34, 0.16);
 
+  bool get _isRussian => Localizations.localeOf(context).languageCode == 'ru';
+
   @override
   void initState() {
     super.initState();
@@ -4048,7 +4066,9 @@ class _VoiceRecorderSheetState extends State<_VoiceRecorderSheet> {
       if (!allowed) {
         if (!mounted) return;
         setState(() {
-          _error = 'Нет доступа к микрофону. Разрешите микрофон в настройках.';
+          _error = _isRussian
+              ? 'Нет доступа к микрофону. Разрешите микрофон в настройках.'
+              : 'Microphone access is disabled. Allow it in your settings.';
         });
         return;
       }
@@ -4085,9 +4105,13 @@ class _VoiceRecorderSheetState extends State<_VoiceRecorderSheet> {
         _recordedBytes = null;
         _duration = Duration.zero;
       });
-    } catch (error) {
+    } catch (_) {
       if (!mounted) return;
-      setState(() => _error = 'Не удалось начать запись: $error');
+      setState(
+        () => _error = _isRussian
+            ? 'Не удалось начать запись.'
+            : 'Could not start recording.',
+      );
     }
   }
 
@@ -4130,9 +4154,13 @@ class _VoiceRecorderSheetState extends State<_VoiceRecorderSheet> {
         _recordedPath = path;
         _recordedBytes = bytes;
       });
-    } catch (error) {
+    } catch (_) {
       if (!mounted) return;
-      setState(() => _error = 'Не удалось сохранить запись: $error');
+      setState(
+        () => _error = _isRussian
+            ? 'Не удалось сохранить запись.'
+            : 'Could not save the recording.',
+      );
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -4182,9 +4210,13 @@ class _VoiceRecorderSheetState extends State<_VoiceRecorderSheet> {
         }
       }
       await _player.play();
-    } catch (error) {
+    } catch (_) {
       if (!mounted) return;
-      setState(() => _error = 'Не удалось прослушать запись: $error');
+      setState(
+        () => _error = _isRussian
+            ? 'Не удалось прослушать запись.'
+            : 'Could not play the recording.',
+      );
     }
   }
 
@@ -4227,6 +4259,7 @@ class _VoiceRecorderSheetState extends State<_VoiceRecorderSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final isRussian = Localizations.localeOf(context).languageCode == 'ru';
     final hasRecording = _recordedBytes != null && _recordedBytes!.isNotEmpty;
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     return Padding(
@@ -4241,8 +4274,8 @@ class _VoiceRecorderSheetState extends State<_VoiceRecorderSheet> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text(
-              'ГОЛОСОВОЕ',
+            Text(
+              isRussian ? 'ГОЛОСОВОЕ' : 'VOICE MESSAGE',
               style: TextStyle(
                 color: kTextDark,
                 fontSize: 20,
@@ -4293,11 +4326,19 @@ class _VoiceRecorderSheetState extends State<_VoiceRecorderSheet> {
                           Text(
                             _recording
                                 ? (_locked
-                                      ? 'ЗАПИСЬ ЗАФИКСИРОВАНА'
-                                      : 'ИДЕТ ЗАПИСЬ')
+                                      ? (isRussian
+                                            ? 'ЗАПИСЬ ЗАФИКСИРОВАНА'
+                                            : 'RECORDING LOCKED')
+                                      : (isRussian
+                                            ? 'ИДЕТ ЗАПИСЬ'
+                                            : 'RECORDING'))
                                 : hasRecording
-                                ? 'ЗАПИСЬ ГОТОВА'
-                                : 'НАЖМИТЕ, ЧТОБЫ НАЧАТЬ',
+                                ? (isRussian
+                                      ? 'ЗАПИСЬ ГОТОВА'
+                                      : 'RECORDING READY')
+                                : (isRussian
+                                      ? 'НАЖМИТЕ, ЧТОБЫ НАЧАТЬ'
+                                      : 'TAP TO START'),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
@@ -4332,20 +4373,22 @@ class _VoiceRecorderSheetState extends State<_VoiceRecorderSheet> {
             AnimatedSwitcher(
               duration: const Duration(milliseconds: 180),
               child: _recording && !_locked
-                  ? const Padding(
-                      padding: EdgeInsets.only(top: 7),
+                  ? Padding(
+                      padding: const EdgeInsets.only(top: 7),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(
+                          const Icon(
                             Icons.keyboard_arrow_left_rounded,
                             color: kTextMuted,
                             size: 18,
                           ),
-                          SizedBox(width: 2),
+                          const SizedBox(width: 2),
                           Text(
-                            'Свайп влево — отменить',
-                            style: TextStyle(
+                            isRussian
+                                ? 'Свайп влево — отменить'
+                                : 'Swipe left to cancel',
+                            style: const TextStyle(
                               color: kTextMuted,
                               fontSize: 11,
                               fontWeight: FontWeight.w800,
@@ -4374,7 +4417,7 @@ class _VoiceRecorderSheetState extends State<_VoiceRecorderSheet> {
                 children: [
                   Expanded(
                     child: _SheetPillButton(
-                      label: 'ОТМЕНИТЬ',
+                      label: isRussian ? 'ОТМЕНИТЬ' : 'CANCEL',
                       onTap: _saving ? null : _cancelRecording,
                     ),
                   ),
@@ -4388,7 +4431,7 @@ class _VoiceRecorderSheetState extends State<_VoiceRecorderSheet> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: _SheetPillButton(
-                      label: 'ГОТОВО',
+                      label: isRussian ? 'ГОТОВО' : 'DONE',
                       dark: true,
                       loading: _saving,
                       onTap: _saving ? null : _stop,
@@ -4402,8 +4445,10 @@ class _VoiceRecorderSheetState extends State<_VoiceRecorderSheet> {
                   Expanded(
                     child: _SheetPillButton(
                       label: hasRecording
-                          ? (_playing ? 'ПАУЗА' : 'ПРОСЛУШАТЬ')
-                          : 'ЗАПИСЬ',
+                          ? (_playing
+                                ? (isRussian ? 'ПАУЗА' : 'PAUSE')
+                                : (isRussian ? 'ПРОСЛУШАТЬ' : 'PLAY'))
+                          : (isRussian ? 'ЗАПИСЬ' : 'RECORD'),
                       dark: !hasRecording,
                       loading: _saving,
                       onTap: _saving
@@ -4416,7 +4461,9 @@ class _VoiceRecorderSheetState extends State<_VoiceRecorderSheet> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: _SheetPillButton(
-                      label: hasRecording ? 'ПРИКРЕПИТЬ' : 'ЗАКРЫТЬ',
+                      label: hasRecording
+                          ? (isRussian ? 'ПРИКРЕПИТЬ' : 'ATTACH')
+                          : (isRussian ? 'ЗАКРЫТЬ' : 'CLOSE'),
                       dark: hasRecording,
                       onTap: hasRecording
                           ? _attach
@@ -4431,8 +4478,12 @@ class _VoiceRecorderSheetState extends State<_VoiceRecorderSheet> {
               child: _recording
                   ? Text(
                       _locked
-                          ? 'Можно отпустить экран — запись продолжается.'
-                          : 'Нажмите на замок, чтобы не удерживать запись.',
+                          ? (isRussian
+                                ? 'Можно отпустить экран — запись продолжается.'
+                                : 'You can release the screen — recording continues.')
+                          : (isRussian
+                                ? 'Нажмите на замок, чтобы не удерживать запись.'
+                                : 'Tap the lock to record hands-free.'),
                       key: ValueKey(_locked),
                       textAlign: TextAlign.center,
                       style: const TextStyle(
@@ -4443,7 +4494,9 @@ class _VoiceRecorderSheetState extends State<_VoiceRecorderSheet> {
                     )
                   : hasRecording
                   ? _SheetPillButton(
-                      label: 'УДАЛИТЬ И ЗАПИСАТЬ ЗАНОВО',
+                      label: isRussian
+                          ? 'УДАЛИТЬ И ЗАПИСАТЬ ЗАНОВО'
+                          : 'DELETE AND RECORD AGAIN',
                       onTap: _reset,
                     )
                   : const SizedBox.shrink(),

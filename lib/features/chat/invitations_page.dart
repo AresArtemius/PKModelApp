@@ -286,6 +286,7 @@ Future<void> _showModelProRequiredDialog(BuildContext context) async {
 }
 
 Future<bool> _confirmDeleteInvitation(BuildContext context) async {
+  final ru = Localizations.localeOf(context).languageCode == 'ru';
   final result = await showDialog<bool>(
     context: context,
     builder: (context) => Dialog(
@@ -299,7 +300,7 @@ Future<bool> _confirmDeleteInvitation(BuildContext context) async {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              'УДАЛИТЬ ПРИГЛАШЕНИЕ?',
+              ru ? 'УДАЛИТЬ ПРИГЛАШЕНИЕ?' : 'DELETE INVITATION?',
               textAlign: TextAlign.center,
               style: _invitationCommandStyle(
                 size: 20,
@@ -309,7 +310,9 @@ Future<bool> _confirmDeleteInvitation(BuildContext context) async {
             ),
             const SizedBox(height: 12),
             Text(
-              'Карточка исчезнет из списка приглашений. Чат и анкета останутся доступны, если они уже были открыты.',
+              ru
+                  ? 'Карточка исчезнет из списка приглашений. Чат и анкета останутся доступны, если они уже были открыты.'
+                  : 'The card will disappear from invitations. The chat and profile will remain available if already opened.',
               textAlign: TextAlign.center,
               style: _invitationBodyStyle(
                 color: kTextMuted,
@@ -331,7 +334,7 @@ Future<bool> _confirmDeleteInvitation(BuildContext context) async {
                 const SizedBox(width: 12),
                 Expanded(
                   child: BrandPillButton(
-                    label: 'УДАЛИТЬ',
+                    label: ru ? 'УДАЛИТЬ' : 'DELETE',
                     style: BrandPillStyle.dark,
                     onTap: () => Navigator.of(context).pop(true),
                   ),
@@ -515,6 +518,7 @@ class _InvitationsDesktopQueuePanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
     return Container(
       decoration: catalogCardDecoration(),
       clipBehavior: Clip.antiAlias,
@@ -527,7 +531,7 @@ class _InvitationsDesktopQueuePanel extends StatelessWidget {
               children: [
                 Expanded(
                   child: Text(
-                    'ДИАЛОГИ И ПРИГЛАШЕНИЯ',
+                    ru ? 'ДИАЛОГИ И ПРИГЛАШЕНИЯ' : 'CHATS AND INVITATIONS',
                     style: _invitationCommandStyle(
                       size: 17,
                       spacing: 1.8,
@@ -557,7 +561,9 @@ class _InvitationsDesktopQueuePanel extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
             child: Text(
-              'Выберите приглашение слева, чтобы открыть карточку или продолжить чат справа.',
+              ru
+                  ? 'Выберите приглашение слева, чтобы открыть карточку или продолжить чат справа.'
+                  : 'Select an invitation on the left to view its card or continue the chat on the right.',
               style: _invitationBodyStyle(
                 color: kTextMuted,
                 size: 14,
@@ -614,6 +620,7 @@ class _InvitationListTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -673,7 +680,7 @@ class _InvitationListTile extends StatelessWidget {
                           ),
                           const SizedBox(width: 5),
                           Text(
-                            'ЧАТ ОТКРЫТ',
+                            ru ? 'ЧАТ ОТКРЫТ' : 'CHAT OPEN',
                             style: _invitationCommandStyle(
                               color: BrandTheme.redTop,
                               size: 10,
@@ -726,6 +733,7 @@ class _InvitationDesktopDetails extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
 
     return Container(
       decoration: catalogCardDecoration(),
@@ -734,7 +742,7 @@ class _InvitationDesktopDetails extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            'КАРТОЧКА ПРИГЛАШЕНИЯ',
+            ru ? 'КАРТОЧКА ПРИГЛАШЕНИЯ' : 'INVITATION DETAILS',
             style: _invitationCommandStyle(
               color: kTextMuted,
               size: 13,
@@ -816,7 +824,9 @@ class _InvitationDesktopDetails extends StatelessWidget {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    'Здесь отображается выбранное приглашение. Откройте чат, чтобы обсудить детали кастинга без перехода на отдельный экран.',
+                    ru
+                        ? 'Здесь отображается выбранное приглашение. Откройте чат, чтобы обсудить детали кастинга без перехода на отдельный экран.'
+                        : 'The selected invitation is shown here. Open the chat to discuss casting details without leaving this screen.',
                     style: _invitationBodyStyle(
                       color: kTextMuted,
                       size: 14,

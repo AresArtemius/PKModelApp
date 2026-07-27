@@ -256,7 +256,8 @@ class ChatListItem {
     return title.toLowerCase().contains(q) ||
         contextLabel.toLowerCase().contains(q) ||
         accountTag.toLowerCase().contains(q) ||
-        participantRole.label.toLowerCase().contains(q) ||
+        participantRole.label(true).toLowerCase().contains(q) ||
+        participantRole.label(false).toLowerCase().contains(q) ||
         lastMessage.toLowerCase().contains(q) ||
         (hasMediaMessages && 'медиа media фото video видео'.contains(q)) ||
         (hasFileMessages && 'файл file документ document'.contains(q)) ||
@@ -269,10 +270,10 @@ enum ChatParticipantRole {
   model,
   client;
 
-  String get label {
+  String label(bool ru) {
     return switch (this) {
-      ChatParticipantRole.model => 'КАК МОДЕЛЬ',
-      ChatParticipantRole.client => 'КАК ЗАКАЗЧИК',
+      ChatParticipantRole.model => ru ? 'КАК МОДЕЛЬ' : 'AS MODEL',
+      ChatParticipantRole.client => ru ? 'КАК ЗАКАЗЧИК' : 'AS CLIENT',
     };
   }
 }
