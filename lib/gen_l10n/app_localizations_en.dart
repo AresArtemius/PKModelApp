@@ -2049,4 +2049,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String advancedFeeTo(int value) {
     return 'TO ₽$value';
   }
+
+  @override
+  String get advancedClearDateUpper => 'CLEAR DATE';
+
+  @override
+  String get catalogNoFilterResults => 'No profiles match the selected filters';
+
+  @override
+  String get catalogAdjustFiltersHint => 'Change or reset the filters';
 }

@@ -616,6 +616,14 @@ class _AdvancedSearchDialogState extends State<AdvancedSearchDialog> {
                         allowPreviousMonths: false,
                         onDateSelected: (d) => setState(() => _needDate = d),
                       ),
+                      if (_needDate != null) ...[
+                        const SizedBox(height: kGap10),
+                        _DialogPillButton(
+                          label: t.advancedClearDateUpper,
+                          isDark: false,
+                          onTap: () => setState(() => _needDate = null),
+                        ),
+                      ],
                     ],
                   ),
                 ),

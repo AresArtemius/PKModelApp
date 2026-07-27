@@ -2048,4 +2048,14 @@ class AppLocalizationsRu extends AppLocalizations {
   String advancedFeeTo(int value) {
     return 'ДО $value ₽';
   }
+
+  @override
+  String get advancedClearDateUpper => 'СБРОСИТЬ ДАТУ';
+
+  @override
+  String get catalogNoFilterResults =>
+      'По выбранным параметрам ничего не найдено';
+
+  @override
+  String get catalogAdjustFiltersHint => 'Измените или сбросьте фильтры';
 }

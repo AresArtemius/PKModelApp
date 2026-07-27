@@ -703,6 +703,9 @@
 "advancedFeeFrom": "ОТ {value} ₽",
 "@advancedFeeFrom": { "placeholders": { "value": { "type": "int" } } },
 "advancedFeeTo": "ДО {value} ₽",
-"@advancedFeeTo": { "placeholders": { "value": { "type": "int" } } }
+"@advancedFeeTo": { "placeholders": { "value": { "type": "int" } } },
+"advancedClearDateUpper": "СБРОСИТЬ ДАТУ",
+"catalogNoFilterResults": "По выбранным параметрам ничего не найдено",
+"catalogAdjustFiltersHint": "Измените или сбросьте фильтры"
 
 }

@@ -1163,8 +1163,12 @@ class _CatalogResultsBody extends StatelessWidget {
     if (filteredItems.isEmpty) {
       return _CatalogEmptyState(
         onRefresh: onRefresh,
-        title: t.noApprovedProfilesYet,
-        subtitle: t.catalogSearchHintUpper,
+        title: controller.hasActiveFilters
+            ? t.catalogNoFilterResults
+            : t.noApprovedProfilesYet,
+        subtitle: controller.hasActiveFilters
+            ? t.catalogAdjustFiltersHint
+            : t.catalogSearchHintUpper,
       );
     }
 

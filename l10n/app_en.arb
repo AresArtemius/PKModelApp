@@ -702,7 +702,10 @@
 "advancedFeeFrom": "FROM ₽{value}",
 "@advancedFeeFrom": { "placeholders": { "value": { "type": "int" } } },
 "advancedFeeTo": "TO ₽{value}",
-"@advancedFeeTo": { "placeholders": { "value": { "type": "int" } } }
+"@advancedFeeTo": { "placeholders": { "value": { "type": "int" } } },
+"advancedClearDateUpper": "CLEAR DATE",
+"catalogNoFilterResults": "No profiles match the selected filters",
+"catalogAdjustFiltersHint": "Change or reset the filters"
 
 
 }

@@ -3961,6 +3961,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'TO ₽{value}'**
   String advancedFeeTo(int value);
+
+  /// No description provided for @advancedClearDateUpper.
+  ///
+  /// In en, this message translates to:
+  /// **'CLEAR DATE'**
+  String get advancedClearDateUpper;
+
+  /// No description provided for @catalogNoFilterResults.
+  ///
+  /// In en, this message translates to:
+  /// **'No profiles match the selected filters'**
+  String get catalogNoFilterResults;
+
+  /// No description provided for @catalogAdjustFiltersHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Change or reset the filters'**
+  String get catalogAdjustFiltersHint;
 }
 
 class _AppLocalizationsDelegate

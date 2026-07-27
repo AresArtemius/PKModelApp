@@ -42,8 +42,7 @@ as $$
     (max(min_hourly_rate) filter (where min_hourly_rate >= 0))::int,
     (min(min_daily_fee) filter (where min_daily_fee >= 0))::int,
     (max(min_daily_fee) filter (where min_daily_fee >= 0))::int
-  from public.profiles
-  where status = 'approved';
+  from public.catalog_profiles;
 $$;
 
 grant execute on function public.catalog_filter_bounds() to authenticated, anon;

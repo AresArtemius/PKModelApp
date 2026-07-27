@@ -988,9 +988,10 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
         : null;
     final roleTabs = _CatalogRoleTabs(
       selectedRole: c.profileRole,
-      onChanged: (role) {
+      onChanged: (role) async {
         _unfocus();
         c.setProfileRole(role);
+        await c.reload();
       },
     );
 
