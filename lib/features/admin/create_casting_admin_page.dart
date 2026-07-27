@@ -117,9 +117,14 @@ class _CreateCastingAdminPageState
       context.go(_returnRoute(context));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Не удалось создать кастинг: $e')));
+      final isRu = Localizations.localeOf(context).languageCode == 'ru';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            isRu ? 'Не удалось создать кастинг.' : 'Could not create casting.',
+          ),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _creating = false);
     }

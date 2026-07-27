@@ -350,6 +350,8 @@ class _AdminProfilesPageState extends ConsumerState<AdminProfilesPage> {
   ProfessionalProfileType? _roleFilter;
   int _profilesLimit = _kProfilesPageSize;
 
+  bool get _ru => Localizations.localeOf(context).languageCode == 'ru';
+
   @override
   void dispose() {
     _searchC.dispose();
@@ -359,14 +361,14 @@ class _AdminProfilesPageState extends ConsumerState<AdminProfilesPage> {
   Future<bool> _confirm(
     String title,
     String message, {
-    String confirmLabel = 'Удалить',
+    String? confirmLabel,
     bool destructive = true,
   }) async {
     return showAdminConfirmDialog(
       context: context,
       title: title,
       message: message,
-      confirmLabel: confirmLabel,
+      confirmLabel: confirmLabel ?? (_ru ? 'Удалить' : 'Delete'),
       destructive: destructive,
     );
   }
@@ -380,8 +382,10 @@ class _AdminProfilesPageState extends ConsumerState<AdminProfilesPage> {
 
   Future<void> _deleteProfile(_AdminProfileRow profile) async {
     final confirmed = await _confirm(
-      'Удалить анкету',
-      'Удалить анкету ${profile.displayName(true)}?',
+      _ru ? 'Удалить анкету' : 'Delete profile',
+      _ru
+          ? 'Удалить анкету ${profile.displayName(true)}?'
+          : 'Delete ${profile.displayName(false)}?',
     );
     if (!confirmed) return;
     try {
@@ -389,9 +393,15 @@ class _AdminProfilesPageState extends ConsumerState<AdminProfilesPage> {
           .read(supabaseProvider)
           .rpc('admin_delete_profile', params: {'p_profile_id': profile.id});
       ref.invalidate(_adminProfilesProvider);
-      _snack('Анкета удалена');
+      _snack(_ru ? 'Анкета удалена' : 'Profile deleted');
     } catch (e) {
-      _snack(_adminProfilesActionError(e, 'Не удалось удалить анкету'));
+      _snack(
+        _adminProfilesActionError(
+          e,
+          _ru ? 'Не удалось удалить анкету' : 'Could not delete profile',
+          _ru,
+        ),
+      );
     }
   }
 
@@ -407,21 +417,35 @@ class _AdminProfilesPageState extends ConsumerState<AdminProfilesPage> {
             params: {
               'p_profile_id': profile.id,
               'p_duration_months': months,
-              'p_admin_note': 'Ручное продление из back-office',
+              'p_admin_note': _ru
+                  ? 'Ручное продление из back-office'
+                  : 'Manual extension from back office',
             },
           );
       ref.invalidate(_adminProfilesProvider);
-      _snack('Размещение анкеты продлено на $months мес.');
+      _snack(
+        _ru
+            ? 'Размещение анкеты продлено на $months мес.'
+            : 'Profile placement extended by $months month(s).',
+      );
     } catch (e) {
-      _snack(_adminProfilesActionError(e, 'Не удалось продлить размещение'));
+      _snack(
+        _adminProfilesActionError(
+          e,
+          _ru ? 'Не удалось продлить размещение' : 'Could not extend placement',
+          _ru,
+        ),
+      );
     }
   }
 
   Future<void> _revokeProfileBilling(_AdminProfileRow profile) async {
     final confirmed = await _confirm(
-      'Отключить размещение',
-      'Отключить активное размещение анкеты ${profile.displayName(true)}?',
-      confirmLabel: 'Отключить',
+      _ru ? 'Отключить размещение' : 'Disable placement',
+      _ru
+          ? 'Отключить активное размещение анкеты ${profile.displayName(true)}?'
+          : 'Disable active placement for ${profile.displayName(false)}?',
+      confirmLabel: _ru ? 'Отключить' : 'Disable',
       destructive: true,
     );
     if (!confirmed) return;
@@ -432,13 +456,23 @@ class _AdminProfilesPageState extends ConsumerState<AdminProfilesPage> {
             'admin_revoke_profile_billing',
             params: {
               'p_profile_id': profile.id,
-              'p_admin_note': 'Отключено вручную из back-office',
+              'p_admin_note': _ru
+                  ? 'Отключено вручную из back-office'
+                  : 'Manually disabled from back office',
             },
           );
       ref.invalidate(_adminProfilesProvider);
-      _snack('Размещение анкеты отключено');
+      _snack(_ru ? 'Размещение анкеты отключено' : 'Placement disabled');
     } catch (e) {
-      _snack(_adminProfilesActionError(e, 'Не удалось отключить размещение'));
+      _snack(
+        _adminProfilesActionError(
+          e,
+          _ru
+              ? 'Не удалось отключить размещение'
+              : 'Could not disable placement',
+          _ru,
+        ),
+      );
     }
   }
 
@@ -1546,7 +1580,7 @@ int _listCount(Object? value) {
   return 0;
 }
 
-String _adminProfilesActionError(Object error, String prefix) {
+String _adminProfilesActionError(Object error, String prefix, bool ru) {
   if (error is PostgrestException) {
     final details = [
       error.message,
@@ -1556,7 +1590,9 @@ String _adminProfilesActionError(Object error, String prefix) {
         'code: ${error.code}',
     ].map((e) => e.toString().trim()).where((e) => e.isNotEmpty).join('\n');
     if (details.toLowerCase().contains('admin_delete_profile')) {
-      return '$prefix.\nПримените SQL: supabase/sql/admin_backoffice_actions.sql';
+      return ru
+          ? '$prefix.\nПримените SQL: supabase/sql/admin_backoffice_actions.sql'
+          : '$prefix.\nApply SQL: supabase/sql/admin_backoffice_actions.sql';
     }
     return '$prefix: $details';
   }

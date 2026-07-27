@@ -73,9 +73,16 @@ class SafetyAdminPage extends ConsumerWidget {
       ref.invalidate(safetyReportsProvider);
       ref.invalidate(adminDashboardCountsProvider);
       if (!context.mounted) return;
+      final ru = Localizations.localeOf(context).languageCode == 'ru';
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
-        ..showSnackBar(const SnackBar(content: Text('Статус жалобы обновлен')));
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              ru ? 'Статус жалобы обновлен' : 'Report status updated',
+            ),
+          ),
+        );
     } catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context)
@@ -157,6 +164,7 @@ class _ReportCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
     String text(String key) => (row[key] ?? '').toString().trim();
     final profileId = text('profile_id');
     final comment = text('comment');
@@ -194,14 +202,18 @@ class _ReportCard extends StatelessWidget {
               TextButton(
                 onPressed: () =>
                     onStatusChanged(isClosed ? 'in_review' : 'closed'),
-                child: Text(isClosed ? 'В РАБОТУ' : 'ЗАКРЫТЬ'),
+                child: Text(
+                  isClosed
+                      ? (ru ? 'В РАБОТУ' : 'REOPEN')
+                      : (ru ? 'ЗАКРЫТЬ' : 'CLOSE'),
+                ),
               ),
               const SizedBox(width: 8),
               if (profileId.isNotEmpty)
                 TextButton(
                   onPressed: () =>
                       context.go('${Routes.modelPrefix}$profileId'),
-                  child: const Text('ОТКРЫТЬ'),
+                  child: Text(ru ? 'ОТКРЫТЬ' : 'OPEN'),
                 ),
             ],
           ),

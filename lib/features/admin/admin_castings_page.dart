@@ -288,6 +288,8 @@ class _AdminCastingsPageState extends ConsumerState<AdminCastingsPage> {
   CastingProjectStage? _stageFilter;
   int _castingsLimit = _kCastingsPageSize;
 
+  bool get _ru => Localizations.localeOf(context).languageCode == 'ru';
+
   @override
   void dispose() {
     _searchC.dispose();
@@ -297,9 +299,11 @@ class _AdminCastingsPageState extends ConsumerState<AdminCastingsPage> {
   Future<bool> _confirmDelete(_AdminCastingRow casting) async {
     return showAdminConfirmDialog(
       context: context,
-      title: 'Удалить кастинг',
-      message: 'Удалить кастинг «${casting.title}»?',
-      confirmLabel: 'Удалить',
+      title: _ru ? 'Удалить кастинг' : 'Delete casting',
+      message: _ru
+          ? 'Удалить кастинг «${casting.title}»?'
+          : 'Delete casting “${casting.title}”?',
+      confirmLabel: _ru ? 'Удалить' : 'Delete',
       destructive: true,
     );
   }
@@ -315,12 +319,16 @@ class _AdminCastingsPageState extends ConsumerState<AdminCastingsPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
-        ..showSnackBar(const SnackBar(content: Text('Кастинг удален')));
+        ..showSnackBar(
+          SnackBar(content: Text(_ru ? 'Кастинг удален' : 'Casting deleted')),
+        );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content: Text(_adminCastingsActionError(e))));
+        ..showSnackBar(
+          SnackBar(content: Text(_adminCastingsActionError(e, _ru))),
+        );
     }
   }
 
@@ -706,8 +714,9 @@ class _CastingActionsMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
     return AdminPopupMenuButton<String>(
-      tooltip: 'Действия',
+      tooltip: ru ? 'Действия' : 'Actions',
       onSelected: (value) {
         switch (value) {
           case 'open':
@@ -720,15 +729,15 @@ class _CastingActionsMenu extends StatelessWidget {
             return;
         }
       },
-      options: const [
+      options: [
         AdminMenuOption(
           value: 'open',
-          label: 'Открыть',
+          label: ru ? 'Открыть' : 'Open',
           icon: Icons.open_in_new_rounded,
         ),
         AdminMenuOption(
           value: 'delete',
-          label: 'Удалить',
+          label: ru ? 'Удалить' : 'Delete',
           icon: Icons.delete_outline_rounded,
           destructive: true,
         ),
@@ -989,7 +998,7 @@ int _listCount(Object? value) {
   return 0;
 }
 
-String _adminCastingsActionError(Object error) {
+String _adminCastingsActionError(Object error, bool ru) {
   if (error is PostgrestException) {
     final details = [
       error.message,
@@ -999,9 +1008,11 @@ String _adminCastingsActionError(Object error) {
         'code: ${error.code}',
     ].map((e) => e.toString().trim()).where((e) => e.isNotEmpty).join('\n');
     if (details.toLowerCase().contains('admin_delete_casting')) {
-      return 'Не удалось удалить кастинг.\nПримените SQL: supabase/sql/admin_backoffice_actions.sql';
+      return ru
+          ? 'Не удалось удалить кастинг.\nПримените SQL: supabase/sql/admin_backoffice_actions.sql'
+          : 'Could not delete casting.\nApply SQL: supabase/sql/admin_backoffice_actions.sql';
     }
-    return 'Не удалось удалить: $details';
+    return ru ? 'Не удалось удалить: $details' : 'Could not delete: $details';
   }
-  return 'Не удалось удалить: $error';
+  return ru ? 'Не удалось удалить: $error' : 'Could not delete: $error';
 }

@@ -304,6 +304,8 @@ class _AdminSelectionsTablePageState
   bool? _publicFilter;
   int _selectionsLimit = _kSelectionsPageSize;
 
+  bool get _ru => Localizations.localeOf(context).languageCode == 'ru';
+
   @override
   void dispose() {
     _searchC.dispose();
@@ -313,9 +315,11 @@ class _AdminSelectionsTablePageState
   Future<bool> _confirmDelete(_AdminSelectionRow selection) async {
     return showAdminConfirmDialog(
       context: context,
-      title: 'Удалить подборку',
-      message: 'Удалить подборку «${selection.title}»?',
-      confirmLabel: 'Удалить',
+      title: _ru ? 'Удалить подборку' : 'Delete selection',
+      message: _ru
+          ? 'Удалить подборку «${selection.title}»?'
+          : 'Delete selection “${selection.title}”?',
+      confirmLabel: _ru ? 'Удалить' : 'Delete',
       destructive: true,
     );
   }
@@ -334,12 +338,18 @@ class _AdminSelectionsTablePageState
       if (!mounted) return;
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
-        ..showSnackBar(const SnackBar(content: Text('Подборка удалена')));
+        ..showSnackBar(
+          SnackBar(
+            content: Text(_ru ? 'Подборка удалена' : 'Selection deleted'),
+          ),
+        );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content: Text(_adminSelectionsActionError(e))));
+        ..showSnackBar(
+          SnackBar(content: Text(_adminSelectionsActionError(e, _ru))),
+        );
     }
   }
 
@@ -771,8 +781,9 @@ class _SelectionActionsMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
     return AdminPopupMenuButton<String>(
-      tooltip: 'Действия',
+      tooltip: ru ? 'Действия' : 'Actions',
       onSelected: (value) {
         switch (value) {
           case 'open':
@@ -785,15 +796,15 @@ class _SelectionActionsMenu extends StatelessWidget {
             return;
         }
       },
-      options: const [
+      options: [
         AdminMenuOption(
           value: 'open',
-          label: 'Открыть',
+          label: ru ? 'Открыть' : 'Open',
           icon: Icons.open_in_new_rounded,
         ),
         AdminMenuOption(
           value: 'delete',
-          label: 'Удалить',
+          label: ru ? 'Удалить' : 'Delete',
           icon: Icons.delete_outline_rounded,
           destructive: true,
         ),
@@ -1056,7 +1067,7 @@ bool _boolFromMap(Object? value) {
   return text == 'true' || text == '1' || text == 'yes';
 }
 
-String _adminSelectionsActionError(Object error) {
+String _adminSelectionsActionError(Object error, bool ru) {
   if (error is PostgrestException) {
     final details = [
       error.message,
@@ -1066,9 +1077,11 @@ String _adminSelectionsActionError(Object error) {
         'code: ${error.code}',
     ].map((e) => e.toString().trim()).where((e) => e.isNotEmpty).join('\n');
     if (details.toLowerCase().contains('admin_delete_selection')) {
-      return 'Не удалось удалить подборку.\nПримените SQL: supabase/sql/admin_backoffice_actions.sql';
+      return ru
+          ? 'Не удалось удалить подборку.\nПримените SQL: supabase/sql/admin_backoffice_actions.sql'
+          : 'Could not delete selection.\nApply SQL: supabase/sql/admin_backoffice_actions.sql';
     }
-    return 'Не удалось удалить: $details';
+    return ru ? 'Не удалось удалить: $details' : 'Could not delete: $details';
   }
-  return 'Не удалось удалить: $error';
+  return ru ? 'Не удалось удалить: $error' : 'Could not delete: $error';
 }

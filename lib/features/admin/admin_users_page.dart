@@ -245,6 +245,8 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
   _AdminUserRoleFilter _roleFilter = _AdminUserRoleFilter.all;
   int _usersLimit = _kUsersPageSize;
 
+  bool get _ru => Localizations.localeOf(context).languageCode == 'ru';
+
   @override
   void dispose() {
     _searchC.dispose();
@@ -260,7 +262,7 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
       context: context,
       title: title,
       message: message,
-      confirmLabel: 'Да',
+      confirmLabel: _ru ? 'Да' : 'Yes',
       destructive: destructive,
     );
   }
@@ -275,8 +277,10 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
   Future<void> _setUserRole(_AdminUserRow user, String role) async {
     final accountType = role == 'casting_agent' ? 'casting_agent' : role;
     final confirmed = await _confirm(
-      'Изменить роль',
-      'Назначить ${user.displayName} роль ${_roleActionLabel(role)}?',
+      _ru ? 'Изменить роль' : 'Change role',
+      _ru
+          ? 'Назначить ${user.displayName} роль ${_roleActionLabel(role, true)}?'
+          : 'Assign ${user.displayName} the ${_roleActionLabel(role, false)} role?',
     );
     if (!confirmed) return;
     try {
@@ -287,16 +291,24 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
             params: {'p_user_id': user.id, 'p_account_type': accountType},
           );
       ref.invalidate(_adminUsersProvider);
-      _snack('Роль обновлена');
+      _snack(_ru ? 'Роль обновлена' : 'Role updated');
     } catch (e) {
-      _snack(_adminUsersActionError(e, 'Не удалось обновить роль'));
+      _snack(
+        _adminUsersActionError(
+          e,
+          _ru ? 'Не удалось обновить роль' : 'Could not update role',
+          _ru,
+        ),
+      );
     }
   }
 
   Future<void> _deleteUserProfile(_AdminUserRow user) async {
     final confirmed = await _confirm(
-      'Удалить профиль аккаунта',
-      'Удалить профиль ${user.displayName}? Auth-пользователь не удаляется.',
+      _ru ? 'Удалить профиль аккаунта' : 'Delete account profile',
+      _ru
+          ? 'Удалить профиль ${user.displayName}? Auth-пользователь не удаляется.'
+          : 'Delete ${user.displayName}’s profile? The authentication user will remain.',
       destructive: true,
     );
     if (!confirmed) return;
@@ -305,9 +317,15 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
           .read(supabaseProvider)
           .rpc('admin_delete_user_profile', params: {'p_user_id': user.id});
       ref.invalidate(_adminUsersProvider);
-      _snack('Профиль аккаунта удален');
+      _snack(_ru ? 'Профиль аккаунта удален' : 'Account profile deleted');
     } catch (e) {
-      _snack(_adminUsersActionError(e, 'Не удалось удалить профиль'));
+      _snack(
+        _adminUsersActionError(
+          e,
+          _ru ? 'Не удалось удалить профиль' : 'Could not delete profile',
+          _ru,
+        ),
+      );
     }
   }
 
@@ -1051,13 +1069,13 @@ String _usersErrorText(Object error, bool ru) {
       : 'Could not load users: $error';
 }
 
-String _roleActionLabel(String role) => switch (role) {
-  'admin' => 'админ',
-  'casting_agent' => 'заказчик',
-  _ => 'пользователь',
+String _roleActionLabel(String role, bool ru) => switch (role) {
+  'admin' => ru ? 'админ' : 'admin',
+  'casting_agent' => ru ? 'заказчик' : 'client',
+  _ => ru ? 'пользователь' : 'user',
 };
 
-String _adminUsersActionError(Object error, String prefix) {
+String _adminUsersActionError(Object error, String prefix, bool ru) {
   if (error is PostgrestException) {
     final details = [
       error.message,
@@ -1068,7 +1086,9 @@ String _adminUsersActionError(Object error, String prefix) {
     ].map((e) => e.toString().trim()).where((e) => e.isNotEmpty).join('\n');
     if (details.toLowerCase().contains('admin_set_user_account_access') ||
         details.toLowerCase().contains('admin_delete_user_profile')) {
-      return '$prefix.\nПримените SQL: supabase/sql/admin_backoffice_actions.sql';
+      return ru
+          ? '$prefix.\nПримените SQL: supabase/sql/admin_backoffice_actions.sql'
+          : '$prefix.\nApply SQL: supabase/sql/admin_backoffice_actions.sql';
     }
     return '$prefix: $details';
   }

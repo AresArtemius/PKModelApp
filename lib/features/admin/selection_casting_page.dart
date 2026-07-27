@@ -331,6 +331,7 @@ class SelectionCastingPage extends ConsumerWidget {
                   options: options,
                   references: references,
                   modelLinks: modelLinks,
+                  isRussian: t.localeName == 'ru',
                 );
               }
 

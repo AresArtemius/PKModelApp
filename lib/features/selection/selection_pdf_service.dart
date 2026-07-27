@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'dart:ui';
 
 import 'package:http/http.dart' as http;
 import 'package:pdf/pdf.dart';
@@ -6,6 +7,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
 import '../../core/public_links.dart';
+import '../../ui/brand/appearance_lookups.dart';
 import '../castings/casting_reference_media.dart';
 import 'selection_export_item.dart';
 import 'selection_pdf_options.dart';
@@ -25,6 +27,7 @@ class SelectionPdfService {
     required SelectionPdfOptions options,
     List<CastingReferenceMedia> references = const <CastingReferenceMedia>[],
     Map<String, String> modelLinks = const <String, String>{},
+    bool isRussian = true,
   }) async {
     final filename = title.trim().isEmpty ? 'selection.pdf' : '$title.pdf';
     final bytes = await buildSelectionPdf(
@@ -33,6 +36,7 @@ class SelectionPdfService {
       options: options,
       references: references,
       modelLinks: modelLinks,
+      isRussian: isRussian,
     );
     await Printing.sharePdf(
       bytes: bytes,
@@ -46,6 +50,7 @@ class SelectionPdfService {
     required SelectionPdfOptions options,
     List<CastingReferenceMedia> references = const <CastingReferenceMedia>[],
     Map<String, String> modelLinks = const <String, String>{},
+    bool isRussian = true,
   }) async {
     final doc = pw.Document();
 
@@ -86,6 +91,7 @@ class SelectionPdfService {
               imageData: imageBytes,
               baseFont: baseFont,
               boldFont: boldFont,
+              isRussian: isRussian,
             ),
             pw.SizedBox(height: 14),
           ],
@@ -97,6 +103,7 @@ class SelectionPdfService {
               baseFont: baseFont,
               boldFont: boldFont,
               modelLinks: modelLinks,
+              isRussian: isRussian,
             ),
           ),
         ],
@@ -111,6 +118,7 @@ class SelectionPdfService {
     required Map<String, Uint8List?> imageData,
     required pw.Font baseFont,
     required pw.Font boldFont,
+    required bool isRussian,
   }) {
     return pw.Container(
       width: double.infinity,
@@ -124,7 +132,7 @@ class SelectionPdfService {
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
           pw.Text(
-            'РЕФЕРЕНСЫ КАСТИНГА',
+            isRussian ? 'РЕФЕРЕНСЫ КАСТИНГА' : 'CASTING REFERENCES',
             style: pw.TextStyle(font: boldFont, fontSize: 12),
           ),
           pw.SizedBox(height: 10),
@@ -138,6 +146,7 @@ class SelectionPdfService {
                     imageData: imageData,
                     baseFont: baseFont,
                     boldFont: boldFont,
+                    isRussian: isRussian,
                   ),
                 )
                 .toList(growable: false),
@@ -152,11 +161,12 @@ class SelectionPdfService {
     required Map<String, Uint8List?> imageData,
     required pw.Font baseFont,
     required pw.Font boldFont,
+    required bool isRussian,
   }) {
     final previewUrl = _referencePreviewUrl(reference);
     final preview = imageData[previewUrl];
     final label = reference.name.trim().isEmpty
-        ? _referenceKindLabel(reference.kind)
+        ? _referenceKindLabel(reference.kind, isRussian)
         : reference.name.trim();
     final body = pw.Container(
       width: 132,
@@ -179,7 +189,10 @@ class SelectionPdfService {
                   ? pw.Image(pw.MemoryImage(preview), fit: pw.BoxFit.cover)
                   : pw.Center(
                       child: pw.Text(
-                        _referenceKindLabel(reference.kind).toUpperCase(),
+                        _referenceKindLabel(
+                          reference.kind,
+                          isRussian,
+                        ).toUpperCase(),
                         style: pw.TextStyle(font: boldFont, fontSize: 9),
                       ),
                     ),
@@ -213,14 +226,14 @@ class SelectionPdfService {
     return '';
   }
 
-  String _referenceKindLabel(CastingReferenceMediaKind kind) {
+  String _referenceKindLabel(CastingReferenceMediaKind kind, bool isRussian) {
     switch (kind) {
       case CastingReferenceMediaKind.image:
-        return 'Фото';
+        return isRussian ? 'Фото' : 'Photo';
       case CastingReferenceMediaKind.video:
-        return 'Видео';
+        return isRussian ? 'Видео' : 'Video';
       case CastingReferenceMediaKind.file:
-        return 'Файл';
+        return isRussian ? 'Файл' : 'File';
     }
   }
 
@@ -231,6 +244,7 @@ class SelectionPdfService {
     required pw.Font baseFont,
     required pw.Font boldFont,
     required Map<String, String> modelLinks,
+    required bool isRussian,
   }) {
     final info = <pw.Widget>[];
 
@@ -269,7 +283,7 @@ class SelectionPdfService {
                   borderRadius: pw.BorderRadius.circular(6),
                 ),
                 child: pw.Text(
-                  'ОТКРЫТЬ МОДЕЛЬ',
+                  isRussian ? 'ОТКРЫТЬ МОДЕЛЬ' : 'OPEN MODEL',
                   style: pw.TextStyle(
                     font: boldFont,
                     fontSize: 12,
@@ -291,25 +305,35 @@ class SelectionPdfService {
     }
 
     if (options.includeFullName) {
-      addLine('ФИО', item.fullName);
+      addLine(isRussian ? 'ФИО' : 'Name', item.fullName);
     }
     if (options.includeAge) {
-      addInt('Возраст', item.age);
+      addInt(isRussian ? 'Возраст' : 'Age', item.age);
     }
     if (options.includeHeight) {
-      addInt('Рост', item.height, suffix: 'см');
+      addInt(
+        isRussian ? 'Рост' : 'Height',
+        item.height,
+        suffix: isRussian ? 'см' : 'cm',
+      );
     }
     if (options.includeCity) {
-      addLine('Город', item.city);
+      addLine(isRussian ? 'Город' : 'City', item.city);
     }
     if (options.includeCountry) {
-      addLine('Страна', item.country);
+      addLine(isRussian ? 'Страна' : 'Country', item.country);
     }
     if (options.includeEyeColor) {
-      addLine('Цвет глаз', item.eyeColor);
+      addLine(
+        isRussian ? 'Цвет глаз' : 'Eye color',
+        eyeColorDisplayValue(item.eyeColor, Locale(isRussian ? 'ru' : 'en')),
+      );
     }
     if (options.includeHairColor) {
-      addLine('Цвет волос', item.hairColor);
+      addLine(
+        isRussian ? 'Цвет волос' : 'Hair color',
+        hairColorDisplayValue(item.hairColor, Locale(isRussian ? 'ru' : 'en')),
+      );
     }
 
     if (options.includeMeasurements) {
@@ -318,18 +342,18 @@ class SelectionPdfService {
       if (item.waist > 0) parts.add('W ${item.waist}');
       if (item.hips > 0) parts.add('H ${item.hips}');
       if (parts.isNotEmpty) {
-        addLine('Параметры', parts.join(' / '));
+        addLine(isRussian ? 'Параметры' : 'Measurements', parts.join(' / '));
       }
     }
 
     if (options.includeShoeSize) {
-      addInt('Обувь', item.shoeSize);
+      addInt(isRussian ? 'Обувь' : 'Shoe size', item.shoeSize);
     }
     if (options.includeHourlyRate) {
-      addInt('Мин. в час', item.minHourlyRate);
+      addInt(isRussian ? 'Мин. в час' : 'Hourly minimum', item.minHourlyRate);
     }
     if (options.includeDailyFee) {
-      addInt('Мин. в день', item.minDailyFee);
+      addInt(isRussian ? 'Мин. в день' : 'Daily minimum', item.minDailyFee);
     }
     if (options.includeModelLink) {
       addLink(modelLinks[item.id.trim()] ?? buildModelUrl(item.id));

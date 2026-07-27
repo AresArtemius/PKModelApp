@@ -328,6 +328,7 @@ class SelectionProjectPage extends ConsumerWidget {
                   items: exportItems,
                   options: options,
                   modelLinks: modelLinks,
+                  isRussian: t.localeName == 'ru',
                 );
               }
 

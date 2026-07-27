@@ -85,14 +85,20 @@ class ProfileSlotRequestsPage extends ConsumerWidget {
       ref.invalidate(adminDashboardCountsProvider);
     } catch (_) {
       if (!context.mounted) return;
+      final ru = Localizations.localeOf(context).languageCode == 'ru';
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Не удалось обработать запрос.')),
+        SnackBar(
+          content: Text(
+            ru ? 'Не удалось обработать запрос.' : 'Could not process request.',
+          ),
+        ),
       );
     }
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
     final requests = ref.watch(profileSlotRequestsProvider);
     return Scaffold(
       body: Stack(
@@ -103,20 +109,22 @@ class ProfileSlotRequestsPage extends ConsumerWidget {
               padding: const EdgeInsets.all(16),
               children: [
                 BrandAdminHeader(
-                  title: 'ДОПОЛНИТЕЛЬНЫЕ АНКЕТЫ',
+                  title: ru ? 'ДОПОЛНИТЕЛЬНЫЕ АНКЕТЫ' : 'EXTRA PROFILES',
                   onBack: () => Navigator.of(context).maybePop(),
                 ),
                 const SizedBox(height: kGap14),
                 requests.when(
                   loading: () =>
                       const Center(child: CircularProgressIndicator()),
-                  error: (error, stackTrace) => const Text(
-                    'Не удалось загрузить запросы.',
+                  error: (error, stackTrace) => Text(
+                    ru
+                        ? 'Не удалось загрузить запросы.'
+                        : 'Could not load requests.',
                     textAlign: TextAlign.center,
                   ),
                   data: (items) => items.isEmpty
-                      ? const Text(
-                          'НОВЫХ ЗАПРОСОВ НЕТ',
+                      ? Text(
+                          ru ? 'НОВЫХ ЗАПРОСОВ НЕТ' : 'NO NEW REQUESTS',
                           textAlign: TextAlign.center,
                         )
                       : Column(
@@ -125,8 +133,10 @@ class ProfileSlotRequestsPage extends ConsumerWidget {
                               Card(
                                 child: ListTile(
                                   title: Text(item.owner),
-                                  subtitle: const Text(
-                                    'Запрос ещё на 1 анкету',
+                                  subtitle: Text(
+                                    ru
+                                        ? 'Запрос ещё на 1 анкету'
+                                        : 'Request for 1 more profile',
                                   ),
                                   trailing: Wrap(
                                     spacing: 8,
@@ -134,12 +144,16 @@ class ProfileSlotRequestsPage extends ConsumerWidget {
                                       TextButton(
                                         onPressed: () =>
                                             _decide(context, ref, item, false),
-                                        child: const Text('ОТКЛОНИТЬ'),
+                                        child: Text(
+                                          ru ? 'ОТКЛОНИТЬ' : 'REJECT',
+                                        ),
                                       ),
                                       FilledButton(
                                         onPressed: () =>
                                             _decide(context, ref, item, true),
-                                        child: const Text('РАЗРЕШИТЬ'),
+                                        child: Text(
+                                          ru ? 'РАЗРЕШИТЬ' : 'APPROVE',
+                                        ),
                                       ),
                                     ],
                                   ),

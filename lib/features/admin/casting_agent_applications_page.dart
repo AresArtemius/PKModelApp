@@ -310,6 +310,7 @@ class CastingAgentApplicationsPage extends ConsumerWidget {
 }
 
 String _adminDecisionErrorMessage(Object error, AppLocalizations t) {
+  final ru = t.localeName == 'ru';
   if (error is PostgrestException) {
     final parts = [
       error.message,
@@ -327,13 +328,19 @@ String _adminDecisionErrorMessage(Object error, AppLocalizations t) {
         lower.contains('requested_account_type') ||
         lower.contains('user_roles_role_check') ||
         lower.contains('admin_decide_casting_agent_application')) {
-      return 'Не удалось обработать заявку.\n'
-          'Примените SQL: supabase/sql/fix_user_roles_updated_at.sql\n\n'
-          '$technical';
+      return ru
+          ? 'Не удалось обработать заявку.\n'
+                'Примените SQL: supabase/sql/fix_user_roles_updated_at.sql\n\n'
+                '$technical'
+          : 'Could not process application.\n'
+                'Apply SQL: supabase/sql/fix_user_roles_updated_at.sql\n\n'
+                '$technical';
     }
 
     if (technical.isNotEmpty) {
-      return 'Ошибка Supabase:\n$technical';
+      return ru
+          ? 'Ошибка Supabase:\n$technical'
+          : 'Supabase error:\n$technical';
     }
   }
 

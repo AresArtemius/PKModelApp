@@ -107,6 +107,7 @@ class AccountMergeRequestsPage extends ConsumerWidget {
     required bool approved,
   }) async {
     final t = AppLocalizations.of(context)!;
+    final ru = t.localeName == 'ru';
     try {
       final sb = Supabase.instance.client;
       await sb.rpc(
@@ -148,8 +149,10 @@ class AccountMergeRequestsPage extends ConsumerWidget {
         SnackBar(
           content: Text(
             approved
-                ? 'Номер ${request.requestedPhone} записан в профиль.'
-                : 'Заявка отклонена.',
+                ? (ru
+                      ? 'Номер ${request.requestedPhone} записан в профиль.'
+                      : 'Phone ${request.requestedPhone} saved to the profile.')
+                : (ru ? 'Заявка отклонена.' : 'Request rejected.'),
           ),
         ),
       );

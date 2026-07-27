@@ -88,6 +88,8 @@ class _AdminSupportPageState extends ConsumerState<AdminSupportPage> {
   String? _selectedId;
   bool _sending = false;
 
+  bool get _ru => Localizations.localeOf(context).languageCode == 'ru';
+
   @override
   void dispose() {
     _replyController.dispose();
@@ -112,12 +114,20 @@ class _AdminSupportPageState extends ConsumerState<AdminSupportPage> {
       ref.invalidate(adminSupportTicketsProvider(_filter));
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Ответ отправлен пользователю.')),
+        SnackBar(
+          content: Text(
+            _ru ? 'Ответ отправлен пользователю.' : 'Reply sent to the user.',
+          ),
+        ),
       );
-    } on PostgrestException catch (error) {
+    } on PostgrestException {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Не удалось отправить ответ: ${error.message}')),
+        SnackBar(
+          content: Text(
+            _ru ? 'Не удалось отправить ответ.' : 'Could not send reply.',
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _sending = false);
@@ -136,15 +146,25 @@ class _AdminSupportPageState extends ConsumerState<AdminSupportPage> {
         SnackBar(
           content: Text(
             claimed == true
-                ? 'Обращение назначено вам.'
-                : 'Обращение уже взял другой администратор.',
+                ? (_ru
+                      ? 'Обращение назначено вам.'
+                      : 'Request assigned to you.')
+                : (_ru
+                      ? 'Обращение уже взял другой администратор.'
+                      : 'Another administrator has already claimed this request.'),
           ),
         ),
       );
-    } on PostgrestException catch (error) {
+    } on PostgrestException {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Не удалось назначить: ${error.message}')),
+        SnackBar(
+          content: Text(
+            _ru
+                ? 'Не удалось назначить обращение.'
+                : 'Could not assign request.',
+          ),
+        ),
       );
     }
   }
@@ -171,18 +191,20 @@ class _AdminSupportPageState extends ConsumerState<AdminSupportPage> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Удалить обращение?'),
-        content: const Text(
-          'Обращение и вся переписка будут удалены без восстановления.',
+        title: Text(_ru ? 'Удалить обращение?' : 'Delete request?'),
+        content: Text(
+          _ru
+              ? 'Обращение и вся переписка будут удалены без восстановления.'
+              : 'The request and its entire conversation will be permanently deleted.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('ОТМЕНА'),
+            child: Text(_ru ? 'ОТМЕНА' : 'CANCEL'),
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('УДАЛИТЬ'),
+            child: Text(_ru ? 'УДАЛИТЬ' : 'DELETE'),
           ),
         ],
       ),
@@ -197,13 +219,19 @@ class _AdminSupportPageState extends ConsumerState<AdminSupportPage> {
       ref.invalidate(adminSupportTicketsProvider(_filter));
       setState(() => _selectedId = null);
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Обращение удалено.')));
-    } on PostgrestException catch (error) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_ru ? 'Обращение удалено.' : 'Request deleted.'),
+        ),
+      );
+    } on PostgrestException {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Не удалось удалить: ${error.message}')),
+        SnackBar(
+          content: Text(
+            _ru ? 'Не удалось удалить обращение.' : 'Could not delete request.',
+          ),
+        ),
       );
     }
   }
@@ -407,8 +435,11 @@ class _TicketList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
     if (tickets.isEmpty) {
-      return const _EmptyDetail(text: 'Новых обращений нет.');
+      return _EmptyDetail(
+        text: ru ? 'Новых обращений нет.' : 'No new requests.',
+      );
     }
     return ListView.separated(
       itemCount: tickets.length,
@@ -453,7 +484,7 @@ class _TicketList extends StatelessWidget {
                   ),
                   const SizedBox(height: 7),
                   Text(
-                    '${_channelLabel(ticket.channel)} • ${_categoryLabel(ticket.category)} • ${_supportStatus(ticket.status, true)}',
+                    '${_channelLabel(ticket.channel, ru)} • ${_categoryLabel(ticket.category, ru)} • ${_supportStatus(ticket.status, ru)}',
                     style: const TextStyle(
                       color: kTextMuted,
                       fontSize: 12,
@@ -462,7 +493,7 @@ class _TicketList extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Пользователь: ${ticket.userId}',
+                    '${ru ? 'Пользователь' : 'User'}: ${ticket.userId}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(color: kTextMuted, fontSize: 11),
@@ -546,17 +577,24 @@ class _FaqAdminDialog extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
     final items = ref.watch(adminSupportFaqProvider);
     return AlertDialog(
-      title: const Text('FAQ ПОДДЕРЖКИ'),
+      title: Text(ru ? 'FAQ ПОДДЕРЖКИ' : 'SUPPORT FAQ'),
       content: SizedBox(
         width: 760,
         height: 560,
         child: items.when(
           loading: () => const Center(child: CircularProgressIndicator()),
-          error: (error, _) => Center(child: Text('Ошибка загрузки: $error')),
+          error: (_, _) => Center(
+            child: Text(
+              ru ? 'Не удалось загрузить FAQ.' : 'Could not load FAQ.',
+            ),
+          ),
           data: (rows) => rows.isEmpty
-              ? const Center(child: Text('Вопросов пока нет.'))
+              ? Center(
+                  child: Text(ru ? 'Вопросов пока нет.' : 'No questions yet.'),
+                )
               : ListView.separated(
                   itemCount: rows.length,
                   separatorBuilder: (_, _) => const Divider(),
@@ -580,7 +618,7 @@ class _FaqAdminDialog extends ConsumerWidget {
                       ),
                       onTap: () => _edit(context, ref, item),
                       trailing: IconButton(
-                        tooltip: 'Удалить FAQ',
+                        tooltip: ru ? 'Удалить FAQ' : 'Delete FAQ',
                         onPressed: () => _delete(ref, item),
                         icon: const Icon(Icons.delete_outline_rounded),
                       ),
@@ -592,12 +630,12 @@ class _FaqAdminDialog extends ConsumerWidget {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('ЗАКРЫТЬ'),
+          child: Text(ru ? 'ЗАКРЫТЬ' : 'CLOSE'),
         ),
         FilledButton.icon(
           onPressed: () => _edit(context, ref),
           icon: const Icon(Icons.add_rounded),
-          label: const Text('ДОБАВИТЬ ВОПРОС'),
+          label: Text(ru ? 'ДОБАВИТЬ ВОПРОС' : 'ADD QUESTION'),
         ),
       ],
     );
@@ -659,56 +697,69 @@ class _FaqEditDialogState extends State<_FaqEditDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
-    title: Text(widget.item == null ? 'НОВЫЙ ВОПРОС' : 'РЕДАКТИРОВАТЬ FAQ'),
-    content: SizedBox(
-      width: 620,
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: _question,
-              decoration: const InputDecoration(labelText: 'Вопрос'),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _answer,
-              minLines: 4,
-              maxLines: 8,
-              decoration: const InputDecoration(labelText: 'Ответ'),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _keywords,
-              decoration: const InputDecoration(
-                labelText: 'Ключевые слова через запятую',
+  Widget build(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    return AlertDialog(
+      title: Text(
+        widget.item == null
+            ? (ru ? 'НОВЫЙ ВОПРОС' : 'NEW QUESTION')
+            : (ru ? 'РЕДАКТИРОВАТЬ FAQ' : 'EDIT FAQ'),
+      ),
+      content: SizedBox(
+        width: 620,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: _question,
+                decoration: InputDecoration(
+                  labelText: ru ? 'Вопрос' : 'Question',
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _sortOrder,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Порядок'),
-            ),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              value: _active,
-              onChanged: (value) => setState(() => _active = value),
-              title: const Text('Активный вопрос'),
-            ),
-          ],
+              const SizedBox(height: 12),
+              TextField(
+                controller: _answer,
+                minLines: 4,
+                maxLines: 8,
+                decoration: InputDecoration(labelText: ru ? 'Ответ' : 'Answer'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _keywords,
+                decoration: InputDecoration(
+                  labelText: ru
+                      ? 'Ключевые слова через запятую'
+                      : 'Keywords separated by commas',
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _sortOrder,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: ru ? 'Порядок' : 'Sort order',
+                ),
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                value: _active,
+                onChanged: (value) => setState(() => _active = value),
+                title: Text(ru ? 'Активный вопрос' : 'Active question'),
+              ),
+            ],
+          ),
         ),
       ),
-    ),
-    actions: [
-      TextButton(
-        onPressed: () => Navigator.of(context).pop(),
-        child: const Text('ОТМЕНА'),
-      ),
-      FilledButton(onPressed: _save, child: const Text('СОХРАНИТЬ')),
-    ],
-  );
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(ru ? 'ОТМЕНА' : 'CANCEL'),
+        ),
+        FilledButton(onPressed: _save, child: Text(ru ? 'СОХРАНИТЬ' : 'SAVE')),
+      ],
+    );
+  }
 }
 
 class _TicketDetail extends ConsumerWidget {
@@ -735,6 +786,7 @@ class _TicketDetail extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
     final messages = ref.watch(adminSupportMessagesProvider(ticket.id));
     final attachments = ref.watch(adminSupportAttachmentsProvider(ticket.id));
     final assignedToMe = ticket.assignedTo == currentAdminId;
@@ -765,7 +817,7 @@ class _TicketDetail extends ConsumerWidget {
                       ),
                     ),
                     Text(
-                      '${_channelLabel(ticket.channel)} • ${_categoryLabel(ticket.category)} • ${ticket.userId}',
+                      '${_channelLabel(ticket.channel, ru)} • ${_categoryLabel(ticket.category, ru)} • ${ticket.userId}',
                       style: const TextStyle(color: kTextMuted, fontSize: 12),
                     ),
                   ],
@@ -773,7 +825,7 @@ class _TicketDetail extends ConsumerWidget {
               ),
               const SizedBox(width: 12),
               IconButton(
-                tooltip: 'Удалить обращение',
+                tooltip: ru ? 'Удалить обращение' : 'Delete request',
                 onPressed: onDelete,
                 icon: const Icon(Icons.delete_outline_rounded),
               ),
@@ -783,7 +835,7 @@ class _TicketDetail extends ConsumerWidget {
                     .map(
                       (status) => DropdownMenuItem(
                         value: status,
-                        child: Text(_supportStatus(status, true)),
+                        child: Text(_supportStatus(status, ru)),
                       ),
                     )
                     .toList(growable: false),
@@ -811,23 +863,27 @@ class _TicketDetail extends ConsumerWidget {
                   Expanded(
                     child: Text(
                       assignedElsewhere
-                          ? 'Обращение назначено другому администратору.'
-                          : 'Обращение пока никому не назначено.',
+                          ? (ru
+                                ? 'Обращение назначено другому администратору.'
+                                : 'Request assigned to another administrator.')
+                          : (ru
+                                ? 'Обращение пока никому не назначено.'
+                                : 'This request has not been assigned yet.'),
                       style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
                   ),
                   if (!assignedElsewhere)
                     FilledButton(
                       onPressed: onClaim,
-                      child: const Text('ВЗЯТЬ В РАБОТУ'),
+                      child: Text(ru ? 'ВЗЯТЬ В РАБОТУ' : 'CLAIM'),
                     ),
                 ],
               ),
             ),
             const SizedBox(height: 12),
           ] else ...[
-            const Text(
-              'НАЗНАЧЕНО ВАМ',
+            Text(
+              ru ? 'НАЗНАЧЕНО ВАМ' : 'ASSIGNED TO YOU',
               style: TextStyle(
                 color: BrandTheme.redTop,
                 fontSize: 12,
@@ -845,7 +901,13 @@ class _TicketDetail extends ConsumerWidget {
                     _MessageBubble(message: items[index]),
               ),
               loading: () => const Center(child: CircularProgressIndicator()),
-              error: (error, _) => Center(child: Text('$error')),
+              error: (_, _) => Center(
+                child: Text(
+                  ru
+                      ? 'Не удалось загрузить переписку.'
+                      : 'Could not load the conversation.',
+                ),
+              ),
             ),
           ),
           attachments.when(
@@ -873,8 +935,8 @@ class _TicketDetail extends ConsumerWidget {
             minLines: 2,
             maxLines: 5,
             maxLength: 5000,
-            decoration: const InputDecoration(
-              hintText: 'Ответ пользователю…',
+            decoration: InputDecoration(
+              hintText: ru ? 'Ответ пользователю…' : 'Reply to user…',
               alignLabelWithHint: true,
             ),
           ),
@@ -882,7 +944,11 @@ class _TicketDetail extends ConsumerWidget {
           FilledButton.icon(
             onPressed: sending || !assignedToMe ? null : onReply,
             icon: const Icon(Icons.send_rounded),
-            label: Text(sending ? 'ОТПРАВКА…' : 'ОТПРАВИТЬ ОТВЕТ'),
+            label: Text(
+              sending
+                  ? (ru ? 'ОТПРАВКА…' : 'SENDING…')
+                  : (ru ? 'ОТПРАВИТЬ ОТВЕТ' : 'SEND REPLY'),
+            ),
           ),
         ],
       ),
@@ -1167,19 +1233,19 @@ String _supportStatus(String status, bool ru) {
   };
 }
 
-String _categoryLabel(String category) => switch (category) {
-  'account' => 'Аккаунт',
-  'profile' => 'Анкета',
-  'moderation' => 'Модерация',
-  'billing' => 'Оплата',
-  'casting' => 'Кастинги',
-  'security' => 'Безопасность',
-  _ => 'Другое',
+String _categoryLabel(String category, bool ru) => switch (category) {
+  'account' => ru ? 'Аккаунт' : 'Account',
+  'profile' => ru ? 'Анкета' : 'Profile',
+  'moderation' => ru ? 'Модерация' : 'Moderation',
+  'billing' => ru ? 'Оплата' : 'Billing',
+  'casting' => ru ? 'Кастинги' : 'Castings',
+  'security' => ru ? 'Безопасность' : 'Security',
+  _ => ru ? 'Другое' : 'Other',
 };
 
-String _channelLabel(String channel) => switch (channel) {
+String _channelLabel(String channel, bool ru) => switch (channel) {
   'telegram' => 'Telegram',
   'email' => 'Email',
-  'admin' => 'Админ',
-  _ => 'Приложение',
+  'admin' => ru ? 'Админ' : 'Admin',
+  _ => ru ? 'Приложение' : 'App',
 };
