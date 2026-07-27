@@ -2319,6 +2319,7 @@ class _AdminRowsTable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
     final narrow = MediaQuery.sizeOf(context).width < 760;
     if (narrow) {
       return Column(
@@ -2357,15 +2358,15 @@ class _AdminRowsTable extends StatelessWidget {
           _tableRow(
             context,
             header: true,
-            cells: const [
+            cells: [
               '',
-              'ТИП',
-              'НАЗВАНИЕ',
-              'ДЕТАЛИ',
+              ru ? 'ТИП' : 'TYPE',
+              ru ? 'НАЗВАНИЕ' : 'TITLE',
+              ru ? 'ДЕТАЛИ' : 'DETAILS',
               'SLA',
-              'ОТВЕТСТВ.',
-              'СТАТУС',
-              'ДАТА',
+              ru ? 'ОТВЕТСТВ.' : 'ASSIGNEE',
+              ru ? 'СТАТУС' : 'STATUS',
+              ru ? 'ДАТА' : 'DATE',
             ],
           ),
           for (final row in rows)
