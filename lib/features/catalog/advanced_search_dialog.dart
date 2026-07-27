@@ -232,6 +232,7 @@ class _AdvancedSearchDialogState extends State<AdvancedSearchDialog> {
 
   DateTime? _needDate;
   String? _validationMessage;
+  bool _appearanceValuesLocalized = false;
 
   _RangeFilter _range({
     required int min,
@@ -320,12 +321,26 @@ class _AdvancedSearchDialogState extends State<AdvancedSearchDialog> {
     super.dispose();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_appearanceValuesLocalized) return;
+    final locale = Localizations.localeOf(context);
+    _eyeC.text = eyeColorDisplayValue(_eyeC.text, locale);
+    _hairC.text = hairColorDisplayValue(_hairC.text, locale);
+    _appearanceValuesLocalized = true;
+  }
+
   List<String> get _countryOptions =>
       countryOptions(AppLocalizations.of(context)!);
   List<String> get _cityOptions => cityOptionsForCountry(
     AppLocalizations.of(context)!,
     _countryC.text.trim(),
   );
+  List<String> get _eyeColorOptions =>
+      eyeColorOptions(Localizations.localeOf(context));
+  List<String> get _hairColorOptions =>
+      hairColorOptions(Localizations.localeOf(context));
 
   String _normalizeLookupValue(String value) => value.trim().toLowerCase();
 
@@ -376,9 +391,9 @@ class _AdvancedSearchDialogState extends State<AdvancedSearchDialog> {
   }
 
   AdvancedSearchResult _buildResult() {
-    final eyeColor = _matchAllowedOptionOrEmpty(eyeColorOptions, _text(_eyeC));
+    final eyeColor = _matchAllowedOptionOrEmpty(_eyeColorOptions, _text(_eyeC));
     final hairColor = _matchAllowedOptionOrEmpty(
-      hairColorOptions,
+      _hairColorOptions,
       _text(_hairC),
     );
     final country = _matchAllowedOptionOrEmpty(
@@ -410,8 +425,8 @@ class _AdvancedSearchDialogState extends State<AdvancedSearchDialog> {
       minHourlyRateTo: _optionalInt(_hourlyToC),
       minDailyFeeFrom: _optionalInt(_dailyFromC),
       minDailyFeeTo: _optionalInt(_dailyToC),
-      eyeColor: eyeColor,
-      hairColor: hairColor,
+      eyeColor: eyeColorStorageValue(eyeColor),
+      hairColor: hairColorStorageValue(hairColor),
       country: country,
       city: city,
       needDate: _needDate,
@@ -458,8 +473,8 @@ class _AdvancedSearchDialogState extends State<AdvancedSearchDialog> {
       return value.isNotEmpty && !_containsNormalized(options, value);
     }
 
-    if (invalid(_eyeC, eyeColorOptions)) return t.eyeColor;
-    if (invalid(_hairC, hairColorOptions)) return t.hairColor;
+    if (invalid(_eyeC, _eyeColorOptions)) return t.eyeColor;
+    if (invalid(_hairC, _hairColorOptions)) return t.hairColor;
     if (invalid(_countryC, _countryOptions)) return t.country;
     if (invalid(_cityC, _cityOptions)) return t.city;
     return null;
@@ -581,14 +596,14 @@ class _AdvancedSearchDialogState extends State<AdvancedSearchDialog> {
                       _sectionTitle(t.eyeColor),
                       SearchableChoiceField(
                         controller: _eyeC,
-                        options: eyeColorOptions,
+                        options: _eyeColorOptions,
                       ),
                       const SizedBox(height: kGap12),
 
                       _sectionTitle(t.hairColor),
                       SearchableChoiceField(
                         controller: _hairC,
-                        options: hairColorOptions,
+                        options: _hairColorOptions,
                       ),
                       const SizedBox(height: kGap12),
 

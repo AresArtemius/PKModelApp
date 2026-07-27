@@ -426,8 +426,9 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
         ? s.minHourlyRate.toString()
         : '';
     _minDailyFeeC.text = s.minDailyFee > 0 ? s.minDailyFee.toString() : '';
-    _eyeColorC.text = s.eyeColor;
-    _hairColorC.text = s.hairColor;
+    final locale = Localizations.localeOf(context);
+    _eyeColorC.text = eyeColorDisplayValue(s.eyeColor, locale);
+    _hairColorC.text = hairColorDisplayValue(s.hairColor, locale);
     _countryC.text = s.country;
     _cityC.text = s.city;
     _resumeC.text = s.resume;
@@ -637,8 +638,8 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
       shoeSize: _intOrZero(_shoeSizeC.text),
       minHourlyRate: _intOrZero(_minHourlyRateC.text),
       minDailyFee: _intOrZero(_minDailyFeeC.text),
-      eyeColor: _eyeColorC.text.trim(),
-      hairColor: _hairColorC.text.trim(),
+      eyeColor: eyeColorStorageValue(_eyeColorC.text),
+      hairColor: hairColorStorageValue(_hairColorC.text),
       country: _countryC.text.trim(),
       resume: _resumeC.text,
       experience: _experienceC.text.trim(),
@@ -1520,12 +1521,12 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
           left: SearchableChoiceField(
             label: t.profileEyeColor,
             controller: _eyeColorC,
-            options: eyeColorOptions,
+            options: eyeColorOptions(Localizations.localeOf(context)),
           ),
           right: SearchableChoiceField(
             label: t.profileHairColor,
             controller: _hairColorC,
-            options: hairColorOptions,
+            options: hairColorOptions(Localizations.localeOf(context)),
           ),
         ),
       ],
@@ -2028,12 +2029,16 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
                                     left: SearchableChoiceField(
                                       label: t.profileEyeColor,
                                       controller: _eyeColorC,
-                                      options: eyeColorOptions,
+                                      options: eyeColorOptions(
+                                        Localizations.localeOf(context),
+                                      ),
                                     ),
                                     right: SearchableChoiceField(
                                       label: t.profileHairColor,
                                       controller: _hairColorC,
-                                      options: hairColorOptions,
+                                      options: hairColorOptions(
+                                        Localizations.localeOf(context),
+                                      ),
                                     ),
                                   ),
                                   const SizedBox(height: kGap12),

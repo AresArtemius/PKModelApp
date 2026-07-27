@@ -1,12 +1,14 @@
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
+import 'package:flutter/widgets.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
 import '../../core/public_links.dart';
 import '../../gen_l10n/app_localizations.dart';
+import '../../ui/brand/appearance_lookups.dart';
 import '../profile/profile_model.dart';
 import 'model_data.dart';
 
@@ -192,9 +194,15 @@ class ProfileCompositePdfService {
       if ((model.shoeSize ?? 0) > 0)
         (label: t.profileShoeSize, value: '${model.shoeSize}'),
       if (model.eyeColor.trim().isNotEmpty)
-        (label: t.profileEyeColor, value: model.eyeColor.trim()),
+        (
+          label: t.profileEyeColor,
+          value: eyeColorDisplayValue(model.eyeColor, Locale(t.localeName)),
+        ),
       if (model.hairColor.trim().isNotEmpty)
-        (label: t.profileHairColor, value: model.hairColor.trim()),
+        (
+          label: t.profileHairColor,
+          value: hairColorDisplayValue(model.hairColor, Locale(t.localeName)),
+        ),
       if (location.isNotEmpty) (label: t.profileCity, value: location),
       if ((model.minHourlyRate ?? 0) > 0)
         (label: t.profileMinHourlyRate, value: '${model.minHourlyRate}'),

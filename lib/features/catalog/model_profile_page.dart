@@ -16,6 +16,7 @@ import '../../core/roles_provider.dart';
 import '../../core/public_links.dart';
 import '../../core/router.dart';
 import '../../gen_l10n/app_localizations.dart';
+import '../../ui/brand/appearance_lookups.dart';
 import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
 import 'agent_workspace.dart';
@@ -610,11 +611,21 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
                                     ),
                                     MapEntry(
                                       t.profileEyeColor,
-                                      _displayText(m.eyeColor),
+                                      _displayText(
+                                        eyeColorDisplayValue(
+                                          m.eyeColor,
+                                          Localizations.localeOf(context),
+                                        ),
+                                      ),
                                     ),
                                     MapEntry(
                                       t.profileHairColor,
-                                      _displayText(m.hairColor),
+                                      _displayText(
+                                        hairColorDisplayValue(
+                                          m.hairColor,
+                                          Localizations.localeOf(context),
+                                        ),
+                                      ),
                                     ),
                                   ],
                                   MapEntry(
