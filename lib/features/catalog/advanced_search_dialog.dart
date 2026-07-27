@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../gen_l10n/app_localizations.dart';
 import '../../ui/brand/appearance_lookups.dart';
@@ -219,15 +220,18 @@ class _AdvancedSearchDialogState extends State<AdvancedSearchDialog> {
   late _RangeFilter _bust;
   late _RangeFilter _waist;
   late _RangeFilter _hips;
-  late _RangeFilter _minHourlyRate;
-  late _RangeFilter _minDailyFee;
 
   late final TextEditingController _eyeC;
   late final TextEditingController _hairC;
   late final TextEditingController _countryC;
   late final TextEditingController _cityC;
+  late final TextEditingController _hourlyFromC;
+  late final TextEditingController _hourlyToC;
+  late final TextEditingController _dailyFromC;
+  late final TextEditingController _dailyToC;
 
   DateTime? _needDate;
+  String? _validationMessage;
 
   _RangeFilter _range({
     required int min,
@@ -284,24 +288,22 @@ class _AdvancedSearchDialogState extends State<AdvancedSearchDialog> {
       to: widget.initialHipsTo,
     );
 
-    _minHourlyRate = _range(
-      min: widget.minHourlyRateMin,
-      max: widget.minHourlyRateMax,
-      from: widget.initialMinHourlyRateFrom,
-      to: widget.initialMinHourlyRateTo,
-    );
-
-    _minDailyFee = _range(
-      min: widget.minDailyFeeMin,
-      max: widget.minDailyFeeMax,
-      from: widget.initialMinDailyFeeFrom,
-      to: widget.initialMinDailyFeeTo,
-    );
-
     _eyeC = TextEditingController(text: widget.initialEyeColor);
     _hairC = TextEditingController(text: widget.initialHairColor);
     _countryC = TextEditingController(text: widget.initialCountry);
     _cityC = TextEditingController(text: widget.initialCity);
+    _hourlyFromC = TextEditingController(
+      text: widget.initialMinHourlyRateFrom?.toString() ?? '',
+    );
+    _hourlyToC = TextEditingController(
+      text: widget.initialMinHourlyRateTo?.toString() ?? '',
+    );
+    _dailyFromC = TextEditingController(
+      text: widget.initialMinDailyFeeFrom?.toString() ?? '',
+    );
+    _dailyToC = TextEditingController(
+      text: widget.initialMinDailyFeeTo?.toString() ?? '',
+    );
     _needDate = widget.initialNeedDate;
   }
 
@@ -311,6 +313,10 @@ class _AdvancedSearchDialogState extends State<AdvancedSearchDialog> {
     _hairC.dispose();
     _countryC.dispose();
     _cityC.dispose();
+    _hourlyFromC.dispose();
+    _hourlyToC.dispose();
+    _dailyFromC.dispose();
+    _dailyToC.dispose();
     super.dispose();
   }
 
@@ -364,6 +370,11 @@ class _AdvancedSearchDialogState extends State<AdvancedSearchDialog> {
 
   String _text(TextEditingController controller) => controller.text.trim();
 
+  int? _optionalInt(TextEditingController controller) {
+    final value = _text(controller);
+    return value.isEmpty ? null : int.tryParse(value);
+  }
+
   AdvancedSearchResult _buildResult() {
     final eyeColor = _matchAllowedOptionOrEmpty(eyeColorOptions, _text(_eyeC));
     final hairColor = _matchAllowedOptionOrEmpty(
@@ -395,10 +406,10 @@ class _AdvancedSearchDialogState extends State<AdvancedSearchDialog> {
       waistTo: _waist.endOrNull(),
       hipsFrom: _hips.startOrNull(),
       hipsTo: _hips.endOrNull(),
-      minHourlyRateFrom: _minHourlyRate.startOrNull(),
-      minHourlyRateTo: _minHourlyRate.endOrNull(),
-      minDailyFeeFrom: _minDailyFee.startOrNull(),
-      minDailyFeeTo: _minDailyFee.endOrNull(),
+      minHourlyRateFrom: _optionalInt(_hourlyFromC),
+      minHourlyRateTo: _optionalInt(_hourlyToC),
+      minDailyFeeFrom: _optionalInt(_dailyFromC),
+      minDailyFeeTo: _optionalInt(_dailyToC),
       eyeColor: eyeColor,
       hairColor: hairColor,
       country: country,
@@ -414,7 +425,44 @@ class _AdvancedSearchDialogState extends State<AdvancedSearchDialog> {
 
   void _applyAndClose() {
     _unfocus();
+    final t = AppLocalizations.of(context)!;
+    final invalidField = _firstInvalidLookupField(t);
+    if (invalidField != null) {
+      setState(() {
+        _validationMessage = t.advancedChooseListedValue(invalidField);
+      });
+      return;
+    }
+    if (!_validFeeRange(_hourlyFromC, _hourlyToC) ||
+        !_validFeeRange(_dailyFromC, _dailyToC)) {
+      setState(() {
+        _validationMessage = t.advancedInvalidFeeRange;
+      });
+      return;
+    }
     Navigator.of(context).pop(_buildResult());
+  }
+
+  bool _validFeeRange(
+    TextEditingController fromController,
+    TextEditingController toController,
+  ) {
+    final from = _optionalInt(fromController);
+    final to = _optionalInt(toController);
+    return from == null || to == null || from <= to;
+  }
+
+  String? _firstInvalidLookupField(AppLocalizations t) {
+    bool invalid(TextEditingController controller, List<String> options) {
+      final value = _text(controller);
+      return value.isNotEmpty && !_containsNormalized(options, value);
+    }
+
+    if (invalid(_eyeC, eyeColorOptions)) return t.eyeColor;
+    if (invalid(_hairC, hairColorOptions)) return t.hairColor;
+    if (invalid(_countryC, _countryOptions)) return t.country;
+    if (invalid(_cityC, _cityOptions)) return t.city;
+    return null;
   }
 
   @override
@@ -472,16 +520,6 @@ class _AdvancedSearchDialogState extends State<AdvancedSearchDialog> {
         filter: _hips,
         onChanged: (v) => setState(() => _hips.set(v)),
       ),
-      _RangeSectionConfig(
-        title: t.advancedMinHourlyRateUpper,
-        filter: _minHourlyRate,
-        onChanged: (v) => setState(() => _minHourlyRate.set(v)),
-      ),
-      _RangeSectionConfig(
-        title: t.advancedMinDailyFeeUpper,
-        filter: _minDailyFee,
-        onChanged: (v) => setState(() => _minDailyFee.set(v)),
-      ),
     ];
 
     return Dialog(
@@ -523,6 +561,22 @@ class _AdvancedSearchDialogState extends State<AdvancedSearchDialog> {
                         ),
                         const SizedBox(height: 18),
                       ],
+                      _feeRangeSection(
+                        title: t.advancedMinHourlyRateUpper,
+                        fromController: _hourlyFromC,
+                        toController: _hourlyToC,
+                        fromHint: t.advancedFeeFrom(widget.minHourlyRateMin),
+                        toHint: t.advancedFeeTo(widget.minHourlyRateMax),
+                      ),
+                      const SizedBox(height: 18),
+                      _feeRangeSection(
+                        title: t.advancedMinDailyFeeUpper,
+                        fromController: _dailyFromC,
+                        toController: _dailyToC,
+                        fromHint: t.advancedFeeFrom(widget.minDailyFeeMin),
+                        toHint: t.advancedFeeTo(widget.minDailyFeeMax),
+                      ),
+                      const SizedBox(height: 18),
 
                       _sectionTitle(t.eyeColor),
                       SearchableChoiceField(
@@ -567,6 +621,17 @@ class _AdvancedSearchDialogState extends State<AdvancedSearchDialog> {
                 ),
               ),
               const SizedBox(height: kGap16),
+              if (_validationMessage != null) ...[
+                Text(
+                  _validationMessage!,
+                  textAlign: TextAlign.center,
+                  style: BrandTheme.pillText.copyWith(
+                    fontSize: 12,
+                    color: BrandTheme.redTop,
+                  ),
+                ),
+                const SizedBox(height: kGap10),
+              ],
               Row(
                 children: [
                   Expanded(
@@ -628,6 +693,43 @@ class _AdvancedSearchDialogState extends State<AdvancedSearchDialog> {
             divisions: filter.max > filter.min ? filter.max - filter.min : null,
             onChanged: onChanged,
           ),
+        ),
+      ],
+    );
+  }
+
+  Widget _feeRangeSection({
+    required String title,
+    required TextEditingController fromController,
+    required TextEditingController toController,
+    required String fromHint,
+    required String toHint,
+  }) {
+    Widget field(TextEditingController controller, String hint) {
+      return TextField(
+        controller: controller,
+        keyboardType: TextInputType.number,
+        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+        decoration: pillInputDecoration(hint: hint),
+        onChanged: (_) {
+          if (_validationMessage != null) {
+            setState(() => _validationMessage = null);
+          }
+        },
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _sectionTitle(title),
+        const SizedBox(height: kGap6),
+        Row(
+          children: [
+            Expanded(child: field(fromController, fromHint)),
+            const SizedBox(width: kGap10),
+            Expanded(child: field(toController, toHint)),
+          ],
         ),
       ],
     );

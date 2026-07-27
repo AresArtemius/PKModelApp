@@ -695,7 +695,14 @@
 "projectBudget": "Budget",
 "projectLocation": "Location",
 "projectDates": "Dates",
-"projectRoles": "Roles"
+"projectRoles": "Roles",
+"advancedChooseListedValue": "Select a value from the list: {field}",
+"@advancedChooseListedValue": { "placeholders": { "field": { "type": "String" } } },
+"advancedInvalidFeeRange": "The FROM value cannot be greater than the TO value.",
+"advancedFeeFrom": "FROM ₽{value}",
+"@advancedFeeFrom": { "placeholders": { "value": { "type": "int" } } },
+"advancedFeeTo": "TO ₽{value}",
+"@advancedFeeTo": { "placeholders": { "value": { "type": "int" } } }
 
 
 }

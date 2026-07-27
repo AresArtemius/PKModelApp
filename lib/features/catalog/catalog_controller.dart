@@ -527,27 +527,29 @@ class CatalogController extends ChangeNotifier {
     bool matches(ModelVm m) {
       if (role != null && !m.hasProfileRole(role)) return false;
 
-      if (ageFrom != null && m.age < ageFrom!) return false;
-      if (ageTo != null && m.age > ageTo!) return false;
+      bool outsideRequiredRange(int value, int? from, int? to) {
+        if (from == null && to == null) return false;
+        if (value <= 0) return true;
+        if (from != null && value < from) return true;
+        if (to != null && value > to) return true;
+        return false;
+      }
 
-      if (heightFrom != null && m.height < heightFrom!) return false;
-      if (heightTo != null && m.height > heightTo!) return false;
+      if (outsideRequiredRange(m.age, ageFrom, ageTo)) return false;
+      if (outsideRequiredRange(m.height, heightFrom, heightTo)) return false;
 
       final s = m.shoeSize;
       if (shoeFrom != null && (s == null || s < shoeFrom!)) return false;
       if (shoeTo != null && (s == null || s > shoeTo!)) return false;
 
       final b = m.bust;
-      if (bustFrom != null && b < bustFrom!) return false;
-      if (bustTo != null && b > bustTo!) return false;
+      if (outsideRequiredRange(b, bustFrom, bustTo)) return false;
 
       final w = m.waist;
-      if (waistFrom != null && w < waistFrom!) return false;
-      if (waistTo != null && w > waistTo!) return false;
+      if (outsideRequiredRange(w, waistFrom, waistTo)) return false;
 
       final h = m.hips;
-      if (hipsFrom != null && h < hipsFrom!) return false;
-      if (hipsTo != null && h > hipsTo!) return false;
+      if (outsideRequiredRange(h, hipsFrom, hipsTo)) return false;
 
       final hourly = m.minHourlyRate;
       if (minHourlyRateFrom != null &&
@@ -618,6 +620,7 @@ class CatalogController extends ChangeNotifier {
       hairColor: hairColor,
       country: country,
       city: city,
+      profileRole: profileRole,
     );
   }
 }

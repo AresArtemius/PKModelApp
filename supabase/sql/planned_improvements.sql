@@ -26,22 +26,22 @@ security definer
 set search_path = public
 as $$
   select
-    min(age)::int,
-    max(age)::int,
-    min(height)::int,
-    max(height)::int,
-    min(shoe_size)::int,
-    max(shoe_size)::int,
-    min(bust)::int,
-    max(bust)::int,
-    min(waist)::int,
-    max(waist)::int,
-    min(hips)::int,
-    max(hips)::int,
-    min(min_hourly_rate)::int,
-    max(min_hourly_rate)::int,
-    min(min_daily_fee)::int,
-    max(min_daily_fee)::int
+    (min(age) filter (where age between 1 and 90))::int,
+    (max(age) filter (where age between 1 and 90))::int,
+    (min(height) filter (where height between 20 and 210))::int,
+    (max(height) filter (where height between 20 and 210))::int,
+    (min(shoe_size) filter (where shoe_size between 5 and 55))::int,
+    (max(shoe_size) filter (where shoe_size between 5 and 55))::int,
+    (min(bust) filter (where bust between 60 and 130))::int,
+    (max(bust) filter (where bust between 60 and 130))::int,
+    (min(waist) filter (where waist between 30 and 90))::int,
+    (max(waist) filter (where waist between 30 and 90))::int,
+    (min(hips) filter (where hips between 60 and 150))::int,
+    (max(hips) filter (where hips between 60 and 150))::int,
+    (min(min_hourly_rate) filter (where min_hourly_rate >= 0))::int,
+    (max(min_hourly_rate) filter (where min_hourly_rate >= 0))::int,
+    (min(min_daily_fee) filter (where min_daily_fee >= 0))::int,
+    (max(min_daily_fee) filter (where min_daily_fee >= 0))::int
   from public.profiles
   where status = 'approved';
 $$;

@@ -2029,4 +2029,23 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get projectRoles => 'Роли';
+
+  @override
+  String advancedChooseListedValue(String field) {
+    return 'Выберите значение из списка: $field';
+  }
+
+  @override
+  String get advancedInvalidFeeRange =>
+      'Значение «ОТ» не может быть больше значения «ДО».';
+
+  @override
+  String advancedFeeFrom(int value) {
+    return 'ОТ $value ₽';
+  }
+
+  @override
+  String advancedFeeTo(int value) {
+    return 'ДО $value ₽';
+  }
 }

@@ -2,6 +2,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/supabase_compat.dart';
 import '../../ui/brand/ui_constants.dart';
+import '../profile/profile_model.dart';
 import '../profile/profile_supabase_schema.dart';
 import 'catalog_filter_bounds.dart';
 import 'model_data.dart';
@@ -46,6 +47,7 @@ class CatalogRepository {
     String hairColor = '',
     String country = '',
     String city = '',
+    ProfessionalProfileType? profileRole,
   }) async {
     assert(offset >= 0 && limit > 0);
 
@@ -107,6 +109,9 @@ class CatalogRepository {
       q = _applyTextFilter(q, 'hair_color', hair);
       q = _applyTextFilter(q, 'country', ctry);
       q = _applyTextFilter(q, 'city', cty);
+      if (profileRole != null) {
+        q = q.contains('profile_roles', <String>[profileRole.storageValue]);
+      }
 
       var ordered = q.range(offset, offset + limit - 1);
       if (includePro) {
@@ -214,8 +219,8 @@ class CatalogRepository {
     int fallbackMin,
     int fallbackMax,
   ) {
-    final min = minValue ?? fallbackMin;
-    final max = maxValue ?? fallbackMax;
+    final min = (minValue ?? fallbackMin).clamp(fallbackMin, fallbackMax);
+    final max = (maxValue ?? fallbackMax).clamp(fallbackMin, fallbackMax);
 
     if (min > max) {
       return (min: fallbackMin, max: fallbackMax);
@@ -224,11 +229,18 @@ class CatalogRepository {
     return (min: min, max: max);
   }
 
-  Future<int?> _edgeOf(String column, {required bool ascending}) async {
+  Future<int?> _edgeOf(
+    String column, {
+    required bool ascending,
+    required int minAllowed,
+    required int maxAllowed,
+  }) async {
     final rows = await _client
         .from(_catalogTable)
         .select(column)
         .not(column, 'is', null)
+        .gte(column, minAllowed)
+        .lte(column, maxAllowed)
         .order(column, ascending: ascending)
         .limit(1);
 
@@ -359,22 +371,97 @@ class CatalogRepository {
 
   Future<CatalogFilterBounds> _loadFilterBoundsFromEdgeQueries() async {
     final results = await Future.wait<int?>([
-      _edgeOf('age', ascending: true),
-      _edgeOf('age', ascending: false),
-      _edgeOf('height', ascending: true),
-      _edgeOf('height', ascending: false),
-      _edgeOf('shoe_size', ascending: true),
-      _edgeOf('shoe_size', ascending: false),
-      _edgeOf('bust', ascending: true),
-      _edgeOf('bust', ascending: false),
-      _edgeOf('waist', ascending: true),
-      _edgeOf('waist', ascending: false),
-      _edgeOf('hips', ascending: true),
-      _edgeOf('hips', ascending: false),
-      _edgeOf('min_hourly_rate', ascending: true),
-      _edgeOf('min_hourly_rate', ascending: false),
-      _edgeOf('min_daily_fee', ascending: true),
-      _edgeOf('min_daily_fee', ascending: false),
+      _edgeOf('age', ascending: true, minAllowed: kAgeMin, maxAllowed: kAgeMax),
+      _edgeOf(
+        'age',
+        ascending: false,
+        minAllowed: kAgeMin,
+        maxAllowed: kAgeMax,
+      ),
+      _edgeOf(
+        'height',
+        ascending: true,
+        minAllowed: kHeightMin,
+        maxAllowed: kHeightMax,
+      ),
+      _edgeOf(
+        'height',
+        ascending: false,
+        minAllowed: kHeightMin,
+        maxAllowed: kHeightMax,
+      ),
+      _edgeOf(
+        'shoe_size',
+        ascending: true,
+        minAllowed: kShoeMin,
+        maxAllowed: kShoeMax,
+      ),
+      _edgeOf(
+        'shoe_size',
+        ascending: false,
+        minAllowed: kShoeMin,
+        maxAllowed: kShoeMax,
+      ),
+      _edgeOf(
+        'bust',
+        ascending: true,
+        minAllowed: kBustMin,
+        maxAllowed: kBustMax,
+      ),
+      _edgeOf(
+        'bust',
+        ascending: false,
+        minAllowed: kBustMin,
+        maxAllowed: kBustMax,
+      ),
+      _edgeOf(
+        'waist',
+        ascending: true,
+        minAllowed: kWaistMin,
+        maxAllowed: kWaistMax,
+      ),
+      _edgeOf(
+        'waist',
+        ascending: false,
+        minAllowed: kWaistMin,
+        maxAllowed: kWaistMax,
+      ),
+      _edgeOf(
+        'hips',
+        ascending: true,
+        minAllowed: kHipsMin,
+        maxAllowed: kHipsMax,
+      ),
+      _edgeOf(
+        'hips',
+        ascending: false,
+        minAllowed: kHipsMin,
+        maxAllowed: kHipsMax,
+      ),
+      _edgeOf(
+        'min_hourly_rate',
+        ascending: true,
+        minAllowed: _hourlyRateFallbackMin,
+        maxAllowed: _hourlyRateFallbackMax,
+      ),
+      _edgeOf(
+        'min_hourly_rate',
+        ascending: false,
+        minAllowed: _hourlyRateFallbackMin,
+        maxAllowed: _hourlyRateFallbackMax,
+      ),
+      _edgeOf(
+        'min_daily_fee',
+        ascending: true,
+        minAllowed: _dailyFeeFallbackMin,
+        maxAllowed: _dailyFeeFallbackMax,
+      ),
+      _edgeOf(
+        'min_daily_fee',
+        ascending: false,
+        minAllowed: _dailyFeeFallbackMin,
+        maxAllowed: _dailyFeeFallbackMax,
+      ),
     ]);
 
     final ageMin = results[0];

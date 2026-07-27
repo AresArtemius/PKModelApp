@@ -20,6 +20,9 @@ void main() {
     int age = 20,
     int height = 175,
     int? shoeSize = 39,
+    int bust = 85,
+    int waist = 60,
+    int hips = 90,
     String city = 'Moscow',
     String country = 'Russia',
     String eyeColor = 'Brown',
@@ -34,9 +37,9 @@ void main() {
       fullName: fullName,
       age: age,
       height: height,
-      bust: 85,
-      waist: 60,
-      hips: 90,
+      bust: bust,
+      waist: waist,
+      hips: hips,
       city: city,
       photoUrls: const [],
       shoeSize: shoeSize,
@@ -108,6 +111,29 @@ void main() {
     ]);
 
     expect(result.map((m) => m.id), ['free']);
+  });
+
+  test('active ranges exclude profiles with missing numeric values', () {
+    final c = controller();
+    c.applyAdvancedFilters(
+      reset: false,
+      ageTo: 30,
+      heightTo: 190,
+      bustTo: 100,
+      waistTo: 80,
+      hipsTo: 110,
+    );
+
+    final result = c.applyLocalFilters([
+      model(id: 'complete', fullName: 'Complete'),
+      model(id: 'missing-age', fullName: 'Missing age', age: 0),
+      model(id: 'missing-height', fullName: 'Missing height', height: 0),
+      model(id: 'missing-bust', fullName: 'Missing bust', bust: 0),
+      model(id: 'missing-waist', fullName: 'Missing waist', waist: 0),
+      model(id: 'missing-hips', fullName: 'Missing hips', hips: 0),
+    ]);
+
+    expect(result.map((m) => m.id), ['complete']);
   });
 
   test('ModelVm.fromMap parses booleans, dates and de-duplicates media', () {

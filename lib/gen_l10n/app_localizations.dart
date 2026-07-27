@@ -3937,6 +3937,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Roles'**
   String get projectRoles;
+
+  /// No description provided for @advancedChooseListedValue.
+  ///
+  /// In en, this message translates to:
+  /// **'Select a value from the list: {field}'**
+  String advancedChooseListedValue(String field);
+
+  /// No description provided for @advancedInvalidFeeRange.
+  ///
+  /// In en, this message translates to:
+  /// **'The FROM value cannot be greater than the TO value.'**
+  String get advancedInvalidFeeRange;
+
+  /// No description provided for @advancedFeeFrom.
+  ///
+  /// In en, this message translates to:
+  /// **'FROM ₽{value}'**
+  String advancedFeeFrom(int value);
+
+  /// No description provided for @advancedFeeTo.
+  ///
+  /// In en, this message translates to:
+  /// **'TO ₽{value}'**
+  String advancedFeeTo(int value);
 }
 
 class _AppLocalizationsDelegate

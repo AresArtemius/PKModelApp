@@ -288,7 +288,7 @@ const double kCalendarDayRadius = 12.0;
 // CATALOG FILTER LIMITS
 // ===============================================================
 
-const int kAgeMin = 0;
+const int kAgeMin = 1;
 const int kAgeMax = 90;
 
 const int kHeightMin = 20;

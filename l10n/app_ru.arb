@@ -696,6 +696,13 @@
 "projectBudget": "Бюджет",
 "projectLocation": "Локация",
 "projectDates": "Даты",
-"projectRoles": "Роли"
+"projectRoles": "Роли",
+"advancedChooseListedValue": "Выберите значение из списка: {field}",
+"@advancedChooseListedValue": { "placeholders": { "field": { "type": "String" } } },
+"advancedInvalidFeeRange": "Значение «ОТ» не может быть больше значения «ДО».",
+"advancedFeeFrom": "ОТ {value} ₽",
+"@advancedFeeFrom": { "placeholders": { "value": { "type": "int" } } },
+"advancedFeeTo": "ДО {value} ₽",
+"@advancedFeeTo": { "placeholders": { "value": { "type": "int" } } }
 
 }
