@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -35,6 +37,14 @@ class AdminDashboardCounts {
 
 final adminDashboardCountsProvider =
     FutureProvider.autoDispose<AdminDashboardCounts>((ref) async {
+      // Admin badges must keep up with new queue items even when the admin
+      // remains on another page. Realtime is not guaranteed to be enabled for
+      // every moderation table, so use a small, admin-only polling fallback.
+      final refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+        ref.invalidateSelf();
+      });
+      ref.onDispose(refreshTimer.cancel);
+
       final sb = ref.read(supabaseProvider);
       final userId = sb.auth.currentUser?.id;
 
@@ -62,16 +72,37 @@ final adminDashboardCountsProvider =
     });
 
 Future<int> _countPendingProfiles(SupabaseClient sb) async {
+  // Use the security-definer moderation RPC first. A direct profiles count can
+  // legitimately return zero under RLS even though the same admin can see the
+  // moderation queue through its protected RPC.
+  try {
+    final response = await sb.rpc('profile_moderation_status_counts');
+    if (response is List) {
+      for (final rawRow in response) {
+        if (rawRow is! Map) continue;
+        final row = Map<String, dynamic>.from(rawRow);
+        if (row['status']?.toString().trim() != 'pending') continue;
+        return int.tryParse(row['count']?.toString() ?? '') ?? 0;
+      }
+      return 0;
+    }
+  } on PostgrestException {
+    // Older production schemas may expose only the queue RPC. It is also the
+    // safest fallback if the aggregate RPC is temporarily unavailable.
+    try {
+      final response = await sb.rpc('pending_profiles_for_moderation');
+      if (response is List) return response.length;
+    } on PostgrestException {
+      // Fall through to the legacy direct count below.
+    }
+  }
+
   try {
     return await sb
         .from('profiles')
         .count(CountOption.exact)
         .eq('status', 'pending');
-  } on PostgrestException catch (e) {
-    if (SupabaseCompat.isMissingRelation(e, const ['profiles']) ||
-        SupabaseCompat.isMissingAnyColumn(e, const ['status'])) {
-      return 0;
-    }
+  } on PostgrestException {
     return 0;
   }
 }
