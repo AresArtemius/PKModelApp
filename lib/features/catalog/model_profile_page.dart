@@ -150,12 +150,130 @@ Future<String?> _videoThumbnailForUrl(String rawUrl) {
   });
 }
 
+bool _isAdminProfileSource(String? source) {
+  return source == 'admin' ||
+      source == 'admin_profiles' ||
+      source == 'moderation';
+}
+
+List<String> _previewStringList(Object? value) {
+  if (value is! List) return const <String>[];
+  return value
+      .map((item) => item.toString().trim())
+      .where((item) => item.isNotEmpty)
+      .toList(growable: false);
+}
+
+({List<String> urls, List<String> labels}) _mergePreviewMedia({
+  required List<String> publishedUrls,
+  required List<String> publishedLabels,
+  required List<String> pendingUrls,
+  required List<String> pendingLabels,
+  required String fallbackLabel,
+}) {
+  final urls = <String>[];
+  final labels = <String>[];
+
+  void add(List<String> sourceUrls, List<String> sourceLabels) {
+    for (var index = 0; index < sourceUrls.length; index += 1) {
+      final url = sourceUrls[index].trim();
+      if (url.isEmpty || urls.contains(url)) continue;
+      urls.add(url);
+      final label = index < sourceLabels.length
+          ? sourceLabels[index].trim()
+          : '';
+      labels.add(label.isEmpty ? fallbackLabel : label);
+    }
+  }
+
+  add(publishedUrls, publishedLabels);
+  add(pendingUrls, pendingLabels);
+  return (urls: urls, labels: labels);
+}
+
+Map<String, dynamic> _withPendingMediaPublished(Map<String, dynamic> source) {
+  final row = Map<String, dynamic>.from(source);
+  final photos = _mergePreviewMedia(
+    publishedUrls: _previewStringList(row['photo_urls']),
+    publishedLabels: _previewStringList(row['photo_category_labels']),
+    pendingUrls: _previewStringList(row['pending_photo_urls']),
+    pendingLabels: _previewStringList(row['pending_photo_category_labels']),
+    fallbackLabel: 'Портфолио',
+  );
+  final videos = _mergePreviewMedia(
+    publishedUrls: _previewStringList(row['video_urls']),
+    publishedLabels: _previewStringList(row['video_category_labels']),
+    pendingUrls: _previewStringList(row['pending_video_urls']),
+    pendingLabels: _previewStringList(row['pending_video_category_labels']),
+    fallbackLabel: 'Видео',
+  );
+
+  row['photo_urls'] = photos.urls;
+  row['photo_category_labels'] = photos.labels;
+  row['video_urls'] = videos.urls;
+  row['video_category_labels'] = videos.labels;
+  row['video_preview_urls'] = <String>{
+    ..._previewStringList(row['video_preview_urls']),
+    ..._previewStringList(row['pending_video_preview_urls']),
+  }.toList(growable: false);
+
+  final pendingCover = (row['pending_cover_photo_url'] ?? '').toString().trim();
+  if (pendingCover.isNotEmpty) {
+    row['cover_photo_url'] = pendingCover;
+    row['cover_photo_focal_x'] = row['pending_cover_photo_focal_x'];
+    row['cover_photo_focal_y'] = row['pending_cover_photo_focal_y'];
+  }
+
+  final pendingShowreel = (row['pending_showreel_url'] ?? '').toString().trim();
+  if (pendingShowreel.isNotEmpty) {
+    row['showreel_url'] = pendingShowreel;
+    row['showreel_preview_url'] = row['pending_showreel_preview_url'];
+  }
+
+  return row;
+}
+
 class ModelProfilePage extends ConsumerStatefulWidget {
   const ModelProfilePage({super.key, required this.modelId});
   final String modelId;
 
   @override
   ConsumerState<ModelProfilePage> createState() => _ModelProfilePageState();
+}
+
+class _AdminCatalogPreviewNotice extends StatelessWidget {
+  const _AdminCatalogPreviewNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+      decoration: BoxDecoration(
+        color: BrandTheme.redTop.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: BrandTheme.redTop.withValues(alpha: 0.28)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.visibility_rounded, color: BrandTheme.redTop),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              ru
+                  ? 'ПРЕДПРОСМОТР КАТАЛОГА — АНКЕТА ЕЩЁ НЕ ОБЯЗАТЕЛЬНО ОПУБЛИКОВАНА'
+                  : 'CATALOG PREVIEW — THIS PROFILE MAY NOT BE PUBLISHED YET',
+              style: _commandStyle(
+                fontSize: 12,
+                color: BrandTheme.redTop,
+                letterSpacing: 0.7,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 enum _ProfileActionKind { invite, selection, folder, message }
@@ -211,19 +329,30 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
     super.didChangeDependencies();
     if (_didInitFuture) return;
     _didInitFuture = true;
-    final fromAdmin =
-        GoRouterState.of(context).uri.queryParameters['from'] == 'admin';
-    final accessToken =
-        GoRouterState.of(context).uri.queryParameters['t'] ?? '';
-    _future = _load(fromAdmin: fromAdmin, accessToken: accessToken);
+    final uri = GoRouterState.of(context).uri;
+    final fromAdmin = _isAdminProfileSource(uri.queryParameters['from']);
+    final adminPreview = uri.queryParameters['preview'] == '1';
+    final accessToken = uri.queryParameters['t'] ?? '';
+    _future = _load(
+      fromAdmin: fromAdmin,
+      adminPreview: adminPreview,
+      accessToken: accessToken,
+    );
   }
 
   Future<ModelVm?> _load({
     required bool fromAdmin,
+    required bool adminPreview,
     required String accessToken,
   }) async {
     final sb = Supabase.instance.client;
     final token = accessToken.trim();
+
+    if (adminPreview) {
+      if (!fromAdmin || !await ref.read(isAdminProvider.future)) return null;
+      final row = await _loadAdminPreview(sb);
+      return row == null ? null : ModelVm.fromMap(row);
+    }
 
     if (!fromAdmin && token.isNotEmpty) {
       final tokenModel = await _loadByAccessToken(sb, token);
@@ -308,6 +437,31 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
     return model;
   }
 
+  Future<Map<String, dynamic>?> _loadAdminPreview(SupabaseClient sb) async {
+    Future<Map<String, dynamic>?> run({required bool includeOptional}) async {
+      final row = await sb
+          .from(ProfileSupabaseSchema.table)
+          .select(
+            ProfileSupabaseSchema.selectOwn(includeOptional: includeOptional),
+          )
+          .eq('id', widget.modelId)
+          .maybeSingle();
+      if (row == null) return null;
+      return Map<String, dynamic>.from(row);
+    }
+
+    Map<String, dynamic>? row;
+    try {
+      row = await run(includeOptional: true);
+    } on PostgrestException catch (error) {
+      if (!ProfileSupabaseSchema.isMissingOwnOptionalColumn(error)) rethrow;
+      row = await run(includeOptional: false);
+    }
+    if (row == null) return null;
+
+    return _withPendingMediaPublished(row);
+  }
+
   Future<ModelVm?> _loadByAccessToken(SupabaseClient sb, String token) async {
     try {
       final data = await sb.rpc<Map<String, dynamic>?>(
@@ -329,12 +483,16 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
   }
 
   Future<void> _refresh() async {
-    final fromAdmin =
-        GoRouterState.of(context).uri.queryParameters['from'] == 'admin';
-    final accessToken =
-        GoRouterState.of(context).uri.queryParameters['t'] ?? '';
+    final uri = GoRouterState.of(context).uri;
+    final fromAdmin = _isAdminProfileSource(uri.queryParameters['from']);
+    final adminPreview = uri.queryParameters['preview'] == '1';
+    final accessToken = uri.queryParameters['t'] ?? '';
     setState(
-      () => _future = _load(fromAdmin: fromAdmin, accessToken: accessToken),
+      () => _future = _load(
+        fromAdmin: fromAdmin,
+        adminPreview: adminPreview,
+        accessToken: accessToken,
+      ),
     );
     await _future;
   }
@@ -374,6 +532,16 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
         context.go('${Routes.adminSelectionProject}/$selectionId');
         return;
       }
+    }
+
+    if (from == 'admin_profiles' && isAdmin) {
+      context.go(Routes.adminProfiles);
+      return;
+    }
+
+    if (from == 'moderation' && isAdmin) {
+      context.go(Routes.moderationAdmin);
+      return;
     }
 
     // fallback (старое поведение)
@@ -473,6 +641,9 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
                 }
 
                 final displayPhotoUrls = m.displayPhotoUrls;
+                final adminPreview =
+                    GoRouterState.of(context).uri.queryParameters['preview'] ==
+                    '1';
 
                 return RefreshIndicator(
                   onRefresh: _refresh,
@@ -494,6 +665,11 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
                         onBack: () => _back(isAdmin: isAdmin),
                       ),
                       const SizedBox(height: _sectionGap),
+
+                      if (adminPreview) ...[
+                        _AdminCatalogPreviewNotice(),
+                        const SizedBox(height: _sectionGap),
+                      ],
 
                       _Card(
                         child: _PortfolioHeroCard(

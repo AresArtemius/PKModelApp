@@ -1021,7 +1021,10 @@ class _ProfileActionsMenu extends StatelessWidget {
       onSelected: (value) {
         switch (value) {
           case 'open':
-            context.go('${Routes.modelPrefix}${profile.id}?from=admin');
+            context.go(
+              '${Routes.modelPrefix}${profile.id}'
+              '?from=admin_profiles&preview=1',
+            );
             return;
           case 'moderation':
             context.go(Routes.moderationAdmin);
@@ -1049,8 +1052,8 @@ class _ProfileActionsMenu extends StatelessWidget {
       options: [
         AdminMenuOption(
           value: 'open',
-          label: ru ? 'Открыть' : 'Open',
-          icon: Icons.open_in_new_rounded,
+          label: ru ? 'Предпросмотр в каталоге' : 'Preview in catalog',
+          icon: Icons.visibility_rounded,
         ),
         if (profile.status == ProfileStatus.pending)
           AdminMenuOption(

@@ -10,6 +10,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/app_error_mapper.dart';
 import '../../core/admin_action_log_service.dart';
 import '../../core/admin_dashboard_counts_provider.dart';
+import '../../core/router.dart';
 import '../../core/supabase_compat.dart';
 import '../../core/supabase_provider.dart';
 import '../../core/roles_provider.dart';
@@ -672,28 +673,51 @@ class _ModerationProfileDetailsSheet extends StatelessWidget {
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(18, 8, 18, 18),
-                child: Row(
+                child: Column(
                   children: [
-                    Expanded(
-                      child: SizedBox(
-                        height: BrandTheme.pillHeight,
-                        child: ElevatedButton.icon(
-                          onPressed: onReject,
-                          icon: const Icon(Icons.close_rounded),
-                          label: Text(t.moderationRejectActionUpper),
+                    SizedBox(
+                      width: double.infinity,
+                      height: BrandTheme.pillHeight,
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          final router = GoRouter.of(context);
+                          Navigator.of(context).pop();
+                          router.go(
+                            '${Routes.modelPrefix}${profile.id}'
+                            '?from=moderation&preview=1',
+                          );
+                        },
+                        icon: const Icon(Icons.visibility_rounded),
+                        label: Text(
+                          ru ? 'ПРЕДПРОСМОТР В КАТАЛОГЕ' : 'PREVIEW IN CATALOG',
                         ),
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: SizedBox(
-                        height: BrandTheme.pillHeight,
-                        child: ElevatedButton.icon(
-                          onPressed: onApprove,
-                          icon: const Icon(Icons.check_rounded),
-                          label: Text(t.profileStatusApprovedUpper),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: SizedBox(
+                            height: BrandTheme.pillHeight,
+                            child: ElevatedButton.icon(
+                              onPressed: onReject,
+                              icon: const Icon(Icons.close_rounded),
+                              label: Text(t.moderationRejectActionUpper),
+                            ),
+                          ),
                         ),
-                      ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: SizedBox(
+                            height: BrandTheme.pillHeight,
+                            child: ElevatedButton.icon(
+                              onPressed: onApprove,
+                              icon: const Icon(Icons.check_rounded),
+                              label: Text(t.profileStatusApprovedUpper),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -1076,28 +1100,47 @@ class _ModerationProfileDetailsPanel extends StatelessWidget {
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(22, 10, 22, 22),
-            child: Row(
+            child: Column(
               children: [
-                Expanded(
-                  child: SizedBox(
-                    height: BrandTheme.pillHeight,
-                    child: ElevatedButton.icon(
-                      onPressed: onReject,
-                      icon: const Icon(Icons.close_rounded),
-                      label: Text(t.moderationRejectActionUpper),
+                SizedBox(
+                  width: double.infinity,
+                  height: BrandTheme.pillHeight,
+                  child: OutlinedButton.icon(
+                    onPressed: () => context.go(
+                      '${Routes.modelPrefix}${profile.id}'
+                      '?from=moderation&preview=1',
+                    ),
+                    icon: const Icon(Icons.visibility_rounded),
+                    label: Text(
+                      ru ? 'ПРЕДПРОСМОТР В КАТАЛОГЕ' : 'PREVIEW IN CATALOG',
                     ),
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: SizedBox(
-                    height: BrandTheme.pillHeight,
-                    child: ElevatedButton.icon(
-                      onPressed: onApprove,
-                      icon: const Icon(Icons.check_rounded),
-                      label: Text(t.profileStatusApprovedUpper),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: SizedBox(
+                        height: BrandTheme.pillHeight,
+                        child: ElevatedButton.icon(
+                          onPressed: onReject,
+                          icon: const Icon(Icons.close_rounded),
+                          label: Text(t.moderationRejectActionUpper),
+                        ),
+                      ),
                     ),
-                  ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: SizedBox(
+                        height: BrandTheme.pillHeight,
+                        child: ElevatedButton.icon(
+                          onPressed: onApprove,
+                          icon: const Icon(Icons.check_rounded),
+                          label: Text(t.profileStatusApprovedUpper),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
