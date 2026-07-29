@@ -1854,56 +1854,177 @@ class _PhotoGalleryPage extends StatefulWidget {
 
 class _PhotoGalleryPageState extends State<_PhotoGalleryPage> {
   late final PageController _pc;
+  late final FocusNode _keyboardFocus;
+  late int _currentIndex;
 
   @override
   void initState() {
     super.initState();
-    _pc = PageController(initialPage: widget.initialIndex);
+    _currentIndex = widget.initialIndex.clamp(0, widget.urls.length - 1);
+    _pc = PageController(initialPage: _currentIndex);
+    _keyboardFocus = FocusNode(debugLabel: 'photo-gallery-keyboard');
   }
 
   @override
   void dispose() {
     _pc.dispose();
+    _keyboardFocus.dispose();
     super.dispose();
+  }
+
+  void _showPhoto(int index) {
+    if (index < 0 || index >= widget.urls.length || index == _currentIndex) {
+      return;
+    }
+    _pc.animateToPage(
+      index,
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  KeyEventResult _handleKeyEvent(FocusNode _, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+      _showPhoto(_currentIndex - 1);
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+      _showPhoto(_currentIndex + 1);
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.escape) {
+      Navigator.of(context).pop();
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: SafeArea(
-        child: Stack(
-          children: [
-            PageView.builder(
-              controller: _pc,
-              itemCount: widget.urls.length,
-              itemBuilder: (_, i) => Center(
-                child: InteractiveViewer(
-                  minScale: 1,
-                  maxScale: 4,
-                  child: CachedNetworkImage(
-                    imageUrl: widget.urls[i],
-                    fit: BoxFit.contain,
-                    placeholder: (_, _) =>
-                        const Center(child: CircularProgressIndicator()),
-                    errorWidget: (_, _, _) => const Icon(
-                      Icons.broken_image_rounded,
-                      color: Colors.white,
+    final hasSeveralPhotos = widget.urls.length > 1;
+    return Focus(
+      focusNode: _keyboardFocus,
+      autofocus: true,
+      onKeyEvent: _handleKeyEvent,
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        body: SafeArea(
+          child: Stack(
+            children: [
+              PageView.builder(
+                controller: _pc,
+                itemCount: widget.urls.length,
+                onPageChanged: (index) {
+                  setState(() => _currentIndex = index);
+                },
+                itemBuilder: (_, i) => Center(
+                  child: InteractiveViewer(
+                    minScale: 1,
+                    maxScale: 4,
+                    child: CachedNetworkImage(
+                      imageUrl: widget.urls[i],
+                      fit: BoxFit.contain,
+                      placeholder: (_, _) =>
+                          const Center(child: CircularProgressIndicator()),
+                      errorWidget: (_, _, _) => const Icon(
+                        Icons.broken_image_rounded,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-            Positioned(
-              top: _galleryCloseOffset,
-              left: _galleryCloseOffset,
-              child: IconButton(
-                icon: const Icon(Icons.close, color: Colors.white),
-                onPressed: () => Navigator.of(context).pop(),
+              Positioned(
+                top: _galleryCloseOffset,
+                left: _galleryCloseOffset,
+                child: IconButton(
+                  tooltip: 'Закрыть',
+                  icon: const Icon(Icons.close, color: Colors.white),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
               ),
-            ),
-          ],
+              if (hasSeveralPhotos && _currentIndex > 0)
+                Positioned(
+                  left: 16,
+                  top: 0,
+                  bottom: 0,
+                  child: Center(
+                    child: _PhotoGalleryArrow(
+                      tooltip: 'Предыдущее фото',
+                      icon: Icons.chevron_left_rounded,
+                      onPressed: () => _showPhoto(_currentIndex - 1),
+                    ),
+                  ),
+                ),
+              if (hasSeveralPhotos && _currentIndex < widget.urls.length - 1)
+                Positioned(
+                  right: 16,
+                  top: 0,
+                  bottom: 0,
+                  child: Center(
+                    child: _PhotoGalleryArrow(
+                      tooltip: 'Следующее фото',
+                      icon: Icons.chevron_right_rounded,
+                      onPressed: () => _showPhoto(_currentIndex + 1),
+                    ),
+                  ),
+                ),
+              if (hasSeveralPhotos)
+                Positioned(
+                  bottom: 18,
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 7,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.62),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        '${_currentIndex + 1} / ${widget.urls.length}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
+      ),
+    );
+  }
+}
+
+class _PhotoGalleryArrow extends StatelessWidget {
+  const _PhotoGalleryArrow({
+    required this.tooltip,
+    required this.icon,
+    required this.onPressed,
+  });
+
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.black.withValues(alpha: 0.62),
+      shape: const CircleBorder(),
+      child: IconButton(
+        tooltip: tooltip,
+        iconSize: 36,
+        color: Colors.white,
+        onPressed: onPressed,
+        icon: Icon(icon),
       ),
     );
   }
