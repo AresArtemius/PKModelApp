@@ -80,7 +80,7 @@ uses `email_to` from `p_data` first, then falls back to `user_profiles.email`.
 Deploy:
 
 ```bash
-supabase functions deploy send-notifications --no-verify-jwt
+supabase functions deploy send-notifications
 ```
 
 The older `send-push-notifications` function can remain deployed for backward

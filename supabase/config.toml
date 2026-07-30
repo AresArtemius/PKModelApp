@@ -1,3 +1,9 @@
+[functions.send-notifications]
+verify_jwt = true
+
+[functions.send-push-notifications]
+verify_jwt = true
+
 [functions.send-sms-aero-otp]
 verify_jwt = false
 
