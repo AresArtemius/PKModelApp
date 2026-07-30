@@ -236,6 +236,7 @@ class MyProfilePage extends ConsumerWidget {
   }
 
   List<Widget> _accountTools(BuildContext context, WidgetRef ref) {
+    ref.watch(appNotificationsRealtimeProvider);
     final unreadNotifications = ref
         .watch(unreadNotificationsCountProvider)
         .maybeWhen(data: (value) => value, orElse: () => 0);

@@ -606,6 +606,34 @@ final unreadNotificationsCountProvider = FutureProvider.autoDispose<int>((
   return ref.read(appNotificationsServiceProvider).unreadCountForCurrentUser();
 });
 
+final appNotificationsRealtimeProvider = Provider.autoDispose<void>((ref) {
+  final userId = ref.watch(currentUserIdProvider);
+  if (userId == null || userId.isEmpty) return;
+
+  final sb = ref.read(supabaseProvider);
+  final channel = sb
+      .channel('my-app-notifications-$userId')
+      .onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: AppNotificationsService.table,
+        filter: PostgresChangeFilter(
+          type: PostgresChangeFilterType.eq,
+          column: 'user_id',
+          value: userId,
+        ),
+        callback: (_) {
+          ref.invalidate(appNotificationsProvider);
+          ref.invalidate(unreadNotificationsCountProvider);
+        },
+      )
+      .subscribe();
+
+  ref.onDispose(() {
+    sb.removeChannel(channel);
+  });
+});
+
 final notificationPreferencesProvider =
     FutureProvider.autoDispose<NotificationPreferences>((ref) async {
       ref.watch(currentUserIdProvider);

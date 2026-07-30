@@ -207,6 +207,7 @@ class AppDesktopNav extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(appNotificationsRealtimeProvider);
     final t = AppLocalizations.of(context)!;
     final isAdmin = ref
         .watch(isAdminProvider)
@@ -431,6 +432,7 @@ class AppBottomNav extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(appNotificationsRealtimeProvider);
     final t = AppLocalizations.of(context)!;
     final isAdmin = ref
         .watch(isAdminProvider)

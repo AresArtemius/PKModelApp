@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:modelapp/core/supabase_provider.dart';
 import 'package:modelapp/features/profile/profile_model.dart';
@@ -42,9 +44,12 @@ class MyProfileController
     extends StateNotifier<AsyncValue<List<MyProfileState>>> {
   MyProfileController(this.ref) : super(const AsyncValue.loading()) {
     load();
+    _subscribeToOwnProfiles();
   }
 
   final Ref ref;
+  RealtimeChannel? _profilesChannel;
+  Timer? _reloadDebounce;
 
   static const int _ageMin = 0;
   static const int _ageMax = 99;
@@ -74,6 +79,39 @@ class MyProfileController
     final uid = _currentUserId;
     if (uid == null) throw MyProfileException(MyProfileError.noUser);
     return uid;
+  }
+
+  void _subscribeToOwnProfiles() {
+    final uid = _currentUserId;
+    if (uid == null || uid.isEmpty) return;
+
+    final channel = _sb.channel('my-profiles-$uid');
+    _profilesChannel = channel
+      ..onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: ProfileSupabaseSchema.table,
+        filter: PostgresChangeFilter(
+          type: PostgresChangeFilterType.eq,
+          column: 'user_id',
+          value: uid,
+        ),
+        callback: (_) {
+          _reloadDebounce?.cancel();
+          _reloadDebounce = Timer(const Duration(milliseconds: 250), load);
+        },
+      )
+      ..subscribe();
+  }
+
+  @override
+  void dispose() {
+    _reloadDebounce?.cancel();
+    final channel = _profilesChannel;
+    if (channel != null) {
+      unawaited(_sb.removeChannel(channel));
+    }
+    super.dispose();
   }
 
   Map<String, dynamic> _basePayloadFor(MyProfileState s, String uid) => {
