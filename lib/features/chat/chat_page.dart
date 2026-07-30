@@ -2797,6 +2797,10 @@ class _MessageBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final viewportWidth = MediaQuery.sizeOf(context).width;
+    final bubbleMaxWidth = viewportWidth >= 800
+        ? math.min(640.0, viewportWidth * 0.56)
+        : math.min(420.0, viewportWidth * 0.78);
     final parsedBody = _ParsedMessageBody.from(message.body);
     final visibleBody =
         message.hasMedia &&
@@ -2812,7 +2816,7 @@ class _MessageBubble extends StatelessWidget {
       onSecondaryTap: onSecondaryTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 160),
-        constraints: const BoxConstraints(maxWidth: 244),
+        constraints: BoxConstraints(maxWidth: bubbleMaxWidth),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
           color: activeSearchResult
