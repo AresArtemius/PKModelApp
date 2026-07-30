@@ -198,7 +198,10 @@ class CastingsService {
     try {
       await _sb.rpc('admin_delete_casting', params: {'p_casting_id': id});
     } on PostgrestException catch (e) {
-      if (!SupabaseCompat.isMissingRpc(e, 'admin_delete_casting')) {
+      final canUseDirectFallback =
+          SupabaseCompat.isMissingRpc(e, 'admin_delete_casting') ||
+          SupabaseCompat.isMissingColumn(e, 'created_by');
+      if (!canUseDirectFallback) {
         throw CastingsException('Failed to delete casting', original: e);
       }
       try {
@@ -286,6 +289,26 @@ class CastingsService {
   }
 
   Future<void> _deleteCastingDirectly(String castingId) async {
+    try {
+      final chatRows = await _sb
+          .from('casting_chats')
+          .select('id')
+          .eq('casting_id', castingId);
+      final chatIds = (chatRows as List)
+          .map((row) => ((row as Map)['id'] ?? '').toString().trim())
+          .where((id) => id.isNotEmpty);
+      for (final chatId in chatIds) {
+        await _sb.from('casting_chat_messages').delete().eq('chat_id', chatId);
+      }
+    } on PostgrestException catch (e) {
+      if (!SupabaseCompat.isMissingRelation(e, const [
+        'casting_chats',
+        'casting_chat_messages',
+      ])) {
+        rethrow;
+      }
+    }
+
     try {
       await _sb.from('casting_responses').delete().eq('casting_id', castingId);
     } on PostgrestException catch (e) {

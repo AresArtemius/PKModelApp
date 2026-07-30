@@ -44,17 +44,6 @@ String _castingLocaleText(BuildContext context, String ru, String en) {
 
 String _castingAdminErrorText(Object error, AppLocalizations t) {
   final source = error is CastingsException ? error.original : error;
-  if (source is PostgrestException) {
-    final parts = <String>[source.message.trim()];
-    final details = (source.details ?? '').toString().trim();
-    final hint = (source.hint ?? '').trim();
-    final code = (source.code ?? '').trim();
-    if (details.isNotEmpty) parts.add(details);
-    if (hint.isNotEmpty) parts.add(hint);
-    if (code.isNotEmpty) parts.add('code: $code');
-    parts.removeWhere((part) => part.isEmpty);
-    if (parts.isNotEmpty) return parts.join('\n');
-  }
   return AppErrorMapper.message(error, t, original: source);
 }
 

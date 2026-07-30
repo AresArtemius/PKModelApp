@@ -11,6 +11,7 @@ import '../../ui/brand/brand_admin_header.dart';
 import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
 import '../castings/casting_project_stage.dart';
+import '../castings/castings_provider.dart';
 import 'admin_style.dart';
 
 const _kCastingsBg = BrandTheme.greyMid;
@@ -312,9 +313,7 @@ class _AdminCastingsPageState extends ConsumerState<AdminCastingsPage> {
     final confirmed = await _confirmDelete(casting);
     if (!confirmed) return;
     try {
-      await ref
-          .read(supabaseProvider)
-          .rpc('admin_delete_casting', params: {'p_casting_id': casting.id});
+      await ref.read(castingsServiceProvider).deleteCasting(casting.id);
       ref.invalidate(_adminCastingsProvider);
       if (!mounted) return;
       ScaffoldMessenger.of(context)
@@ -999,20 +998,7 @@ int _listCount(Object? value) {
 }
 
 String _adminCastingsActionError(Object error, bool ru) {
-  if (error is PostgrestException) {
-    final details = [
-      error.message,
-      if ((error.details ?? '').toString().trim().isNotEmpty) error.details,
-      if ((error.hint ?? '').toString().trim().isNotEmpty) error.hint,
-      if ((error.code ?? '').toString().trim().isNotEmpty)
-        'code: ${error.code}',
-    ].map((e) => e.toString().trim()).where((e) => e.isNotEmpty).join('\n');
-    if (details.toLowerCase().contains('admin_delete_casting')) {
-      return ru
-          ? 'Не удалось удалить кастинг.\nПримените SQL: supabase/sql/admin_backoffice_actions.sql'
-          : 'Could not delete casting.\nApply SQL: supabase/sql/admin_backoffice_actions.sql';
-    }
-    return ru ? 'Не удалось удалить: $details' : 'Could not delete: $details';
-  }
-  return ru ? 'Не удалось удалить: $error' : 'Could not delete: $error';
+  return ru
+      ? 'Не удалось удалить кастинг. Попробуйте ещё раз.'
+      : 'Could not delete the casting. Please try again.';
 }

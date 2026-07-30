@@ -366,7 +366,7 @@ begin
     coalesce((
       select to_jsonb(c)
       from (
-        select id, title, project_stage, created_by, created_at
+        select id, title, project_stage, created_at
         from public.castings
         where id = p_casting_id
         limit 1
