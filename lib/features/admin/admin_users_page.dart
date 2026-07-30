@@ -431,15 +431,13 @@ class _UsersTablePanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final ru = Localizations.localeOf(context).languageCode == 'ru';
     final query = searchController.text.trim().toLowerCase();
-    final filtered = users
-        .where((user) {
-          final roleOk =
-              roleFilter == _AdminUserRoleFilter.all ||
-              user.primaryRole == roleFilter.role;
-          final searchOk = query.isEmpty || user.searchable.contains(query);
-          return roleOk && searchOk;
-        })
-        .toList(growable: false);
+    final filtered = users.where((user) {
+      final roleOk =
+          roleFilter == _AdminUserRoleFilter.all ||
+          user.primaryRole == roleFilter.role;
+      final searchOk = query.isEmpty || user.searchable.contains(query);
+      return roleOk && searchOk;
+    }).toList()..sort(_compareAdminUsers);
     final isDesktop =
         MediaQuery.sizeOf(context).width >= _kUsersDesktopBreakpoint;
 
@@ -1044,6 +1042,25 @@ class _AdminUserRow {
       '$id $email $phone $accountTag $fullName $companyName $position $city $country $primaryRole'
           .toLowerCase();
 }
+
+int _compareAdminUsers(_AdminUserRow left, _AdminUserRow right) {
+  final roleComparison = _adminUserRolePriority(
+    left.primaryRole,
+  ).compareTo(_adminUserRolePriority(right.primaryRole));
+  if (roleComparison != 0) return roleComparison;
+
+  final nameComparison = left.displayName.toLowerCase().compareTo(
+    right.displayName.toLowerCase(),
+  );
+  if (nameComparison != 0) return nameComparison;
+  return left.id.compareTo(right.id);
+}
+
+int _adminUserRolePriority(String role) => switch (role) {
+  'admin' => 0,
+  'casting_agent' => 1,
+  _ => 2,
+};
 
 enum _AdminUserRoleFilter {
   all(''),
