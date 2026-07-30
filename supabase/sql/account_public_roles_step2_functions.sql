@@ -61,12 +61,6 @@ as $current_user_is_admin$
     from public.user_roles
     where user_id = auth.uid()
       and lower(role) = 'admin'
-  )
-  or exists (
-    select 1
-    from public.user_profiles
-    where user_id = auth.uid()
-      and public.role_for_account_type(account_type) = 'admin'
   );
 $current_user_is_admin$;
 

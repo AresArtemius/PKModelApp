@@ -46,6 +46,10 @@ Deno.serve(async (req) => {
       );
     }
 
+    if (!hasServiceRoleAuthorization(req)) {
+      return json({ error: 'Unauthorized' }, 401);
+    }
+
     const payload = await readJson(req);
     const notificationId = extractNotificationId(payload);
 
@@ -63,6 +67,11 @@ Deno.serve(async (req) => {
     return json({ error: errorMessage(error) }, 500);
   }
 });
+
+function hasServiceRoleAuthorization(req: Request): boolean {
+  const authorization = req.headers.get('authorization')?.trim() ?? '';
+  return authorization === `Bearer ${serviceRoleKey}`;
+}
 
 function extractNotificationId(payload: Record<string, unknown> | null) {
   const record = asRecord(payload?.record);

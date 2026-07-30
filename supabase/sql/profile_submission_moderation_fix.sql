@@ -21,12 +21,6 @@ as $$
     from public.user_roles
     where user_id::text = auth.uid()::text
       and lower(role) = 'admin'
-  )
-  or exists (
-    select 1
-    from public.user_profiles
-    where user_id::text = auth.uid()::text
-      and lower(account_type) in ('admin', 'moderator', 'support')
   );
 $$;
 

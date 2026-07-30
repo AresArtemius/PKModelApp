@@ -32,8 +32,18 @@ const _adminPaths = <String>{
   Routes.catalogAdmin,
   Routes.moderationAdmin,
   Routes.castingAgentApplicationsAdmin,
+  Routes.accountMergeRequestsAdmin,
+  Routes.profileSlotRequestsAdmin,
+  Routes.adminUsers,
+  Routes.adminProfiles,
+  Routes.adminSupport,
+  Routes.adminCastings,
+  Routes.adminSelectionsTable,
   Routes.createCastingAdmin,
+  Routes.adminSelection,
   Routes.safetyAdmin,
+  Routes.profileActionAuditAdmin,
+  Routes.adminSelectionProject,
 };
 
 final goRouterProvider = Provider<GoRouter>((ref) {

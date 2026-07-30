@@ -142,14 +142,6 @@ final accountRoleProvider = FutureProvider<AccountRole>((ref) async {
       return accountRoleFromStorage(data['role']);
     }
 
-    try {
-      final profile = await _fetchAccountProfileRow(sb, user.id);
-      final profileRole = accountRoleFromStorage(profile?['account_type']);
-      if (profileRole == AccountRole.admin) return profileRole;
-    } on PostgrestException {
-      // The account profile table may not exist before SQL is applied.
-    }
-
     return AccountRole.user;
   } on PostgrestException catch (e) {
     AppLogger.warning('Account role DB fallback', error: e);
