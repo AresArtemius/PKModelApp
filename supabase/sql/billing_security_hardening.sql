@@ -22,6 +22,13 @@ as $$
     join public.user_roles ur on ur.user_id = p.user_id
     where p.id = p_profile_id
       and lower(ur.role) = 'admin'
+      and not exists (
+        select 1
+        from public.billing_profile_subscriptions disabled
+        where disabled.profile_id = p.id
+          and disabled.status = 'canceled'
+          and disabled.source = 'manual'
+      )
   );
 $$;
 

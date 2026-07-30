@@ -10,6 +10,7 @@ import '../../core/supabase_provider.dart';
 import '../../ui/brand/brand_admin_header.dart';
 import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
+import '../catalog/catalog_providers.dart';
 import '../profile/profile_model.dart';
 import 'admin_style.dart';
 
@@ -423,6 +424,7 @@ class _AdminProfilesPageState extends ConsumerState<AdminProfilesPage> {
             },
           );
       ref.invalidate(_adminProfilesProvider);
+      await ref.read(catalogControllerProvider).refresh();
       _snack(
         _ru
             ? 'Размещение анкеты продлено на $months мес.'
@@ -462,6 +464,7 @@ class _AdminProfilesPageState extends ConsumerState<AdminProfilesPage> {
             },
           );
       ref.invalidate(_adminProfilesProvider);
+      await ref.read(catalogControllerProvider).refresh();
       _snack(_ru ? 'Размещение анкеты отключено' : 'Placement disabled');
     } catch (e) {
       _snack(
