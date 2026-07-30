@@ -411,6 +411,22 @@ class _AdminProfilesPageState extends ConsumerState<AdminProfilesPage> {
     int months,
   ) async {
     try {
+      if (months == 0) {
+        await ref
+            .read(supabaseProvider)
+            .rpc(
+              'admin_restore_free_profile_billing',
+              params: {'p_profile_id': profile.id},
+            );
+        ref.invalidate(_adminProfilesProvider);
+        await ref.read(catalogControllerProvider).refresh();
+        _snack(
+          _ru
+              ? 'Бесплатное размещение анкеты включено'
+              : 'Free profile placement enabled',
+        );
+        return;
+      }
       await ref
           .read(supabaseProvider)
           .rpc(
@@ -1050,6 +1066,9 @@ class _ProfileActionsMenu extends StatelessWidget {
           case 'billing_revoke':
             onRevokeBilling(profile);
             return;
+          case 'billing_restore_admin':
+            onGrantBilling(profile, 0);
+            return;
         }
       },
       options: [
@@ -1091,6 +1110,14 @@ class _ProfileActionsMenu extends StatelessWidget {
           destructive: true,
           enabled: profile.billing.isActive,
         ),
+        if (profile.billing.source == 'admin_disabled')
+          AdminMenuOption(
+            value: 'billing_restore_admin',
+            label: ru
+                ? 'Включить бесплатное размещение'
+                : 'Enable free placement',
+            icon: Icons.check_circle_outline_rounded,
+          ),
         AdminMenuOption(
           value: 'delete',
           label: ru ? 'Удалить' : 'Delete',

@@ -179,7 +179,7 @@ create table if not exists public.billing_profile_subscriptions (
   status text not null default 'inactive'
     check (status in ('inactive', 'trial_active', 'active_paid', 'payment_overdue', 'canceled')),
   source text not null default 'manual'
-    check (source in ('manual', 'trial', 'yookassa', 'cloudpayments', 'system')),
+    check (source in ('manual', 'trial', 'yookassa', 'cloudpayments', 'system', 'admin_disabled')),
   product_id uuid references public.billing_products(id),
   last_order_id uuid references public.billing_payment_orders(id) on delete set null,
   last_payment_id uuid references public.billing_payments(id) on delete set null,
@@ -310,9 +310,9 @@ as $$
         and not exists (
           select 1
           from public.billing_profile_subscriptions disabled
-          where disabled.profile_id = p.id
-            and disabled.status = 'canceled'
-            and disabled.source = 'manual'
+        where disabled.profile_id = p.id
+          and disabled.status = 'canceled'
+          and disabled.source = 'admin_disabled'
         )
       )
   );
@@ -609,6 +609,8 @@ set row_security = off
 as $$
 declare
   v_profile_title text := '';
+  v_profile_user_id uuid;
+  v_admin_owned boolean := false;
 begin
   if not public.current_user_is_admin() then
     raise exception 'Only admins can revoke profile billing';
@@ -618,20 +620,28 @@ begin
     raise exception 'Profile id is required';
   end if;
 
-  select coalesce(nullif(full_name, ''), id::text)
-  into v_profile_title
-  from public.profiles
-  where id = p_profile_id
+  select p.user_id, coalesce(nullif(p.full_name, ''), p.id::text)
+  into v_profile_user_id, v_profile_title
+  from public.profiles p
+  where p.id = p_profile_id
   limit 1;
 
   if not found then
     raise exception 'Profile not found';
   end if;
 
+  select exists (
+    select 1
+    from public.user_roles ur
+    where ur.user_id = v_profile_user_id
+      and lower(ur.role) = 'admin'
+  )
+  into v_admin_owned;
+
   update public.billing_profile_subscriptions
   set
     status = 'canceled',
-    source = 'manual',
+    source = case when v_admin_owned then 'admin_disabled' else 'manual' end,
     current_period_end = now(),
     admin_note = coalesce(p_admin_note, ''),
     updated_at = now()
@@ -653,7 +663,7 @@ begin
       p.id,
       p.user_id,
       'canceled',
-      'manual',
+      case when v_admin_owned then 'admin_disabled' else 'manual' end,
       now(),
       now(),
       auth.uid(),
@@ -679,6 +689,54 @@ end;
 $$;
 
 grant execute on function public.admin_revoke_profile_billing(uuid, text)
+  to authenticated;
+
+create or replace function public.admin_restore_free_profile_billing(
+  p_profile_id uuid
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+set row_security = off
+as $$
+declare
+  v_profile_title text := '';
+begin
+  if not public.current_user_is_admin() then
+    raise exception 'Only admins can restore profile billing';
+  end if;
+
+  select coalesce(nullif(p.full_name, ''), p.id::text)
+  into v_profile_title
+  from public.profiles p
+  join public.user_roles ur on ur.user_id = p.user_id
+  where p.id = p_profile_id
+    and lower(ur.role) = 'admin'
+  limit 1;
+
+  if not found then
+    raise exception 'Admin-owned profile not found';
+  end if;
+
+  delete from public.billing_profile_subscriptions
+  where profile_id = p_profile_id
+    and status = 'canceled'
+    and source = 'admin_disabled';
+
+  perform public.admin_record_backoffice_action(
+    'profile_billing_restored',
+    'Бесплатное размещение админской анкеты включено',
+    '',
+    'profiles',
+    p_profile_id,
+    v_profile_title,
+    jsonb_build_object('profile_id', p_profile_id)
+  );
+end;
+$$;
+
+grant execute on function public.admin_restore_free_profile_billing(uuid)
   to authenticated;
 
 alter table public.billing_products enable row level security;
