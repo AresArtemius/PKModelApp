@@ -688,7 +688,7 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
                           onCompositePdf: () => _openCompositePdf(m),
                           onCopyLink: () => _copyPublicLink(m.id),
                           canUseAgentActions: canUseAgentTools,
-                          actionHistoryFuture: canUseAgentTools
+                          actionHistoryFuture: isAdmin
                               ? _loadProfileActionHistory(m.id)
                               : null,
                           isBusy: _isPortfolioActionBusy,
