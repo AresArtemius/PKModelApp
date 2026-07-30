@@ -278,16 +278,6 @@ where not exists (
       where ur.user_id = p.user_id
         and lower(ur.role) = 'admin'
     )
-    or exists (
-      select 1
-      from public.user_profiles up
-      where up.user_id = p.user_id
-        and lower(coalesce(up.account_type, '')) in (
-          'admin',
-          'moderator',
-          'support'
-        )
-    )
   );
 
 alter view public.billing_entitlements set (security_invoker = true);
@@ -316,16 +306,6 @@ as $$
           from public.user_roles ur
           where ur.user_id = p.user_id
             and lower(ur.role) = 'admin'
-        )
-        or exists (
-          select 1
-          from public.user_profiles up
-          where up.user_id = p.user_id
-            and lower(coalesce(up.account_type, '')) in (
-              'admin',
-              'moderator',
-              'support'
-            )
         )
       )
   );

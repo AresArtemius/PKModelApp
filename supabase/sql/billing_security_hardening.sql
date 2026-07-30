@@ -1,7 +1,5 @@
--- Enforce paid catalog visibility while keeping admin-owned profiles free.
--- Apply after profile_billing_mvp.sql.
--- Owners still see their own profiles through profiles_owner_read_own;
--- admins still see everything through profiles_admin_read_all.
+-- Removes the legacy account_type privilege source from catalog billing.
+-- Apply after profile_billing_mvp.sql and catalog_paid_visibility.sql.
 
 create or replace function public.profile_billing_is_active(p_profile_id uuid)
 returns boolean
@@ -21,15 +19,9 @@ as $$
   or exists (
     select 1
     from public.profiles p
+    join public.user_roles ur on ur.user_id = p.user_id
     where p.id = p_profile_id
-      and (
-        exists (
-          select 1
-          from public.user_roles ur
-          where ur.user_id = p.user_id
-            and lower(ur.role) = 'admin'
-        )
-      )
+      and lower(ur.role) = 'admin'
   );
 $$;
 
@@ -74,34 +66,14 @@ where not exists (
     from public.billing_profile_subscriptions s
     where s.profile_id = p.id
   )
-  and (
-    exists (
-      select 1
-      from public.user_roles ur
-      where ur.user_id = p.user_id
-        and lower(ur.role) = 'admin'
-    )
-  );
+and exists (
+  select 1
+  from public.user_roles ur
+  where ur.user_id = p.user_id
+    and lower(ur.role) = 'admin'
+);
 
 alter view public.billing_entitlements set (security_invoker = true);
 grant select on public.billing_entitlements to authenticated;
 
-drop policy if exists "profiles_public_read_approved" on public.profiles;
-create policy "profiles_public_read_approved"
-  on public.profiles
-  for select
-  to anon, authenticated
-  using (
-    status = 'approved'
-    and public.profile_billing_is_active(id)
-  );
-
-create or replace view public.catalog_profiles
-with (security_invoker = false, security_barrier = true)
-as
-select p.*
-from public.profiles p
-where p.status = 'approved'
-  and public.profile_billing_is_active(p.id);
-
-grant select on public.catalog_profiles to anon, authenticated;
+notify pgrst, 'reload schema';
