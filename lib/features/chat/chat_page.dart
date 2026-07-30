@@ -1141,6 +1141,15 @@ class _ChatPageState extends ConsumerState<ChatPage> {
               setState(() => _replyingTo = message);
             },
           ),
+          if (mine && message.mediaType == 'text' && !message.isDeleted)
+            _ActionSheetTile(
+              icon: Icons.edit_rounded,
+              title: _isRussian ? 'Редактировать' : 'Edit',
+              onTap: () async {
+                Navigator.of(context).pop();
+                await _editMessage(message);
+              },
+            ),
           _ActionSheetTile(
             icon: Icons.forward_rounded,
             title: _isRussian ? 'Переслать' : 'Forward',
@@ -1182,6 +1191,61 @@ class _ChatPageState extends ConsumerState<ChatPage> {
         ],
       ),
     );
+  }
+
+  Future<void> _editMessage(ChatMessage message) async {
+    final parsed = _ParsedMessageBody.from(message.body);
+    final controller = TextEditingController(text: parsed.body);
+    final updated = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(_isRussian ? 'Редактировать сообщение' : 'Edit message'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          minLines: 3,
+          maxLines: 12,
+          maxLength: 2000,
+          decoration: InputDecoration(
+            hintText: _isRussian ? 'Текст сообщения' : 'Message text',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(_isRussian ? 'Отмена' : 'Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              final value = controller.text.trim();
+              if (value.isNotEmpty) Navigator.of(context).pop(value);
+            },
+            child: Text(_isRussian ? 'Сохранить' : 'Save'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (updated == null || updated == parsed.body || !mounted) return;
+
+    final body = parsed.replyQuote.isEmpty
+        ? updated
+        : '$_replyPrefix${parsed.replyQuote}$_replySeparator$updated';
+    try {
+      await ref
+          .read(chatServiceProvider)
+          .editTextMessage(messageId: message.id, body: body);
+      ref.invalidate(chatMessagesProvider(widget.chatId));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            AppErrorMapper.message(error, AppLocalizations.of(context)!),
+          ),
+        ),
+      );
+    }
   }
 
   bool get _selectionMode => _selectedMessageIds.isNotEmpty;
@@ -1269,8 +1333,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
         title: Text(_isRussian ? 'Удалить чат?' : 'Delete chat?'),
         content: Text(
           _isRussian
-              ? 'Чат будет скрыт у вас. У второго участника история останется.'
-              : 'The chat will be hidden for you. The other participant keeps the history.',
+              ? 'Вся переписка будет безвозвратно удалена у обоих участников.'
+              : 'The entire conversation will be permanently deleted for both participants.',
         ),
         actions: [
           TextButton(
@@ -1288,7 +1352,21 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       ),
     );
     if (confirmed != true) return;
-    await ref.read(chatServiceProvider).hideChatForMe(widget.chatId);
+    try {
+      await ref.read(chatServiceProvider).deleteChatForEveryone(widget.chatId);
+      ref.invalidate(myChatsProvider(false));
+      ref.invalidate(myChatsProvider(true));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            AppErrorMapper.message(error, AppLocalizations.of(context)!),
+          ),
+        ),
+      );
+      return;
+    }
     if (!mounted) return;
     if (widget.embedded) {
       widget.onClose?.call();
@@ -2865,6 +2943,22 @@ class _MessageBubble extends StatelessWidget {
                     ? Colors.white.withValues(alpha: 0.22)
                     : BrandTheme.redTop.withValues(alpha: 0.18),
               ),
+            if (message.editedAt != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                Localizations.localeOf(context).languageCode.toLowerCase() ==
+                        'ru'
+                    ? 'изменено'
+                    : 'edited',
+                style: TextStyle(
+                  color: mine
+                      ? Colors.white.withValues(alpha: 0.62)
+                      : kTextMuted,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -3021,7 +3115,9 @@ class _HighlightedMessageText extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cleanQuery = query.trim();
-    if (cleanQuery.isEmpty || text.isEmpty) return Text(text, style: style);
+    if (cleanQuery.isEmpty || text.isEmpty) {
+      return SelectionArea(child: Text(text, style: style));
+    }
 
     final lowerText = text.toLowerCase();
     final lowerQuery = cleanQuery.toLowerCase();
@@ -3046,13 +3142,15 @@ class _HighlightedMessageText extends StatelessWidget {
       cursor = index + lowerQuery.length;
     }
 
-    if (spans.isEmpty) return Text(text, style: style);
+    if (spans.isEmpty) {
+      return SelectionArea(child: Text(text, style: style));
+    }
     if (cursor < text.length) {
       spans.add(TextSpan(text: text.substring(cursor)));
     }
 
-    return RichText(
-      text: TextSpan(style: style, children: spans),
+    return SelectionArea(
+      child: Text.rich(TextSpan(style: style, children: spans)),
     );
   }
 }

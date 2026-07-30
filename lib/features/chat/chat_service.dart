@@ -47,7 +47,7 @@ class ChatService {
   static const int _reactionStreamLimit = _messageStreamLimit * 3;
   static const int _typingStreamLimit = 8;
   static const String _baseMessageSelect =
-      'id,chat_id,sender_id,body,media_type,media_url,media_thumbnail_url,deleted_at,created_at';
+      'id,chat_id,sender_id,body,media_type,media_url,media_thumbnail_url,deleted_at,edited_at,created_at';
   static const String _fileMessageFields = ',file_name,file_size,file_mime';
   static const String _metadataMessageFields = ',metadata';
 
@@ -1925,6 +1925,27 @@ class ChatService {
         .eq('sender_id', userId);
   }
 
+  Future<void> editTextMessage({
+    required String messageId,
+    required String body,
+  }) async {
+    final userId = _sb.auth.currentUser?.id;
+    final cleanId = messageId.trim();
+    final cleanBody = body.trim();
+    if (userId == null || cleanId.isEmpty || cleanBody.isEmpty) return;
+
+    await _sb
+        .from('selection_chat_messages')
+        .update({
+          'body': cleanBody,
+          'edited_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', cleanId)
+        .eq('sender_id', userId)
+        .eq('media_type', 'text')
+        .filter('deleted_at', 'is', null);
+  }
+
   Future<void> setReaction({
     required String chatId,
     required String messageId,
@@ -1993,6 +2014,17 @@ class ChatService {
           })
           .eq('id', chatId);
     }
+  }
+
+  Future<void> deleteChatForEveryone(String chatId) async {
+    final userId = _sb.auth.currentUser?.id;
+    final cleanId = chatId.trim();
+    if (userId == null || cleanId.isEmpty) return;
+
+    await _sb.rpc(
+      'delete_selection_chat_for_everyone',
+      params: {'p_chat_id': cleanId},
+    );
   }
 
   Future<void> hideInvitationForMe({

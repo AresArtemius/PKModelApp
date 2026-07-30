@@ -409,6 +409,7 @@ class ChatMessage {
     required this.listenedAt,
     required this.pinnedAt,
     required this.pinnedBy,
+    required this.editedAt,
     required this.createdAt,
   });
 
@@ -428,6 +429,7 @@ class ChatMessage {
   final DateTime? listenedAt;
   final DateTime? pinnedAt;
   final String pinnedBy;
+  final DateTime? editedAt;
   final DateTime? createdAt;
 
   bool get isDeleted => deletedAt != null;
@@ -465,6 +467,7 @@ class ChatMessage {
       listenedAt: DateTime.tryParse((map['listened_at'] ?? '').toString()),
       pinnedAt: DateTime.tryParse((map['pinned_at'] ?? '').toString()),
       pinnedBy: (map['pinned_by'] ?? '').toString(),
+      editedAt: DateTime.tryParse((map['edited_at'] ?? '').toString()),
       createdAt: DateTime.tryParse((map['created_at'] ?? '').toString()),
     );
   }
