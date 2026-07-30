@@ -261,12 +261,10 @@ class SecurityNotificationsService {
 
     try {
       await _sb.rpc<void>(
-        'enqueue_app_notification',
+        'enqueue_my_security_notification',
         params: {
-          'p_user_id': userId,
           'p_title': title,
           'p_body': body,
-          'p_route': '/notifications',
           'p_type': type,
           'p_data': payload,
         },
@@ -283,7 +281,7 @@ class SecurityNotificationsService {
         return;
       }
       final message = e.message.toLowerCase();
-      if (message.contains('enqueue_app_notification')) {
+      if (message.contains('enqueue_my_security_notification')) {
         AppLogger.warning(
           'Security notification RPC is not applied yet',
           error: e,

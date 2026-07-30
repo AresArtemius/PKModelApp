@@ -362,6 +362,15 @@ begin
 end;
 $$;
 
+revoke all on function public.enqueue_app_notification(
+  uuid,
+  text,
+  text,
+  text,
+  text,
+  jsonb
+) from public;
+
 grant execute on function public.enqueue_app_notification(
   uuid,
   text,
@@ -369,7 +378,7 @@ grant execute on function public.enqueue_app_notification(
   text,
   text,
   jsonb
-) to authenticated;
+) to service_role;
 
 create or replace function public.mark_app_notification_push_attempt(
   p_notification_id uuid

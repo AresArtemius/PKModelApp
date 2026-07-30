@@ -688,7 +688,11 @@ final List<RouteBase> appRoutes = [
     path: Routes.publicSelection,
     builder: (context, state) {
       final id = state.pathParameters[_routeParamId] ?? '';
-      return SelectionProjectPage(selectionId: id, isPublic: true);
+      return SelectionProjectPage(
+        selectionId: id,
+        isPublic: true,
+        feedbackAccessToken: state.uri.queryParameters['access'] ?? '',
+      );
     },
   ),
 

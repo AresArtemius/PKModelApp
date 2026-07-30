@@ -523,7 +523,12 @@ begin
 end;
 $resolve_auth_email_by_phone$;
 
-grant execute on function public.resolve_auth_email_by_phone(text)
-  to anon, authenticated;
+-- Kept only for compatibility with already-created databases. Returning an
+-- email for an arbitrary phone number is account enumeration, so clients must
+-- never receive EXECUTE permission on this helper.
+revoke all on function public.resolve_auth_email_by_phone(text) from public;
+revoke all on function public.resolve_auth_email_by_phone(text) from anon;
+revoke all on function public.resolve_auth_email_by_phone(text)
+  from authenticated;
 
 notify pgrst, 'reload schema';

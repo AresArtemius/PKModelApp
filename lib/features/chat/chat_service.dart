@@ -1625,23 +1625,18 @@ class ChatService {
       for (final target in targets) {
         if (!mentionedTags.contains(target.accountTag)) continue;
         await _sb.rpc(
-          'enqueue_app_notification',
+          'enqueue_selection_chat_mention',
           params: {
-            'p_user_id': target.userId,
-            'p_title': 'Вас упомянули в чате',
+            'p_chat_id': chatId,
             'p_body': body.length > 120 ? '${body.substring(0, 120)}...' : body,
-            'p_route': '/chat/$chatId',
-            'p_type': 'chat_message',
-            'p_data': {
-              'chat_id': chatId,
-              'mention_tag': target.accountTag,
-              'sender_id': senderId,
-            },
+            'p_mention_tag': target.accountTag,
           },
         );
       }
     } on PostgrestException catch (e) {
-      if (SupabaseCompat.isMissingRpc(e, 'enqueue_app_notification')) return;
+      if (SupabaseCompat.isMissingRpc(e, 'enqueue_selection_chat_mention')) {
+        return;
+      }
       if (_isRlsRecursion(e)) return;
       return;
     } catch (_) {

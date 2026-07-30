@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 
 import '../../core/admin_action_log_service.dart';
 import '../../core/app_error_mapper.dart';
+import '../../core/public_links.dart';
 import '../../core/router.dart';
 import '../../core/supabase_provider.dart';
 import '../../gen_l10n/app_localizations.dart';
@@ -211,11 +212,13 @@ class SelectionProjectPage extends ConsumerWidget {
     super.key,
     required this.selectionId,
     this.isPublic = false,
+    this.feedbackAccessToken = '',
     this.from,
   });
 
   final String selectionId;
   final bool isPublic;
+  final String feedbackAccessToken;
   final String? from;
 
   @override
@@ -261,7 +264,7 @@ class SelectionProjectPage extends ConsumerWidget {
               final status = selectionStatusFromString(selection['status']);
               final campaignRows = _campaignRows(t, selection);
 
-              final clientKey = isPublic
+              final clientKey = isPublic && feedbackAccessToken.isNotEmpty
                   ? ref.watch(selectionClientKeyProvider).valueOrNull ?? ''
                   : '';
               final clientFeedback = isPublic && clientKey.isNotEmpty
@@ -271,6 +274,7 @@ class SelectionProjectPage extends ConsumerWidget {
                                 SelectionClientFeedbackRequest(
                                   selectionId: selectionId,
                                   clientKey: clientKey,
+                                  accessToken: feedbackAccessToken,
                                 ),
                               ),
                             )
@@ -330,6 +334,39 @@ class SelectionProjectPage extends ConsumerWidget {
                   modelLinks: modelLinks,
                   isRussian: t.localeName == 'ru',
                 );
+              }
+
+              Future<void> copyProtectedPublicLink() async {
+                try {
+                  final token = await ref
+                      .read(supabaseProvider)
+                      .rpc<String>(
+                        'create_selection_feedback_access_token',
+                        params: {'p_selection_id': selectionId},
+                      );
+                  final link = publicSelectionFeedbackLink(
+                    selectionId: selectionId,
+                    accessToken: token,
+                  );
+                  await Clipboard.setData(ClipboardData(text: link));
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context)
+                    ..hideCurrentSnackBar()
+                    ..showSnackBar(
+                      SnackBar(content: Text(t.publicSelectionLinkCopied)),
+                    );
+                } catch (e) {
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context)
+                    ..hideCurrentSnackBar()
+                    ..showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          '${t.errorUpper}: ${AppErrorMapper.message(e, t)}',
+                        ),
+                      ),
+                    );
+                }
               }
 
               Future<void> setStatus(SelectionStatus next) async {
@@ -410,17 +447,22 @@ class SelectionProjectPage extends ConsumerWidget {
                           ),
                     trailing: isPublic
                         ? null
-                        : IconButton(
-                            onPressed: exportItems.isEmpty ? null : openPdf,
-                            splashRadius: 22,
-                            tooltip: 'PDF',
-                            icon: Icon(
-                              Icons.picture_as_pdf_rounded,
-                              color: exportItems.isEmpty
-                                  ? kTextMuted
-                                  : BrandTheme.redTop,
-                            ),
+                        : BrandAdminHeaderActions(
+                            actions: [
+                              if (publicEnabled)
+                                BrandAdminHeaderAction(
+                                  label: t.publicSelectionLinkUpper,
+                                  icon: Icons.link_rounded,
+                                  onPressed: copyProtectedPublicLink,
+                                ),
+                              BrandAdminHeaderAction(
+                                label: 'PDF',
+                                icon: Icons.picture_as_pdf_rounded,
+                                onPressed: exportItems.isEmpty ? null : openPdf,
+                              ),
+                            ],
                           ),
+                    sideWidth: publicEnabled ? 92 : kTopBarIconBoxW,
                   ),
                   const SizedBox(height: 12),
                   if (!isPublic) ...[
@@ -1249,6 +1291,7 @@ class _PublicSelectionFeaturedProfile extends StatelessWidget {
                   selectionId: selectionId,
                   profileId: profile.profileId,
                   clientKey: clientKey,
+                  accessToken: '',
                   initial: feedback,
                 ),
               ],
@@ -1647,12 +1690,14 @@ class _ClientFeedbackControls extends ConsumerStatefulWidget {
     required this.selectionId,
     required this.profileId,
     required this.clientKey,
+    required this.accessToken,
     required this.initial,
   });
 
   final String selectionId;
   final String profileId;
   final String clientKey;
+  final String accessToken;
   final SelectionClientFeedback? initial;
 
   @override
@@ -1691,7 +1736,9 @@ class _ClientFeedbackControlsState
   }
 
   Future<void> _save({SelectionClientVote? vote}) async {
-    if (_saving || widget.clientKey.isEmpty) return;
+    if (_saving || widget.clientKey.isEmpty || widget.accessToken.isEmpty) {
+      return;
+    }
 
     final nextVote = vote ?? _vote;
     setState(() {
@@ -1707,6 +1754,7 @@ class _ClientFeedbackControlsState
             selectionId: widget.selectionId,
             profileId: widget.profileId,
             clientKey: widget.clientKey,
+            accessToken: widget.accessToken,
             vote: nextVote,
             comment: _commentC.text,
           );
@@ -1715,6 +1763,7 @@ class _ClientFeedbackControlsState
           SelectionClientFeedbackRequest(
             selectionId: widget.selectionId,
             clientKey: widget.clientKey,
+            accessToken: widget.accessToken,
           ),
         ),
       );

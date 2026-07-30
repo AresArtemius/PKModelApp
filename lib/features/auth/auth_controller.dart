@@ -71,15 +71,6 @@ class AuthController {
     return _sb.auth.signInWithPassword(phone: phone, password: password);
   }
 
-  Future<String?> resolveEmailByPhone(String phone) async {
-    final value = await _sb.rpc<String?>(
-      'resolve_auth_email_by_phone',
-      params: {'p_phone': phone},
-    );
-    final email = value?.trim();
-    return email == null || email.isEmpty ? null : email;
-  }
-
   Future<AuthResponse> signInWithResponse({
     required String email,
     required String password,

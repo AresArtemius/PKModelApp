@@ -54,20 +54,23 @@ class SelectionClientFeedbackRequest {
   const SelectionClientFeedbackRequest({
     required this.selectionId,
     required this.clientKey,
+    required this.accessToken,
   });
 
   final String selectionId;
   final String clientKey;
+  final String accessToken;
 
   @override
   bool operator ==(Object other) {
     return other is SelectionClientFeedbackRequest &&
         selectionId == other.selectionId &&
-        clientKey == other.clientKey;
+        clientKey == other.clientKey &&
+        accessToken == other.accessToken;
   }
 
   @override
-  int get hashCode => Object.hash(selectionId, clientKey);
+  int get hashCode => Object.hash(selectionId, clientKey, accessToken);
 }
 
 class SelectionClientFeedbackService {
@@ -78,13 +81,20 @@ class SelectionClientFeedbackService {
   Future<Map<String, SelectionClientFeedback>> fetchClientFeedback({
     required String selectionId,
     required String clientKey,
+    required String accessToken,
   }) async {
-    if (selectionId.isEmpty || clientKey.isEmpty) return const {};
+    if (selectionId.isEmpty || clientKey.isEmpty || accessToken.isEmpty) {
+      return const {};
+    }
 
     try {
       final rows = await _sb.rpc(
         'get_selection_client_feedback',
-        params: {'p_selection_id': selectionId, 'p_client_key': clientKey},
+        params: {
+          'p_selection_id': selectionId,
+          'p_client_key': clientKey,
+          'p_access_token': accessToken,
+        },
       );
       return _feedbackMapFromRows(rows);
     } on PostgrestException catch (e) {
@@ -122,10 +132,16 @@ class SelectionClientFeedbackService {
     required String selectionId,
     required String profileId,
     required String clientKey,
+    required String accessToken,
     SelectionClientVote? vote,
     String comment = '',
   }) async {
-    if (selectionId.isEmpty || profileId.isEmpty || clientKey.isEmpty) return;
+    if (selectionId.isEmpty ||
+        profileId.isEmpty ||
+        clientKey.isEmpty ||
+        accessToken.isEmpty) {
+      return;
+    }
 
     try {
       await _sb.rpc(
@@ -134,20 +150,14 @@ class SelectionClientFeedbackService {
           'p_selection_id': selectionId,
           'p_profile_id': profileId,
           'p_client_key': clientKey,
+          'p_access_token': accessToken,
           'p_vote': vote?.storageValue,
           'p_comment': comment.trim(),
         },
       );
     } on PostgrestException catch (e) {
-      if (!_isMissingFeedbackSchema(e)) rethrow;
-
-      await _sb.from('selection_client_feedback').upsert({
-        'selection_id': selectionId,
-        'profile_id': profileId,
-        'client_key': clientKey,
-        'vote': vote?.storageValue,
-        'comment': comment.trim(),
-      }, onConflict: 'selection_id,profile_id,client_key');
+      if (_isMissingFeedbackSchema(e)) return;
+      rethrow;
     }
   }
 
@@ -213,6 +223,7 @@ final selectionClientFeedbackProvider = FutureProvider.autoDispose
           .fetchClientFeedback(
             selectionId: request.selectionId,
             clientKey: request.clientKey,
+            accessToken: request.accessToken,
           );
     });
 

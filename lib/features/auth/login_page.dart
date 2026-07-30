@@ -237,19 +237,6 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         }
       }
       if (res == null) {
-        final email = await auth.resolveEmailByPhone(phone);
-        if (email != null) {
-          try {
-            res = await ref
-                .read(supabaseProvider)
-                .auth
-                .signInWithPassword(email: email, password: password);
-          } on AuthException catch (e) {
-            lastAuthError = e;
-          }
-        }
-      }
-      if (res == null) {
         throw lastAuthError ?? AuthException(t.signInGenericError);
       }
       final userId = res.user?.id;

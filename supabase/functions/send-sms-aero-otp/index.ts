@@ -50,6 +50,9 @@ Deno.serve(async (req) => {
     if (error instanceof UnauthorizedHookRequestError) {
       return json({ error: error.message }, 401);
     }
+    if (error instanceof HookConfigurationError) {
+      return json({ error: error.message }, 503);
+    }
     return json({ error: errorMessage(error) }, 500);
   }
 });
@@ -57,6 +60,12 @@ Deno.serve(async (req) => {
 class UnauthorizedHookRequestError extends Error {
   constructor() {
     super('Unauthorized hook request');
+  }
+}
+
+class HookConfigurationError extends Error {
+  constructor() {
+    super('Auth hook secret is not configured');
   }
 }
 
@@ -147,7 +156,9 @@ function normalizePhoneForSmsAero(phone: string): string {
 }
 
 async function verifyHookRequest(req: Request, rawBody: string) {
-  if (!hookSecret) return;
+  if (!hookSecret) {
+    throw new HookConfigurationError();
+  }
 
   const authorization = req.headers.get('authorization') ?? '';
   if (authorization === `Bearer ${hookSecret}`) return;

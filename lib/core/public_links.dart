@@ -34,3 +34,17 @@ String publicProfileTokenLink({
 String publicSelectionLink(String selectionId) {
   return _joinPublicPath('/s/${Uri.encodeComponent(selectionId)}');
 }
+
+String publicSelectionFeedbackLink({
+  required String selectionId,
+  required String accessToken,
+}) {
+  final id = selectionId.trim();
+  final token = accessToken.trim();
+  if (id.isEmpty) return '';
+  if (token.isEmpty) return publicSelectionLink(id);
+  return _joinPublicPath(
+    '/s/${Uri.encodeComponent(id)}'
+    '?access=${Uri.encodeQueryComponent(token)}',
+  );
+}
