@@ -1,4 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.48.1';
+import { createClient } from 'npm:@supabase/supabase-js@2.48.1';
 
 type AppNotification = {
   id: string;
