@@ -13,6 +13,7 @@ import 'package:video_player/video_player.dart';
 
 import '../../core/app_logger.dart';
 import '../../core/content_safety_filter.dart';
+import '../../core/resume_text_formatter.dart';
 import '../../core/roles_provider.dart';
 import '../../core/supabase_provider.dart';
 import '../../gen_l10n/app_localizations.dart';
@@ -917,6 +918,13 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
     if (_saving) return null;
 
     FocusScope.of(context).unfocus();
+    final formattedResume = formatResumeText(_resumeC.text);
+    if (formattedResume != _resumeC.text) {
+      _resumeC.value = TextEditingValue(
+        text: formattedResume,
+        selection: TextSelection.collapsed(offset: formattedResume.length),
+      );
+    }
     setState(() {
       _error = null;
       _saving = true;
