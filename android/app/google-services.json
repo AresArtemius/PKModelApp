@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "877269956887",
+    "project_id": "pkmodelapp-a5668",
+    "storage_bucket": "pkmodelapp-a5668.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:877269956887:android:cb8d275f55245315fa5f52",
+        "android_client_info": {
+          "package_name": "com.artemkukhar.modelapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCM2Bhdx4PAgFK2aCh7VtrkiUHm_UyCSmM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

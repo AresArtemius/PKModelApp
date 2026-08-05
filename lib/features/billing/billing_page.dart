@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -108,6 +109,15 @@ class _BillingPageState extends ConsumerState<BillingPage> {
 
   Future<void> _startPayment(MyProfileState profile) async {
     if (_isSubmitting) return;
+    if (!kIsWeb) {
+      setState(() {
+        _errorText = '';
+        _infoText = _isRussian
+            ? 'Покупка и продление размещения в мобильном приложении пока недоступны.'
+            : 'Purchasing and renewing placement are not currently available in the mobile app.';
+      });
+      return;
+    }
     if (profile.status != ProfileStatus.approved) {
       setState(() {
         _errorText = _isRussian
@@ -400,9 +410,13 @@ class _ProfilesPanel extends StatelessWidget {
     final ru = _isRu(context);
     return _BillingSection(
       title: ru ? 'Выберите анкету' : 'Choose profile',
-      subtitle: ru
-          ? 'Оплата включает активное размещение одной анкеты в базе.'
-          : 'Payment activates placement for one profile.',
+      subtitle: kIsWeb
+          ? (ru
+                ? 'Оплата включает активное размещение одной анкеты в базе.'
+                : 'Payment activates placement for one profile.')
+          : (ru
+                ? 'Выберите анкету, чтобы проверить срок ее размещения.'
+                : 'Choose a profile to check its placement period.'),
       child: Column(
         children: [
           for (var i = 0; i < profiles.length; i++) ...[
@@ -442,17 +456,21 @@ class _PaymentPanel extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final ru = _isRu(context);
     final statusAsync = ref.watch(_profileBillingSummaryProvider(profile.id));
-    final canPay = profile.status == ProfileStatus.approved;
+    final canPay = kIsWeb && profile.status == ProfileStatus.approved;
     final selectedProduct = _billingProducts.firstWhere(
       (item) => item.code == selectedProductCode,
       orElse: () => _billingProducts.first,
     );
 
     return _BillingSection(
-      title: ru ? 'Срок размещения' : 'Placement period',
-      subtitle: ru
-          ? 'После оплаты анкета автоматически станет активной до конца периода.'
-          : 'After payment the profile will be active until the period ends.',
+      title: ru ? 'Размещение' : 'Placement',
+      subtitle: kIsWeb
+          ? (ru
+                ? 'После оплаты анкета автоматически станет активной до конца периода.'
+                : 'After payment the profile will be active until the period ends.')
+          : (ru
+                ? 'Здесь отображается текущий статус и срок размещения анкеты.'
+                : 'The current profile placement status and period are shown here.'),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -468,47 +486,56 @@ class _PaymentPanel extends ConsumerWidget {
             ),
             data: (summary) => _StatusLine(text: summary.label(ru)),
           ),
-          const SizedBox(height: kGap12),
-          Wrap(
-            spacing: kGap8,
-            runSpacing: kGap8,
-            children: [
-              for (final product in _billingProducts)
-                _ProductChip(
-                  product: product,
-                  selected: product.code == selectedProductCode,
-                  onTap: () => onProductSelected(product.code),
-                ),
+          if (kIsWeb) ...[
+            const SizedBox(height: kGap12),
+            Wrap(
+              spacing: kGap8,
+              runSpacing: kGap8,
+              children: [
+                for (final product in _billingProducts)
+                  _ProductChip(
+                    product: product,
+                    selected: product.code == selectedProductCode,
+                    onTap: () => onProductSelected(product.code),
+                  ),
+              ],
+            ),
+            const SizedBox(height: kGap14),
+            _CheckoutSummary(product: selectedProduct),
+            if (profile.status != ProfileStatus.approved) ...[
+              const SizedBox(height: kGap10),
+              _InlineMessage(
+                text: ru
+                    ? 'Сейчас оплатить нельзя: анкета должна быть утверждена.'
+                    : 'Payment is disabled until the profile is approved.',
+                danger: true,
+              ),
             ],
-          ),
-          const SizedBox(height: kGap14),
-          _CheckoutSummary(product: selectedProduct),
-          if (!canPay) ...[
+            if (errorText.isNotEmpty) ...[
+              const SizedBox(height: kGap10),
+              _InlineMessage(text: errorText, danger: true),
+            ],
+            if (infoText.isNotEmpty) ...[
+              const SizedBox(height: kGap10),
+              _InlineMessage(text: infoText),
+            ],
+            const SizedBox(height: kGap14),
+            _PayButton(
+              label: isSubmitting
+                  ? (ru ? 'СОЗДАЕМ ОПЛАТУ...' : 'CREATING PAYMENT...')
+                  : (ru ? 'ПЕРЕЙТИ К ОПЛАТЕ' : 'GO TO PAYMENT'),
+              onTap: canPay && !isSubmitting ? onPay : null,
+            ),
             const SizedBox(height: kGap10),
+            _PaymentLegalLinks(ru: ru),
+          ] else ...[
+            const SizedBox(height: kGap12),
             _InlineMessage(
               text: ru
-                  ? 'Сейчас оплатить нельзя: анкета должна быть утверждена.'
-                  : 'Payment is disabled until the profile is approved.',
-              danger: true,
+                  ? 'Покупка и продление размещения в мобильном приложении пока недоступны.'
+                  : 'Purchasing and renewing placement are not currently available in the mobile app.',
             ),
           ],
-          if (errorText.isNotEmpty) ...[
-            const SizedBox(height: kGap10),
-            _InlineMessage(text: errorText, danger: true),
-          ],
-          if (infoText.isNotEmpty) ...[
-            const SizedBox(height: kGap10),
-            _InlineMessage(text: infoText),
-          ],
-          const SizedBox(height: kGap14),
-          _PayButton(
-            label: isSubmitting
-                ? (ru ? 'СОЗДАЕМ ОПЛАТУ...' : 'CREATING PAYMENT...')
-                : (ru ? 'ПЕРЕЙТИ К ОПЛАТЕ' : 'GO TO PAYMENT'),
-            onTap: canPay && !isSubmitting ? onPay : null,
-          ),
-          const SizedBox(height: kGap10),
-          _PaymentLegalLinks(ru: ru),
         ],
       ),
     );

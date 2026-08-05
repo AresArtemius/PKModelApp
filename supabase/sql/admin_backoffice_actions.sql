@@ -277,9 +277,24 @@ security definer
 set search_path = public
 set row_security = off
 as $$
+declare
+  v_owner_user_id uuid;
+  v_profile_name text;
 begin
   if not public.current_user_is_admin() then
     raise exception 'Only admins can delete profiles';
+  end if;
+
+  select
+    user_id,
+    coalesce(nullif(btrim(full_name), ''), 'Без названия')
+  into v_owner_user_id, v_profile_name
+  from public.profiles
+  where id = p_profile_id
+  limit 1;
+
+  if not found then
+    raise exception 'Profile not found';
   end if;
 
   perform public.admin_record_backoffice_action(
@@ -336,6 +351,36 @@ begin
   if not found then
     raise exception 'Profile not found';
   end if;
+
+  -- DELETE-события Realtime не всегда содержат user_id, поэтому фильтр
+  -- владельца может их не получить. Уведомление служит одновременно
+  -- пользовательским сообщением и надёжным сигналом обновить список анкет.
+  begin
+    if v_owner_user_id is not null
+       and to_regprocedure(
+         'public.enqueue_app_notification(uuid,text,text,text,text,jsonb)'
+       ) is not null then
+      perform public.enqueue_app_notification(
+        v_owner_user_id,
+        'Анкета удалена',
+        format(
+          'Анкета «%s» была удалена администратором.',
+          v_profile_name
+        ),
+        '/me',
+        'profile_moderation',
+        jsonb_build_object(
+          'profile_id', p_profile_id,
+          'profile_name', v_profile_name,
+          'status', 'deleted',
+          'action', 'deleted'
+        )
+      );
+    end if;
+  exception
+    when others then
+      raise warning 'Could not enqueue profile deletion notification: %', sqlerrm;
+  end;
 end;
 $$;
 

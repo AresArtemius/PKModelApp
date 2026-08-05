@@ -26,8 +26,14 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>PK Management использует микрофон для записи голосовых сообщений в чатах.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>PK Management использует камеру, чтобы добавлять фотографии и материалы в анкеты, кастинги и чаты.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>PK Management использует медиатеку, чтобы добавлять фотографии и видео в анкеты, кастинги и чаты.</string>
 
 	<key>CFBundleURLTypes</key>
 	<array>
@@ -65,6 +71,10 @@
 
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

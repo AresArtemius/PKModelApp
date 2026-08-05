@@ -47,11 +47,14 @@ import '../features/profile/public_account_profile_page.dart';
 import '../features/support/support_page.dart';
 import '../features/legal/legal_document_page.dart';
 import '../features/legal/legal_documents.dart';
+import '../features/legal/account_deletion_page.dart';
+import '../features/landing/landing_preview_page.dart';
 import '../gen_l10n/app_localizations.dart';
 import '../ui/brand/brand_theme.dart';
 import '../features/admin/selection_project_page.dart';
 
 abstract class Routes {
+  static const landingPreview = '/landing-preview';
   static const login = '/login';
   static const register = '/register';
   static const emailVerification = '/verify-email';
@@ -62,6 +65,7 @@ abstract class Routes {
   static const cookiePolicy = '/cookies';
   static const processingNotice = '/processing-notice';
   static const requisites = '/requisites';
+  static const accountDeletion = '/account-deletion';
 
   static const castings = '/castings';
   static const search = '/search';
@@ -598,6 +602,10 @@ class _NavIconWithBadge extends StatelessWidget {
 }
 
 final List<RouteBase> appRoutes = [
+  GoRoute(
+    path: Routes.landingPreview,
+    builder: (context, state) => const LandingPreviewPage(),
+  ),
   GoRoute(path: Routes.login, builder: (context, state) => const LoginPage()),
 
   GoRoute(
@@ -633,6 +641,10 @@ final List<RouteBase> appRoutes = [
     path: Routes.requisites,
     builder: (context, state) =>
         const LegalDocumentPage(kind: LegalDocumentKind.requisites),
+  ),
+  GoRoute(
+    path: Routes.accountDeletion,
+    builder: (context, state) => const AccountDeletionPage(),
   ),
 
   GoRoute(

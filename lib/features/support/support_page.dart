@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
@@ -1253,7 +1254,7 @@ List<(String, String)> _categories(bool ru) => [
 ];
 
 List<({String question, String answer})> _faq(bool ru) => ru
-    ? const [
+    ? [
         (
           question: 'Почему анкета не видна в каталоге?',
           answer:
@@ -1266,8 +1267,9 @@ List<({String question, String answer})> _faq(bool ru) => ru
         ),
         (
           question: 'Как оплатить размещение?',
-          answer:
-              'После одобрения анкеты откройте раздел оплаты в аккаунте, выберите срок и завершите платеж на защищенной странице ЮKassa.',
+          answer: kIsWeb
+              ? 'После одобрения анкеты откройте раздел оплаты в аккаунте, выберите срок и завершите платеж на защищенной странице ЮKassa.'
+              : 'Покупка и продление размещения в мобильном приложении пока недоступны. Текущий статус и дату окончания размещения можно проверить в разделе «Тарифы».',
         ),
         (
           question: 'Как откликнуться на кастинг?',
@@ -1275,7 +1277,7 @@ List<({String question, String answer})> _faq(bool ru) => ru
               'Откройте кастинг, выберите подходящую анкету и отправьте отклик. Его дальнейший статус будет доступен в приложении.',
         ),
       ]
-    : const [
+    : [
         (
           question: 'Why is my profile not visible in the catalogue?',
           answer:
@@ -1288,8 +1290,9 @@ List<({String question, String answer})> _faq(bool ru) => ru
         ),
         (
           question: 'How do I pay for placement?',
-          answer:
-              'After approval, open Billing in your account, choose a period and complete payment on the secure YooKassa page.',
+          answer: kIsWeb
+              ? 'After approval, open Billing in your account, choose a period and complete payment on the secure YooKassa page.'
+              : 'Purchasing and renewing placement are not currently available in the mobile app. You can check the current status and end date in Plans.',
         ),
         (
           question: 'How do I respond to a casting?',

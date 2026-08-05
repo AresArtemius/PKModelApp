@@ -14,6 +14,7 @@ const _authPaths = <String>{
 };
 
 const _publicPaths = <String>{
+  Routes.landingPreview,
   Routes.login,
   Routes.register,
   Routes.emailVerification,
@@ -22,6 +23,7 @@ const _publicPaths = <String>{
   Routes.cookiePolicy,
   Routes.processingNotice,
   Routes.requisites,
+  Routes.accountDeletion,
   Routes.search,
   Routes.castings,
   Routes.authRequired,

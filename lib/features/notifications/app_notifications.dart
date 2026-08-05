@@ -5,6 +5,7 @@ import '../../core/app_logger.dart';
 import '../../core/auth_providers.dart';
 import '../../core/supabase_compat.dart';
 import '../../core/supabase_provider.dart';
+import '../profile/my_profile_controller.dart';
 
 class AppNotification {
   const AppNotification({
@@ -622,9 +623,20 @@ final appNotificationsRealtimeProvider = Provider.autoDispose<void>((ref) {
           column: 'user_id',
           value: userId,
         ),
-        callback: (_) {
+        callback: (payload) {
           ref.invalidate(appNotificationsProvider);
           ref.invalidate(unreadNotificationsCountProvider);
+
+          // A DELETE payload from `profiles` may not contain the non-primary
+          // `user_id`, so the owner's filtered profile subscription can miss
+          // an administrator deleting their profile on another device. The
+          // server emits a profile notification as a reliable refresh signal.
+          final notificationType = (payload.newRecord['type'] ?? '')
+              .toString()
+              .trim();
+          if (notificationType == 'profile_moderation') {
+            ref.invalidate(myProfileProvider);
+          }
         },
       )
       .subscribe();
