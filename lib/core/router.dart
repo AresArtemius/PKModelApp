@@ -62,6 +62,7 @@ abstract class Routes {
   static const onboarding = '/onboarding';
   static const privacyPolicy = '/privacy';
   static const termsOfService = '/terms';
+  static const childSafety = '/child-safety';
   static const cookiePolicy = '/cookies';
   static const processingNotice = '/processing-notice';
   static const requisites = '/requisites';
@@ -626,6 +627,11 @@ final List<RouteBase> appRoutes = [
     path: Routes.termsOfService,
     builder: (context, state) =>
         const LegalDocumentPage(kind: LegalDocumentKind.terms),
+  ),
+  GoRoute(
+    path: Routes.childSafety,
+    builder: (context, state) =>
+        const LegalDocumentPage(kind: LegalDocumentKind.childSafety),
   ),
   GoRoute(
     path: Routes.cookiePolicy,

@@ -4,6 +4,7 @@ const publicRoutes = [
   '/register',
   '/privacy',
   '/terms',
+  '/child-safety',
   '/cookies',
   '/processing-notice',
   '/requisites',

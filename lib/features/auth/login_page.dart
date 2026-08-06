@@ -521,6 +521,10 @@ class _LoginLegalLinks extends StatelessWidget {
         label: isRussian ? 'Конфиденциальность' : 'Privacy',
         route: Routes.privacyPolicy,
       ),
+      (
+        label: isRussian ? 'Безопасность детей' : 'Child safety',
+        route: Routes.childSafety,
+      ),
     ];
 
     return Wrap(

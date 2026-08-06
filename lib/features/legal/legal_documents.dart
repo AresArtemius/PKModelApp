@@ -1,6 +1,14 @@
 const kLegalVersion = '2026-07-15';
+const kChildSafetyStandardsVersion = '2026-08-06';
 
-enum LegalDocumentKind { privacy, terms, cookies, processingNotice, requisites }
+enum LegalDocumentKind {
+  privacy,
+  terms,
+  childSafety,
+  cookies,
+  processingNotice,
+  requisites,
+}
 
 class LegalDocumentSection {
   const LegalDocumentSection({required this.title, required this.body});
@@ -17,6 +25,7 @@ class LegalDocument {
     required this.route,
     required this.sectionsRu,
     required this.sectionsEn,
+    this.version = kLegalVersion,
   });
 
   final LegalDocumentKind kind;
@@ -25,6 +34,7 @@ class LegalDocument {
   final String route;
   final List<LegalDocumentSection> sectionsRu;
   final List<LegalDocumentSection> sectionsEn;
+  final String version;
 
   String title(bool isRu) => isRu ? titleRu : titleEn;
   List<LegalDocumentSection> sections(bool isRu) =>
@@ -219,6 +229,87 @@ const legalDocuments = <LegalDocument>[
         title: 'Account security',
         body:
             'Users must protect account access, keep passwords and recovery codes private and report suspicious activity. Administrators and important users may use 2FA for additional protection.',
+      ),
+    ],
+  ),
+  LegalDocument(
+    kind: LegalDocumentKind.childSafety,
+    titleRu: 'Стандарты безопасности детей',
+    titleEn: 'Child Safety Standards',
+    route: '/child-safety',
+    version: kChildSafetyStandardsVersion,
+    sectionsRu: [
+      LegalDocumentSection(
+        title: 'Назначение и сфера действия',
+        body:
+            'Настоящие стандарты применяются к приложению и платформе PK Management, оператором которых является ООО «Модельное агентство “Биг Вест”». Они распространяются на анкеты, фотографии, видео, сообщения, файлы, кастинги, подборки и любое другое содержимое или взаимодействие внутри сервиса.',
+      ),
+      LegalDocumentSection(
+        title: 'Нулевая терпимость к сексуальному насилию и эксплуатации детей',
+        body:
+            'PK Management прямо запрещает сексуальное насилие и эксплуатацию детей (Child Sexual Abuse and Exploitation, CSAE), а также материалы, содержащие сексуальное насилие над детьми (Child Sexual Abuse Material, CSAM). Запрещены создание, загрузка, хранение, публикация, передача, запрос или распространение таких материалов и любое поведение, которое сексуально эксплуатирует, подвергает насилию или опасности несовершеннолетнего.',
+      ),
+      LegalDocumentSection(
+        title: 'Запрещенное поведение и материалы',
+        body:
+            'Запрещены, в частности: установление доверия с ребенком в сексуальных целях (груминг); сексуализация несовершеннолетнего; склонение к созданию или обмену интимными материалами; сексуальный шантаж и вымогательство; торговля детьми или их вовлечение в коммерческую сексуальную эксплуатацию; организация сексуальных контактов с несовершеннолетним; создание, хранение, запрос, передача или распространение CSAM, включая созданные или измененные цифровыми средствами изображения.',
+      ),
+      LegalDocumentSection(
+        title: 'Как сообщить о нарушении',
+        body:
+            'Пользователь может сообщить о проблеме, не выходя из приложения: «Мой аккаунт» → «Помощь и поддержка» → «Новое обращение» → категория «Безопасность». Укажите профиль, сообщение, чат или материал и опишите обстоятельства. Не копируйте и не распространяйте предполагаемые незаконные материалы. Также можно написать на artem@president-kids.ru. Если ребенок находится в непосредственной опасности, следует незамедлительно обратиться в местные экстренные службы или правоохранительные органы.',
+      ),
+      LegalDocumentSection(
+        title: 'Рассмотрение сообщений и меры',
+        body:
+            'PK Management рассматривает сообщения о безопасности, ограничивает доступ к подозрительному содержимому на время проверки и принимает соразмерные меры. Они могут включать удаление материалов, блокировку или прекращение доступа пользователя, сохранение необходимых сведений в пределах закона и сотрудничество с компетентными органами. Подтвержденные материалы CSAM удаляются или блокируются, а сведения о них передаются в NCMEC или соответствующий региональный или национальный орган, когда это требуется применимым законодательством.',
+      ),
+      LegalDocumentSection(
+        title: 'Защита несовершеннолетних участников',
+        body:
+            'Данные и материалы несовершеннолетнего участника должны предоставляться и поддерживаться родителем или законным представителем либо с его явного разрешения. Согласие представителя не допускает материалы или действия, запрещенные настоящими стандартами. Общение и использование материалов должны быть связаны только с законными профессиональными задачами, такими как кастинги и съемки, и проходить с соблюдением прав и безопасности ребенка.',
+      ),
+      LegalDocumentSection(
+        title: 'Контактное лицо по безопасности детей',
+        body:
+            'Контакт для сообщений Google Play, пользователей и компетентных органов по вопросам CSAE и CSAM: artem@president-kids.ru. Контактное лицо уполномочено получать уведомления, координировать проверку, применение правил и необходимые меры реагирования.',
+      ),
+    ],
+    sectionsEn: [
+      LegalDocumentSection(
+        title: 'Purpose and scope',
+        body:
+            'These standards apply to the PK Management application and platform operated by Model Agency “Big West” LLC. They cover profiles, photos, videos, messages, files, castings, selections and any other content or interaction within the service.',
+      ),
+      LegalDocumentSection(
+        title: 'Zero tolerance for child sexual abuse and exploitation',
+        body:
+            'PK Management explicitly prohibits Child Sexual Abuse and Exploitation (CSAE) and Child Sexual Abuse Material (CSAM). Creating, uploading, storing, publishing, transmitting, requesting or distributing such material is prohibited, as is any behavior that sexually exploits, abuses or endangers a minor.',
+      ),
+      LegalDocumentSection(
+        title: 'Prohibited conduct and content',
+        body:
+            'Prohibited conduct includes, without limitation: grooming a child for sexual purposes; sexualization of a minor; soliciting the creation or exchange of intimate material; sextortion; child trafficking or commercial sexual exploitation; arranging sexual contact with a minor; and creating, storing, requesting, transmitting or distributing CSAM, including digitally created or altered imagery.',
+      ),
+      LegalDocumentSection(
+        title: 'How to report a concern',
+        body:
+            'Users can report a concern without leaving the app by opening “My account” → “Help & support” → “New support request” and selecting “Security”. Identify the relevant profile, message, chat or material and describe the circumstances. Do not copy or redistribute suspected illegal material. Reports can also be sent to artem@president-kids.ru. If a child is in immediate danger, contact local emergency services or law enforcement without delay.',
+      ),
+      LegalDocumentSection(
+        title: 'Review and enforcement',
+        body:
+            'PK Management reviews safety reports, restricts access to suspected content while it is assessed and takes proportionate action. This may include removing content, suspending or terminating user access, preserving necessary information as permitted by law and cooperating with competent authorities. Confirmed CSAM is removed or blocked and reported to NCMEC or the relevant regional or national authority when required by applicable law.',
+      ),
+      LegalDocumentSection(
+        title: 'Protection of minor participants',
+        body:
+            'A minor participant’s data and materials must be provided and maintained by a parent or legal guardian or with their explicit permission. Guardian consent does not permit content or conduct prohibited by these standards. Communication and use of materials must be limited to lawful professional purposes such as castings and shoots and must protect the child’s rights and safety.',
+      ),
+      LegalDocumentSection(
+        title: 'Child safety point of contact',
+        body:
+            'The designated contact for Google Play, users and competent authorities regarding CSAE and CSAM is artem@president-kids.ru. This contact is authorized to receive notices and coordinate review, enforcement and necessary response measures.',
       ),
     ],
   ),
@@ -430,6 +521,7 @@ Map<String, dynamic> legalConsentVersionsMetadata({
     'legal_consent_user_agent': userAgent,
     'privacy_policy_version': kLegalVersion,
     'terms_version': kLegalVersion,
+    'child_safety_standards_version': kChildSafetyStandardsVersion,
     'cookie_policy_version': kLegalVersion,
     'processing_notice_version': kLegalVersion,
   };

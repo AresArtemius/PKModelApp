@@ -15,6 +15,7 @@ class LegalDocumentPage extends StatelessWidget {
     final isRu = Localizations.localeOf(context).languageCode == 'ru';
     final document = legalDocumentByKind(kind);
     final sections = document.sections(isRu);
+    final compactHeader = MediaQuery.sizeOf(context).width < 520;
 
     return Scaffold(
       body: Stack(
@@ -40,14 +41,14 @@ class LegalDocumentPage extends StatelessWidget {
                     Expanded(
                       child: Text(
                         document.title(isRu).toUpperCase(),
-                        maxLines: 2,
+                        maxLines: compactHeader ? 3 : 2,
                         overflow: TextOverflow.ellipsis,
                         textAlign: TextAlign.center,
                         style: BrandTheme.pillText.copyWith(
                           color: kTextDark,
-                          fontSize: 20,
+                          fontSize: compactHeader ? 16 : 20,
                           fontWeight: FontWeight.w800,
-                          letterSpacing: 2.2,
+                          letterSpacing: compactHeader ? 1.2 : 2.2,
                         ),
                       ),
                     ),
@@ -81,8 +82,8 @@ class LegalDocumentPage extends StatelessWidget {
                     children: [
                       Text(
                         isRu
-                            ? 'Версия $kLegalVersion'
-                            : 'Version $kLegalVersion',
+                            ? 'Версия ${document.version}'
+                            : 'Version ${document.version}',
                         style: _bodyStyle(
                           color: kTextMuted,
                           fontWeight: FontWeight.w700,

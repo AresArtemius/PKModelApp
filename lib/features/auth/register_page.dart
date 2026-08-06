@@ -1310,6 +1310,12 @@ class _LegalConsentBox extends StatelessWidget {
                         ).route,
                       ),
                       _LegalLink(
+                        label: isRu ? 'Безопасность детей' : 'Child safety',
+                        route: legalDocumentByKind(
+                          LegalDocumentKind.childSafety,
+                        ).route,
+                      ),
+                      _LegalLink(
                         label: 'Cookies',
                         route: legalDocumentByKind(
                           LegalDocumentKind.cookies,

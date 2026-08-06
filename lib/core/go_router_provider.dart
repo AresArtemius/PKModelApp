@@ -20,6 +20,7 @@ const _publicPaths = <String>{
   Routes.emailVerification,
   Routes.privacyPolicy,
   Routes.termsOfService,
+  Routes.childSafety,
   Routes.cookiePolicy,
   Routes.processingNotice,
   Routes.requisites,
