@@ -30,6 +30,8 @@ jobs:
   build:
     name: Build Flutter Web
     runs-on: ubuntu-latest
+    outputs:
+      pages_artifact_id: ${{ steps.upload-pages.outputs.artifact_id }}
 
     steps:
       - name: Checkout
@@ -109,6 +111,7 @@ jobs:
         uses: actions/configure-pages@v5
 
       - name: Upload Pages artifact
+        id: upload-pages
         uses: actions/upload-pages-artifact@v3
         with:
           path: build/web
@@ -127,7 +130,16 @@ jobs:
 
       - name: Deploy Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/github-script@v9
+        timeout-minutes: 35
+        env:
+          PAGES_ARTIFACT_ID: ${{ needs.build.outputs.pages_artifact_id }}
+          PAGES_DEPLOYMENT_TIMEOUT_MS: 1800000
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const deployPages = require('./.github/scripts/deploy-pages-with-extended-wait.js');
+            await deployPages({ github, context, core });
 
       - name: Smoke test production
         run: bash tool/web_smoke.sh https://app.pk.management
