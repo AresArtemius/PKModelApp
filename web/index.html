@@ -49,8 +49,6 @@
       font: 500 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
       inset: 0;
       justify-content: center;
-      margin: 0 auto;
-      max-width: 1440px;
       padding: 24px;
       position: fixed;
       text-align: center;
@@ -59,17 +57,13 @@
     #app-loading-logo {
       align-items: center;
       animation: loader-pop 1.3s cubic-bezier(.2, .8, .3, 1.2) both;
-      background: rgba(0, 0, 0, 0.32);
-      border: 1px solid rgba(255, 255, 255, 0.13);
       border-radius: 50%;
-      box-shadow: 0 0 42px 8px rgba(176, 0, 0, 0.46);
-      box-sizing: border-box;
+      box-shadow: 0 0 48px 6px rgba(176, 0, 0, 0.55);
       display: flex;
-      height: 132px;
+      height: 120px;
       justify-content: center;
       margin-bottom: 36px;
-      padding: 18px;
-      width: 132px;
+      width: 120px;
     }
     #app-loading-logo img {
       height: 100%;
@@ -150,7 +144,7 @@
 </head>
 <body>
   <div id="app-loading" role="status" aria-live="polite">
-    <div id="app-loading-logo"><img src="logo-144.png" alt="PK Management" width="96" height="96"></div>
+    <div id="app-loading-logo"><img src="logo-144.png" alt="PK Management" width="120" height="120"></div>
     <div id="app-loading-bar"></div>
     <p id="app-loading-text">Загружаем кабинет…</p>
     <button id="app-loading-retry" type="button">Обновить страницу</button>
