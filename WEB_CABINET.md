@@ -40,6 +40,32 @@ python3 -m http.server 8080 -d build/web
 
 Keep this server only for local checking. Production should use static hosting.
 
+## Hosting: Timeweb Cloud server
+
+Production moves from GitHub Pages to a Timeweb Cloud server (Ubuntu) running
+Caddy. Files: `deploy/Caddyfile` (site config: automatic HTTPS, SPA fallback,
+precompressed Brotli/gzip, cache headers) and `deploy/setup-server.sh`
+(one-time provisioning).
+
+Repository secrets:
+
+- `TIMEWEB_HOST` — server IP.
+- `TIMEWEB_SSH_KEY` — private SSH key; its public half must be in root's
+  `authorized_keys` on the server (add it when creating the server).
+
+Workflows:
+
+1. **Server Setup (Timeweb Cloud)** — run manually once: installs Caddy,
+   creates the `deploy` user, `/var/www/app/{releases,current}`, firewall.
+2. **Flutter Web Deploy** — on every push to `main` the `deploy-timeweb` job
+   precompresses `build/web`, uploads it to `/var/www/app/releases/<sha>` and
+   switches the `current` symlink (last 3 releases kept). The job is skipped
+   when the secrets are not set.
+
+Then point the DNS A record for `app.pk.management` to the server IP; Caddy
+obtains the certificate automatically. GitHub Pages deploy stays until the
+switch is verified, then it is removed.
+
 ## Supabase Auth URLs
 
 In Supabase Dashboard, open Authentication -> URL Configuration.

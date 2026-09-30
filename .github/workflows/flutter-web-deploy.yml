@@ -117,6 +117,13 @@ jobs:
         with:
           path: build/web
 
+      - name: Upload build for server deploy
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-build
+          path: build/web
+          retention-days: 3
+
   deploy:
     name: Deploy to GitHub Pages
     needs: build
@@ -155,3 +162,76 @@ jobs:
         env:
           WEB_BASE_URL: https://app.pk.management
         run: npm run test:e2e
+
+  deploy-timeweb:
+    name: Deploy to Timeweb Cloud
+    needs: build
+    runs-on: ubuntu-latest
+    env:
+      TIMEWEB_HOST: ${{ secrets.TIMEWEB_HOST }}
+      TIMEWEB_SSH_KEY: ${{ secrets.TIMEWEB_SSH_KEY }}
+
+    steps:
+      - name: Check server secrets
+        id: gate
+        run: |
+          if [ -z "$TIMEWEB_HOST" ] || [ -z "$TIMEWEB_SSH_KEY" ]; then
+            echo "TIMEWEB_HOST / TIMEWEB_SSH_KEY are not set; skipping server deploy."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download build
+        if: steps.gate.outputs.enabled == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: web-build
+          path: build/web
+
+      - name: Precompress static files (brotli + gzip)
+        if: steps.gate.outputs.enabled == 'true'
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq brotli >/dev/null
+          rm -f build/web/CNAME
+          find build/web -type f \( -name '*.js' -o -name '*.wasm' -o -name '*.json' -o -name '*.html' -o -name '*.css' -o -name '*.otf' -o -name '*.ttf' -o -name '*.svg' -o -name '*.txt' \) -size +1k \
+            -exec brotli -k -f -q 11 {} \; -exec gzip -k -f -9 {} \;
+          du -sh build/web
+          ls -la build/web/main.dart.js*
+
+      - name: Configure SSH
+        if: steps.gate.outputs.enabled == 'true'
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$TIMEWEB_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$TIMEWEB_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Upload release
+        if: steps.gate.outputs.enabled == 'true'
+        run: |
+          release="/var/www/app/releases/${GITHUB_SHA::12}"
+          ssh -i ~/.ssh/deploy_key "deploy@$TIMEWEB_HOST" "mkdir -p '$release'"
+          rsync -az --delete -e "ssh -i ~/.ssh/deploy_key" build/web/ "deploy@$TIMEWEB_HOST:$release/"
+
+      - name: Switch release and prune
+        if: steps.gate.outputs.enabled == 'true'
+        run: |
+          release="/var/www/app/releases/${GITHUB_SHA::12}"
+          ssh -i ~/.ssh/deploy_key "deploy@$TIMEWEB_HOST" bash -s <<EOF
+            set -e
+            ln -sfn "$release" /var/www/app/current.tmp
+            mv -T /var/www/app/current.tmp /var/www/app/current
+            cd /var/www/app/releases && ls -1dt */ | tail -n +4 | xargs -r rm -rf
+            echo "current -> \$(readlink /var/www/app/current)"
+          EOF
+
+      - name: Verify server answers for the domain
+        if: steps.gate.outputs.enabled == 'true'
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: app.pk.management' "http://$TIMEWEB_HOST/")
+          echo "HTTP $code from the server for Host: app.pk.management"
+          case "$code" in
+            200|301|308) ;;
+            *) echo "Unexpected status from the server"; exit 1 ;;
+          esac
