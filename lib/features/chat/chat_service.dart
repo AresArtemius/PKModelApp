@@ -75,7 +75,7 @@ class ChatService {
           )
           .where((e) => e.selectionId.isNotEmpty && e.profileId.isNotEmpty)
           .toList(growable: false);
-      return _enrichInvitationsWithAccounts(invitations);
+      return await _enrichInvitationsWithAccounts(invitations);
     } on PostgrestException catch (e) {
       if (_isRlsRecursion(e)) {
         return const <CastingInvitation>[];

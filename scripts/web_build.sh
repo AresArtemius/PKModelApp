@@ -17,4 +17,11 @@ fi
 flutter --version
 flutter config --enable-web
 flutter pub get
-flutter build web   --release   --pwa-strategy=none   --dart-define=SUPABASE_URL="$SUPABASE_URL"   --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
+# --no-web-resources-cdn: serve CanvasKit and fonts from our own origin instead of
+# www.gstatic.com / fonts.gstatic.com (Google CDN is a single point of failure for RU users).
+flutter build web \
+  --release \
+  --pwa-strategy=none \
+  --no-web-resources-cdn \
+  --dart-define=SUPABASE_URL="$SUPABASE_URL" \
+  --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"

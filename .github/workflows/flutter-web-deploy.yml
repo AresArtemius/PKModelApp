@@ -82,6 +82,7 @@ jobs:
           flutter build web
           --release
           --pwa-strategy=none
+          --no-web-resources-cdn
           --base-href=/
           --dart-define=PUBLIC_BASE_URL=https://app.pk.management/#
           --dart-define=SUPABASE_URL=$SUPABASE_URL
