@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
   <!--
     If you are serving your web app in a path other than the root, change the
@@ -18,6 +18,7 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="description" content="PK Management web cabinet for castings, profiles, selections, chats and admin tools.">
   <meta name="theme-color" content="#1F1F1F">
 
@@ -38,34 +39,137 @@
       align-items: center;
       color: #252525;
       display: flex;
-      font: 600 14px/1.4 Arial, sans-serif;
+      flex-direction: column;
+      font: 500 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
       inset: 0;
       justify-content: center;
-      letter-spacing: 1.2px;
+      padding: 24px;
       position: fixed;
+      text-align: center;
+      z-index: 10;
     }
-    #app-loading::before {
-      animation: loading-pulse 1s ease-in-out infinite alternate;
+    #app-loading img {
+      height: 72px;
+      width: 72px;
+      margin-bottom: 20px;
+      user-select: none;
+      -webkit-user-drag: none;
+    }
+    #app-loading-bar {
+      background: rgba(0, 0, 0, 0.10);
+      border-radius: 2px;
+      height: 3px;
+      margin-bottom: 14px;
+      overflow: hidden;
+      position: relative;
+      width: 160px;
+    }
+    #app-loading-bar::after {
+      animation: loading-slide 1.4s cubic-bezier(.4, 0, .2, 1) infinite;
       background: #be0000;
-      border-radius: 50%;
+      border-radius: 2px;
       content: '';
-      height: 12px;
-      margin-right: 12px;
-      width: 12px;
+      height: 100%;
+      left: 0;
+      position: absolute;
+      top: 0;
+      width: 40%;
     }
-    @keyframes loading-pulse { to { opacity: .28; transform: scale(.82); } }
+    @keyframes loading-slide {
+      from { transform: translateX(-100%); }
+      to { transform: translateX(250%); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      #app-loading-bar::after { animation: none; width: 100%; opacity: .6; }
+    }
+    #app-loading-text { color: #6d6d6d; margin: 0; }
+    #app-loading-retry {
+      background: #1f1f1f;
+      border: 0;
+      border-radius: 999px;
+      color: #fff;
+      cursor: pointer;
+      display: none;
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      line-height: 1;
+      margin-top: 18px;
+      padding: 13px 28px;
+    }
+    #app-loading-retry:hover { background: #000; }
+    #app-loading.is-failed #app-loading-bar { display: none; }
+    #app-loading.is-failed #app-loading-text { color: #252525; max-width: 320px; }
+    #app-loading.is-failed #app-loading-retry { display: inline-block; }
   </style>
 </head>
 <body>
-  <div id="app-loading" role="status" aria-live="polite">PK MANAGEMENT ЗАГРУЖАЕТСЯ</div>
+  <div id="app-loading" role="status" aria-live="polite">
+    <img src="logo-144.png" alt="PK Management" width="72" height="72">
+    <div id="app-loading-bar"></div>
+    <p id="app-loading-text">Загружаем кабинет…</p>
+    <button id="app-loading-retry" type="button">Обновить страницу</button>
+  </div>
   <script>
-    const loadingObserver = new MutationObserver(() => {
-      if (document.querySelector('flutter-view')) {
-        document.getElementById('app-loading')?.remove();
-        loadingObserver.disconnect();
+    (function () {
+      var LOAD_TIMEOUT_MS = 20000;
+      var SLOW_HINT_MS = 8000;
+      var loading = document.getElementById('app-loading');
+      var text = document.getElementById('app-loading-text');
+      var retry = document.getElementById('app-loading-retry');
+      var done = false;
+
+      function finish() {
+        if (done) return;
+        done = true;
+        clearTimeout(slowTimer);
+        clearTimeout(failTimer);
+        window.removeEventListener('error', onResourceError, true);
+        window.removeEventListener('unhandledrejection', onRejection);
+        observer.disconnect();
+        if (loading && loading.parentNode) loading.parentNode.removeChild(loading);
       }
-    });
-    loadingObserver.observe(document.body, { childList: true, subtree: true });
+
+      function fail(reason) {
+        if (done || loading.classList.contains('is-failed')) return;
+        clearTimeout(slowTimer);
+        clearTimeout(failTimer);
+        loading.classList.add('is-failed');
+        text.textContent = 'Не удалось загрузить приложение. Проверьте подключение к интернету и попробуйте ещё раз.';
+        if (reason && window.console) console.warn('[app-loading] ' + reason);
+      }
+
+      var observer = new MutationObserver(function () {
+        if (document.querySelector('flutter-view')) finish();
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+
+      var slowTimer = setTimeout(function () {
+        if (!done) text.textContent = 'Загрузка идёт дольше обычного…';
+      }, SLOW_HINT_MS);
+
+      var failTimer = setTimeout(function () {
+        fail('timeout after ' + LOAD_TIMEOUT_MS + ' ms');
+      }, LOAD_TIMEOUT_MS);
+
+      // A script or wasm file that failed to download (CDN blocked, offline).
+      function onResourceError(event) {
+        var target = event.target;
+        if (target && target.tagName === 'SCRIPT') fail('script failed: ' + target.src);
+      }
+      // flutter_bootstrap.js reports fetch failures as rejected promises.
+      function onRejection(event) {
+        var message = String(event.reason && event.reason.message || event.reason || '');
+        if (/failed to fetch|networkerror|load failed/i.test(message)) fail('fetch failed: ' + message);
+      }
+      window.addEventListener('error', onResourceError, true);
+      window.addEventListener('unhandledrejection', onRejection);
+
+      retry.addEventListener('click', function () {
+        retry.disabled = true;
+        window.location.reload();
+      });
+    })();
   </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
