@@ -1,0 +1,43 @@
+# Caddy config for the PK Management web cabinet (Timeweb Cloud server).
+# Installed to /etc/caddy/Caddyfile by .github/workflows/server-setup.yml.
+#
+# - Automatic HTTPS (Let's Encrypt) once DNS for the domain points here.
+# - SPA fallback: any unknown path serves index.html (needed for path URLs).
+# - Precompressed .br/.gz files are produced by the deploy workflow and served
+#   as-is; small files are compressed on the fly.
+# - Flutter web assets are not content-hashed, so everything revalidates
+#   (ETag → 304) instead of being cached blindly; index.html is never cached.
+
+app.pk.management {
+	root * /var/www/app/current
+
+	encode zstd gzip
+
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+
+	@index path / /index.html
+	header @index Cache-Control "no-cache"
+
+	@static path /main.dart.js /flutter_bootstrap.js /flutter.js /flutter_service_worker.js /version.json /manifest.json /assets/* /canvaskit/* /icons/* /*.png /*.js
+	header @static Cache-Control "public, max-age=0, must-revalidate"
+
+	@wasm path *.wasm
+	header @wasm Content-Type application/wasm
+
+	try_files {path} /index.html
+
+	file_server {
+		precompressed br gzip
+	}
+
+	log {
+		output file /var/log/caddy/app.pk.management.log {
+			roll_size 20mb
+			roll_keep 5
+		}
+	}
+}

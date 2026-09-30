@@ -1,0 +1,46 @@
+name: Server Setup (Timeweb Cloud)
+
+# One-time (and re-runnable) provisioning of the web server: installs Caddy,
+# creates the deploy user and directories, applies deploy/Caddyfile.
+# Requires repository secrets TIMEWEB_HOST (IP) and TIMEWEB_SSH_KEY (private key
+# whose public half is in root's authorized_keys on the server).
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  setup:
+    name: Provision server
+    runs-on: ubuntu-latest
+    env:
+      TIMEWEB_HOST: ${{ secrets.TIMEWEB_HOST }}
+      TIMEWEB_SSH_KEY: ${{ secrets.TIMEWEB_SSH_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Require secrets
+        run: |
+          if [ -z "$TIMEWEB_HOST" ] || [ -z "$TIMEWEB_SSH_KEY" ]; then
+            echo "Set TIMEWEB_HOST and TIMEWEB_SSH_KEY in repository secrets first."
+            exit 1
+          fi
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$TIMEWEB_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$TIMEWEB_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Copy deploy files
+        run: |
+          ssh -i ~/.ssh/deploy_key "root@$TIMEWEB_HOST" "mkdir -p /root/pk-deploy"
+          scp -i ~/.ssh/deploy_key deploy/Caddyfile deploy/setup-server.sh "root@$TIMEWEB_HOST:/root/pk-deploy/"
+
+      - name: Run setup script
+        run: ssh -i ~/.ssh/deploy_key "root@$TIMEWEB_HOST" "bash /root/pk-deploy/setup-server.sh"
