@@ -57,7 +57,6 @@ Widget _buildBaseApp({
 const _kSupportedLocales = AppLocalizations.supportedLocales;
 const _kLocalizationsDelegates = AppLocalizations.localizationsDelegates;
 
-const double _kWebCabinetMaxWidth = 1440.0;
 const double _kBootstrapErrorMaxWidth = 520.0;
 const EdgeInsets _kBootstrapErrorPadding = EdgeInsets.all(24);
 const double _kBootstrapErrorGap = 12.0;
@@ -105,17 +104,8 @@ class _WebAppFrame extends StatelessWidget {
         ),
       ],
     );
-    if (!kIsWeb) return app;
-
-    return ColoredBox(
-      color: const Color(0xFFE7E7E7),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: _kWebCabinetMaxWidth),
-          child: app,
-        ),
-      ),
-    );
+    // Web renders edge to edge; individual pages own their content widths.
+    return app;
   }
 }
 
@@ -353,25 +343,20 @@ class _StartupSplashScreenState extends State<_StartupSplashScreen>
                   child: ScaleTransition(
                     scale: _scale,
                     child: Container(
-                      width: 132,
-                      height: 132,
-                      padding: const EdgeInsets.all(18),
+                      width: 120,
+                      height: 120,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: Colors.black.withValues(alpha: 0.32),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.13),
-                        ),
                         boxShadow: [
                           BoxShadow(
-                            color: BrandTheme.redTop.withValues(alpha: 0.46),
-                            blurRadius: 42,
-                            spreadRadius: 8,
+                            color: BrandTheme.redTop.withValues(alpha: 0.55),
+                            blurRadius: 48,
+                            spreadRadius: 6,
                           ),
                         ],
                       ),
                       child: Image.asset(
-                        'assets/images/pk-logo-red-512.png',
+                        'assets/images/pk-logo-splash-512.png',
                         fit: BoxFit.contain,
                       ),
                     ),
