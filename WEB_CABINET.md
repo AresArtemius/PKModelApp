@@ -10,6 +10,10 @@ through the existing tables, storage buckets, policies and Edge Functions.
 SUPABASE_URL=... SUPABASE_ANON_KEY=... bash scripts/web_build.sh
 ```
 
+The script builds with `--no-web-resources-cdn`: the CanvasKit renderer and
+fonts are copied into `build/web/canvaskit/` and served from our domain. After a
+build, `grep -c gstatic build/web/flutter_bootstrap.js` must print `0`.
+
 The deployable site is created in:
 
 ```text

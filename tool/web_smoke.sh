@@ -42,4 +42,15 @@ test -s "$tmp_dir/flutter_bootstrap.js"
 test -s "$tmp_dir/main.dart.js"
 test -s "$tmp_dir/firebase-messaging-sw.js"
 
+# Renderer must be self-hosted: no Google CDN references in the bootstrap,
+# and the CanvasKit files must be served from our own origin.
+if grep -q "gstatic.com" "$tmp_dir/flutter_bootstrap.js"; then
+  echo "flutter_bootstrap.js still references gstatic.com; build with --no-web-resources-cdn."
+  exit 1
+fi
+fetch "/canvaskit/canvaskit.js" "$tmp_dir/canvaskit.js"
+fetch "/canvaskit/canvaskit.wasm" "$tmp_dir/canvaskit.wasm"
+test -s "$tmp_dir/canvaskit.js"
+test -s "$tmp_dir/canvaskit.wasm"
+
 echo "Production smoke test passed for $base_url"

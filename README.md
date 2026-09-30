@@ -24,9 +24,14 @@ flutter run \
 ```bash
 flutter build web \
   --pwa-strategy=none \
+  --no-web-resources-cdn \
   --dart-define=SUPABASE_URL=... \
   --dart-define=SUPABASE_ANON_KEY=...
 ```
+
+`--no-web-resources-cdn` keeps CanvasKit and the fallback fonts on our own
+origin (`build/web/canvaskit/`) instead of `www.gstatic.com`, so the cabinet
+loads even when Google CDNs are slow or blocked.
 
 More web cabinet notes are in `WEB_CABINET.md`.
 
