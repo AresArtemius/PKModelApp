@@ -352,7 +352,7 @@ class PushNotificationsService {
     if (kIsWeb || !Platform.isIOS) return null;
 
     try {
-      return messaging.getAPNSToken();
+      return await messaging.getAPNSToken();
     } catch (_) {
       return null;
     }
