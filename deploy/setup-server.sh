@@ -49,10 +49,16 @@ fi
 
 echo "== Caddyfile"
 install -m 644 "$(dirname "$0")/Caddyfile" /etc/caddy/Caddyfile
-mkdir -p /var/log/caddy && chown caddy:caddy /var/log/caddy
 caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
 systemctl enable caddy >/dev/null
-systemctl reload caddy || systemctl restart caddy
+systemctl restart caddy
+sleep 2
+if ! systemctl is-active --quiet caddy; then
+  echo "Caddy failed to start:"
+  journalctl -u caddy -n 20 --no-pager
+  exit 1
+fi
+ss -ltn | grep -E ':80 |:443 ' || { echo "Caddy is not listening on 80/443"; exit 1; }
 
 echo "== Firewall (SSH, HTTP, HTTPS)"
 ufw allow OpenSSH >/dev/null
