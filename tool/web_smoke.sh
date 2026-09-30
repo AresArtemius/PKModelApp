@@ -32,6 +32,8 @@ if [ "$ready" != true ]; then
 fi
 
 fetch "/manifest.json" "$tmp_dir/manifest.json"
+fetch "/logo-144.png" "$tmp_dir/logo-144.png"
+test -s "$tmp_dir/logo-144.png"
 grep -q 'PK Management' "$tmp_dir/manifest.json"
 
 fetch "/flutter_bootstrap.js" "$tmp_dir/flutter_bootstrap.js"
