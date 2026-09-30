@@ -46,8 +46,10 @@ test -s "$tmp_dir/firebase-messaging-sw.js"
 
 # Renderer must be self-hosted: no Google CDN references in the bootstrap,
 # and the CanvasKit files must be served from our own origin.
-if grep -q "gstatic.com" "$tmp_dir/flutter_bootstrap.js"; then
-  echo "flutter_bootstrap.js still references gstatic.com; build with --no-web-resources-cdn."
+# (The bootstrap always embeds the gstatic URL as a code fallback; what matters is
+# the build flag that makes it load CanvasKit from our origin.)
+if ! grep -q '"useLocalCanvasKit":true' "$tmp_dir/flutter_bootstrap.js"; then
+  echo "flutter_bootstrap.js was built without --no-web-resources-cdn (useLocalCanvasKit is not true)."
   exit 1
 fi
 fetch "/canvaskit/canvaskit.js" "$tmp_dir/canvaskit.js"

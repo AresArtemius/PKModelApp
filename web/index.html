@@ -20,7 +20,7 @@
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="description" content="PK Management web cabinet for castings, profiles, selections, chats and admin tools.">
-  <meta name="theme-color" content="#1F1F1F">
+  <meta name="theme-color" content="#020202">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
@@ -35,38 +35,64 @@
   <link rel="manifest" href="manifest.json">
   <style>
     html, body { height: 100%; margin: 0; background: #e7e7e7; }
+    /* Startup loader — matches the Flutter splash (dark gradient, red glow, logo, wordmark)
+       so the hand-off from HTML to the app is seamless. */
     #app-loading {
+      --loader-red: #b00000;
       align-items: center;
-      color: #252525;
+      background:
+        radial-gradient(72% 72% at 50% 59%, rgba(176, 0, 0, 0.34) 0%, rgba(176, 0, 0, 0) 100%),
+        linear-gradient(180deg, #020202 0%, #140507 46%, #42000a 78%, #760012 100%);
+      color: #fff;
       display: flex;
       flex-direction: column;
       font: 500 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
       inset: 0;
       justify-content: center;
+      margin: 0 auto;
+      max-width: 1440px;
       padding: 24px;
       position: fixed;
       text-align: center;
       z-index: 10;
     }
-    #app-loading img {
-      height: 72px;
-      width: 72px;
-      margin-bottom: 20px;
+    #app-loading-logo {
+      align-items: center;
+      animation: loader-pop 1.3s cubic-bezier(.2, .8, .3, 1.2) both;
+      background: rgba(0, 0, 0, 0.32);
+      border: 1px solid rgba(255, 255, 255, 0.13);
+      border-radius: 50%;
+      box-shadow: 0 0 42px 8px rgba(176, 0, 0, 0.46);
+      box-sizing: border-box;
+      display: flex;
+      height: 132px;
+      justify-content: center;
+      margin-bottom: 36px;
+      padding: 18px;
+      width: 132px;
+    }
+    #app-loading-logo img {
+      height: 100%;
+      width: 100%;
       user-select: none;
       -webkit-user-drag: none;
     }
+    @keyframes loader-pop {
+      from { opacity: 0; transform: scale(.94); }
+      to { opacity: 1; transform: none; }
+    }
     #app-loading-bar {
-      background: rgba(0, 0, 0, 0.10);
+      background: rgba(255, 255, 255, 0.12);
       border-radius: 2px;
-      height: 3px;
-      margin-bottom: 14px;
+      height: 2px;
+      margin-bottom: 16px;
       overflow: hidden;
       position: relative;
-      width: 160px;
+      width: 132px;
     }
     #app-loading-bar::after {
       animation: loading-slide 1.4s cubic-bezier(.4, 0, .2, 1) infinite;
-      background: #be0000;
+      background: #ff2a2a;
       border-radius: 2px;
       content: '';
       height: 100%;
@@ -79,36 +105,56 @@
       from { transform: translateX(-100%); }
       to { transform: translateX(250%); }
     }
-    @media (prefers-reduced-motion: reduce) {
-      #app-loading-bar::after { animation: none; width: 100%; opacity: .6; }
+    #app-loading-text {
+      color: rgba(255, 255, 255, 0.62);
+      font-size: 13px;
+      letter-spacing: .4px;
+      margin: 0;
+      max-width: 340px;
     }
-    #app-loading-text { color: #6d6d6d; margin: 0; }
     #app-loading-retry {
-      background: #1f1f1f;
+      background: #fff;
       border: 0;
       border-radius: 999px;
-      color: #fff;
+      color: #1f1f1f;
       cursor: pointer;
       display: none;
       font-family: inherit;
       font-size: 14px;
       font-weight: 600;
+      letter-spacing: .3px;
       line-height: 1;
-      margin-top: 18px;
-      padding: 13px 28px;
+      margin-top: 22px;
+      padding: 14px 30px;
     }
-    #app-loading-retry:hover { background: #000; }
+    #app-loading-retry:hover { background: #f0f0f0; }
+    #app-loading-brand {
+      bottom: 48px;
+      color: rgba(255, 255, 255, 0.82);
+      font-size: 18px;
+      font-weight: 800;
+      left: 24px;
+      letter-spacing: 3.4px;
+      position: absolute;
+      right: 24px;
+      text-transform: uppercase;
+    }
     #app-loading.is-failed #app-loading-bar { display: none; }
-    #app-loading.is-failed #app-loading-text { color: #252525; max-width: 320px; }
+    #app-loading.is-failed #app-loading-text { color: rgba(255, 255, 255, 0.86); }
     #app-loading.is-failed #app-loading-retry { display: inline-block; }
+    @media (prefers-reduced-motion: reduce) {
+      #app-loading-logo { animation: none; }
+      #app-loading-bar::after { animation: none; width: 100%; opacity: .6; }
+    }
   </style>
 </head>
 <body>
   <div id="app-loading" role="status" aria-live="polite">
-    <img src="logo-144.png" alt="PK Management" width="72" height="72">
+    <div id="app-loading-logo"><img src="logo-144.png" alt="PK Management" width="96" height="96"></div>
     <div id="app-loading-bar"></div>
     <p id="app-loading-text">Загружаем кабинет…</p>
     <button id="app-loading-retry" type="button">Обновить страницу</button>
+    <div id="app-loading-brand" aria-hidden="true">PK Management</div>
   </div>
   <script>
     (function () {
