@@ -35,12 +35,24 @@ jobs:
           mkdir -p ~/.ssh && chmod 700 ~/.ssh
           printf '%s\n' "$TIMEWEB_SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H "$TIMEWEB_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          ssh-keyscan -H "$TIMEWEB_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+          if ! head -1 ~/.ssh/deploy_key | grep -q 'PRIVATE KEY'; then
+            echo "TIMEWEB_SSH_KEY does not look like a private key (expected '-----BEGIN OPENSSH PRIVATE KEY-----' on the first line)."
+            exit 1
+          fi
+          ssh-keygen -y -f ~/.ssh/deploy_key >/dev/null || { echo "TIMEWEB_SSH_KEY is not a valid private key (copy the whole file, including BEGIN/END lines)."; exit 1; }
+
+      - name: Check SSH connection
+        run: |
+          if ! ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new -o BatchMode=yes -o ConnectTimeout=20 "root@$TIMEWEB_HOST" 'echo connected as $(whoami) on $(hostname)'; then
+            echo "Cannot log in as root@$TIMEWEB_HOST with the key from TIMEWEB_SSH_KEY."
+            exit 1
+          fi
 
       - name: Copy deploy files
         run: |
-          ssh -i ~/.ssh/deploy_key "root@$TIMEWEB_HOST" "mkdir -p /root/pk-deploy"
-          scp -i ~/.ssh/deploy_key deploy/Caddyfile deploy/setup-server.sh "root@$TIMEWEB_HOST:/root/pk-deploy/"
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new -o BatchMode=yes "root@$TIMEWEB_HOST" "mkdir -p /root/pk-deploy"
+          scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new -o BatchMode=yes deploy/Caddyfile deploy/setup-server.sh "root@$TIMEWEB_HOST:/root/pk-deploy/"
 
       - name: Run setup script
-        run: ssh -i ~/.ssh/deploy_key "root@$TIMEWEB_HOST" "bash /root/pk-deploy/setup-server.sh"
+        run: ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new -o BatchMode=yes "root@$TIMEWEB_HOST" "bash /root/pk-deploy/setup-server.sh"
