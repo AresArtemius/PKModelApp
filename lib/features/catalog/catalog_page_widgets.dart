@@ -1689,8 +1689,20 @@ class _GridProfileCard extends StatelessWidget {
 
   final VoidCallback onTap;
 
-  /// Called when the mouse enters the card (desktop side preview).
+  /// Called when the mouse moves over the card (desktop side preview).
   final VoidCallback? onHover;
+
+  /// Last global pointer position that produced a hover. Route transitions
+  /// slide the grid under a stationary cursor, which the browser reports as
+  /// hover events; those must not change the preview.
+  static Offset? _lastHoverPosition;
+
+  void _handleHover(PointerEvent event) {
+    final last = _lastHoverPosition;
+    _lastHoverPosition = event.position;
+    if (last != null && (event.position - last).distance < 3) return;
+    onHover?.call();
+  }
   final VoidCallback onToggleSelected;
   final VoidCallback onQuickAdd;
   final bool isSelected;
@@ -1718,13 +1730,12 @@ class _GridProfileCard extends StatelessWidget {
       child: GestureDetector(
         onLongPressStart: onLongPressStart,
         onLongPressEnd: onLongPressEnd,
-        // MouseRegion.onHover fires only on real pointer movement. Enter
-        // events (InkWell.onHover) are also synthesised by Flutter when the
-        // page re-appears under the cursor, which reset the side preview to
-        // whatever card happened to be under the pointer after «Back».
+        // The side preview follows the cursor only when it really moves:
+        // enter events and hovers produced by the page sliding back under a
+        // stationary pointer after «Back» are ignored (see _handleHover).
         child: MouseRegion(
           opaque: false,
-          onHover: onHover == null ? null : (_) => onHover!(),
+          onHover: onHover == null ? null : _handleHover,
           child: InkWell(
             borderRadius: BorderRadius.circular(kCardRadius),
             onTap: onTap,
