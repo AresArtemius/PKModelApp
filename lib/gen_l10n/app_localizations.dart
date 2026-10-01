@@ -3746,6 +3746,30 @@ abstract class AppLocalizations {
   /// **'No notifications yet'**
   String get notificationsEmpty;
 
+  /// No description provided for @castingsEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No castings yet'**
+  String get castingsEmptyTitle;
+
+  /// No description provided for @castingsEmptyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'New castings appear here. Turn on notifications to hear about them first.'**
+  String get castingsEmptyHint;
+
+  /// No description provided for @castingsEmptyNotifyAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Notify me about new castings'**
+  String get castingsEmptyNotifyAction;
+
+  /// No description provided for @castingsEmptySignInAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in to get notified'**
+  String get castingsEmptySignInAction;
+
   /// No description provided for @analyticsUpper.
   ///
   /// In en, this message translates to:

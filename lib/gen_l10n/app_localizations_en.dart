@@ -1932,6 +1932,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get notificationsEmpty => 'No notifications yet';
 
   @override
+  String get castingsEmptyTitle => 'No castings yet';
+
+  @override
+  String get castingsEmptyHint => 'New castings appear here. Turn on notifications to hear about them first.';
+
+  @override
+  String get castingsEmptyNotifyAction => 'Notify me about new castings';
+
+  @override
+  String get castingsEmptySignInAction => 'Sign in to get notified';
+
+  @override
   String get analyticsUpper => 'ANALYTICS';
 
   @override
