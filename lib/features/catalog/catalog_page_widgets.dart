@@ -1682,6 +1682,11 @@ class _GridProfileCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final semanticsLabel = [
+      name,
+      ageText,
+      heightText,
+    ].where((part) => part.trim().isNotEmpty).join(', ');
     return Material(
       color: Colors.transparent,
       child: GestureDetector(
@@ -1692,129 +1697,135 @@ class _GridProfileCard extends StatelessWidget {
           onTap: onTap,
           child: Stack(
             children: [
-              Container(
-                decoration: catalogCardDecoration(),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(kCardRadius),
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      final photoH = (constraints.maxHeight - kInfoH).clamp(
-                        0.0,
-                        constraints.maxHeight,
-                      );
+              Semantics(
+                button: true,
+                label: semanticsLabel,
+                selected: isSelected,
+                excludeSemantics: true,
+                child: Container(
+                  decoration: catalogCardDecoration(),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(kCardRadius),
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final photoH = (constraints.maxHeight - kInfoH).clamp(
+                          0.0,
+                          constraints.maxHeight,
+                        );
 
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          SizedBox(
-                            height: photoH,
-                            width: double.infinity,
-                            child: (photoUrl == null)
-                                ? const _CatalogPhotoPlaceholder()
-                                : Stack(
-                                    fit: StackFit.expand,
-                                    children: [
-                                      Hero(
-                                        tag: heroTag,
-                                        child: CachedNetworkImage(
-                                          imageUrl: photoUrl!,
-                                          memCacheWidth:
-                                              _catalogCardPhotoCacheWidth,
-                                          maxWidthDiskCache:
-                                              _catalogCardPhotoCacheWidth,
-                                          fit: BoxFit.cover,
-                                          alignment: coverAlignment,
-                                          fadeInDuration: const Duration(
-                                            milliseconds: 220,
-                                          ),
-                                          placeholder: (_, _) =>
-                                              const _CatalogPhotoPlaceholder(),
-                                          errorWidget: (_, _, _) =>
-                                              const _CatalogPhotoPlaceholder(),
-                                        ),
-                                      ),
-                                      const DecoratedBox(
-                                        decoration: BoxDecoration(
-                                          gradient: LinearGradient(
-                                            begin: Alignment.topCenter,
-                                            end: Alignment.bottomCenter,
-                                            colors: [
-                                              Color(0x00000000),
-                                              Color(0x14000000),
-                                              Color(0x2A000000),
-                                            ],
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            SizedBox(
+                              height: photoH,
+                              width: double.infinity,
+                              child: (photoUrl == null)
+                                  ? const _CatalogPhotoPlaceholder()
+                                  : Stack(
+                                      fit: StackFit.expand,
+                                      children: [
+                                        Hero(
+                                          tag: heroTag,
+                                          child: CachedNetworkImage(
+                                            imageUrl: photoUrl!,
+                                            memCacheWidth:
+                                                _catalogCardPhotoCacheWidth,
+                                            maxWidthDiskCache:
+                                                _catalogCardPhotoCacheWidth,
+                                            fit: BoxFit.cover,
+                                            alignment: coverAlignment,
+                                            fadeInDuration: const Duration(
+                                              milliseconds: 220,
+                                            ),
+                                            placeholder: (_, _) =>
+                                                const _CatalogPhotoPlaceholder(),
+                                            errorWidget: (_, _, _) =>
+                                                const _CatalogPhotoPlaceholder(),
                                           ),
                                         ),
-                                      ),
-                                    ],
+                                        const DecoratedBox(
+                                          decoration: BoxDecoration(
+                                            gradient: LinearGradient(
+                                              begin: Alignment.topCenter,
+                                              end: Alignment.bottomCenter,
+                                              colors: [
+                                                Color(0x00000000),
+                                                Color(0x14000000),
+                                                Color(0x2A000000),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                            ),
+                            Container(
+                              height: kInfoH,
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [
+                                    Colors.white.withValues(alpha: 0.98),
+                                    const Color(
+                                      0xFFF8F8F8,
+                                    ).withValues(alpha: 0.96),
+                                  ],
+                                ),
+                                border: Border(
+                                  top: BorderSide(
+                                    color: Colors.white.withValues(alpha: 0.82),
+                                    width: 1,
                                   ),
-                          ),
-                          Container(
-                            height: kInfoH,
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [
-                                  Colors.white.withValues(alpha: 0.98),
-                                  const Color(
-                                    0xFFF8F8F8,
-                                  ).withValues(alpha: 0.96),
-                                ],
-                              ),
-                              border: Border(
-                                top: BorderSide(
-                                  color: Colors.white.withValues(alpha: 0.82),
-                                  width: 1,
                                 ),
                               ),
-                            ),
-                            padding: kCardInfoPad,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    name,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
+                              padding: kCardInfoPad,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      name,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w700,
+                                        color: kTextTitle,
+                                        height: 1.06,
+                                        letterSpacing: 0,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: kGap4),
+                                  Text(
+                                    ageText,
                                     style: const TextStyle(
-                                      fontSize: 16,
+                                      fontSize: 14,
                                       fontWeight: FontWeight.w700,
-                                      color: kTextTitle,
-                                      height: 1.06,
+                                      color: kTextDanger,
+                                      height: 1.05,
                                       letterSpacing: 0,
                                     ),
                                   ),
-                                ),
-                                const SizedBox(height: kGap4),
-                                Text(
-                                  ageText,
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w700,
-                                    color: kTextDanger,
-                                    height: 1.05,
-                                    letterSpacing: 0,
+                                  const SizedBox(height: kGap2),
+                                  Text(
+                                    heightText,
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                      color: kTextMuted,
+                                      height: 1.05,
+                                      letterSpacing: 0,
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(height: kGap2),
-                                Text(
-                                  heightText,
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w500,
-                                    color: kTextMuted,
-                                    height: 1.05,
-                                    letterSpacing: 0,
-                                  ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
-                          ),
-                        ],
-                      );
-                    },
+                          ],
+                        );
+                      },
+                    ),
                   ),
                 ),
               ),
@@ -1933,31 +1944,35 @@ class _QuickCardAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(kCardCheckRadius),
-        onTap: onTap,
-        child: Container(
-          width: kCardCheckSize,
-          height: kCardCheckSize,
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.94),
-            borderRadius: BorderRadius.circular(kCardCheckRadius),
-            border: Border.all(color: kBorderColor),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x22000000),
-                blurRadius: 10,
-                offset: Offset(0, 5),
-              ),
-            ],
-          ),
-          alignment: Alignment.center,
-          child: const Icon(
-            Icons.playlist_add_rounded,
-            size: 22,
-            color: BrandTheme.redTop,
+    final t = AppLocalizations.of(context)!;
+    return Tooltip(
+      message: _sentenceCase(t.quickAddTitleUpper),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(kCardCheckRadius),
+          onTap: onTap,
+          child: Container(
+            width: kCardCheckSize,
+            height: kCardCheckSize,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.94),
+              borderRadius: BorderRadius.circular(kCardCheckRadius),
+              border: Border.all(color: kBorderColor),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x22000000),
+                  blurRadius: 10,
+                  offset: Offset(0, 5),
+                ),
+              ],
+            ),
+            alignment: Alignment.center,
+            child: const Icon(
+              Icons.playlist_add_rounded,
+              size: 22,
+              color: BrandTheme.redTop,
+            ),
           ),
         ),
       ),
@@ -2045,31 +2060,38 @@ class _CardCheck extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(kCardCheckRadius),
-        onTap: onTap,
-        child: Container(
-          width: kCardCheckSize,
-          height: kCardCheckSize,
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.92),
+    final t = AppLocalizations.of(context)!;
+    return Semantics(
+      checked: value,
+      child: Tooltip(
+        message: _sentenceCase(value ? t.selectedUpper : t.selectUpper),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
             borderRadius: BorderRadius.circular(kCardCheckRadius),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.78)),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x18000000),
-                blurRadius: 12,
-                offset: Offset(0, 6),
+            onTap: onTap,
+            child: Container(
+              width: kCardCheckSize,
+              height: kCardCheckSize,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.92),
+                borderRadius: BorderRadius.circular(kCardCheckRadius),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.78)),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x18000000),
+                    blurRadius: 12,
+                    offset: Offset(0, 6),
+                  ),
+                ],
               ),
-            ],
-          ),
-          alignment: Alignment.center,
-          child: Icon(
-            value ? Icons.check_rounded : Icons.check_box_outline_blank_rounded,
-            size: kCardCheckIconSize,
-            color: value ? BrandTheme.redTop : kTextMuted,
+              alignment: Alignment.center,
+              child: Icon(
+                value ? Icons.check_rounded : Icons.check_box_outline_blank_rounded,
+                size: kCardCheckIconSize,
+                color: value ? BrandTheme.redTop : kTextMuted,
+              ),
+            ),
           ),
         ),
       ),
@@ -2593,4 +2615,11 @@ class _SelectModelsButton extends StatelessWidget {
       ),
     );
   }
+}
+
+/// «ВЫБРАТЬ» → «Выбрать» for tooltips and screen readers.
+String _sentenceCase(String value) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) return trimmed;
+  return trimmed[0].toUpperCase() + trimmed.substring(1).toLowerCase();
 }

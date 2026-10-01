@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -165,6 +166,9 @@ class AppShell extends StatelessWidget {
     final width = MediaQuery.sizeOf(context).width;
     final isDesktop = width >= _kDesktopShellBreakpoint;
     final isExpandedDesktop = width >= _kExpandedDesktopShellBreakpoint;
+    // On web, text behaves like on any site: names and parameters can be
+    // selected with the mouse and copied. Mobile apps keep native behaviour.
+    final content = kIsWeb ? SelectionArea(child: child) : child;
 
     if (isDesktop) {
       return Scaffold(
@@ -188,7 +192,7 @@ class AppShell extends StatelessWidget {
                     constraints: const BoxConstraints(
                       maxWidth: _kDesktopContentMaxWidth,
                     ),
-                    child: child,
+                    child: content,
                   ),
                 ),
               ),
@@ -199,7 +203,7 @@ class AppShell extends StatelessWidget {
     }
 
     return Scaffold(
-      body: child,
+      body: content,
       bottomNavigationBar: AppBottomNav(currentIndex: currentIndex),
     );
   }
