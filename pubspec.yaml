@@ -90,6 +90,21 @@ flutter:
     - assets/images/pk-logo-red-512.png
     - assets/images/pk-logo-splash-512.png
     - assets/images/landing-hero-draft.png
+
+  # Brand typeface: Golos Text (SIL Open Font License, see assets/fonts/OFL-GolosText.txt).
+  # Static instances generated from the variable font so every platform
+  # (CanvasKit on web included) resolves weights 400–700 reliably.
+  fonts:
+    - family: GolosText
+      fonts:
+        - asset: assets/fonts/GolosText-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/GolosText-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/GolosText-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/GolosText-Bold.ttf
+          weight: 700
   # To add assets to your application, add an assets section, like this:
   # assets:
   #   - images/a_dot_burr.jpeg
