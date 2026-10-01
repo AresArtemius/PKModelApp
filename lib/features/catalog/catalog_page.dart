@@ -13,6 +13,7 @@ import '../../core/app_logger.dart';
 import '../../core/account_profile_service.dart';
 import '../../core/entitlements_provider.dart';
 import '../../core/roles_provider.dart';
+import '../../core/storage_image_variant.dart';
 import '../../core/router.dart';
 import '../../gen_l10n/app_localizations.dart';
 import '../../ui/brand/brand_logo.dart';
