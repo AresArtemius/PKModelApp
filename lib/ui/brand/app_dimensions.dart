@@ -3,13 +3,13 @@
 // ===============================================================
 
 /// Радиус карточек профиля
-const double kCardRadius = 22.0;
+const double kCardRadius = 12.0;
 
 /// Радиус pill-кнопок и полей
-const double kPillRadius = 16.0;
+const double kPillRadius = 12.0;
 
 /// Радиус строки поиска
-const double kSearchRadius = 18.0;
+const double kSearchRadius = 12.0;
 
 // ===============================================================
 // SPACING — отступы и гэпы
