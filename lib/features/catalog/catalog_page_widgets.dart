@@ -1238,15 +1238,27 @@ class _CatalogDesktopPreview extends StatelessWidget {
                   child: m.primaryPhotoUrl == null
                       ? const _CatalogPhotoPlaceholder()
                       : CachedNetworkImage(
-                          imageUrl: m.primaryPhotoUrl!,
+                          imageUrl: storageImageVariant(
+                            m.primaryPhotoUrl!,
+                            width: kCatalogPreviewImageWidth,
+                          ),
                           memCacheWidth: _catalogOverlayPhotoCacheWidth,
                           maxWidthDiskCache: _catalogOverlayPhotoCacheWidth,
                           fit: BoxFit.cover,
                           alignment: _catalogCoverAlignmentFor(m),
                           placeholder: (_, _) =>
                               const _CatalogPhotoPlaceholder(),
-                          errorWidget: (_, _, _) =>
-                              const _CatalogPhotoPlaceholder(),
+                          errorWidget: (_, _, _) => CachedNetworkImage(
+                            imageUrl: m.primaryPhotoUrl!,
+                            memCacheWidth: _catalogOverlayPhotoCacheWidth,
+                            maxWidthDiskCache: _catalogOverlayPhotoCacheWidth,
+                            fit: BoxFit.cover,
+                            alignment: _catalogCoverAlignmentFor(m),
+                            placeholder: (_, _) =>
+                                const _CatalogPhotoPlaceholder(),
+                            errorWidget: (_, _, _) =>
+                                const _CatalogPhotoPlaceholder(),
+                          ),
                         ),
                 ),
                 Padding(
@@ -1727,7 +1739,12 @@ class _GridProfileCard extends StatelessWidget {
                                         Hero(
                                           tag: heroTag,
                                           child: CachedNetworkImage(
-                                            imageUrl: photoUrl!,
+                                            // Resized by Storage; the
+                                            // original opens in the lightbox.
+                                            imageUrl: storageImageVariant(
+                                              photoUrl!,
+                                              width: kCatalogCardImageWidth,
+                                            ),
                                             memCacheWidth:
                                                 _catalogCardPhotoCacheWidth,
                                             maxWidthDiskCache:
@@ -1739,8 +1756,23 @@ class _GridProfileCard extends StatelessWidget {
                                             ),
                                             placeholder: (_, _) =>
                                                 const _CatalogPhotoPlaceholder(),
+                                            // If the transform endpoint is
+                                            // unavailable, fall back to the
+                                            // original object.
                                             errorWidget: (_, _, _) =>
-                                                const _CatalogPhotoPlaceholder(),
+                                                CachedNetworkImage(
+                                                  imageUrl: photoUrl!,
+                                                  memCacheWidth:
+                                                      _catalogCardPhotoCacheWidth,
+                                                  maxWidthDiskCache:
+                                                      _catalogCardPhotoCacheWidth,
+                                                  fit: BoxFit.cover,
+                                                  alignment: coverAlignment,
+                                                  placeholder: (_, _) =>
+                                                      const _CatalogPhotoPlaceholder(),
+                                                  errorWidget: (_, _, _) =>
+                                                      const _CatalogPhotoPlaceholder(),
+                                                ),
                                           ),
                                         ),
                                         const DecoratedBox(
