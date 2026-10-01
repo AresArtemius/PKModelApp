@@ -73,8 +73,38 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
   bool _isSavingSelection = false;
   String? _desktopPreviewModelId;
   late final ProviderSubscription<CatalogController> _controllerSub;
+  Map<String, String>? _lastUrlFilters;
 
   CatalogController get _c => ref.read(catalogControllerProvider);
+
+  /// Mirrors the active filters into the URL (`/search?city=…`) so a link to
+  /// the catalog reproduces the same selection; history is replaced, not
+  /// pushed, so Back still leaves the catalog.
+  void _syncUrlWithFilters(CatalogController c) {
+    if (!mounted) return;
+    final params = c.filterSnapshot.toQueryParameters();
+    if (_lastUrlFilters != null && mapEquals(_lastUrlFilters, params)) return;
+    _lastUrlFilters = params;
+    final router = GoRouter.of(context);
+    final current = router.routerDelegate.currentConfiguration.uri;
+    if (current.path != Routes.search) return;
+    if (mapEquals(current.queryParameters, params)) return;
+    final next = Uri(
+      path: Routes.search,
+      queryParameters: params.isEmpty ? null : params,
+    ).toString();
+    router.replace(next);
+  }
+
+  /// Applies filters carried by the URL on first open (shared or bookmarked
+  /// catalog links).
+  void _restoreFiltersFromUrl(CatalogController c) {
+    final params = GoRouterState.of(context).uri.queryParameters;
+    if (!CatalogFilterSnapshot.hasQueryParameters(params)) return;
+    final snapshot = CatalogFilterSnapshot.fromQueryParameters(params);
+    _lastUrlFilters = snapshot.toQueryParameters();
+    c.applyFilterSnapshot(snapshot);
+  }
 
   void _syncSearchController(String value) {
     if (_searchC.text == value) return;
@@ -93,11 +123,15 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
     final controller = ref.read(catalogControllerProvider);
     _controllerSub = ref.listenManual<CatalogController>(
       catalogControllerProvider,
-      (_, next) => _syncSearchController(next.query),
+      (_, next) {
+        _syncSearchController(next.query);
+        _syncUrlWithFilters(next);
+      },
     );
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
+      _restoreFiltersFromUrl(controller);
       if (_catalogSavedSearchesEnabled) {
         unawaited(ref.read(catalogSavedSearchesProvider).load());
       }
