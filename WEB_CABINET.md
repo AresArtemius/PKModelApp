@@ -66,6 +66,16 @@ Then point the DNS A record for `app.pk.management` to the server IP; Caddy
 obtains the certificate automatically (if DNS changed after Caddy started,
 `systemctl restart caddy` forces an immediate retry).
 
+## Updates in open tabs
+
+There is no service worker (`--pwa-strategy=none`; Flutter's SW loading is
+deprecated). Instead the build writes `release.json` (`{"sha","builtAt"}`)
+next to `index.html` and bakes the same sha into the bundle via
+`--dart-define=APP_RELEASE_SHA`. `ReleaseUpdateBanner` (`lib/core/release_update.dart`)
+re-fetches `release.json` every 10 minutes and when the tab becomes visible;
+when the sha differs it shows «Доступна новая версия — Обновить», which
+reloads the page. Local builds have no `APP_RELEASE_SHA`, so the check is off.
+
 ## URLs
 
 The web build uses path URLs (`usePathUrlStrategy()` in `lib/main.dart`):

@@ -42,6 +42,14 @@ test('legacy hash link still opens the route', async ({ page }) => {
   await expect.poll(() => new URL(page.url()).hash).toBe('');
 });
 
+test('release.json carries the deployed commit', async ({ request }) => {
+  const response = await request.get('/release.json');
+  expect(response.ok()).toBeTruthy();
+  const body = await response.json();
+  expect(body.sha).toMatch(/^[0-9a-f]{40}$/);
+  expect(body.builtAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+});
+
 test('anonymous user is redirected away from account', async ({ page }) => {
   await page.goto('/me', { waitUntil: 'domcontentloaded' });
   await expect(page.locator('flutter-view')).toBeAttached();
