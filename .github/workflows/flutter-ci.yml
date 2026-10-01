@@ -33,7 +33,21 @@ jobs:
         run: flutter pub get
 
       - name: Analyze
-        run: flutter analyze
+        # Issues are re-emitted as GitHub annotations so they show up in the
+        # checks UI and the API, not only in the raw log.
+        run: |
+          set -o pipefail
+          status=0
+          flutter analyze 2>&1 | tee analyze.txt || status=$?
+          grep -E '^\s*(error|warning|info) •' analyze.txt | while IFS= read -r line; do
+            level=$(echo "$line" | sed -E 's/^\s*(error|warning|info) •.*/\1/')
+            msg=$(echo "$line" | sed -E 's/^\s*(error|warning|info) • (.*) • ([^ ]+):([0-9]+):([0-9]+) • (.*)$/\2 (\6)/')
+            file=$(echo "$line" | sed -E 's/^\s*(error|warning|info) • (.*) • ([^ ]+):([0-9]+):([0-9]+) • (.*)$/\3/')
+            ln=$(echo "$line" | sed -E 's/^\s*(error|warning|info) • (.*) • ([^ ]+):([0-9]+):([0-9]+) • (.*)$/\4/')
+            [ "$level" = "info" ] && level=notice
+            echo "::${level} file=${file},line=${ln}::${msg}"
+          done
+          exit $status
 
       - name: Test
         run: flutter test
