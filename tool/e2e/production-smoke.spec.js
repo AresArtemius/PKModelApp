@@ -17,7 +17,7 @@ async function openFlutterRoute(page, route) {
   page.on('pageerror', (error) => pageErrors.push(error.message));
 
   await page.goto(route, { waitUntil: 'domcontentloaded' });
-  await expect(page).toHaveTitle('PK Management');
+  await expect(page).toHaveTitle(/PK Management/);
   await expect(page.locator('flutter-view')).toBeAttached();
   await expect.poll(() => new URL(page.url()).pathname).toBe(route);
   expect(pageErrors).toEqual([]);
@@ -28,6 +28,12 @@ for (const route of publicRoutes) {
     await openFlutterRoute(page, route);
   });
 }
+
+test('tab title reflects the section', async ({ page }) => {
+  await page.goto('/castings', { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('flutter-view')).toBeAttached();
+  await expect(page).toHaveTitle(/Кастинги|Castings/);
+});
 
 test('legacy hash link still opens the route', async ({ page }) => {
   await page.goto('/#/castings', { waitUntil: 'domcontentloaded' });

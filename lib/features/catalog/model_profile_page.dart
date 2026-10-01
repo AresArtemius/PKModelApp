@@ -13,6 +13,7 @@ import '../../core/app_error_mapper.dart';
 import '../../core/app_logger.dart';
 import '../../core/profile_action_log_service.dart';
 import '../../core/roles_provider.dart';
+import '../../core/page_titles.dart';
 import '../../core/public_links.dart';
 import '../../core/router.dart';
 import '../../gen_l10n/app_localizations.dart';
@@ -645,7 +646,9 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
                     GoRouterState.of(context).uri.queryParameters['preview'] ==
                     '1';
 
-                return RefreshIndicator(
+                return PageTitle(
+                  title: m.fullName,
+                  child: RefreshIndicator(
                   onRefresh: _refresh,
                   child: ListView(
                     padding: const EdgeInsets.fromLTRB(
@@ -916,6 +919,7 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
                         ),
                       ),
                     ],
+                  ),
                   ),
                 );
               },
