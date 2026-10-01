@@ -1931,6 +1931,18 @@ class AppLocalizationsRu extends AppLocalizations {
   String get notificationsEmpty => 'Пока нет уведомлений';
 
   @override
+  String get castingsEmptyTitle => 'Кастингов пока нет';
+
+  @override
+  String get castingsEmptyHint => 'Новые кастинги появятся здесь. Включите уведомления, чтобы узнавать о них первыми.';
+
+  @override
+  String get castingsEmptyNotifyAction => 'Уведомлять о новых кастингах';
+
+  @override
+  String get castingsEmptySignInAction => 'Войти, чтобы получать уведомления';
+
+  @override
   String get analyticsUpper => 'АНАЛИТИКА';
 
   @override

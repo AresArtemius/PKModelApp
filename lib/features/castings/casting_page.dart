@@ -866,26 +866,45 @@ class _CastingPageState extends ConsumerState<CastingPage> {
                         ),
                         const SizedBox(width: kGap10),
                         Expanded(
-                          child: Container(
-                            height: kTopBarH,
-                            alignment: Alignment.center,
-                            padding: kAccountPad,
-                            decoration: pillDecoration(
-                              isDark: true,
-                              radius: BrandTheme.pillRadius,
-                            ),
-                            child: Text(
-                              t.castingsUpper,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              textAlign: TextAlign.center,
-                              style: BrandTheme.pillText.copyWith(
-                                color: Colors.white.withValues(alpha: 0.95),
-                                fontSize: 16,
-                                letterSpacing: 1.45,
-                              ),
-                            ),
-                          ),
+                          child: isDesktop
+                              // Desktop: a plain page title, like a site.
+                              ? Container(
+                                  height: kTopBarH,
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    t.castingsTab,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: kTextDark,
+                                      fontSize: 28,
+                                      fontWeight: FontWeight.w600,
+                                      height: 1.1,
+                                    ),
+                                  ),
+                                )
+                              : Container(
+                                  height: kTopBarH,
+                                  alignment: Alignment.center,
+                                  padding: kAccountPad,
+                                  decoration: pillDecoration(
+                                    isDark: true,
+                                    radius: BrandTheme.pillRadius,
+                                  ),
+                                  child: Text(
+                                    t.castingsUpper,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    textAlign: TextAlign.center,
+                                    style: BrandTheme.pillText.copyWith(
+                                      color: Colors.white.withValues(
+                                        alpha: 0.95,
+                                      ),
+                                      fontSize: 16,
+                                      letterSpacing: 1.45,
+                                    ),
+                                  ),
+                                ),
                         ),
                       ],
                     ),
@@ -950,31 +969,15 @@ class _CastingPageState extends ConsumerState<CastingPage> {
                       },
                       data: (items) {
                         if (items.isEmpty) {
-                          return Center(
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 24,
-                              ),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(
-                                    Icons.videocam_off_rounded,
-                                    size: 54,
-                                    color: kTextMuted,
-                                  ),
-                                  const SizedBox(height: kGap12),
-                                  Text(
-                                    t.noCastingsYetUpper,
-                                    style: BrandTheme.pillText.copyWith(
-                                      color: kTextMuted,
-                                      fontSize: 15,
-                                      letterSpacing: 1.15,
-                                    ),
-                                    textAlign: TextAlign.center,
-                                  ),
-                                ],
-                              ),
+                          final signedIn = ref.watch(isAuthenticatedProvider);
+                          return _CastingsEmptyState(
+                            title: t.castingsEmptyTitle,
+                            hint: t.castingsEmptyHint,
+                            actionLabel: signedIn
+                                ? t.castingsEmptyNotifyAction
+                                : t.castingsEmptySignInAction,
+                            onAction: () => context.push(
+                              signedIn ? Routes.notifications : Routes.login,
                             ),
                           );
                         }
@@ -2371,6 +2374,91 @@ class _CastingStagePickerTile extends StatelessWidget {
               ),
               if (selected)
                 const Icon(Icons.check_rounded, color: Colors.white, size: 20),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Empty castings list: one line of explanation and one action.
+class _CastingsEmptyState extends StatelessWidget {
+  const _CastingsEmptyState({
+    required this.title,
+    required this.hint,
+    required this.actionLabel,
+    required this.onAction,
+  });
+
+  final String title;
+  final String hint;
+  final String actionLabel;
+  final VoidCallback onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 360),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: kBorderColor),
+                ),
+                alignment: Alignment.center,
+                child: const Icon(
+                  Icons.videocam_outlined,
+                  size: 32,
+                  color: kTextMuted,
+                ),
+              ),
+              const SizedBox(height: 18),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: kTextDark,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                hint,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: kTextMuted,
+                  fontSize: 14,
+                  height: 1.45,
+                ),
+              ),
+              const SizedBox(height: 20),
+              FilledButton(
+                onPressed: onAction,
+                style: FilledButton.styleFrom(
+                  backgroundColor: kTextDark,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(160, 46),
+                  padding: const EdgeInsets.symmetric(horizontal: 22),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  textStyle: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                child: Text(actionLabel),
+              ),
             ],
           ),
         ),
