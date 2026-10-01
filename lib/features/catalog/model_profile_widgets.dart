@@ -1532,6 +1532,10 @@ class _HeroMedia extends StatelessWidget {
                 onTap: () => onOpenPhotos(0),
                 child: Hero(
                   tag: heroTag,
+                  // Fly the card's already-decoded thumbnail instead of this
+                  // (larger, still loading) image: on CanvasKit a copy of a
+                  // loading image inside the flight renders black afterwards.
+                  flightShuttleBuilder: _flyFromHeroChild,
                   child: CachedNetworkImage(
                     imageUrl: photoUrls.first,
                     memCacheWidth: _profileHeroCacheWidth,
@@ -2645,4 +2649,16 @@ class _MediaTile extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Hero shuttle that shows the source hero's child for the whole flight.
+Widget _flyFromHeroChild(
+  BuildContext flightContext,
+  Animation<double> animation,
+  HeroFlightDirection flightDirection,
+  BuildContext fromHeroContext,
+  BuildContext toHeroContext,
+) {
+  final from = fromHeroContext.widget as Hero;
+  return from.child;
 }

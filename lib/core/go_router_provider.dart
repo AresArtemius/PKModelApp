@@ -63,6 +63,9 @@ final goRouterProvider = Provider<GoRouter>((ref) {
     return isAdmin;
   }
 
+  // Since go_router 9, imperative push() no longer updates the browser URL
+  // by default; the cabinet needs shareable URLs and a working Back button.
+  GoRouter.optionURLReflectsImperativeAPIs = true;
   final router = GoRouter(
     initialLocation: Routes.login,
     refreshListenable: GoRouterRefreshStream(
