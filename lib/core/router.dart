@@ -4,25 +4,26 @@ import 'package:go_router/go_router.dart';
 
 import 'admin_dashboard_counts_provider.dart';
 import 'roles_provider.dart';
-import '../features/admin/account_merge_requests_page.dart';
-import '../features/admin/admin_castings_page.dart';
-import '../features/admin/admin_profiles_page.dart';
-import '../features/admin/admin_support_page.dart';
-import '../features/admin/admin_selections_table_page.dart';
-import '../features/admin/admin_users_page.dart';
-import '../features/admin/selection_admin_page.dart';
-import '../features/admin/selection_casting_page.dart';
-import '../features/admin/safety_admin_page.dart';
-import '../features/admin/casting_agent_applications_page.dart';
-import '../features/admin/profile_slot_requests_page.dart';
+import 'deferred_page.dart';
+import '../features/admin/account_merge_requests_page.dart' deferred as account_merge_requests_page;
+import '../features/admin/admin_castings_page.dart' deferred as admin_castings_page;
+import '../features/admin/admin_profiles_page.dart' deferred as admin_profiles_page;
+import '../features/admin/admin_support_page.dart' deferred as admin_support_page;
+import '../features/admin/admin_selections_table_page.dart' deferred as admin_selections_table_page;
+import '../features/admin/admin_users_page.dart' deferred as admin_users_page;
+import '../features/admin/selection_admin_page.dart' deferred as selection_admin_page;
+import '../features/admin/selection_casting_page.dart' deferred as selection_casting_page;
+import '../features/admin/safety_admin_page.dart' deferred as safety_admin_page;
+import '../features/admin/casting_agent_applications_page.dart' deferred as casting_agent_applications_page;
+import '../features/admin/profile_slot_requests_page.dart' deferred as profile_slot_requests_page;
 import '../features/analytics/profile_analytics_page.dart';
 import '../features/auth/email_verification_page.dart';
 import '../features/auth/login_page.dart';
-import '../features/admin/admin_page.dart';
-import '../features/admin/catalog_admin_page.dart';
-import '../features/admin/create_casting_admin_page.dart';
-import '../features/admin/moderation_admin_page.dart';
-import '../features/admin/profile_action_audit_page.dart';
+import '../features/admin/admin_page.dart' deferred as admin_page;
+import '../features/admin/catalog_admin_page.dart' deferred as catalog_admin_page;
+import '../features/admin/create_casting_admin_page.dart' deferred as create_casting_admin_page;
+import '../features/admin/moderation_admin_page.dart' deferred as moderation_admin_page;
+import '../features/admin/profile_action_audit_page.dart' deferred as profile_action_audit_page;
 import '../features/auth/auth_required_page.dart';
 import '../features/auth/register_page.dart';
 import '../features/billing/billing_page.dart';
@@ -51,7 +52,7 @@ import '../features/legal/account_deletion_page.dart';
 import '../features/landing/landing_preview_page.dart';
 import '../gen_l10n/app_localizations.dart';
 import '../ui/brand/brand_theme.dart';
-import '../features/admin/selection_project_page.dart';
+import '../features/admin/selection_project_page.dart' deferred as selection_project_page;
 
 abstract class Routes {
   static const landingPreview = '/landing-preview';
@@ -708,10 +709,15 @@ final List<RouteBase> appRoutes = [
     path: Routes.publicSelection,
     builder: (context, state) {
       final id = state.pathParameters[_routeParamId] ?? '';
-      return SelectionProjectPage(
-        selectionId: id,
-        isPublic: true,
-        feedbackAccessToken: state.uri.queryParameters['access'] ?? '',
+      final accessToken = state.uri.queryParameters['access'] ?? '';
+      return DeferredPage(
+        libraryKey: 'selection_project_page',
+        load: selection_project_page.loadLibrary,
+        builder: (_) => selection_project_page.SelectionProjectPage(
+          selectionId: id,
+          isPublic: true,
+          feedbackAccessToken: accessToken,
+        ),
       );
     },
   ),
@@ -769,71 +775,136 @@ final List<RouteBase> appRoutes = [
       ),
       GoRoute(
         path: Routes.admin,
-        builder: (context, state) => const AdminPage(),
+        builder: (context, state) => DeferredPage(
+          libraryKey: 'admin_page',
+          load: admin_page.loadLibrary,
+          builder: (_) => admin_page.AdminPage(),
+        ),
       ),
       GoRoute(
         path: Routes.catalogAdmin,
-        builder: (context, state) => const CatalogAdminPage(),
+        builder: (context, state) => DeferredPage(
+          libraryKey: 'catalog_admin_page',
+          load: catalog_admin_page.loadLibrary,
+          builder: (_) => catalog_admin_page.CatalogAdminPage(),
+        ),
       ),
       GoRoute(
         path: Routes.moderationAdmin,
-        builder: (context, state) => const ModerationAdminPage(),
+        builder: (context, state) => DeferredPage(
+          libraryKey: 'moderation_admin_page',
+          load: moderation_admin_page.loadLibrary,
+          builder: (_) => moderation_admin_page.ModerationAdminPage(),
+        ),
       ),
       GoRoute(
         path: Routes.castingAgentApplicationsAdmin,
-        builder: (context, state) => const CastingAgentApplicationsPage(),
+        builder: (context, state) => DeferredPage(
+          libraryKey: 'casting_agent_applications_page',
+          load: casting_agent_applications_page.loadLibrary,
+          builder: (_) => casting_agent_applications_page.CastingAgentApplicationsPage(),
+        ),
       ),
       GoRoute(
         path: Routes.accountMergeRequestsAdmin,
-        builder: (context, state) => const AccountMergeRequestsPage(),
+        builder: (context, state) => DeferredPage(
+          libraryKey: 'account_merge_requests_page',
+          load: account_merge_requests_page.loadLibrary,
+          builder: (_) => account_merge_requests_page.AccountMergeRequestsPage(),
+        ),
       ),
       GoRoute(
         path: Routes.profileSlotRequestsAdmin,
-        builder: (context, state) => const ProfileSlotRequestsPage(),
+        builder: (context, state) => DeferredPage(
+          libraryKey: 'profile_slot_requests_page',
+          load: profile_slot_requests_page.loadLibrary,
+          builder: (_) => profile_slot_requests_page.ProfileSlotRequestsPage(),
+        ),
       ),
       GoRoute(
         path: Routes.adminUsers,
-        builder: (context, state) => const AdminUsersPage(),
+        builder: (context, state) => DeferredPage(
+          libraryKey: 'admin_users_page',
+          load: admin_users_page.loadLibrary,
+          builder: (_) => admin_users_page.AdminUsersPage(),
+        ),
       ),
       GoRoute(
         path: Routes.adminProfiles,
-        builder: (context, state) => const AdminProfilesPage(),
+        builder: (context, state) => DeferredPage(
+          libraryKey: 'admin_profiles_page',
+          load: admin_profiles_page.loadLibrary,
+          builder: (_) => admin_profiles_page.AdminProfilesPage(),
+        ),
       ),
       GoRoute(
         path: Routes.adminSupport,
-        builder: (context, state) => const AdminSupportPage(),
+        builder: (context, state) => DeferredPage(
+          libraryKey: 'admin_support_page',
+          load: admin_support_page.loadLibrary,
+          builder: (_) => admin_support_page.AdminSupportPage(),
+        ),
       ),
       GoRoute(
         path: Routes.adminCastings,
-        builder: (context, state) => const AdminCastingsPage(),
+        builder: (context, state) => DeferredPage(
+          libraryKey: 'admin_castings_page',
+          load: admin_castings_page.loadLibrary,
+          builder: (_) => admin_castings_page.AdminCastingsPage(),
+        ),
       ),
       GoRoute(
         path: Routes.adminSelectionsTable,
-        builder: (context, state) => const AdminSelectionsTablePage(),
+        builder: (context, state) => DeferredPage(
+          libraryKey: 'admin_selections_table_page',
+          load: admin_selections_table_page.loadLibrary,
+          builder: (_) => admin_selections_table_page.AdminSelectionsTablePage(),
+        ),
       ),
       GoRoute(
         path: Routes.createCastingAdmin,
-        builder: (context, state) => const CreateCastingAdminPage(),
+        builder: (context, state) => DeferredPage(
+          libraryKey: 'create_casting_admin_page',
+          load: create_casting_admin_page.loadLibrary,
+          builder: (_) => create_casting_admin_page.CreateCastingAdminPage(),
+        ),
       ),
       GoRoute(
         path: Routes.adminSelection,
-        builder: (context, state) => const SelectionAdminPage(),
+        builder: (context, state) => DeferredPage(
+          libraryKey: 'selection_admin_page',
+          load: selection_admin_page.loadLibrary,
+          builder: (_) => selection_admin_page.SelectionAdminPage(),
+        ),
       ),
       GoRoute(
         path: Routes.safetyAdmin,
-        builder: (context, state) => const SafetyAdminPage(),
+        builder: (context, state) => DeferredPage(
+          libraryKey: 'safety_admin_page',
+          load: safety_admin_page.loadLibrary,
+          builder: (_) => safety_admin_page.SafetyAdminPage(),
+        ),
       ),
       GoRoute(
         path: Routes.profileActionAuditAdmin,
-        builder: (context, state) => const ProfileActionAuditPage(),
+        builder: (context, state) => DeferredPage(
+          libraryKey: 'profile_action_audit_page',
+          load: profile_action_audit_page.loadLibrary,
+          builder: (_) => profile_action_audit_page.ProfileActionAuditPage(),
+        ),
       ),
       GoRoute(
         path: '${Routes.adminSelection}/:$_routeParamId',
         builder: (context, state) {
           final id = state.pathParameters[_routeParamId] ?? '';
-          return SelectionCastingPage(
-            castingId: id,
-            from: state.uri.queryParameters['from'],
+          final from = state.uri.queryParameters['from'];
+          return DeferredPage(
+            libraryKey: 'selection_casting_page',
+            load: selection_casting_page.loadLibrary,
+            builder: (_) => selection_casting_page.SelectionCastingPage(
+              castingId: id,
+              from: from,
+            ),
           );
         },
       ),
@@ -841,9 +912,14 @@ final List<RouteBase> appRoutes = [
         path: '${Routes.adminSelectionProject}/:$_routeParamId',
         builder: (context, state) {
           final id = state.pathParameters[_routeParamId] ?? '';
-          return SelectionProjectPage(
-            selectionId: id,
-            from: state.uri.queryParameters['from'],
+          final from = state.uri.queryParameters['from'];
+          return DeferredPage(
+            libraryKey: 'selection_project_page',
+            load: selection_project_page.loadLibrary,
+            builder: (_) => selection_project_page.SelectionProjectPage(
+              selectionId: id,
+              from: from,
+            ),
           );
         },
       ),
