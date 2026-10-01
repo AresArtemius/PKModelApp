@@ -35,14 +35,9 @@ class AuthController {
     if (base.host == 'aresartemius.github.io') {
       return '$origin/PKModelApp/';
     }
-
-    final firstSegment = base.pathSegments
-        .where((segment) => segment.trim().isNotEmpty)
-        .firstOrNull;
-    if (firstSegment != null) {
-      return '$origin/$firstSegment/';
-    }
-    return origin;
+    // With path URLs the app lives at the origin root; auth links must return
+    // there (the router then restores the session and redirects).
+    return '$origin/';
   }
 
   SupabaseClient get _sb => ref.read(supabaseProvider);
