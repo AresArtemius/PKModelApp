@@ -19,7 +19,7 @@ app.pk.management {
 		-Server
 	}
 
-	@index path / /index.html
+	@index path / /index.html /release.json
 	header @index Cache-Control "no-cache"
 
 	@static path /main.dart.js /flutter_bootstrap.js /flutter.js /flutter_service_worker.js /version.json /manifest.json /assets/* /canvaskit/* /icons/* /*.png /*.js

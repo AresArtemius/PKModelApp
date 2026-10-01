@@ -81,6 +81,7 @@ jobs:
           --no-web-resources-cdn
           --base-href=/
           --dart-define=PUBLIC_BASE_URL=https://app.pk.management
+          --dart-define=APP_RELEASE_SHA=$GITHUB_SHA
           --dart-define=SUPABASE_URL=$SUPABASE_URL
           --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY
           --dart-define=FIREBASE_WEB_API_KEY=$FIREBASE_WEB_API_KEY
@@ -91,6 +92,12 @@ jobs:
           --dart-define=FIREBASE_WEB_APP_ID=$FIREBASE_WEB_APP_ID
           --dart-define=FIREBASE_WEB_MEASUREMENT_ID=$FIREBASE_WEB_MEASUREMENT_ID
           --dart-define=FIREBASE_WEB_VAPID_KEY=$FIREBASE_WEB_VAPID_KEY
+
+      - name: Write release.json (used by the in-app "new version" banner)
+        run: |
+          built_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          printf '{"sha":"%s","builtAt":"%s"}\n' "$GITHUB_SHA" "$built_at" > build/web/release.json
+          cat build/web/release.json
 
       - name: Enforce web bundle budget
         run: |

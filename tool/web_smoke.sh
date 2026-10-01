@@ -32,6 +32,8 @@ if [ "$ready" != true ]; then
 fi
 
 fetch "/manifest.json" "$tmp_dir/manifest.json"
+fetch "/release.json" "$tmp_dir/release.json"
+grep -q '"sha":"[0-9a-f]\{40\}"' "$tmp_dir/release.json" || { echo "release.json has no commit sha"; cat "$tmp_dir/release.json"; exit 1; }
 fetch "/logo-144.png" "$tmp_dir/logo-144.png"
 test -s "$tmp_dir/logo-144.png"
 grep -q 'PK Management' "$tmp_dir/manifest.json"

@@ -12,6 +12,7 @@ import 'core/app_logger.dart';
 import 'core/auth_providers.dart';
 import 'core/go_router_provider.dart';
 import 'core/push_notifications_service.dart';
+import 'core/release_update.dart';
 import 'gen_l10n/app_localizations.dart';
 import 'core/locale_provider.dart';
 import 'ui/brand/app_theme.dart';
@@ -106,7 +107,8 @@ class _WebAppFrame extends StatelessWidget {
       ],
     );
     // Web renders edge to edge; individual pages own their content widths.
-    return app;
+    // The release banner is a no-op outside web builds with APP_RELEASE_SHA.
+    return ReleaseUpdateBanner(child: app);
   }
 }
 
