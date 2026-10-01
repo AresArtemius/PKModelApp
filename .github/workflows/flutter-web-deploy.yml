@@ -96,6 +96,7 @@ jobs:
         run: |
           main_js_bytes=$(stat -c%s build/web/main.dart.js)
           echo "main.dart.js: $main_js_bytes bytes"
+          echo "deferred parts:"; ls -la build/web/main.dart.js_*.part.js 2>/dev/null || echo "  (none)"
           if [ "$main_js_bytes" -gt 8000000 ]; then
             echo "main.dart.js exceeded the 8 MB release budget."
             exit 1
