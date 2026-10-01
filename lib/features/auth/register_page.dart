@@ -299,6 +299,8 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
+    final isDesktop =
+        MediaQuery.sizeOf(context).width >= kAuthDesktopBreakpoint;
     return Scaffold(
       body: Stack(
         children: [
@@ -313,176 +315,188 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                     child: ListView(
                       padding: kRegisterPagePad,
                       children: [
-                        _Card(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Text(t.signUp, style: kRegisterTitleStyle),
-                              const SizedBox(height: kRegisterGap6),
-                              Text(
-                                t.registerFillBelow,
-                                style: kRegisterHintStyle,
-                              ),
-                              const SizedBox(height: kRegisterGap16),
-
-                              if (_error != null) ...[
-                                Text(
-                                  _error!,
-                                  style: const TextStyle(color: kTextDanger),
-                                ),
-                                const SizedBox(height: kRegisterGap12),
-                              ],
-
-                              TextField(
-                                controller: _emailC,
-                                focusNode: _emailF,
-                                style: const TextStyle(
-                                  color: kTextDark,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                                keyboardType: TextInputType.emailAddress,
-                                textInputAction: TextInputAction.next,
-                                autofillHints: const [AutofillHints.email],
-                                onChanged: (_) {
-                                  if (_error != null) {
-                                    setState(() => _error = null);
-                                  }
-                                },
-                                onSubmitted: (_) => _passF.requestFocus(),
-                                decoration: _registerFieldDecoration(
-                                  labelText: t.email,
-                                ),
-                              ),
-
-                              const SizedBox(height: kRegisterGap12),
-
-                              _passwordField(
-                                controller: _passC,
-                                focusNode: _passF,
-                                hidden: _hide1,
-                                toggleHidden: () =>
-                                    setState(() => _hide1 = !_hide1),
-                                label: t.password,
-                                tooltipShow: t.showPassword,
-                                tooltipHide: t.hidePassword,
-                                action: TextInputAction.next,
-                                onSubmitted: () => _pass2F.requestFocus(),
-                                onChanged: (_) {
-                                  setState(() => _error = null);
-                                },
-                              ),
-                              const SizedBox(height: 10),
-                              PasswordStrengthMeter(
-                                password: _passC.text,
-                                isRussian: _isRussian,
-                                email: _emailC.text,
-                              ),
-                              const SizedBox(height: kRegisterGap12),
-
-                              _passwordField(
-                                controller: _pass2C,
-                                focusNode: _pass2F,
-                                hidden: _hide2,
-                                toggleHidden: () =>
-                                    setState(() => _hide2 = !_hide2),
-                                label: t.passwordRepeat,
-                                tooltipShow: t.showPassword,
-                                tooltipHide: t.hidePassword,
-                                action: TextInputAction.done,
-                                onSubmitted: _submitIfNotLoading,
-                                onChanged: (_) {
-                                  if (_error != null) {
-                                    setState(() => _error = null);
-                                  }
-                                },
-                              ),
-
-                              const SizedBox(height: kRegisterGap16),
-
-                              _ClientRoleSelector(
-                                isClient: _isClient,
-                                selectedType: _selectedClientType,
-                                toggleLabel: _clientToggleLabel,
-                                typeLabel: _clientTypeLabel,
-                                typeName: _registrationTypeLabel,
-                                onClientChanged: (value) {
-                                  setState(() {
-                                    _isClient = value;
-                                    _error = null;
-                                  });
-                                },
-                                onTypeChanged: (value) {
-                                  if (value == null) return;
-                                  setState(() {
-                                    _selectedClientType = value;
-                                    _error = null;
-                                  });
-                                },
-                              ),
-
-                              const SizedBox(height: kRegisterGap16),
-
-                              _LegalConsentBox(
-                                accepted: _acceptedLegal,
-                                onChanged: (value) {
-                                  setState(() {
-                                    _acceptedLegal = value;
-                                    if (_error == _legalRequiredMessage) {
-                                      _error = null;
-                                    }
-                                  });
-                                },
-                              ),
-
-                              const SizedBox(height: kRegisterGap16),
-
-                              SizedBox(
-                                width: double.infinity,
-                                height: kRegisterButtonH,
-                                child: BrandPillButton(
-                                  label: _loading
-                                      ? t.loadingDots
-                                      : t.registerUpper,
-                                  style: BrandPillStyle.dark,
-                                  onTap: _submitIfNotLoading,
-                                ),
-                              ),
-
-                              const SizedBox(height: kRegisterGap14),
-
-                              _AuthDivider(text: t.continueWith),
-
-                              const SizedBox(height: kRegisterGap12),
-
-                              _AuthOptionButton(
-                                label: t.continueSignUpWithPhone,
-                                icon: Icons.phone_iphone_rounded,
-                                onTap: _openPhoneSignUp,
-                              ),
-
-                              const SizedBox(height: kRegisterGap14),
-
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
+                        // Wide screens: the card is centred and capped
+                        // instead of stretching across the window.
+                        Align(
+                          alignment: Alignment.topCenter,
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxWidth: isDesktop
+                                  ? kAuthCardMaxWidth
+                                  : double.infinity,
+                            ),
+                            child: _Card(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
+                                  Text(t.signUp, style: kRegisterTitleStyle),
+                                  const SizedBox(height: kRegisterGap6),
                                   Text(
-                                    t.alreadyHaveAccount,
-                                    style: _registerBodyText(
+                                    t.registerFillBelow,
+                                    style: kRegisterHintStyle,
+                                  ),
+                                  const SizedBox(height: kRegisterGap16),
+
+                                  if (_error != null) ...[
+                                    Text(
+                                      _error!,
+                                      style: const TextStyle(color: kTextDanger),
+                                    ),
+                                    const SizedBox(height: kRegisterGap12),
+                                  ],
+
+                                  TextField(
+                                    controller: _emailC,
+                                    focusNode: _emailF,
+                                    style: const TextStyle(
                                       color: kTextDark,
-                                      fontSize: 16,
+                                      fontSize: 18,
                                       fontWeight: FontWeight.w500,
                                     ),
+                                    keyboardType: TextInputType.emailAddress,
+                                    textInputAction: TextInputAction.next,
+                                    autofillHints: const [AutofillHints.email],
+                                    onChanged: (_) {
+                                      if (_error != null) {
+                                        setState(() => _error = null);
+                                      }
+                                    },
+                                    onSubmitted: (_) => _passF.requestFocus(),
+                                    decoration: _registerFieldDecoration(
+                                      labelText: t.email,
+                                    ),
                                   ),
-                                  const SizedBox(width: 10),
-                                  BrandPillButton(
-                                    label: t.signInUpper,
-                                    style: BrandPillStyle.light,
-                                    onTap: _goLoginOrPop,
+
+                                  const SizedBox(height: kRegisterGap12),
+
+                                  _passwordField(
+                                    controller: _passC,
+                                    focusNode: _passF,
+                                    hidden: _hide1,
+                                    toggleHidden: () =>
+                                        setState(() => _hide1 = !_hide1),
+                                    label: t.password,
+                                    tooltipShow: t.showPassword,
+                                    tooltipHide: t.hidePassword,
+                                    action: TextInputAction.next,
+                                    onSubmitted: () => _pass2F.requestFocus(),
+                                    onChanged: (_) {
+                                      setState(() => _error = null);
+                                    },
+                                  ),
+                                  const SizedBox(height: 10),
+                                  PasswordStrengthMeter(
+                                    password: _passC.text,
+                                    isRussian: _isRussian,
+                                    email: _emailC.text,
+                                  ),
+                                  const SizedBox(height: kRegisterGap12),
+
+                                  _passwordField(
+                                    controller: _pass2C,
+                                    focusNode: _pass2F,
+                                    hidden: _hide2,
+                                    toggleHidden: () =>
+                                        setState(() => _hide2 = !_hide2),
+                                    label: t.passwordRepeat,
+                                    tooltipShow: t.showPassword,
+                                    tooltipHide: t.hidePassword,
+                                    action: TextInputAction.done,
+                                    onSubmitted: _submitIfNotLoading,
+                                    onChanged: (_) {
+                                      if (_error != null) {
+                                        setState(() => _error = null);
+                                      }
+                                    },
+                                  ),
+
+                                  const SizedBox(height: kRegisterGap16),
+
+                                  _ClientRoleSelector(
+                                    isClient: _isClient,
+                                    selectedType: _selectedClientType,
+                                    toggleLabel: _clientToggleLabel,
+                                    typeLabel: _clientTypeLabel,
+                                    typeName: _registrationTypeLabel,
+                                    onClientChanged: (value) {
+                                      setState(() {
+                                        _isClient = value;
+                                        _error = null;
+                                      });
+                                    },
+                                    onTypeChanged: (value) {
+                                      if (value == null) return;
+                                      setState(() {
+                                        _selectedClientType = value;
+                                        _error = null;
+                                      });
+                                    },
+                                  ),
+
+                                  const SizedBox(height: kRegisterGap16),
+
+                                  _LegalConsentBox(
+                                    accepted: _acceptedLegal,
+                                    onChanged: (value) {
+                                      setState(() {
+                                        _acceptedLegal = value;
+                                        if (_error == _legalRequiredMessage) {
+                                          _error = null;
+                                        }
+                                      });
+                                    },
+                                  ),
+
+                                  const SizedBox(height: kRegisterGap16),
+
+                                  SizedBox(
+                                    width: double.infinity,
+                                    height: kRegisterButtonH,
+                                    child: BrandPillButton(
+                                      label: _loading
+                                          ? t.loadingDots
+                                          : t.registerUpper,
+                                      style: BrandPillStyle.dark,
+                                      onTap: _submitIfNotLoading,
+                                    ),
+                                  ),
+
+                                  const SizedBox(height: kRegisterGap14),
+
+                                  _AuthDivider(text: t.continueWith),
+
+                                  const SizedBox(height: kRegisterGap12),
+
+                                  _AuthOptionButton(
+                                    label: t.continueSignUpWithPhone,
+                                    icon: Icons.phone_iphone_rounded,
+                                    onTap: _openPhoneSignUp,
+                                  ),
+
+                                  const SizedBox(height: kRegisterGap14),
+
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Text(
+                                        t.alreadyHaveAccount,
+                                        style: _registerBodyText(
+                                          color: kTextDark,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      BrandPillButton(
+                                        label: t.signInUpper,
+                                        style: BrandPillStyle.light,
+                                        onTap: _goLoginOrPop,
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),
-                            ],
+                            ),
                           ),
                         ),
                       ],

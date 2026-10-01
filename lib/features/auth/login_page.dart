@@ -307,199 +307,284 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     final appLocale = ref.watch(localeProvider);
     final lang = _langCodeFor(context, appLocale);
 
+    final isDesktop =
+        MediaQuery.sizeOf(context).width >= kAuthDesktopBreakpoint;
+
+    final card = _Card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              const BrandLogo(height: kLoginLogoH),
+
+              Positioned(
+                right: 0,
+                top: 0,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(
+                    kLangToggleRadius,
+                  ),
+                  onTap: _loading
+                      ? null
+                      : () => ref
+                            .read(localeProvider.notifier)
+                            .toggle(),
+                  child: Container(
+                    padding: kLangTogglePad,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(
+                        kLangToggleRadius,
+                      ),
+                      border: Border.all(color: kBorderColor),
+                    ),
+                    child: Text(
+                      lang == 'ru' ? 'RU' : 'EN',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: kLoginGapAfterLogo),
+
+          // On phones the public sections are big pill buttons
+          // inside the card; on desktop they become text links
+          // above it (see below).
+          if (!isDesktop) ...[
+            SizedBox(
+              width: double.infinity,
+              height: kLoginButtonH,
+              child: BrandPillButton(
+                label: t.castingsUpper,
+                style: BrandPillStyle.dark,
+                onTap: () => _goIfNotLoading(Routes.castings),
+              ),
+            ),
+
+            const SizedBox(height: kLoginGapButtons),
+
+            SizedBox(
+              width: double.infinity,
+              height: kLoginButtonH,
+              child: BrandPillButton(
+                label: t.catalogUpper,
+                style: BrandPillStyle.dark,
+                onTap: () => _goIfNotLoading(Routes.search),
+              ),
+            ),
+
+            const SizedBox(height: kLoginGapSection),
+          ],
+
+          AbsorbPointer(
+            absorbing: _loading,
+            child: AutofillGroup(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  AnimatedSwitcher(
+                    duration: kAnim200,
+                    child: _error == null
+                        ? const SizedBox.shrink()
+                        : Padding(
+                            padding: const EdgeInsets.only(
+                              bottom: kLoginGapFields,
+                            ),
+                            child: Text(
+                              _error!,
+                              key: ValueKey<String?>(_error),
+                              style: const TextStyle(
+                                color: kTextDanger,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                  ),
+                  _LoginModeTabs(
+                    mode: _mode,
+                    emailLabel: 'Email',
+                    phoneLabel: t.phoneNumber,
+                    onChanged: _switchMode,
+                  ),
+                  const SizedBox(height: kLoginGapFields),
+                  AnimatedSwitcher(
+                    duration: kAnim200,
+                    child: _mode == _LoginMode.email
+                        ? _EmailLoginFields(
+                            key: const ValueKey('email-login'),
+                            emailController: _emailC,
+                            passwordController: _passC,
+                            emailFocus: _emailF,
+                            passwordFocus: _passF,
+                            passwordHidden: isPasswordHidden,
+                            onTogglePassword: () => setState(
+                              () => isPasswordHidden =
+                                  !isPasswordHidden,
+                            ),
+                            onSubmit: _submitIfNotLoading,
+                            t: t,
+                          )
+                        : _PhoneLoginFields(
+                            key: const ValueKey('phone-login'),
+                            phoneController: _phoneC,
+                            passwordController: _phonePassC,
+                            passwordFocus: _phonePassF,
+                            phoneIso: _phoneIso,
+                            loading: _loading,
+                            passwordHidden: _phonePasswordHidden,
+                            t: t,
+                            onCountryIsoChanged: (value) =>
+                                setState(() => _phoneIso = value),
+                            onTogglePassword: () => setState(
+                              () => _phonePasswordHidden =
+                                  !_phonePasswordHidden,
+                            ),
+                            onSubmit: _submitIfNotLoading,
+                          ),
+                  ),
+                  const SizedBox(height: kLoginGapActions),
+
+                  SizedBox(
+                    width: double.infinity,
+                    height: kLoginButtonH,
+                    child: BrandPillButton(
+                      label: _loading
+                          ? t.loadingDots
+                          : t.signInUpper,
+                      style: BrandPillStyle.dark,
+                      onTap: _submitIfNotLoading,
+                    ),
+                  ),
+
+                  const SizedBox(height: kLoginGapBottomRow),
+
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Text(
+                        t.noAccount,
+                        style: const TextStyle(
+                          color: kTextDark,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      BrandPillButton(
+                        label: t.registerUpper,
+                        style: BrandPillStyle.light,
+                        onTap: () =>
+                            _goIfNotLoading(Routes.register),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  _LoginLegalLinks(isRussian: lang == 'ru'),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
     return Scaffold(
       body: Stack(
         children: [
           const BrandBackground(),
 
           SafeArea(
-            child: ListView(
-              padding: kLoginPagePad,
-              children: [
-                _Card(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          const BrandLogo(height: kLoginLogoH),
-
-                          Positioned(
-                            right: 0,
-                            top: 0,
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(
-                                kLangToggleRadius,
-                              ),
-                              onTap: _loading
-                                  ? null
-                                  : () => ref
-                                        .read(localeProvider.notifier)
-                                        .toggle(),
-                              child: Container(
-                                padding: kLangTogglePad,
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(
-                                    kLangToggleRadius,
-                                  ),
-                                  border: Border.all(color: kBorderColor),
-                                ),
-                                child: Text(
-                                  lang == 'ru' ? 'RU' : 'EN',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ),
+            child: isDesktop
+                ? Center(
+                    child: SingleChildScrollView(
+                      padding: kLoginPagePad,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(
+                          maxWidth: kAuthCardMaxWidth,
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _DesktopPublicLinks(
+                              castingsLabel: t.castingsTab,
+                              catalogLabel: t.catalogTab,
+                              onCastings: () =>
+                                  _goIfNotLoading(Routes.castings),
+                              onCatalog: () => _goIfNotLoading(Routes.search),
                             ),
-                          ),
-                        ],
-                      ),
-
-                      const SizedBox(height: kLoginGapAfterLogo),
-
-                      SizedBox(
-                        width: double.infinity,
-                        height: kLoginButtonH,
-                        child: BrandPillButton(
-                          label: t.castingsUpper,
-                          style: BrandPillStyle.dark,
-                          onTap: () => _goIfNotLoading(Routes.castings),
+                            const SizedBox(height: 14),
+                            card,
+                          ],
                         ),
                       ),
-
-                      const SizedBox(height: kLoginGapButtons),
-
-                      SizedBox(
-                        width: double.infinity,
-                        height: kLoginButtonH,
-                        child: BrandPillButton(
-                          label: t.catalogUpper,
-                          style: BrandPillStyle.dark,
-                          onTap: () => _goIfNotLoading(Routes.search),
-                        ),
-                      ),
-
-                      const SizedBox(height: kLoginGapSection),
-
-                      AbsorbPointer(
-                        absorbing: _loading,
-                        child: AutofillGroup(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              AnimatedSwitcher(
-                                duration: kAnim200,
-                                child: _error == null
-                                    ? const SizedBox.shrink()
-                                    : Padding(
-                                        padding: const EdgeInsets.only(
-                                          bottom: kLoginGapFields,
-                                        ),
-                                        child: Text(
-                                          _error!,
-                                          key: ValueKey<String?>(_error),
-                                          style: const TextStyle(
-                                            color: kTextDanger,
-                                          ),
-                                          textAlign: TextAlign.center,
-                                        ),
-                                      ),
-                              ),
-                              _LoginModeTabs(
-                                mode: _mode,
-                                emailLabel: 'Email',
-                                phoneLabel: t.phoneNumber,
-                                onChanged: _switchMode,
-                              ),
-                              const SizedBox(height: kLoginGapFields),
-                              AnimatedSwitcher(
-                                duration: kAnim200,
-                                child: _mode == _LoginMode.email
-                                    ? _EmailLoginFields(
-                                        key: const ValueKey('email-login'),
-                                        emailController: _emailC,
-                                        passwordController: _passC,
-                                        emailFocus: _emailF,
-                                        passwordFocus: _passF,
-                                        passwordHidden: isPasswordHidden,
-                                        onTogglePassword: () => setState(
-                                          () => isPasswordHidden =
-                                              !isPasswordHidden,
-                                        ),
-                                        onSubmit: _submitIfNotLoading,
-                                        t: t,
-                                      )
-                                    : _PhoneLoginFields(
-                                        key: const ValueKey('phone-login'),
-                                        phoneController: _phoneC,
-                                        passwordController: _phonePassC,
-                                        passwordFocus: _phonePassF,
-                                        phoneIso: _phoneIso,
-                                        loading: _loading,
-                                        passwordHidden: _phonePasswordHidden,
-                                        t: t,
-                                        onCountryIsoChanged: (value) =>
-                                            setState(() => _phoneIso = value),
-                                        onTogglePassword: () => setState(
-                                          () => _phonePasswordHidden =
-                                              !_phonePasswordHidden,
-                                        ),
-                                        onSubmit: _submitIfNotLoading,
-                                      ),
-                              ),
-                              const SizedBox(height: kLoginGapActions),
-
-                              SizedBox(
-                                width: double.infinity,
-                                height: kLoginButtonH,
-                                child: BrandPillButton(
-                                  label: _loading
-                                      ? t.loadingDots
-                                      : t.signInUpper,
-                                  style: BrandPillStyle.dark,
-                                  onTap: _submitIfNotLoading,
-                                ),
-                              ),
-
-                              const SizedBox(height: kLoginGapBottomRow),
-
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.center,
-                                children: [
-                                  Text(
-                                    t.noAccount,
-                                    style: const TextStyle(
-                                      color: kTextDark,
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  BrandPillButton(
-                                    label: t.registerUpper,
-                                    style: BrandPillStyle.light,
-                                    onTap: () =>
-                                        _goIfNotLoading(Routes.register),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 14),
-                              _LoginLegalLinks(isRussian: lang == 'ru'),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+                    ),
+                  )
+                : ListView(padding: kLoginPagePad, children: [card]),
           ),
         ],
       ),
+    );
+  }
+}
+
+/// «Кастинги · Каталог» links shown above the login card on wide screens.
+class _DesktopPublicLinks extends StatelessWidget {
+  const _DesktopPublicLinks({
+    required this.castingsLabel,
+    required this.catalogLabel,
+    required this.onCastings,
+    required this.onCatalog,
+  });
+
+  final String castingsLabel;
+  final String catalogLabel;
+  final VoidCallback onCastings;
+  final VoidCallback onCatalog;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        _DesktopPublicLink(label: castingsLabel, onTap: onCastings),
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 6),
+          child: Text('·', style: TextStyle(color: Colors.white70)),
+        ),
+        _DesktopPublicLink(label: catalogLabel, onTap: onCatalog),
+      ],
+    );
+  }
+}
+
+class _DesktopPublicLink extends StatelessWidget {
+  const _DesktopPublicLink({required this.label, required this.onTap});
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextButton(
+      onPressed: onTap,
+      style: TextButton.styleFrom(
+        foregroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        textStyle: const TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.4,
+        ),
+      ),
+      child: Text(label),
     );
   }
 }
