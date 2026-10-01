@@ -53,6 +53,7 @@ import '../features/legal/account_deletion_page.dart';
 import '../features/landing/landing_preview_page.dart';
 import '../gen_l10n/app_localizations.dart';
 import '../ui/brand/brand_theme.dart';
+import '../ui/brand/design_tokens.dart';
 import '../features/admin/selection_project_page.dart' deferred as selection_project_page;
 
 abstract class Routes {
@@ -185,7 +186,7 @@ class AppShell extends StatelessWidget {
             ),
             Expanded(
               child: ColoredBox(
-                color: const Color(0xFFE8E8E8),
+                color: Tokens.bg,
                 child: Align(
                   alignment: Alignment.topCenter,
                   child: ConstrainedBox(

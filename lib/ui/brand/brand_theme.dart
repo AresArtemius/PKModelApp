@@ -11,9 +11,11 @@ class BrandTheme {
   static const redTop = Color(0xFFB00000);
   static const redBottom = Color(0xFF7A0000);
 
-  static const greyTop = Color(0xFFF1F1F1);
-  static const greyMid = Color(0xFFE7E7E7);
-  static const greyBottom = Color(0xFFDADADA);
+  // Page greys (v2): white page, warm-grey surfaces. Kept under the old
+  // names because admin pages reference them as compile-time constants.
+  static const greyTop = Color(0xFFFFFFFF);
+  static const greyMid = Color(0xFFF7F7F5);
+  static const greyBottom = Color(0xFFF1F1EF);
 
   static const textDark = Color(0xFF4A4A4A);
 
@@ -125,12 +127,16 @@ class BrandTheme {
   );
 }
 
-/// Фон “как на референсе”: центр светлее, края темнее + лёгкая дымка.
+/// Page background. On web it is a flat white page (v2 tokens); the mobile
+/// apps keep the soft gradient with a vignette until they move to v2.
 class BrandBackground extends StatelessWidget {
   const BrandBackground({super.key});
 
   @override
   Widget build(BuildContext context) {
+    if (kIsWeb) {
+      return const ColoredBox(color: BrandTheme.greyTop);
+    }
     return Stack(
       children: [
         Container(
