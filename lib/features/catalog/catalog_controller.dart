@@ -131,6 +131,60 @@ class CatalogFilterSnapshot {
     };
   }
 
+  /// Keys that may appear in the catalog URL (`/search?city=…&ageFrom=…`).
+  static const Set<String> urlKeys = {
+    'query',
+    'ageFrom',
+    'ageTo',
+    'heightFrom',
+    'heightTo',
+    'shoeFrom',
+    'shoeTo',
+    'bustFrom',
+    'bustTo',
+    'waistFrom',
+    'waistTo',
+    'hipsFrom',
+    'hipsTo',
+    'minHourlyRateFrom',
+    'minHourlyRateTo',
+    'minDailyFeeFrom',
+    'minDailyFeeTo',
+    'eyeColor',
+    'hairColor',
+    'country',
+    'city',
+    'needDate',
+    'profileRole',
+  };
+
+  /// URL query parameters for the active filters; empty when none are set.
+  Map<String, String> toQueryParameters() {
+    final out = <String, String>{};
+    for (final entry in toJson().entries) {
+      final value = entry.value;
+      if (value == null) continue;
+      final text = value.toString().trim();
+      if (text.isEmpty) continue;
+      out[entry.key] = text;
+    }
+    return out;
+  }
+
+  /// Whether [params] carry any catalog filter.
+  static bool hasQueryParameters(Map<String, String> params) {
+    return params.keys.any(urlKeys.contains);
+  }
+
+  /// Filters restored from URL query parameters (unknown keys ignored).
+  static CatalogFilterSnapshot fromQueryParameters(Map<String, String> params) {
+    final json = <String, dynamic>{
+      for (final entry in params.entries)
+        if (urlKeys.contains(entry.key)) entry.key: entry.value,
+    };
+    return CatalogFilterSnapshot.fromJson(json);
+  }
+
   @override
   bool operator ==(Object other) {
     return other is CatalogFilterSnapshot &&
