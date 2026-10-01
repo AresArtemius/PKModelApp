@@ -1103,7 +1103,11 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                             onRefresh: _refresh,
                             onOpenModel: (modelId) async {
                               _unfocus();
+                              // Keep the side preview in sync, then open the
+                              // profile like on mobile: a click on the card
+                              // should open the profile, not just preview it.
                               _setDesktopPreview(modelId);
+                              await context.push('/model/$modelId');
                             },
                             onToggleSelected: _toggleSelected,
                             onQuickAdd: _openQuickAdd,
