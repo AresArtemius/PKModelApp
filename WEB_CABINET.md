@@ -42,8 +42,8 @@ Keep this server only for local checking. Production should use static hosting.
 
 ## Hosting: Timeweb Cloud server
 
-Production moves from GitHub Pages to a Timeweb Cloud server (Ubuntu) running
-Caddy. Files: `deploy/Caddyfile` (site config: automatic HTTPS, SPA fallback,
+Production runs on a Timeweb Cloud server (Ubuntu, Novosibirsk, 31.130.133.87)
+with Caddy; GitHub Pages is retired. Files: `deploy/Caddyfile` (site config: automatic HTTPS, SPA fallback,
 precompressed Brotli/gzip, cache headers) and `deploy/setup-server.sh`
 (one-time provisioning).
 
@@ -63,8 +63,8 @@ Workflows:
    when the secrets are not set.
 
 Then point the DNS A record for `app.pk.management` to the server IP; Caddy
-obtains the certificate automatically. GitHub Pages deploy stays until the
-switch is verified, then it is removed.
+obtains the certificate automatically (if DNS changed after Caddy started,
+`systemctl restart caddy` forces an immediate retry).
 
 ## Supabase Auth URLs
 

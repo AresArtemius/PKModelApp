@@ -41,7 +41,7 @@ More web cabinet notes are in `WEB_CABINET.md`.
 The repository includes two workflows:
 
 - `Flutter CI` runs `flutter analyze` and `flutter test` on pushes and pull requests to `main`.
-- `Flutter Web Deploy` builds Flutter Web for GitHub Pages when Pages is available for the repository.
+- `Flutter Web Deploy` builds Flutter Web and deploys it to the Timeweb Cloud server (Caddy) over SSH; see `WEB_CABINET.md`.
 
 For a private repository, use Vercel or Netlify first. Both configs are included and use the same build script:
 

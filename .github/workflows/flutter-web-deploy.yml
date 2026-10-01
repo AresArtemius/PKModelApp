@@ -6,13 +6,11 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: pages
+  group: web-deploy
   cancel-in-progress: false
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 env:
   SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -30,8 +28,6 @@ jobs:
   build:
     name: Build Flutter Web
     runs-on: ubuntu-latest
-    outputs:
-      pages_artifact_id: ${{ steps.upload-pages.outputs.artifact_id }}
 
     steps:
       - name: Checkout
@@ -105,63 +101,12 @@ jobs:
             exit 1
           fi
 
-      - name: Configure custom domain
-        run: printf 'app.pk.management\n' > build/web/CNAME
-
-      - name: Configure Pages
-        uses: actions/configure-pages@v5
-
-      - name: Upload Pages artifact
-        id: upload-pages
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: build/web
-
       - name: Upload build for server deploy
         uses: actions/upload-artifact@v4
         with:
           name: web-build
           path: build/web
           retention-days: 3
-
-  deploy:
-    name: Deploy to GitHub Pages
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-
-    steps:
-      - name: Checkout smoke tests
-        uses: actions/checkout@v4
-
-      - name: Deploy Pages
-        id: deployment
-        uses: actions/github-script@v9
-        timeout-minutes: 35
-        env:
-          PAGES_ARTIFACT_ID: ${{ needs.build.outputs.pages_artifact_id }}
-          PAGES_DEPLOYMENT_TIMEOUT_MS: 1800000
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const deployPages = require('./.github/scripts/deploy-pages-with-extended-wait.js');
-            await deployPages({ github, context, core });
-
-      - name: Smoke test production
-        run: bash tool/web_smoke.sh https://app.pk.management
-
-      - name: Install production browser tests
-        run: npm ci
-
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
-
-      - name: Run production browser smoke
-        env:
-          WEB_BASE_URL: https://app.pk.management
-        run: npm run test:e2e
 
   deploy-timeweb:
     name: Deploy to Timeweb Cloud
@@ -172,15 +117,17 @@ jobs:
       TIMEWEB_SSH_KEY: ${{ secrets.TIMEWEB_SSH_KEY }}
 
     steps:
+      - name: Checkout smoke tests
+        uses: actions/checkout@v4
+
       - name: Check server secrets
         id: gate
         run: |
           if [ -z "$TIMEWEB_HOST" ] || [ -z "$TIMEWEB_SSH_KEY" ]; then
-            echo "TIMEWEB_HOST / TIMEWEB_SSH_KEY are not set; skipping server deploy."
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "TIMEWEB_HOST / TIMEWEB_SSH_KEY must be set for the production deploy."
+            exit 1
           fi
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
 
       - name: Download build
         if: steps.gate.outputs.enabled == 'true'
@@ -239,12 +186,16 @@ jobs:
             echo "current -> \$(readlink /var/www/app/current)"
           EOF
 
-      - name: Verify server answers for the domain
-        if: steps.gate.outputs.enabled == 'true'
-        run: |
-          code=$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: app.pk.management' "http://$TIMEWEB_HOST/")
-          echo "HTTP $code from the server for Host: app.pk.management"
-          case "$code" in
-            200|301|308) ;;
-            *) echo "Unexpected status from the server"; exit 1 ;;
-          esac
+      - name: Smoke test production
+        run: bash tool/web_smoke.sh https://app.pk.management
+
+      - name: Install production browser tests
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run production browser smoke
+        env:
+          WEB_BASE_URL: https://app.pk.management
+        run: npm run test:e2e
