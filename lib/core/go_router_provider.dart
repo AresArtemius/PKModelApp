@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter/foundation.dart';
 
+import 'locale_provider.dart';
+import 'page_titles.dart';
 import 'roles_provider.dart';
 import 'router.dart';
 import 'supabase_provider.dart';
@@ -61,7 +63,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
     return isAdmin;
   }
 
-  return GoRouter(
+  final router = GoRouter(
     initialLocation: Routes.login,
     refreshListenable: GoRouterRefreshStream(
       supabase.auth.onAuthStateChange,
@@ -131,6 +133,13 @@ final goRouterProvider = Provider<GoRouter>((ref) {
     },
     routes: appRoutes,
   );
+
+  final titles = PageTitleSync(
+    router,
+    () => (ref.read(localeProvider)?.languageCode ?? 'ru') != 'en',
+  );
+  ref.onDispose(titles.dispose);
+  return router;
 });
 
 class GoRouterRefreshStream extends ChangeNotifier {
