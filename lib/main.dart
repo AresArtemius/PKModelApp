@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/account_profile_service.dart';
@@ -153,6 +154,9 @@ Future<void> main() async {
   var appStarted = false;
   await runZonedGuarded(
     () async {
+      // Web: clean path URLs (/search, /model/:id) instead of /#/...; the
+      // server serves index.html for every path (see deploy/Caddyfile).
+      usePathUrlStrategy();
       WidgetsFlutterBinding.ensureInitialized();
       _configureImageCache();
 

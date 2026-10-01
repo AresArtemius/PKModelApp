@@ -1,11 +1,11 @@
 const String _publicBaseUrl = String.fromEnvironment(
   'PUBLIC_BASE_URL',
-  defaultValue: 'https://aresartemius.github.io/PKModelApp/#',
+  defaultValue: 'https://app.pk.management',
 );
 
 String _joinPublicPath(String path) {
   final base = _publicBaseUrl.trim().isEmpty
-      ? 'https://aresartemius.github.io/PKModelApp/#'
+      ? 'https://app.pk.management'
       : _publicBaseUrl;
   final cleanBase = base.endsWith('/')
       ? base.substring(0, base.length - 1)

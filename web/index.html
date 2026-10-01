@@ -151,6 +151,17 @@
     <div id="app-loading-brand" aria-hidden="true">PK Management</div>
   </div>
   <script>
+    // Legacy links of the form /#/castings → /castings. Only route-like
+    // hashes are rewritten; auth callbacks (#access_token=…) are left alone.
+    (function () {
+      var hash = window.location.hash;
+      if (hash && hash.indexOf('#/') === 0) {
+        var target = hash.slice(1) + window.location.search;
+        window.history.replaceState(null, '', target);
+      }
+    })();
+  </script>
+  <script>
     (function () {
       var LOAD_TIMEOUT_MS = 20000;
       var SLOW_HINT_MS = 8000;

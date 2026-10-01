@@ -66,6 +66,14 @@ Then point the DNS A record for `app.pk.management` to the server IP; Caddy
 obtains the certificate automatically (if DNS changed after Caddy started,
 `systemctl restart caddy` forces an immediate retry).
 
+## URLs
+
+The web build uses path URLs (`usePathUrlStrategy()` in `lib/main.dart`):
+`/search`, `/model/<id>`, `/p/<id>`. Caddy serves `index.html` for every
+path. Old links of the form `/#/castings` are rewritten to `/castings` by a
+small script in `web/index.html` before the app starts. `PUBLIC_BASE_URL`
+(used for PDF and share links) is `https://app.pk.management` — no `#`.
+
 ## Supabase Auth URLs
 
 In Supabase Dashboard, open Authentication -> URL Configuration.

@@ -16,10 +16,10 @@ async function openFlutterRoute(page, route) {
   const pageErrors = [];
   page.on('pageerror', (error) => pageErrors.push(error.message));
 
-  await page.goto(`/#${route}`, { waitUntil: 'domcontentloaded' });
+  await page.goto(route, { waitUntil: 'domcontentloaded' });
   await expect(page).toHaveTitle('PK Management');
   await expect(page.locator('flutter-view')).toBeAttached();
-  await expect.poll(() => new URL(page.url()).hash).toContain(route);
+  await expect.poll(() => new URL(page.url()).pathname).toBe(route);
   expect(pageErrors).toEqual([]);
 }
 
@@ -29,16 +29,23 @@ for (const route of publicRoutes) {
   });
 }
 
-test('anonymous user is redirected away from account', async ({ page }) => {
-  await page.goto('/#/me', { waitUntil: 'domcontentloaded' });
+test('legacy hash link still opens the route', async ({ page }) => {
+  await page.goto('/#/castings', { waitUntil: 'domcontentloaded' });
   await expect(page.locator('flutter-view')).toBeAttached();
-  await expect.poll(() => new URL(page.url()).hash).toContain('/auth-required');
+  await expect.poll(() => new URL(page.url()).pathname).toBe('/castings');
+  await expect.poll(() => new URL(page.url()).hash).toBe('');
+});
+
+test('anonymous user is redirected away from account', async ({ page }) => {
+  await page.goto('/me', { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('flutter-view')).toBeAttached();
+  await expect.poll(() => new URL(page.url()).pathname).toContain('/auth-required');
 });
 
 test('anonymous user is redirected away from admin', async ({ page }) => {
-  await page.goto('/#/admin', { waitUntil: 'domcontentloaded' });
+  await page.goto('/admin', { waitUntil: 'domcontentloaded' });
   await expect(page.locator('flutter-view')).toBeAttached();
-  await expect.poll(() => new URL(page.url()).hash).toContain('/login');
+  await expect.poll(() => new URL(page.url()).pathname).toContain('/login');
 });
 
 test('catalog cold start renders within the mobile budget', async ({
@@ -53,9 +60,9 @@ test('catalog cold start renders within the mobile budget', async ({
   const page = await context.newPage();
   const startedAt = Date.now();
 
-  await page.goto('/#/search', { waitUntil: 'domcontentloaded' });
+  await page.goto('/search', { waitUntil: 'domcontentloaded' });
   await expect(page.locator('flutter-view')).toBeAttached();
-  await expect.poll(() => new URL(page.url()).hash).toContain('/search');
+  await expect.poll(() => new URL(page.url()).pathname).toBe('/search');
 
   const renderMs = Date.now() - startedAt;
   expect(renderMs, `cold catalogue render took ${renderMs} ms`).toBeLessThan(
