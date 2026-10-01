@@ -1718,201 +1718,204 @@ class _GridProfileCard extends StatelessWidget {
       child: GestureDetector(
         onLongPressStart: onLongPressStart,
         onLongPressEnd: onLongPressEnd,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(kCardRadius),
-          onTap: onTap,
-          onHover: onHover == null
-              ? null
-              : (hovering) {
-                  if (hovering) onHover!();
-                },
-          child: Stack(
-            children: [
-              Semantics(
-                button: true,
-                label: semanticsLabel,
-                selected: isSelected,
-                excludeSemantics: true,
-                child: Container(
-                  decoration: catalogCardDecoration(),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(kCardRadius),
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        final photoH = (constraints.maxHeight - kInfoH).clamp(
-                          0.0,
-                          constraints.maxHeight,
-                        );
+        // MouseRegion.onHover fires only on real pointer movement. Enter
+        // events (InkWell.onHover) are also synthesised by Flutter when the
+        // page re-appears under the cursor, which reset the side preview to
+        // whatever card happened to be under the pointer after «Back».
+        child: MouseRegion(
+          opaque: false,
+          onHover: onHover == null ? null : (_) => onHover!(),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(kCardRadius),
+            onTap: onTap,
+            child: Stack(
+              children: [
+                Semantics(
+                  button: true,
+                  label: semanticsLabel,
+                  selected: isSelected,
+                  excludeSemantics: true,
+                  child: Container(
+                    decoration: catalogCardDecoration(),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(kCardRadius),
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final photoH = (constraints.maxHeight - kInfoH).clamp(
+                            0.0,
+                            constraints.maxHeight,
+                          );
 
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            SizedBox(
-                              height: photoH,
-                              width: double.infinity,
-                              child: (photoUrl == null)
-                                  ? const _CatalogPhotoPlaceholder()
-                                  : Stack(
-                                      fit: StackFit.expand,
-                                      children: [
-                                        Hero(
-                                          tag: heroTag,
-                                          child: CachedNetworkImage(
-                                            // Resized by Storage; the
-                                            // original opens in the lightbox.
-                                            imageUrl: storageImageVariant(
-                                              photoUrl!,
-                                              width: kCatalogCardImageWidth,
-                                            ),
-                                            memCacheWidth:
-                                                _catalogCardPhotoCacheWidth,
-                                            maxWidthDiskCache:
-                                                _catalogCardPhotoCacheWidth,
-                                            fit: BoxFit.cover,
-                                            alignment: coverAlignment,
-                                            fadeInDuration: const Duration(
-                                              milliseconds: 220,
-                                            ),
-                                            placeholder: (_, _) =>
-                                                const _CatalogPhotoPlaceholder(),
-                                            // If the transform endpoint is
-                                            // unavailable, fall back to the
-                                            // original object.
-                                            errorWidget: (_, _, _) =>
-                                                CachedNetworkImage(
-                                                  imageUrl: photoUrl!,
-                                                  memCacheWidth:
-                                                      _catalogCardPhotoCacheWidth,
-                                                  maxWidthDiskCache:
-                                                      _catalogCardPhotoCacheWidth,
-                                                  fit: BoxFit.cover,
-                                                  alignment: coverAlignment,
-                                                  placeholder: (_, _) =>
-                                                      const _CatalogPhotoPlaceholder(),
-                                                  errorWidget: (_, _, _) =>
-                                                      const _CatalogPhotoPlaceholder(),
-                                                ),
-                                          ),
-                                        ),
-                                        const DecoratedBox(
-                                          decoration: BoxDecoration(
-                                            gradient: LinearGradient(
-                                              begin: Alignment.topCenter,
-                                              end: Alignment.bottomCenter,
-                                              colors: [
-                                                Color(0x00000000),
-                                                Color(0x14000000),
-                                                Color(0x2A000000),
-                                              ],
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              SizedBox(
+                                height: photoH,
+                                width: double.infinity,
+                                child: (photoUrl == null)
+                                    ? const _CatalogPhotoPlaceholder()
+                                    : Stack(
+                                        fit: StackFit.expand,
+                                        children: [
+                                          Hero(
+                                            tag: heroTag,
+                                            child: CachedNetworkImage(
+                                              // Resized by Storage; the
+                                              // original opens in the lightbox.
+                                              imageUrl: storageImageVariant(
+                                                photoUrl!,
+                                                width: kCatalogCardImageWidth,
+                                              ),
+                                              memCacheWidth:
+                                                  _catalogCardPhotoCacheWidth,
+                                              maxWidthDiskCache:
+                                                  _catalogCardPhotoCacheWidth,
+                                              fit: BoxFit.cover,
+                                              alignment: coverAlignment,
+                                              fadeInDuration: const Duration(
+                                                milliseconds: 220,
+                                              ),
+                                              placeholder: (_, _) =>
+                                                  const _CatalogPhotoPlaceholder(),
+                                              // If the transform endpoint is
+                                              // unavailable, fall back to the
+                                              // original object.
+                                              errorWidget: (_, _, _) =>
+                                                  CachedNetworkImage(
+                                                    imageUrl: photoUrl!,
+                                                    memCacheWidth:
+                                                        _catalogCardPhotoCacheWidth,
+                                                    maxWidthDiskCache:
+                                                        _catalogCardPhotoCacheWidth,
+                                                    fit: BoxFit.cover,
+                                                    alignment: coverAlignment,
+                                                    placeholder: (_, _) =>
+                                                        const _CatalogPhotoPlaceholder(),
+                                                    errorWidget: (_, _, _) =>
+                                                        const _CatalogPhotoPlaceholder(),
+                                                  ),
                                             ),
                                           ),
-                                        ),
-                                      ],
+                                          const DecoratedBox(
+                                            decoration: BoxDecoration(
+                                              gradient: LinearGradient(
+                                                begin: Alignment.topCenter,
+                                                end: Alignment.bottomCenter,
+                                                colors: [
+                                                  Color(0x00000000),
+                                                  Color(0x14000000),
+                                                  Color(0x2A000000),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                              ),
+                              Container(
+                                height: kInfoH,
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                    colors: [
+                                      Colors.white.withValues(alpha: 0.98),
+                                      const Color(
+                                        0xFFF8F8F8,
+                                      ).withValues(alpha: 0.96),
+                                    ],
+                                  ),
+                                  border: Border(
+                                    top: BorderSide(
+                                      color: Colors.white.withValues(alpha: 0.82),
+                                      width: 1,
                                     ),
-                            ),
-                            Container(
-                              height: kInfoH,
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.topCenter,
-                                  end: Alignment.bottomCenter,
-                                  colors: [
-                                    Colors.white.withValues(alpha: 0.98),
-                                    const Color(
-                                      0xFFF8F8F8,
-                                    ).withValues(alpha: 0.96),
-                                  ],
-                                ),
-                                border: Border(
-                                  top: BorderSide(
-                                    color: Colors.white.withValues(alpha: 0.82),
-                                    width: 1,
                                   ),
                                 ),
-                              ),
-                              padding: kCardInfoPad,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      name,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
+                                padding: kCardInfoPad,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        name,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w700,
+                                          color: kTextTitle,
+                                          height: 1.06,
+                                          letterSpacing: 0,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: kGap4),
+                                    Text(
+                                      ageText,
                                       style: const TextStyle(
-                                        fontSize: 16,
+                                        fontSize: 14,
                                         fontWeight: FontWeight.w700,
-                                        color: kTextTitle,
-                                        height: 1.06,
+                                        color: kTextDanger,
+                                        height: 1.05,
                                         letterSpacing: 0,
                                       ),
                                     ),
-                                  ),
-                                  const SizedBox(height: kGap4),
-                                  Text(
-                                    ageText,
-                                    style: const TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w700,
-                                      color: kTextDanger,
-                                      height: 1.05,
-                                      letterSpacing: 0,
+                                    const SizedBox(height: kGap2),
+                                    Text(
+                                      heightText,
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w500,
+                                        color: kTextMuted,
+                                        height: 1.05,
+                                        letterSpacing: 0,
+                                      ),
                                     ),
-                                  ),
-                                  const SizedBox(height: kGap2),
-                                  Text(
-                                    heightText,
-                                    style: const TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w500,
-                                      color: kTextMuted,
-                                      height: 1.05,
-                                      letterSpacing: 0,
-                                    ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
-                            ),
-                          ],
-                        );
-                      },
-                    ),
-                  ),
-                ),
-              ),
-
-              if (isSelected)
-                Positioned.fill(
-                  child: AnimatedContainer(
-                    duration: kAnim180,
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.25),
-                      borderRadius: BorderRadius.circular(kCardRadius),
+                            ],
+                          );
+                        },
+                      ),
                     ),
                   ),
                 ),
 
-              if (canSelect)
-                Positioned(
-                  top: kCardCheckOffset,
-                  right: kCardCheckOffset,
-                  child: _CardCheck(value: isSelected, onTap: onToggleSelected),
-                ),
+                if (isSelected)
+                  Positioned.fill(
+                    child: AnimatedContainer(
+                      duration: kAnim180,
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.25),
+                        borderRadius: BorderRadius.circular(kCardRadius),
+                      ),
+                    ),
+                  ),
 
-              if (canSelect)
-                Positioned(
-                  top: isPro ? kCardCheckOffset + 42 : kCardCheckOffset,
-                  left: kCardCheckOffset,
-                  child: _QuickCardAction(onTap: onQuickAdd),
-                ),
+                if (canSelect)
+                  Positioned(
+                    top: kCardCheckOffset,
+                    right: kCardCheckOffset,
+                    child: _CardCheck(value: isSelected, onTap: onToggleSelected),
+                  ),
 
-              if (isPro)
-                const Positioned(
-                  top: kCardCheckOffset,
-                  left: kCardCheckOffset,
-                  child: _ProBadge(),
-                ),
-            ],
+                if (canSelect)
+                  Positioned(
+                    top: isPro ? kCardCheckOffset + 42 : kCardCheckOffset,
+                    left: kCardCheckOffset,
+                    child: _QuickCardAction(onTap: onQuickAdd),
+                  ),
+
+                if (isPro)
+                  const Positioned(
+                    top: kCardCheckOffset,
+                    left: kCardCheckOffset,
+                    child: _ProBadge(),
+                  ),
+              ],
+            ),
           ),
         ),
       ),
