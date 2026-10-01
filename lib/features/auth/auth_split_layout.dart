@@ -144,11 +144,6 @@ class AuthBrandPanel extends StatelessWidget {
                   style: AppText.display.copyWith(color: Colors.white),
                 ),
               ),
-              const SizedBox(height: 14),
-              Text(
-                t.authHeroSubtitle,
-                style: AppText.body.copyWith(color: Colors.white70),
-              ),
             ],
           ),
         ),
