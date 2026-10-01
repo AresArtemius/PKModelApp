@@ -85,6 +85,10 @@ const EdgeInsets kLangTogglePad = EdgeInsets.symmetric(
   vertical: 6,
 );
 
+/// Auth pages on wide screens: the card stops stretching and sits centred.
+const double kAuthDesktopBreakpoint = 900.0;
+const double kAuthCardMaxWidth = 440.0;
+
 /// Login card
 const EdgeInsets kLoginCardPad = EdgeInsets.all(16);
 const double kLoginCardWhiteOpacity = 0.95;
