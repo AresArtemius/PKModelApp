@@ -2,7 +2,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'brand_theme.dart';
-import 'design_tokens.dart';
 import 'ui_constants.dart';
 
 /// Global Material theme built on the v2 tokens: white page, flat inputs
