@@ -6,7 +6,8 @@ import 'ui_constants.dart';
 ThemeData buildModelAppTheme() {
   final base = ThemeData(
     useMaterial3: true,
-    fontFamily: null,
+    // Brand typeface with full Cyrillic; weights above 700 fall back to Bold.
+    fontFamily: kBrandFontFamily,
     brightness: Brightness.light,
   );
 

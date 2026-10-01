@@ -3,6 +3,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 /// Единый стиль приложения (цвета, радиусы, тени, фон, кнопки).
+/// Font family registered in pubspec.yaml (Golos Text, OFL).
+const String kBrandFontFamily = 'GolosText';
+
 class BrandTheme {
   // Colors
   static const redTop = Color(0xFFB00000);
@@ -117,7 +120,7 @@ class BrandTheme {
   // Typography
   static const pillText = TextStyle(
     fontSize: 16,
-    letterSpacing: 1.6,
+    letterSpacing: 1.0,
     fontWeight: FontWeight.w500,
   );
 }
