@@ -16,6 +16,7 @@ import '../../core/locale_provider.dart';
 import '../../core/user_security_audit_service.dart';
 import '../notifications/app_notifications.dart';
 import 'auth_rate_limiter.dart';
+import 'auth_split_layout.dart';
 import 'auth_controller.dart';
 import 'phone_number_field.dart';
 
@@ -495,42 +496,169 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       ),
     );
 
+    if (isDesktop) {
+      // v2: brand panel on the left, a 360 px form on the right.
+      return Scaffold(
+        body: AuthSplitLayout(
+          topBar: Row(
+            children: [
+              _DesktopPublicLinks(
+                castingsLabel: t.castingsTab,
+                catalogLabel: t.catalogTab,
+                onCastings: () => _goIfNotLoading(Routes.castings),
+                onCatalog: () => _goIfNotLoading(Routes.search),
+              ),
+              const Spacer(),
+              _LangToggle(
+                lang: lang,
+                onTap: _loading
+                    ? null
+                    : () => ref.read(localeProvider.notifier).toggle(),
+              ),
+            ],
+          ),
+          child: _buildDesktopForm(t),
+        ),
+      );
+    }
+
     return Scaffold(
       body: Stack(
         children: [
           const BrandBackground(),
-
           SafeArea(
-            child: isDesktop
-                ? Center(
-                    child: SingleChildScrollView(
-                      padding: kLoginPagePad,
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(
-                          maxWidth: kAuthCardMaxWidth,
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            _DesktopPublicLinks(
-                              castingsLabel: t.castingsTab,
-                              catalogLabel: t.catalogTab,
-                              onCastings: () =>
-                                  _goIfNotLoading(Routes.castings),
-                              onCatalog: () => _goIfNotLoading(Routes.search),
-                            ),
-                            const SizedBox(height: 14),
-                            card,
-                          ],
-                        ),
-                      ),
-                    ),
-                  )
-                : ListView(padding: kLoginPagePad, children: [card]),
+            child: ListView(padding: kLoginPagePad, children: [card]),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildDesktopForm(AppLocalizations t) {
+    final fields = AnimatedSwitcher(
+      duration: kAnim200,
+      child: _mode == _LoginMode.email
+          ? _EmailLoginFields(
+              key: const ValueKey('email-login-desktop'),
+              emailController: _emailC,
+              passwordController: _passC,
+              emailFocus: _emailF,
+              passwordFocus: _passF,
+              passwordHidden: isPasswordHidden,
+              onTogglePassword: () =>
+                  setState(() => isPasswordHidden = !isPasswordHidden),
+              onSubmit: _submitIfNotLoading,
+              t: t,
+            )
+          : _PhoneLoginFields(
+              key: const ValueKey('phone-login-desktop'),
+              phoneController: _phoneC,
+              passwordController: _phonePassC,
+              passwordFocus: _phonePassF,
+              phoneIso: _phoneIso,
+              loading: _loading,
+              passwordHidden: _phonePasswordHidden,
+              t: t,
+              onCountryIsoChanged: (value) =>
+                  setState(() => _phoneIso = value),
+              onTogglePassword: () => setState(
+                () => _phonePasswordHidden = !_phonePasswordHidden,
+              ),
+              onSubmit: _submitIfNotLoading,
+            ),
+    );
+
+    return AbsorbPointer(
+      absorbing: _loading,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(t.signInTitle, style: AppText.h1),
+          const SizedBox(height: 6),
+          Text(
+            t.signInHint,
+            style: AppText.small.copyWith(color: Tokens.textSecondary),
+          ),
+          const SizedBox(height: 28),
+          if (_error != null) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 12,
+              ),
+              decoration: BoxDecoration(
+                color: Tokens.accentSoft,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                _error!,
+                style: AppText.small.copyWith(color: Tokens.danger),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+          AuthModeSwitch(
+            labels: ['Email', t.phoneNumber],
+            selectedIndex: _mode == _LoginMode.email ? 0 : 1,
+            onChanged: (index) =>
+                _switchMode(index == 0 ? _LoginMode.email : _LoginMode.phone),
+          ),
+          const SizedBox(height: 16),
+          fields,
+          const SizedBox(height: 20),
+          SizedBox(
+            height: Tokens.inputHeight,
+            child: FilledButton(
+              onPressed: _submitIfNotLoading,
+              child: Text(_loading ? t.loadingDots : t.signInTitle),
+            ),
+          ),
+          const SizedBox(height: 18),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                t.noAccount,
+                style: AppText.small.copyWith(color: Tokens.textSecondary),
+              ),
+              TextButton(
+                onPressed: () => _goIfNotLoading(Routes.register),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  minimumSize: const Size(0, 32),
+                ),
+                child: Text(t.createAccount),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          _LoginLegalLinks(isRussian: t.localeName.startsWith('ru')),
+        ],
+      ),
+    );
+  }
+}
+
+/// Language chip (RU / EN) used on the wide layout.
+class _LangToggle extends StatelessWidget {
+  const _LangToggle({required this.lang, required this.onTap});
+
+  final String lang;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton(
+      onPressed: onTap,
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size(0, 36),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        side: const BorderSide(color: Tokens.border),
+        textStyle: AppText.smallStrong,
+      ),
+      child: Text(lang == 'ru' ? 'RU' : 'EN'),
     );
   }
 }
@@ -556,8 +684,8 @@ class _DesktopPublicLinks extends StatelessWidget {
       children: [
         _DesktopPublicLink(label: castingsLabel, onTap: onCastings),
         const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 6),
-          child: Text('·', style: TextStyle(color: Colors.white70)),
+          padding: EdgeInsets.symmetric(horizontal: 2),
+          child: Text('·', style: TextStyle(color: Tokens.textTertiary)),
         ),
         _DesktopPublicLink(label: catalogLabel, onTap: onCatalog),
       ],
@@ -576,13 +704,10 @@ class _DesktopPublicLink extends StatelessWidget {
     return TextButton(
       onPressed: onTap,
       style: TextButton.styleFrom(
-        foregroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        textStyle: const TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 0.4,
-        ),
+        foregroundColor: Tokens.textSecondary,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        minimumSize: const Size(0, 36),
+        textStyle: AppText.smallStrong,
       ),
       child: Text(label),
     );
@@ -759,28 +884,22 @@ InputDecoration _authFieldDecoration({
   required String label,
   Widget? suffixIcon,
 }) {
+  InputBorder border(Color color, [double width = 1]) => OutlineInputBorder(
+    borderRadius: BorderRadius.circular(10),
+    borderSide: BorderSide(color: color, width: width),
+  );
   return InputDecoration(
     labelText: label,
     filled: true,
-    fillColor: Colors.white.withValues(alpha: 0.86),
-    contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
-    border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(18),
-      borderSide: BorderSide(color: Colors.black.withValues(alpha: 0.10)),
-    ),
-    enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(18),
-      borderSide: BorderSide(color: Colors.black.withValues(alpha: 0.10)),
-    ),
-    focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(18),
-      borderSide: const BorderSide(color: BrandTheme.redTop, width: 1.5),
-    ),
-    labelStyle: const TextStyle(color: kTextMuted, fontWeight: FontWeight.w600),
-    floatingLabelStyle: const TextStyle(
-      color: BrandTheme.redTop,
-      fontWeight: FontWeight.w700,
-    ),
+    fillColor: Tokens.bg,
+    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+    border: border(Tokens.border),
+    enabledBorder: border(Tokens.border),
+    focusedBorder: border(Tokens.text, 1.5),
+    errorBorder: border(Tokens.danger),
+    focusedErrorBorder: border(Tokens.danger, 1.5),
+    labelStyle: AppText.small.copyWith(color: Tokens.textSecondary),
+    floatingLabelStyle: AppText.caption.copyWith(color: Tokens.text),
     suffixIcon: suffixIcon,
   );
 }
@@ -819,7 +938,7 @@ class _EmailLoginFields extends StatelessWidget {
             textInputAction: TextInputAction.next,
             autofillHints: const [AutofillHints.username, AutofillHints.email],
             onSubmitted: (_) => passwordFocus.requestFocus(),
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
+            style: AppText.body,
             decoration: _authFieldDecoration(label: t.email),
           ),
           const SizedBox(height: kLoginGapFields),
@@ -830,7 +949,7 @@ class _EmailLoginFields extends StatelessWidget {
             textInputAction: TextInputAction.done,
             autofillHints: const [AutofillHints.password],
             onSubmitted: (_) => onSubmit(),
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
+            style: AppText.body,
             decoration: _authFieldDecoration(
               label: t.password,
               suffixIcon: IconButton(
@@ -897,7 +1016,7 @@ class _PhoneLoginFields extends StatelessWidget {
           textInputAction: TextInputAction.done,
           autofillHints: const [AutofillHints.password],
           onSubmitted: (_) => loading ? null : onSubmit(),
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
+          style: AppText.body,
           decoration: _authFieldDecoration(
             label: t.password,
             suffixIcon: IconButton(

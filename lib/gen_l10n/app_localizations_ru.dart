@@ -1931,6 +1931,21 @@ class AppLocalizationsRu extends AppLocalizations {
   String get notificationsEmpty => 'Пока нет уведомлений';
 
   @override
+  String get authHeroTitle => 'Кастинги, модели и подборки — в одном кабинете';
+
+  @override
+  String get authHeroSubtitle => 'Для агентств, родителей и моделей';
+
+  @override
+  String get signInTitle => 'Войти';
+
+  @override
+  String get signInHint => 'Введите email или телефон и пароль';
+
+  @override
+  String get createAccount => 'Создать аккаунт';
+
+  @override
   String get castingsEmptyTitle => 'Кастингов пока нет';
 
   @override

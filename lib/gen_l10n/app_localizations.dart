@@ -3746,6 +3746,36 @@ abstract class AppLocalizations {
   /// **'No notifications yet'**
   String get notificationsEmpty;
 
+  /// No description provided for @authHeroTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Castings, models and selections — in one place'**
+  String get authHeroTitle;
+
+  /// No description provided for @authHeroSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'For agencies, parents and models'**
+  String get authHeroSubtitle;
+
+  /// No description provided for @signInTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in'**
+  String get signInTitle;
+
+  /// No description provided for @signInHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Use your email or phone number'**
+  String get signInHint;
+
+  /// No description provided for @createAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Create account'**
+  String get createAccount;
+
   /// No description provided for @castingsEmptyTitle.
   ///
   /// In en, this message translates to:

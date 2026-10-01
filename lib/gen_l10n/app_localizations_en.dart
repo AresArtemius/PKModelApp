@@ -1932,6 +1932,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get notificationsEmpty => 'No notifications yet';
 
   @override
+  String get authHeroTitle => 'Castings, models and selections — in one place';
+
+  @override
+  String get authHeroSubtitle => 'For agencies, parents and models';
+
+  @override
+  String get signInTitle => 'Sign in';
+
+  @override
+  String get signInHint => 'Use your email or phone number';
+
+  @override
+  String get createAccount => 'Create account';
+
+  @override
   String get castingsEmptyTitle => 'No castings yet';
 
   @override
