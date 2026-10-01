@@ -1117,6 +1117,7 @@ class _CatalogResultsBody extends StatelessWidget {
     required this.cmLabel,
     required this.bottomInset,
     required this.onAutoLoadMore,
+    this.onHoverModel,
   });
 
   final CatalogController controller;
@@ -1134,6 +1135,9 @@ class _CatalogResultsBody extends StatelessWidget {
   final String cmLabel;
   final double bottomInset;
   final VoidCallback onAutoLoadMore;
+
+  /// Desktop only: the pointer entered a card (feeds the side preview).
+  final ValueChanged<String>? onHoverModel;
 
   @override
   Widget build(BuildContext context) {
@@ -1186,6 +1190,7 @@ class _CatalogResultsBody extends StatelessWidget {
       canSelect: canSelect,
       cmLabel: cmLabel,
       bottomInset: bottomInset,
+      onHoverModel: onHoverModel,
     );
   }
 }
@@ -1474,10 +1479,12 @@ class _CatalogGrid extends StatelessWidget {
     required this.canSelect,
     required this.cmLabel,
     required this.bottomInset,
+    this.onHoverModel,
   });
 
   final List<ModelVm> items;
   final Set<String> selectedIds;
+  final ValueChanged<String>? onHoverModel;
   final ScrollController gridController;
   final Future<void> Function() onRefresh;
   final Future<void> Function(String modelId) onOpenModel;
@@ -1532,6 +1539,9 @@ class _CatalogGrid extends StatelessWidget {
               final heroTag = 'model-photo-${m.id}';
 
               return _GridProfileCard(
+                onHover: onHoverModel == null
+                    ? null
+                    : () => onHoverModel!(m.id),
                 onTap: () async {
                   if (canSelect && isSelectionMode) {
                     onToggleSelected(m.id);
@@ -1674,9 +1684,13 @@ class _GridProfileCard extends StatelessWidget {
     required this.isPro,
     this.onLongPressStart,
     this.onLongPressEnd,
+    this.onHover,
   });
 
   final VoidCallback onTap;
+
+  /// Called when the mouse enters the card (desktop side preview).
+  final VoidCallback? onHover;
   final VoidCallback onToggleSelected;
   final VoidCallback onQuickAdd;
   final bool isSelected;
@@ -1707,6 +1721,11 @@ class _GridProfileCard extends StatelessWidget {
         child: InkWell(
           borderRadius: BorderRadius.circular(kCardRadius),
           onTap: onTap,
+          onHover: onHover == null
+              ? null
+              : (hovering) {
+                  if (hovering) onHover!();
+                },
           child: Stack(
             children: [
               Semantics(

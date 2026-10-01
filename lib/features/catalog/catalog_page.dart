@@ -1102,11 +1102,11 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                             selectedIds: effectiveSelectedIds,
                             gridController: _gridC,
                             onRefresh: _refresh,
+                            // Hover fills the side preview; a click opens the
+                            // profile, like on mobile.
+                            onHoverModel: _setDesktopPreview,
                             onOpenModel: (modelId) async {
                               _unfocus();
-                              // Keep the side preview in sync, then open the
-                              // profile like on mobile: a click on the card
-                              // should open the profile, not just preview it.
                               _setDesktopPreview(modelId);
                               await context.push('/model/$modelId');
                             },
