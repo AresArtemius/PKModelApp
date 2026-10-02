@@ -1503,10 +1503,10 @@ class _CatalogGrid extends StatelessWidget {
     return kGridCrossAxisCount;
   }
 
-  double _childAspectRatio(int columns) {
-    if (columns >= 4) return 0.68;
-    if (columns == 3) return 0.69;
-    return kGridChildAspectRatio;
+  /// Card = 3:4 photo + text block, so the ratio depends on the column width.
+  double _childAspectRatio(double width, int columns) {
+    final columnWidth = (width - kGridGap * (columns - 1)) / columns;
+    return columnWidth / (columnWidth * 4 / 3 + _kCardInfoHeightV2);
   }
 
   @override
@@ -1529,7 +1529,7 @@ class _CatalogGrid extends StatelessWidget {
               crossAxisCount: columns,
               crossAxisSpacing: kGridGap,
               mainAxisSpacing: kGridGap,
-              childAspectRatio: _childAspectRatio(columns),
+              childAspectRatio: _childAspectRatio(constraints.maxWidth, columns),
             ),
             itemCount: items.length,
             itemBuilder: (context, i) {
@@ -1560,12 +1560,17 @@ class _CatalogGrid extends StatelessWidget {
                 isSelected: selected,
                 canSelect: canSelect,
                 name: m.fullName,
-                ageText: '${m.age}',
+                ageText: AppLocalizations.of(context)!.ageYears(m.age),
                 heightText: '${m.height} $cmLabel',
+                cityText: m.city.trim(),
                 photoUrl: photo,
+                secondPhotoUrl: m.displayPhotoUrls.length > 1
+                    ? m.displayPhotoUrls[1]
+                    : null,
                 coverAlignment: _catalogCoverAlignmentFor(m),
                 heroTag: heroTag,
                 isPro: m.isProActive,
+                hoverActions: columns >= 3,
               );
             },
           );
@@ -1668,7 +1673,7 @@ class _SearchBarState extends State<_SearchBar> {
   }
 }
 
-class _GridProfileCard extends StatelessWidget {
+class _GridProfileCard extends StatefulWidget {
   const _GridProfileCard({
     required this.onTap,
     required this.onToggleSelected,
@@ -1678,10 +1683,13 @@ class _GridProfileCard extends StatelessWidget {
     required this.name,
     required this.ageText,
     required this.heightText,
+    required this.cityText,
     required this.photoUrl,
+    required this.secondPhotoUrl,
     required this.coverAlignment,
     required this.heroTag,
     required this.isPro,
+    required this.hoverActions,
     this.onLongPressStart,
     this.onLongPressEnd,
     this.onHover,
@@ -1691,6 +1699,34 @@ class _GridProfileCard extends StatelessWidget {
 
   /// Called when the mouse moves over the card (desktop side preview).
   final VoidCallback? onHover;
+  final VoidCallback onToggleSelected;
+  final VoidCallback onQuickAdd;
+  final bool isSelected;
+  final bool canSelect;
+  final String name;
+  final String ageText;
+  final String heightText;
+  final String cityText;
+  final String? photoUrl;
+
+  /// Shown instead of [photoUrl] while the pointer is over the card.
+  final String? secondPhotoUrl;
+  final Alignment coverAlignment;
+  final String heroTag;
+  final bool isPro;
+
+  /// Desktop: the select / quick-add controls appear on hover only.
+  final bool hoverActions;
+
+  final void Function(LongPressStartDetails)? onLongPressStart;
+  final void Function(LongPressEndDetails)? onLongPressEnd;
+
+  @override
+  State<_GridProfileCard> createState() => _GridProfileCardState();
+}
+
+class _GridProfileCardState extends State<_GridProfileCard> {
+  bool _hovered = false;
 
   /// Last global pointer position that produced a hover. Route transitions
   /// slide the grid under a stationary cursor, which the browser reports as
@@ -1701,238 +1737,167 @@ class _GridProfileCard extends StatelessWidget {
     final last = _lastHoverPosition;
     _lastHoverPosition = event.position;
     if (last != null && (event.position - last).distance < 3) return;
-    onHover?.call();
+    widget.onHover?.call();
   }
-  final VoidCallback onToggleSelected;
-  final VoidCallback onQuickAdd;
-  final bool isSelected;
-  final bool canSelect;
-  final String name;
-  final String ageText;
-  final String heightText;
-  final String? photoUrl;
-  final Alignment coverAlignment;
-  final String heroTag;
-  final bool isPro;
 
-  final void Function(LongPressStartDetails)? onLongPressStart;
-  final void Function(LongPressEndDetails)? onLongPressEnd;
+  void _setHovered(bool value) {
+    if (_hovered == value) return;
+    setState(() => _hovered = value);
+  }
+
+  Widget _photo(String url, {required bool hero}) {
+    final image = CachedNetworkImage(
+      // Resized by Storage; the original opens in the lightbox.
+      imageUrl: storageImageVariant(url, width: kCatalogCardImageWidth),
+      memCacheWidth: _catalogCardPhotoCacheWidth,
+      maxWidthDiskCache: _catalogCardPhotoCacheWidth,
+      fit: BoxFit.cover,
+      alignment: widget.coverAlignment,
+      fadeInDuration: const Duration(milliseconds: 220),
+      placeholder: (_, _) => const _CatalogPhotoPlaceholder(),
+      // If the transform endpoint is unavailable, fall back to the original.
+      errorWidget: (_, _, _) => CachedNetworkImage(
+        imageUrl: url,
+        memCacheWidth: _catalogCardPhotoCacheWidth,
+        maxWidthDiskCache: _catalogCardPhotoCacheWidth,
+        fit: BoxFit.cover,
+        alignment: widget.coverAlignment,
+        placeholder: (_, _) => const _CatalogPhotoPlaceholder(),
+        errorWidget: (_, _, _) => const _CatalogPhotoPlaceholder(),
+      ),
+    );
+    if (!hero) return image;
+    return Hero(tag: widget.heroTag, child: image);
+  }
 
   @override
   Widget build(BuildContext context) {
+    final w = widget;
     final semanticsLabel = [
-      name,
-      ageText,
-      heightText,
+      w.name,
+      w.ageText,
+      w.heightText,
+      w.cityText,
     ].where((part) => part.trim().isNotEmpty).join(', ');
-    return Material(
-      color: Colors.transparent,
-      child: GestureDetector(
-        onLongPressStart: onLongPressStart,
-        onLongPressEnd: onLongPressEnd,
-        // The side preview follows the cursor only when it really moves:
-        // enter events and hovers produced by the page sliding back under a
-        // stationary pointer after «Back» are ignored (see _handleHover).
-        child: MouseRegion(
-          opaque: false,
-          onHover: onHover == null ? null : _handleHover,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(kCardRadius),
-            onTap: onTap,
-            child: Stack(
-              children: [
-                Semantics(
-                  button: true,
-                  label: semanticsLabel,
-                  selected: isSelected,
-                  excludeSemantics: true,
-                  child: Container(
-                    decoration: catalogCardDecoration(),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(kCardRadius),
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          final photoH = (constraints.maxHeight - kInfoH).clamp(
-                            0.0,
-                            constraints.maxHeight,
-                          );
+    final details = [
+      w.ageText,
+      w.heightText,
+      w.cityText,
+    ].where((part) => part.trim().isNotEmpty).join(' · ');
+    final showActions =
+        w.canSelect && (!w.hoverActions || _hovered || w.isSelected);
+    final second = w.secondPhotoUrl;
+    final showSecond = _hovered && second != null && second != w.photoUrl;
 
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              SizedBox(
-                                height: photoH,
-                                width: double.infinity,
-                                child: (photoUrl == null)
-                                    ? const _CatalogPhotoPlaceholder()
-                                    : Stack(
-                                        fit: StackFit.expand,
-                                        children: [
-                                          Hero(
-                                            tag: heroTag,
-                                            child: CachedNetworkImage(
-                                              // Resized by Storage; the
-                                              // original opens in the lightbox.
-                                              imageUrl: storageImageVariant(
-                                                photoUrl!,
-                                                width: kCatalogCardImageWidth,
-                                              ),
-                                              memCacheWidth:
-                                                  _catalogCardPhotoCacheWidth,
-                                              maxWidthDiskCache:
-                                                  _catalogCardPhotoCacheWidth,
-                                              fit: BoxFit.cover,
-                                              alignment: coverAlignment,
-                                              fadeInDuration: const Duration(
-                                                milliseconds: 220,
-                                              ),
-                                              placeholder: (_, _) =>
-                                                  const _CatalogPhotoPlaceholder(),
-                                              // If the transform endpoint is
-                                              // unavailable, fall back to the
-                                              // original object.
-                                              errorWidget: (_, _, _) =>
-                                                  CachedNetworkImage(
-                                                    imageUrl: photoUrl!,
-                                                    memCacheWidth:
-                                                        _catalogCardPhotoCacheWidth,
-                                                    maxWidthDiskCache:
-                                                        _catalogCardPhotoCacheWidth,
-                                                    fit: BoxFit.cover,
-                                                    alignment: coverAlignment,
-                                                    placeholder: (_, _) =>
-                                                        const _CatalogPhotoPlaceholder(),
-                                                    errorWidget: (_, _, _) =>
-                                                        const _CatalogPhotoPlaceholder(),
-                                                  ),
-                                            ),
-                                          ),
-                                          const DecoratedBox(
-                                            decoration: BoxDecoration(
-                                              gradient: LinearGradient(
-                                                begin: Alignment.topCenter,
-                                                end: Alignment.bottomCenter,
-                                                colors: [
-                                                  Color(0x00000000),
-                                                  Color(0x14000000),
-                                                  Color(0x2A000000),
-                                                ],
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
+    return MouseRegion(
+      opaque: false,
+      onEnter: (_) => _setHovered(true),
+      onExit: (_) => _setHovered(false),
+      onHover: w.onHover == null ? null : _handleHover,
+      child: GestureDetector(
+        onLongPressStart: w.onLongPressStart,
+        onLongPressEnd: w.onLongPressEnd,
+        child: Semantics(
+          button: true,
+          label: semanticsLabel,
+          selected: w.isSelected,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              AspectRatio(
+                aspectRatio: 3 / 4,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(Tokens.radiusMd),
+                  child: Material(
+                    color: Tokens.surfaceAlt,
+                    child: InkWell(
+                      onTap: w.onTap,
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          if (w.photoUrl == null)
+                            const _CatalogPhotoPlaceholder()
+                          else
+                            _photo(w.photoUrl!, hero: true),
+                          if (second != null && second != w.photoUrl)
+                            AnimatedOpacity(
+                              opacity: showSecond ? 1 : 0,
+                              duration: Tokens.base,
+                              child: showSecond || _hovered
+                                  ? _photo(second, hero: false)
+                                  : const SizedBox.shrink(),
+                            ),
+                          if (w.isSelected)
+                            const DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: Color(0x33000000),
                               ),
-                              Container(
-                                height: kInfoH,
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    begin: Alignment.topCenter,
-                                    end: Alignment.bottomCenter,
-                                    colors: [
-                                      Colors.white.withValues(alpha: 0.98),
-                                      const Color(
-                                        0xFFF8F8F8,
-                                      ).withValues(alpha: 0.96),
-                                    ],
-                                  ),
-                                  border: Border(
-                                    top: BorderSide(
-                                      color: Colors.white.withValues(alpha: 0.82),
-                                      width: 1,
-                                    ),
+                            ),
+                          if (w.isPro)
+                            const Positioned(
+                              left: 10,
+                              bottom: 10,
+                              child: _ProBadge(),
+                            ),
+                          if (w.canSelect) ...[
+                            Positioned(
+                              top: 10,
+                              right: 10,
+                              child: AnimatedOpacity(
+                                opacity: showActions ? 1 : 0,
+                                duration: Tokens.fast,
+                                child: IgnorePointer(
+                                  ignoring: !showActions,
+                                  child: _CardCheck(
+                                    value: w.isSelected,
+                                    onTap: w.onToggleSelected,
                                   ),
                                 ),
-                                padding: kCardInfoPad,
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        name,
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w700,
-                                          color: kTextTitle,
-                                          height: 1.06,
-                                          letterSpacing: 0,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(height: kGap4),
-                                    Text(
-                                      ageText,
-                                      style: const TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w700,
-                                        color: kTextDanger,
-                                        height: 1.05,
-                                        letterSpacing: 0,
-                                      ),
-                                    ),
-                                    const SizedBox(height: kGap2),
-                                    Text(
-                                      heightText,
-                                      style: const TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w500,
-                                        color: kTextMuted,
-                                        height: 1.05,
-                                        letterSpacing: 0,
-                                      ),
-                                    ),
-                                  ],
+                              ),
+                            ),
+                            Positioned(
+                              top: 10,
+                              left: 10,
+                              child: AnimatedOpacity(
+                                opacity: showActions ? 1 : 0,
+                                duration: Tokens.fast,
+                                child: IgnorePointer(
+                                  ignoring: !showActions,
+                                  child: _QuickCardAction(onTap: w.onQuickAdd),
                                 ),
                               ),
-                            ],
-                          );
-                        },
+                            ),
+                          ],
+                        ],
                       ),
                     ),
                   ),
                 ),
-
-                if (isSelected)
-                  Positioned.fill(
-                    child: AnimatedContainer(
-                      duration: kAnim180,
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.25),
-                        borderRadius: BorderRadius.circular(kCardRadius),
-                      ),
-                    ),
-                  ),
-
-                if (canSelect)
-                  Positioned(
-                    top: kCardCheckOffset,
-                    right: kCardCheckOffset,
-                    child: _CardCheck(value: isSelected, onTap: onToggleSelected),
-                  ),
-
-                if (canSelect)
-                  Positioned(
-                    top: isPro ? kCardCheckOffset + 42 : kCardCheckOffset,
-                    left: kCardCheckOffset,
-                    child: _QuickCardAction(onTap: onQuickAdd),
-                  ),
-
-                if (isPro)
-                  const Positioned(
-                    top: kCardCheckOffset,
-                    left: kCardCheckOffset,
-                    child: _ProBadge(),
-                  ),
-              ],
-            ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                w.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppText.smallStrong,
+              ),
+              const SizedBox(height: 2),
+              Text(
+                details,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppText.caption,
+              ),
+            ],
           ),
         ),
       ),
     );
   }
 }
+
+/// Height of the text block under the 3:4 photo (name + details line).
+const double _kCardInfoHeightV2 = 8 + 20 + 2 + 17;
 
 class _CatalogPhotoPlaceholder extends StatelessWidget {
   const _CatalogPhotoPlaceholder();

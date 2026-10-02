@@ -665,6 +665,8 @@
 "notificationsUpper": "УВЕДОМЛЕНИЯ",
 "notificationsAccountEntrySubtitle": "События по подборкам, сообщениям и профилям",
 "notificationsEmpty": "Пока нет уведомлений",
+"ageYears": "{count, plural, one{{count} год} few{{count} года} many{{count} лет} other{{count} лет}}",
+"@ageYears": { "placeholders": { "count": { "type": "int" } } },
 "authHeroTitle": "Кастинги, модели и подборки — в одном кабинете",
 "authHeroSubtitle": "Для агентств, родителей и моделей",
 "signInTitle": "Войти",

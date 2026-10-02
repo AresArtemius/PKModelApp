@@ -1931,6 +1931,19 @@ class AppLocalizationsRu extends AppLocalizations {
   String get notificationsEmpty => 'Пока нет уведомлений';
 
   @override
+  String ageYears(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count лет',
+      many: '$count лет',
+      few: '$count года',
+      one: '$count год',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get authHeroTitle => 'Кастинги, модели и подборки — в одном кабинете';
 
   @override
