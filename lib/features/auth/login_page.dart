@@ -574,20 +574,20 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Align(
-            alignment: Alignment.centerLeft,
+          Center(
             child: Image.asset(
               'assets/images/pk-logo-red-512.png',
-              height: 64,
+              height: 112,
               semanticLabel: 'PK Management',
             ),
           ),
           const SizedBox(height: 28),
-          Text(t.signInTitle, style: AppText.h1),
+          Text(t.signInTitle, style: AppText.h1, textAlign: TextAlign.center),
           const SizedBox(height: 6),
           Text(
             t.signInHint,
             style: AppText.small.copyWith(color: Tokens.textSecondary),
+            textAlign: TextAlign.center,
           ),
           const SizedBox(height: 28),
           if (_error != null) ...[
