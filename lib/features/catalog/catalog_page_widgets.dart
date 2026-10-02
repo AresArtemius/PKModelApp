@@ -2068,14 +2068,21 @@ class _TopBar extends StatelessWidget {
         ? (isDesktop ? 72.0 : kTopBarIconBoxW)
         : 96.0;
 
+    // On desktop the shell's top bar already carries the logo.
+    final showLeading = leading != null || !isDesktop;
+
     return Row(
       children: [
-        SizedBox(
-          width: leadingWidth,
-          height: kTopBarH,
-          child: Center(child: leading ?? const BrandLogo(height: kBrandLogoH)),
-        ),
-        const SizedBox(width: kGap10),
+        if (showLeading) ...[
+          SizedBox(
+            width: leadingWidth,
+            height: kTopBarH,
+            child: Center(
+              child: leading ?? const BrandLogo(height: kBrandLogoH),
+            ),
+          ),
+          const SizedBox(width: kGap10),
+        ],
         Expanded(child: _AccountPill(text: accountLabel)),
         const SizedBox(width: kGap10),
         if (onFolders != null) ...[
