@@ -120,6 +120,18 @@ const _routeParamId = 'id';
 const _routeParamTag = 'tag';
 const double _kDesktopShellBreakpoint = 900;
 
+/// Routes whose content is mostly text and reads better in a 1280 px column.
+const List<String> _kNarrowContentPrefixes = [
+  Routes.me,
+  Routes.notifications,
+  Routes.billing,
+  Routes.support,
+  Routes.dataPrivacy,
+  Routes.accountDevices,
+  Routes.accountMfa,
+  Routes.profileAnalytics,
+];
+
 class AppShell extends StatelessWidget {
   const AppShell({super.key, required this.child});
   final Widget child;
@@ -168,7 +180,9 @@ class AppShell extends StatelessWidget {
     final content = kIsWeb ? SelectionArea(child: child) : child;
 
     if (isDesktop) {
-      // v2 shell: white top bar, content in a centred column.
+      // v2 shell: white top bar; catalogue/castings/chats use the full
+      // width (pages own their paddings), text-like pages stay in a column.
+      final narrow = _kNarrowContentPrefixes.any(path.startsWith);
       return Scaffold(
         body: Column(
           children: [
@@ -176,15 +190,17 @@ class AppShell extends StatelessWidget {
             Expanded(
               child: ColoredBox(
                 color: Tokens.bg,
-                child: Align(
-                  alignment: Alignment.topCenter,
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(
-                      maxWidth: Tokens.contentMaxWidth,
-                    ),
-                    child: content,
-                  ),
-                ),
+                child: narrow
+                    ? Align(
+                        alignment: Alignment.topCenter,
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(
+                            maxWidth: Tokens.contentMaxWidth,
+                          ),
+                          child: content,
+                        ),
+                      )
+                    : content,
               ),
             ),
           ],

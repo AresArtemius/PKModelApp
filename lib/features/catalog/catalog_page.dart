@@ -41,11 +41,12 @@ const int _catalogCardPhotoCacheWidth = 560;
 const int _catalogOverlayPhotoCacheWidth = 1000;
 const double _catalogGridCacheExtent = 1000;
 const double _catalogDesktopBreakpoint = 900;
-const double _catalogDesktopMaxWidth = 1680;
-const double _catalogDesktopSidePanelWidth = 320;
+const double _catalogDesktopMaxWidth = double.infinity;
+const double _catalogDetailBreakpoint = 1400;
+const double _catalogDesktopSidePanelWidth = 280;
 const double _catalogDesktopDetailWidth = 360;
 const bool _catalogSavedSearchesEnabled = false;
-const EdgeInsets _catalogDesktopPadding = EdgeInsets.fromLTRB(32, 28, 32, 28);
+const EdgeInsets _catalogDesktopPadding = EdgeInsets.fromLTRB(32, 24, 32, 24);
 
 Alignment _catalogCoverAlignmentFor(ModelVm m) {
   return Alignment(
@@ -1049,15 +1050,34 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                     children: [
                       if (isDesktop)
                         _CatalogDesktopLayout(
-                          topBar: _TopBar(
+                          showDetail:
+                              MediaQuery.sizeOf(context).width >=
+                              _catalogDetailBreakpoint,
+                          topBar: _CatalogResultsHeader(
+                            countLabel: c.isInitialLoading
+                                ? t.catalogTab
+                                : (c.hasMore
+                                      ? t.catalogFoundMore(filteredItems.length)
+                                      : t.catalogFoundCount(
+                                          filteredItems.length,
+                                        )),
+                            filters: _activeFilters(
+                              t,
+                              c,
+                              reload: () async {
+                                _unfocus();
+                                await c.reload();
+                              },
+                            ),
                             onAdvancedSearch: _openAdvancedSearch,
+                            advancedSearchEnabled: !c.isInitialLoading,
                             onFolders: canUseAgentFolders
                                 ? () => context.go(Routes.agentFolders)
                                 : null,
-                            accountLabel: accountLabel,
-                            leading: widget.leading,
-                            advancedSearchEnabled: !c.isInitialLoading,
-                            isDesktop: true,
+                            onResetFilters: c.hasActiveFilters
+                                ? _clearCatalogFilters
+                                : null,
+                            resetLabel: resetFiltersLabel,
                           ),
                           onAdvancedSearch: _openAdvancedSearch,
                           advancedSearchEnabled: !c.isInitialLoading,
