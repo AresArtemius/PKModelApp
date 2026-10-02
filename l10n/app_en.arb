@@ -720,7 +720,27 @@
 "@advancedFeeTo": { "placeholders": { "value": { "type": "int" } } },
 "advancedClearDateUpper": "CLEAR DATE",
 "catalogNoFilterResults": "No profiles match the selected filters",
-"catalogAdjustFiltersHint": "Change or reset the filters"
+"catalogAdjustFiltersHint": "Change or reset the filters",
+"castingsCount": "{count, plural, one{{count} casting} other{{count} castings}}",
+"@castingsCount": { "placeholders": { "count": { "type": "int" } } },
+"createCasting": "Create casting",
+"newCastingTitle": "New casting",
+"newCastingHint": "Fill in the description, dates and stage — the casting goes live right after publishing",
+"publish": "Publish",
+"respond": "Respond",
+"addParticipant": "Add participant",
+"castingSelectHint": "Select a casting on the left to see the details",
+"castingResponsesAction": "Responses",
+"castingStageAction": "Stage",
+"castingReferencesLabel": "References",
+"castingDescriptionLabel": "Description",
+"castingAddFiles": "Add files",
+"castingProjectStageLabel": "Project stage",
+"castingTitleHint": "e.g. Shoot for a kids' clothing catalogue",
+"castingDescriptionHint": "Who you are looking for, shoot format, location",
+"castingRightsHint": "Usage term and territory",
+"castingFeeHint": "e.g. ₽15,000 per shift",
+"castingDatesHint": "Mark one or more shooting days"
 
 
 }

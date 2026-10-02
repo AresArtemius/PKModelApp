@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -16,6 +17,12 @@ import '../castings/casting_project_stage.dart';
 import '../castings/casting_reference_media.dart';
 import 'selection_providers.dart';
 import 'admin_style.dart';
+
+const double _createCastingDesktopBreakpoint = 900;
+
+/// Width of the v2 form column and of its calendar.
+const double _createCastingFormWidth = 720;
+const double _createCastingCalendarWidth = 420;
 
 class CreateCastingAdminPage extends ConsumerStatefulWidget {
   const CreateCastingAdminPage({super.key});
@@ -143,9 +150,206 @@ class _CreateCastingAdminPageState
   }
 
   @override
+  void initState() {
+    super.initState();
+    // The publish button follows the title: it is the only required field.
+    _titleC.addListener(_onTitleChanged);
+  }
+
+  void _onTitleChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
+    final isDesktop =
+        MediaQuery.sizeOf(context).width >= _createCastingDesktopBreakpoint;
+    if (isDesktop || kIsWeb) return _buildV2(context, t, isDesktop: isDesktop);
+    return _buildLegacy(context, t);
+  }
 
+  /// v2: a centred 720 px column — back link, title, flat fields, calendar,
+  /// stage chips and the «Publish / Cancel» row at the end.
+  Widget _buildV2(
+    BuildContext context,
+    AppLocalizations t, {
+    required bool isDesktop,
+  }) {
+    final from = GoRouterState.of(context).uri.queryParameters['from'];
+    final backLabel = from == 'admin' ? t.adminTab : t.castingsTab;
+    final canPublish =
+        !_creating && !_pickingReferences && _titleC.text.trim().isNotEmpty;
+
+    return Scaffold(
+      backgroundColor: Tokens.bg,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: isDesktop
+              ? const EdgeInsets.fromLTRB(32, 20, 32, 48)
+              : const EdgeInsets.fromLTRB(16, 8, 16, 32),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                maxWidth: _createCastingFormWidth,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: () => context.go(_returnRoute(context)),
+                      style: TextButton.styleFrom(
+                        foregroundColor: Tokens.textSecondary,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                      ),
+                      icon: const Icon(Icons.arrow_back_rounded, size: 18),
+                      label: Text(backLabel),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(t.newCastingTitle, style: AppText.h1),
+                  const SizedBox(height: 6),
+                  Text(
+                    t.newCastingHint,
+                    style: AppText.small.copyWith(color: Tokens.textSecondary),
+                  ),
+                  const SizedBox(height: 32),
+                  _FormField(
+                    label: t.castingTitle,
+                    child: _TextField(
+                      controller: _titleC,
+                      hint: t.castingTitleHint,
+                      flat: true,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  _FormField(
+                    label: t.projectDescription,
+                    child: _TextField(
+                      controller: _descC,
+                      hint: t.castingDescriptionHint,
+                      minLines: 3,
+                      maxLines: 8,
+                      flat: true,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  _FormField(
+                    label: t.rights,
+                    child: _TextField(
+                      controller: _rightsC,
+                      hint: t.castingRightsHint,
+                      minLines: 2,
+                      maxLines: 5,
+                      flat: true,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  _FormField(
+                    label: t.fee,
+                    child: _TextField(
+                      controller: _feeC,
+                      hint: t.castingFeeHint,
+                      flat: true,
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+                  _FormField(
+                    label: t.castingReferencesLabel,
+                    child: _ReferencesPicker(
+                      items: _pendingReferences,
+                      picking: _pickingReferences,
+                      flat: true,
+                      onPick: _pickReferences,
+                      onRemove: (index) {
+                        setState(() => _pendingReferences.removeAt(index));
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+                  _FormField(
+                    label: t.dates,
+                    hint: t.castingDatesHint,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Container(
+                        width: _createCastingCalendarWidth,
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(Tokens.radiusMd),
+                          border: Border.all(color: Tokens.border),
+                        ),
+                        child: _MultiMonthCalendar(
+                          initialSelected: _selectedDates,
+                          flat: true,
+                          onToggle: _toggleDate,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+                  _FormField(
+                    label: t.castingProjectStageLabel,
+                    child: _StageSelector(
+                      value: _stage,
+                      flat: true,
+                      onChanged: (stage) => setState(() => _stage = stage),
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  const Divider(height: 1, thickness: 1, color: Tokens.border),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      FilledButton(
+                        onPressed: canPublish ? _createCasting : null,
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size(180, Tokens.controlHeight),
+                        ),
+                        child: _creating
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : Text(t.publish),
+                      ),
+                      const SizedBox(width: 12),
+                      OutlinedButton(
+                        onPressed: _creating
+                            ? null
+                            : () => context.go(_returnRoute(context)),
+                        child: Text(t.cancel),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _toggleDate(DateTime d) {
+    setState(() {
+      final dd = _dateOnly(d);
+      if (_selectedDates.contains(dd)) {
+        _selectedDates.remove(dd);
+      } else {
+        _selectedDates.add(dd);
+      }
+    });
+  }
+
+  /// Native apps: the pill-style form (unchanged).
+  Widget _buildLegacy(BuildContext context, AppLocalizations t) {
     return Scaffold(
       backgroundColor: BrandTheme.greyMid,
       body: SafeArea(
@@ -269,46 +473,95 @@ class _CreateCastingAdminPageState
   }
 }
 
+/// v2 form row: sentence-case label, optional hint and the control.
+class _FormField extends StatelessWidget {
+  const _FormField({required this.label, required this.child, this.hint});
+
+  final String label;
+  final String? hint;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(label, style: AppText.smallStrong),
+        if (hint != null) ...[
+          const SizedBox(height: 2),
+          Text(hint!, style: AppText.caption),
+        ],
+        const SizedBox(height: 8),
+        child,
+      ],
+    );
+  }
+}
+
 class _ReferencesPicker extends StatelessWidget {
   const _ReferencesPicker({
     required this.items,
     required this.picking,
     required this.onPick,
     required this.onRemove,
+    this.flat = false,
   });
 
   final List<PendingCastingReferenceMedia> items;
   final bool picking;
   final VoidCallback onPick;
   final ValueChanged<int> onRemove;
+  final bool flat;
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
     final isRu = Localizations.localeOf(context).languageCode == 'ru';
+    final button = flat
+        ? Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton.icon(
+              onPressed: picking ? null : onPick,
+              icon: Icon(
+                picking
+                    ? Icons.hourglass_top_rounded
+                    : Icons.attach_file_rounded,
+                size: 18,
+              ),
+              label: Text(picking ? t.loadingDots : t.castingAddFiles),
+            ),
+          )
+        : SizedBox(
+            height: BrandTheme.pillHeight,
+            child: OutlinedButton.icon(
+              onPressed: picking ? null : onPick,
+              style: castingDialogOutlinedButtonStyle(),
+              icon: Icon(
+                picking
+                    ? Icons.hourglass_top_rounded
+                    : Icons.attach_file_rounded,
+                size: 18,
+              ),
+              label: Text(
+                picking
+                    ? (isRu ? 'ВЫБОР...' : 'PICKING...')
+                    : (isRu ? 'ДОБАВИТЬ ФАЙЛЫ' : 'ADD FILES'),
+                style: adminCommandStyle(size: 12, letterSpacing: 0.9),
+              ),
+            ),
+          );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SizedBox(
-          height: BrandTheme.pillHeight,
-          child: OutlinedButton.icon(
-            onPressed: picking ? null : onPick,
-            style: castingDialogOutlinedButtonStyle(),
-            icon: Icon(
-              picking ? Icons.hourglass_top_rounded : Icons.attach_file_rounded,
-              size: 18,
-            ),
-            label: Text(
-              picking
-                  ? (isRu ? 'ВЫБОР...' : 'PICKING...')
-                  : (isRu ? 'ДОБАВИТЬ ФАЙЛЫ' : 'ADD FILES'),
-              style: adminCommandStyle(size: 12, letterSpacing: 0.9),
-            ),
-          ),
-        ),
+        button,
         if (items.isNotEmpty) ...[
           const SizedBox(height: 10),
           for (var i = 0; i < items.length; i++) ...[
-            _ReferenceDraftTile(item: items[i], onRemove: () => onRemove(i)),
+            _ReferenceDraftTile(
+              item: items[i],
+              flat: flat,
+              onRemove: () => onRemove(i),
+            ),
             if (i != items.length - 1) const SizedBox(height: 8),
           ],
         ],
@@ -318,30 +571,48 @@ class _ReferencesPicker extends StatelessWidget {
 }
 
 class _ReferenceDraftTile extends StatelessWidget {
-  const _ReferenceDraftTile({required this.item, required this.onRemove});
+  const _ReferenceDraftTile({
+    required this.item,
+    required this.onRemove,
+    this.flat = false,
+  });
 
   final PendingCastingReferenceMedia item;
   final VoidCallback onRemove;
+  final bool flat;
 
   @override
   Widget build(BuildContext context) {
     final isRu = Localizations.localeOf(context).languageCode == 'ru';
     final icon = switch (item.kind) {
-      CastingReferenceMediaKind.image => Icons.image_rounded,
-      CastingReferenceMediaKind.video => Icons.videocam_rounded,
-      CastingReferenceMediaKind.file => Icons.insert_drive_file_rounded,
+      CastingReferenceMediaKind.image => Icons.image_outlined,
+      CastingReferenceMediaKind.video => Icons.videocam_outlined,
+      CastingReferenceMediaKind.file => Icons.insert_drive_file_outlined,
     };
+    final subtitle = [
+      castingReferenceMediaKindLabel(item.kind, isRu: isRu),
+      formatCastingReferenceSize(item.sizeBytes),
+    ].where((part) => part.trim().isNotEmpty).join(' · ');
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.62),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.black.withValues(alpha: 0.07)),
-      ),
+      decoration: flat
+          ? BoxDecoration(
+              color: Tokens.surface,
+              borderRadius: BorderRadius.circular(Tokens.radiusMd),
+            )
+          : BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.62),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.black.withValues(alpha: 0.07)),
+            ),
       child: Row(
         children: [
-          Icon(icon, color: BrandTheme.redTop, size: 20),
+          Icon(
+            icon,
+            color: flat ? Tokens.textSecondary : BrandTheme.redTop,
+            size: 20,
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -351,25 +622,26 @@ class _ReferenceDraftTile extends StatelessWidget {
                   item.name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: adminBodyStyle(
-                    size: 13,
-                    color: kTextDark,
-                    weight: FontWeight.w800,
-                  ),
+                  style: flat
+                      ? AppText.smallStrong
+                      : adminBodyStyle(
+                          size: 13,
+                          color: kTextDark,
+                          weight: FontWeight.w800,
+                        ),
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  [
-                    castingReferenceMediaKindLabel(item.kind, isRu: isRu),
-                    formatCastingReferenceSize(item.sizeBytes),
-                  ].where((part) => part.trim().isNotEmpty).join(' • '),
+                  subtitle,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: adminBodyStyle(
-                    size: 11,
-                    color: kTextMuted,
-                    weight: FontWeight.w700,
-                  ),
+                  style: flat
+                      ? AppText.caption
+                      : adminBodyStyle(
+                          size: 11,
+                          color: kTextMuted,
+                          weight: FontWeight.w700,
+                        ),
                 ),
               ],
             ),
@@ -377,7 +649,7 @@ class _ReferenceDraftTile extends StatelessWidget {
           IconButton(
             onPressed: onRemove,
             icon: const Icon(Icons.close_rounded),
-            color: kTextMuted,
+            color: flat ? Tokens.textSecondary : kTextMuted,
             visualDensity: VisualDensity.compact,
             tooltip: isRu ? 'Удалить' : 'Remove',
           ),
@@ -388,13 +660,32 @@ class _ReferenceDraftTile extends StatelessWidget {
 }
 
 class _StageSelector extends StatelessWidget {
-  const _StageSelector({required this.value, required this.onChanged});
+  const _StageSelector({
+    required this.value,
+    required this.onChanged,
+    this.flat = false,
+  });
 
   final CastingProjectStage value;
   final ValueChanged<CastingProjectStage> onChanged;
+  final bool flat;
 
   @override
   Widget build(BuildContext context) {
+    if (flat) {
+      return Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          for (final stage in CastingProjectStage.values)
+            _StageChip(
+              stage: stage,
+              selected: value == stage,
+              onTap: () => onChanged(stage),
+            ),
+        ],
+      );
+    }
     return Wrap(
       spacing: 8,
       runSpacing: 8,
@@ -423,6 +714,55 @@ class _StageSelector extends StatelessWidget {
   }
 }
 
+/// v2 stage choice: flat chip, dark when selected.
+class _StageChip extends StatelessWidget {
+  const _StageChip({
+    required this.stage,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final CastingProjectStage stage;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected ? Tokens.ink : Tokens.surfaceAlt,
+      borderRadius: BorderRadius.circular(Tokens.radiusSm),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(Tokens.radiusSm),
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: Tokens.fast,
+          height: 38,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                castingProjectStageIcon(stage),
+                size: 16,
+                color: selected
+                    ? Tokens.textOnDark
+                    : castingProjectStageColor(stage),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                castingProjectStageLabel(context, stage),
+                style: AppText.smallStrong.copyWith(
+                  color: selected ? Tokens.textOnDark : Tokens.text,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _SectionTitle extends StatelessWidget {
   const _SectionTitle(this.text);
   final String text;
@@ -437,13 +777,35 @@ class _SectionTitle extends StatelessWidget {
 }
 
 class _TextField extends StatelessWidget {
-  const _TextField({required this.controller, this.maxLines = 1});
+  const _TextField({
+    required this.controller,
+    this.maxLines = 1,
+    this.minLines,
+    this.hint,
+    this.flat = false,
+  });
 
   final TextEditingController controller;
   final int maxLines;
+  final int? minLines;
+  final String? hint;
+  final bool flat;
 
   @override
   Widget build(BuildContext context) {
+    if (flat) {
+      // Theme inputs are already v2 (48 px, radius 10, grey border).
+      return TextField(
+        controller: controller,
+        maxLines: maxLines,
+        minLines: minLines,
+        style: AppText.body,
+        decoration: InputDecoration(
+          hintText: hint,
+          hintStyle: AppText.body.copyWith(color: Tokens.textTertiary),
+        ),
+      );
+    }
     return TextField(
       controller: controller,
       maxLines: maxLines,
@@ -482,10 +844,14 @@ class _MultiMonthCalendar extends StatefulWidget {
   const _MultiMonthCalendar({
     required this.onToggle,
     this.initialSelected = const {},
+    this.flat = false,
   });
 
   final void Function(DateTime d) onToggle;
   final Set<DateTime> initialSelected;
+
+  /// v2 look: plain text header, accent-filled selected days.
+  final bool flat;
 
   @override
   State<_MultiMonthCalendar> createState() => _MultiMonthCalendarState();
@@ -504,6 +870,7 @@ class _MultiMonthCalendarState extends State<_MultiMonthCalendar> {
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
+    final flat = widget.flat;
 
     final weekdays = [
       t.weekdayMonUpper,
@@ -526,11 +893,13 @@ class _MultiMonthCalendarState extends State<_MultiMonthCalendar> {
         Center(
           child: Text(
             w,
-            style: adminCommandStyle(
-              size: 11,
-              letterSpacing: 0.8,
-              color: kTextMid,
-            ),
+            style: flat
+                ? AppText.label
+                : adminCommandStyle(
+                    size: 11,
+                    letterSpacing: 0.8,
+                    color: kTextMid,
+                  ),
           ),
         ),
       );
@@ -550,6 +919,8 @@ class _MultiMonthCalendarState extends State<_MultiMonthCalendar> {
           day: day,
           disabled: disabled,
           selected: selected,
+          today: d == now,
+          flat: flat,
           onTap: disabled ? null : () => widget.onToggle(d),
         ),
       );
@@ -557,48 +928,66 @@ class _MultiMonthCalendarState extends State<_MultiMonthCalendar> {
 
     final currentMonth = DateTime(now.year, now.month, 1);
     final canGoPrev = _month.isAfter(currentMonth);
+    void prev() =>
+        setState(() => _month = DateTime(_month.year, _month.month - 1, 1));
+    void next() =>
+        setState(() => _month = DateTime(_month.year, _month.month + 1, 1));
+
+    final monthLabel = flat
+        ? _sentenceCase(_ruMonth(_month, t))
+        : _ruMonth(_month, t);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Row(
           children: [
-            GestureDetector(
-              onTap: canGoPrev
-                  ? () => setState(
-                      () => _month = DateTime(_month.year, _month.month - 1, 1),
-                    )
-                  : null,
-              child: Opacity(
-                opacity: canGoPrev ? 1 : 0.25,
+            if (flat)
+              IconButton(
+                onPressed: canGoPrev ? prev : null,
+                visualDensity: VisualDensity.compact,
+                icon: const Icon(Icons.chevron_left_rounded),
+              )
+            else
+              GestureDetector(
+                onTap: canGoPrev ? prev : null,
+                child: Opacity(
+                  opacity: canGoPrev ? 1 : 0.25,
+                  child: const Icon(
+                    Icons.chevron_left_rounded,
+                    size: 28,
+                    color: kTextDark,
+                  ),
+                ),
+              ),
+            Expanded(
+              child: Text(
+                monthLabel,
+                textAlign: TextAlign.center,
+                style: flat
+                    ? AppText.smallStrong
+                    : adminCommandStyle(
+                        size: 15,
+                        letterSpacing: 1.0,
+                        color: kTextDark,
+                      ),
+              ),
+            ),
+            if (flat)
+              IconButton(
+                onPressed: next,
+                visualDensity: VisualDensity.compact,
+                icon: const Icon(Icons.chevron_right_rounded),
+              )
+            else
+              GestureDetector(
+                onTap: next,
                 child: const Icon(
-                  Icons.chevron_left_rounded,
+                  Icons.chevron_right_rounded,
                   size: 28,
                   color: kTextDark,
                 ),
               ),
-            ),
-            Expanded(
-              child: Text(
-                _ruMonth(_month, t),
-                textAlign: TextAlign.center,
-                style: adminCommandStyle(
-                  size: 15,
-                  letterSpacing: 1.0,
-                  color: kTextDark,
-                ),
-              ),
-            ),
-            GestureDetector(
-              onTap: () => setState(
-                () => _month = DateTime(_month.year, _month.month + 1, 1),
-              ),
-              child: const Icon(
-                Icons.chevron_right_rounded,
-                size: 28,
-                color: kTextDark,
-              ),
-            ),
           ],
         ),
         const SizedBox(height: 10),
@@ -606,8 +995,8 @@ class _MultiMonthCalendarState extends State<_MultiMonthCalendar> {
           crossAxisCount: 7,
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          mainAxisSpacing: 8,
-          crossAxisSpacing: 8,
+          mainAxisSpacing: flat ? 4 : 8,
+          crossAxisSpacing: flat ? 4 : 8,
           children: cells,
         ),
       ],
@@ -620,15 +1009,49 @@ class _DowCell extends StatelessWidget {
     required this.day,
     required this.disabled,
     required this.selected,
+    this.today = false,
+    this.flat = false,
     this.onTap,
   });
   final int day;
   final bool disabled;
   final bool selected;
+  final bool today;
+  final bool flat;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
+    if (flat) {
+      final fg = selected
+          ? Tokens.textOnDark
+          : (disabled ? Tokens.textTertiary : Tokens.text);
+      return Material(
+        color: selected ? Tokens.accent : Colors.transparent,
+        borderRadius: BorderRadius.circular(Tokens.radiusSm),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(Tokens.radiusSm),
+          onTap: onTap,
+          child: Container(
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(Tokens.radiusSm),
+              border: today && !selected
+                  ? Border.all(color: Tokens.borderStrong)
+                  : null,
+            ),
+            child: Text(
+              '$day',
+              style: AppText.small.copyWith(
+                color: fg,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     final bg = selected
         ? BrandTheme.redTop
         : Colors.white.withValues(alpha: kWhiteOpacity92);
@@ -650,6 +1073,13 @@ class _DowCell extends StatelessWidget {
       ),
     );
   }
+}
+
+/// «ОКТЯБРЬ 2026» → «Октябрь 2026» for the v2 calendar header.
+String _sentenceCase(String text) {
+  if (text.isEmpty) return text;
+  final lower = text.toLowerCase();
+  return lower[0].toUpperCase() + lower.substring(1);
 }
 
 DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);

@@ -3818,6 +3818,120 @@ abstract class AppLocalizations {
   /// **'Sign in to get notified'**
   String get castingsEmptySignInAction;
 
+  /// Number of castings in the list.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{{count} casting} other{{count} castings}}'**
+  String castingsCount(int count);
+
+  /// No description provided for @createCasting.
+  ///
+  /// In en, this message translates to:
+  /// **'Create casting'**
+  String get createCasting;
+
+  /// No description provided for @newCastingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'New casting'**
+  String get newCastingTitle;
+
+  /// No description provided for @newCastingHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Fill in the description, dates and stage — the casting goes live right after publishing'**
+  String get newCastingHint;
+
+  /// No description provided for @publish.
+  ///
+  /// In en, this message translates to:
+  /// **'Publish'**
+  String get publish;
+
+  /// No description provided for @respond.
+  ///
+  /// In en, this message translates to:
+  /// **'Respond'**
+  String get respond;
+
+  /// No description provided for @addParticipant.
+  ///
+  /// In en, this message translates to:
+  /// **'Add participant'**
+  String get addParticipant;
+
+  /// No description provided for @castingSelectHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Select a casting on the left to see the details'**
+  String get castingSelectHint;
+
+  /// No description provided for @castingResponsesAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Responses'**
+  String get castingResponsesAction;
+
+  /// No description provided for @castingStageAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Stage'**
+  String get castingStageAction;
+
+  /// No description provided for @castingReferencesLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'References'**
+  String get castingReferencesLabel;
+
+  /// No description provided for @castingDescriptionLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Description'**
+  String get castingDescriptionLabel;
+
+  /// No description provided for @castingAddFiles.
+  ///
+  /// In en, this message translates to:
+  /// **'Add files'**
+  String get castingAddFiles;
+
+  /// No description provided for @castingProjectStageLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Project stage'**
+  String get castingProjectStageLabel;
+
+  /// No description provided for @castingTitleHint.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. Shoot for a kids\' clothing catalogue'**
+  String get castingTitleHint;
+
+  /// No description provided for @castingDescriptionHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Who you are looking for, shoot format, location'**
+  String get castingDescriptionHint;
+
+  /// No description provided for @castingRightsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Usage term and territory'**
+  String get castingRightsHint;
+
+  /// No description provided for @castingFeeHint.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. ₽15,000 per shift'**
+  String get castingFeeHint;
+
+  /// No description provided for @castingDatesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark one or more shooting days'**
+  String get castingDatesHint;
+
   /// No description provided for @analyticsUpper.
   ///
   /// In en, this message translates to:
