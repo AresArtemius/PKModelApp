@@ -585,6 +585,241 @@ bool _hasAdvancedCatalogFilters(CatalogFilterSnapshot filters) {
       filters.needDate != null;
 }
 
+/// One active filter shown as a removable chip above the grid.
+class _ActiveFilter {
+  const _ActiveFilter({required this.label, required this.onRemove});
+
+  final String label;
+  final Future<void> Function() onRemove;
+}
+
+/// Builds chips for every active filter; removing a chip clears only it.
+List<_ActiveFilter> _activeFilters(
+  AppLocalizations t,
+  CatalogController c, {
+  required Future<void> Function() reload,
+}) {
+  final out = <_ActiveFilter>[];
+  String range(String label, int? from, int? to, [String unit = '']) {
+    final suffix = unit.isEmpty ? '' : ' $unit';
+    if (from != null && to != null) return '$label $from–$to$suffix';
+    if (from != null) return '$label ≥ $from$suffix';
+    return '$label ≤ $to$suffix';
+  }
+
+  void add(String label, void Function() clear) {
+    out.add(
+      _ActiveFilter(
+        label: label,
+        onRemove: () async {
+          clear();
+          await reload();
+        },
+      ),
+    );
+  }
+
+  if (c.profileRole != null) {
+    add(_catalogProfileTypeLabel(t, c.profileRole!), () {
+      c.setProfileRole(null);
+    });
+  }
+  if (c.ageFrom != null || c.ageTo != null) {
+    add(range(t.age, c.ageFrom, c.ageTo), () {
+      c.ageFrom = null;
+      c.ageTo = null;
+    });
+  }
+  if (c.heightFrom != null || c.heightTo != null) {
+    add(range(t.height, c.heightFrom, c.heightTo, t.cm), () {
+      c.heightFrom = null;
+      c.heightTo = null;
+    });
+  }
+  if (c.shoeFrom != null || c.shoeTo != null) {
+    add(range(t.shoeSize, c.shoeFrom, c.shoeTo), () {
+      c.shoeFrom = null;
+      c.shoeTo = null;
+    });
+  }
+  if (c.bustFrom != null || c.bustTo != null) {
+    add(range(t.bust, c.bustFrom, c.bustTo), () {
+      c.bustFrom = null;
+      c.bustTo = null;
+    });
+  }
+  if (c.waistFrom != null || c.waistTo != null) {
+    add(range(t.waist, c.waistFrom, c.waistTo), () {
+      c.waistFrom = null;
+      c.waistTo = null;
+    });
+  }
+  if (c.hipsFrom != null || c.hipsTo != null) {
+    add(range(t.hips, c.hipsFrom, c.hipsTo), () {
+      c.hipsFrom = null;
+      c.hipsTo = null;
+    });
+  }
+  if (c.eyeColor.trim().isNotEmpty) {
+    add('${t.eyeColor}: ${c.eyeColor.trim()}', () => c.eyeColor = '');
+  }
+  if (c.hairColor.trim().isNotEmpty) {
+    add('${t.hairColor}: ${c.hairColor.trim()}', () => c.hairColor = '');
+  }
+  if (c.country.trim().isNotEmpty) {
+    add('${t.country}: ${c.country.trim()}', () => c.country = '');
+  }
+  if (c.city.trim().isNotEmpty) {
+    add('${t.city}: ${c.city.trim()}', () => c.city = '');
+  }
+  if (c.needDate != null) {
+    final d = c.needDate!;
+    final dd = d.day.toString().padLeft(2, '0');
+    final mm = d.month.toString().padLeft(2, '0');
+    add('$dd.$mm.${d.year}', () => c.needDate = null);
+  }
+  return out;
+}
+
+/// Desktop header above the grid: result count, active-filter chips and the
+/// folder / advanced-search actions.
+class _CatalogResultsHeader extends StatelessWidget {
+  const _CatalogResultsHeader({
+    required this.countLabel,
+    required this.filters,
+    required this.onAdvancedSearch,
+    required this.advancedSearchEnabled,
+    this.onFolders,
+    this.onResetFilters,
+    this.resetLabel,
+  });
+
+  final String countLabel;
+  final List<_ActiveFilter> filters;
+  final VoidCallback onAdvancedSearch;
+  final bool advancedSearchEnabled;
+  final VoidCallback? onFolders;
+  final Future<void> Function()? onResetFilters;
+  final String? resetLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(countLabel, style: AppText.h2),
+            const Spacer(),
+            if (onFolders != null) ...[
+              _HeaderIconButton(
+                icon: Icons.folder_outlined,
+                tooltip: _sentenceCase(t.agentFoldersUpper),
+                onTap: onFolders,
+              ),
+              const SizedBox(width: 8),
+            ],
+            _HeaderIconButton(
+              icon: Icons.tune_rounded,
+              tooltip: _sentenceCase(t.advancedSearchUpper),
+              onTap: advancedSearchEnabled ? onAdvancedSearch : null,
+            ),
+          ],
+        ),
+        if (filters.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              for (final f in filters)
+                _FilterChip(label: f.label, onRemove: f.onRemove),
+              if (onResetFilters != null && resetLabel != null)
+                TextButton(
+                  onPressed: onResetFilters,
+                  style: TextButton.styleFrom(
+                    foregroundColor: Tokens.textSecondary,
+                    minimumSize: const Size(0, 32),
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                  ),
+                  child: Text(_sentenceCase(resetLabel!)),
+                ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _HeaderIconButton extends StatelessWidget {
+  const _HeaderIconButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: OutlinedButton(
+        onPressed: onTap,
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size(40, 40),
+          padding: EdgeInsets.zero,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(Tokens.radiusSm),
+          ),
+          side: const BorderSide(color: Tokens.border),
+          foregroundColor: Tokens.text,
+        ),
+        child: Icon(icon, size: 20),
+      ),
+    );
+  }
+}
+
+class _FilterChip extends StatelessWidget {
+  const _FilterChip({required this.label, required this.onRemove});
+
+  final String label;
+  final Future<void> Function() onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 32,
+      padding: const EdgeInsets.only(left: 12, right: 6),
+      decoration: BoxDecoration(
+        color: Tokens.surfaceAlt,
+        borderRadius: BorderRadius.circular(Tokens.radiusPill),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(label, style: AppText.smallStrong),
+          const SizedBox(width: 4),
+          InkWell(
+            borderRadius: BorderRadius.circular(Tokens.radiusPill),
+            onTap: onRemove,
+            child: const Padding(
+              padding: EdgeInsets.all(4),
+              child: Icon(Icons.close_rounded, size: 16, color: Tokens.text),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _CatalogEmptyState extends StatelessWidget {
   const _CatalogEmptyState({
     required this.onRefresh,
@@ -664,9 +899,12 @@ class _CatalogDesktopLayout extends StatelessWidget {
     required this.search,
     required this.grid,
     required this.detail,
+    required this.showDetail,
     this.savedSearches,
   });
 
+  /// The hover preview column needs room; hidden on narrower desktops.
+  final bool showDetail;
   final Widget topBar;
   final VoidCallback onAdvancedSearch;
   final bool advancedSearchEnabled;
@@ -680,33 +918,36 @@ class _CatalogDesktopLayout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        topBar,
-        const SizedBox(height: 18),
+        SizedBox(
+          width: _catalogDesktopSidePanelWidth,
+          child: _CatalogDesktopFilterPanel(
+            search: search,
+            onAdvancedSearch: onAdvancedSearch,
+            advancedSearchEnabled: advancedSearchEnabled,
+            onResetFilters: onResetFilters,
+            resetFiltersLabel: resetFiltersLabel,
+            roleTabs: roleTabs,
+            savedSearches: savedSearches,
+          ),
+        ),
+        const SizedBox(width: 32),
         Expanded(
-          child: Row(
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              SizedBox(
-                width: _catalogDesktopSidePanelWidth,
-                child: _CatalogDesktopFilterPanel(
-                  search: search,
-                  onAdvancedSearch: onAdvancedSearch,
-                  advancedSearchEnabled: advancedSearchEnabled,
-                  onResetFilters: onResetFilters,
-                  resetFiltersLabel: resetFiltersLabel,
-                  roleTabs: roleTabs,
-                  savedSearches: savedSearches,
-                ),
-              ),
-              const SizedBox(width: 18),
+              topBar,
+              const SizedBox(height: 16),
               Expanded(child: grid),
-              const SizedBox(width: 18),
-              SizedBox(width: _catalogDesktopDetailWidth, child: detail),
             ],
           ),
         ),
+        if (showDetail) ...[
+          const SizedBox(width: 32),
+          SizedBox(width: _catalogDesktopDetailWidth, child: detail),
+        ],
       ],
     );
   }
@@ -735,53 +976,37 @@ class _CatalogDesktopFilterPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: catalogCardDecoration(),
-      child: ListView(
-        physics: const BouncingScrollPhysics(),
-        children: [
-          Text(
-            t.catalogUpper,
-            style: BrandTheme.pillText.copyWith(
-              color: kTextDark,
-              fontSize: 17,
-              letterSpacing: 2.0,
-            ),
-          ),
-          const SizedBox(height: 14),
-          search,
-          const SizedBox(height: 12),
-          roleTabs,
-          const SizedBox(height: 6),
+    // Flat column (v2): no card, no shadow — just the controls.
+    return ListView(
+      physics: const BouncingScrollPhysics(),
+      padding: EdgeInsets.zero,
+      children: [
+        Text(t.catalogTab, style: AppText.h1),
+        const SizedBox(height: 16),
+        search,
+        const SizedBox(height: 12),
+        roleTabs,
+        const SizedBox(height: 8),
+        _DesktopFilterAction(
+          icon: Icons.tune_rounded,
+          label: _sentenceCase(t.advancedSearchUpper),
+          onTap: advancedSearchEnabled ? onAdvancedSearch : null,
+        ),
+        if (onResetFilters != null) ...[
+          const SizedBox(height: 8),
           _DesktopFilterAction(
-            icon: Icons.tune_rounded,
-            label: t.advancedSearchUpper,
-            onTap: advancedSearchEnabled ? onAdvancedSearch : null,
+            icon: Icons.restart_alt_rounded,
+            label: _sentenceCase(resetFiltersLabel),
+            onTap: onResetFilters,
           ),
-          if (onResetFilters != null) ...[
-            const SizedBox(height: 8),
-            _DesktopFilterAction(
-              icon: Icons.restart_alt_rounded,
-              label: resetFiltersLabel,
-              onTap: onResetFilters,
-            ),
-          ],
-          if (savedSearches != null) ...[
-            const SizedBox(height: 18),
-            Text(
-              t.savedSearchSaveTitle,
-              style: BrandTheme.pillText.copyWith(
-                color: kTextMid,
-                fontSize: 12,
-                letterSpacing: 1.2,
-              ),
-            ),
-            const SizedBox(height: 10),
-            savedSearches!,
-          ],
         ],
-      ),
+        if (savedSearches != null) ...[
+          const SizedBox(height: 24),
+          Text(_sentenceCase(t.savedSearchSaveTitle), style: AppText.label),
+          const SizedBox(height: 10),
+          savedSearches!,
+        ],
+      ],
     );
   }
 }
@@ -799,34 +1024,17 @@ class _DesktopFilterAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(kPillRadius),
-        onTap: onTap,
-        child: Container(
-          height: 46,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          decoration: pillDecoration(isDark: false, radius: kPillRadius),
-          child: Row(
-            children: [
-              Icon(icon, color: kTextDark, size: 20),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: BrandTheme.pillText.copyWith(
-                    color: kTextDark,
-                    fontSize: 12,
-                    letterSpacing: 0.8,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
+    return OutlinedButton.icon(
+      onPressed: onTap,
+      icon: Icon(icon, size: 18),
+      label: Align(
+        alignment: Alignment.centerLeft,
+        child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+      ),
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size.fromHeight(44),
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        alignment: Alignment.centerLeft,
       ),
     );
   }
@@ -1497,10 +1705,11 @@ class _CatalogGrid extends StatelessWidget {
   final String cmLabel;
   final double bottomInset;
 
+  /// ~240 px cards on desktop (3–6 columns); phones keep two columns.
   int _crossAxisCount(double width) {
-    if (width >= 1120) return 4;
-    if (width >= 780) return 3;
-    return kGridCrossAxisCount;
+    if (width < 600) return kGridCrossAxisCount;
+    final columns = ((width + kGridGap) / (240 + kGridGap)).floor();
+    return columns.clamp(2, 6);
   }
 
   /// Card = 3:4 photo + text block, so the ratio depends on the column width.

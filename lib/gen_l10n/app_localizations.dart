@@ -3746,6 +3746,18 @@ abstract class AppLocalizations {
   /// **'No notifications yet'**
   String get notificationsEmpty;
 
+  /// No description provided for @catalogFoundMore.
+  ///
+  /// In en, this message translates to:
+  /// **'{count}+ found'**
+  String catalogFoundMore(int count);
+
+  /// No description provided for @catalogFoundCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{{count} profile found} other{{count} profiles found}}'**
+  String catalogFoundCount(int count);
+
   /// Age in years with the right plural form.
   ///
   /// In en, this message translates to:

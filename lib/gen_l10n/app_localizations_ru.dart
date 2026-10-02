@@ -1931,6 +1931,24 @@ class AppLocalizationsRu extends AppLocalizations {
   String get notificationsEmpty => 'Пока нет уведомлений';
 
   @override
+  String catalogFoundMore(int count) {
+    return 'Найдено $count+';
+  }
+
+  @override
+  String catalogFoundCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Найдено $count анкет',
+      many: 'Найдено $count анкет',
+      few: 'Найдено $count анкеты',
+      one: 'Найдено $count анкета',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String ageYears(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,

@@ -1932,6 +1932,22 @@ class AppLocalizationsEn extends AppLocalizations {
   String get notificationsEmpty => 'No notifications yet';
 
   @override
+  String catalogFoundMore(int count) {
+    return '$count+ found';
+  }
+
+  @override
+  String catalogFoundCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count profiles found',
+      one: '$count profile found',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String ageYears(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
