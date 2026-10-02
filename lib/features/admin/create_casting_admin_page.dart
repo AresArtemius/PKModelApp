@@ -23,8 +23,8 @@ const double _createCastingDesktopBreakpoint = 900;
 /// Single-column width (narrow screens) and the two-column editor's cap,
 /// aligned to the left gutter so the page is used, not a strip in the middle.
 const double _createCastingFormWidth = 720;
-const double _createCastingMaxWidth = 1480;
-const double _createCastingSideWidth = 440;
+const double _createCastingMaxWidth = 1600;
+const double _createCastingSideWidth = 460;
 const double _createCastingTwoColumnBreakpoint = 1100;
 
 class CreateCastingAdminPage extends ConsumerStatefulWidget {
@@ -203,11 +203,11 @@ class _CreateCastingAdminPageState
           ),
         ),
         const SizedBox(height: 12),
-        Text(t.newCastingTitle, style: AppText.h1),
-        const SizedBox(height: 6),
+        Text(t.newCastingTitle, style: AppText.display.copyWith(fontSize: 36)),
+        const SizedBox(height: 8),
         Text(
           t.newCastingHint,
-          style: AppText.small.copyWith(color: Tokens.textSecondary),
+          style: AppText.body.copyWith(color: Tokens.textSecondary),
         ),
       ],
     );
@@ -238,7 +238,7 @@ class _CreateCastingAdminPageState
             flat: true,
           ),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 28),
         _FormField(
           label: t.projectDescription,
           child: _TextField(
@@ -293,7 +293,8 @@ class _CreateCastingAdminPageState
     final publishButton = FilledButton(
       onPressed: canPublish ? _createCasting : null,
       style: FilledButton.styleFrom(
-        minimumSize: const Size(180, Tokens.controlHeight),
+        minimumSize: const Size.fromHeight(52),
+        textStyle: AppText.button.copyWith(fontSize: 15),
       ),
       child: _creating
           ? const SizedBox(
@@ -313,9 +314,9 @@ class _CreateCastingAdminPageState
 
     // Publish panel: dates, stage and the two buttons in one bordered block.
     final sidePanel = Container(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(Tokens.radiusMd),
+        borderRadius: BorderRadius.circular(Tokens.radiusLg),
         border: Border.all(color: Tokens.border),
       ),
       child: Column(
@@ -536,12 +537,15 @@ class _FormField extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(label, style: AppText.smallStrong),
+        Text(label, style: AppText.bodyStrong.copyWith(height: 1.3)),
         if (hint != null) ...[
-          const SizedBox(height: 2),
-          Text(hint!, style: AppText.caption),
+          const SizedBox(height: 4),
+          Text(
+            hint!,
+            style: AppText.small.copyWith(color: Tokens.textSecondary),
+          ),
         ],
-        const SizedBox(height: 8),
+        const SizedBox(height: 10),
         child,
       ],
     );
@@ -849,10 +853,17 @@ class _TextField extends StatelessWidget {
         controller: controller,
         maxLines: maxLines,
         minLines: minLines,
-        style: AppText.body,
+        style: AppText.body.copyWith(fontSize: 17),
         decoration: InputDecoration(
           hintText: hint,
-          hintStyle: AppText.body.copyWith(color: Tokens.textTertiary),
+          hintStyle: AppText.body.copyWith(
+            fontSize: 17,
+            color: Tokens.textTertiary,
+          ),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 18,
+            vertical: 16,
+          ),
         ),
       );
     }

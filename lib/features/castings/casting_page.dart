@@ -30,10 +30,11 @@ import 'casting_card.dart';
 const double _castingsDesktopBreakpoint = 900;
 
 /// Left column with the list on desktop.
-const double _castingsListWidth = 380;
+const double _castingsListWidth = 420;
 
-/// Detail panel width from which texts and references sit side by side.
-const double _castingDetailTwoColumnWidth = 1000;
+/// Detail panel width from which the text and the side card sit side by side.
+const double _castingDetailTwoColumnWidth = 980;
+const double _castingSideCardWidth = 380;
 const EdgeInsets _castingsDesktopPadding = EdgeInsets.fromLTRB(32, 24, 32, 28);
 
 /// The v2 look (white page, flat cards, sentence case) is the web standard
@@ -985,14 +986,36 @@ class _CastingMobileCard extends StatelessWidget {
         ? t.loadingDots
         : (status == null ? t.respond : t.addParticipant);
 
+    final cover = _firstImageReference(casting);
     return Container(
-      padding: const EdgeInsets.all(16),
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: Tokens.bg,
         borderRadius: BorderRadius.circular(Tokens.radiusMd),
         border: Border.all(color: Tokens.border),
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (cover != null)
+            AspectRatio(
+              aspectRatio: 16 / 9,
+              child: GestureDetector(
+                onTap: () => _showCastingReferenceLightbox(context, cover),
+                child: CachedNetworkImage(
+                  imageUrl: cover.url,
+                  fit: BoxFit.cover,
+                  memCacheWidth: 900,
+                  placeholder: (_, _) =>
+                      const ColoredBox(color: Tokens.surfaceAlt),
+                  errorWidget: (_, _, _) =>
+                      const ColoredBox(color: Tokens.surfaceAlt),
+                ),
+              ),
+            ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(casting.title, style: AppText.h2),
@@ -1039,6 +1062,9 @@ class _CastingMobileCard extends StatelessWidget {
                 ),
               ],
             ],
+          ),
+        ],
+            ),
           ),
         ],
       ),
@@ -1169,7 +1195,7 @@ class _CastingsDesktopQueuePanel extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(32, 28, 20, 16),
+          padding: const EdgeInsets.fromLTRB(32, 36, 20, 20),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1177,9 +1203,15 @@ class _CastingsDesktopQueuePanel extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(t.castingsTab, style: AppText.h1),
-                    const SizedBox(height: 2),
-                    Text(t.castingsCount(items.length), style: AppText.caption),
+                    Text(
+                      t.castingsTab,
+                      style: AppText.h1.copyWith(fontSize: 32),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      t.castingsCount(items.length),
+                      style: AppText.small.copyWith(color: Tokens.textSecondary),
+                    ),
                   ],
                 ),
               ),
@@ -1259,7 +1291,7 @@ class _CastingListTile extends StatelessWidget {
         hoverColor: Tokens.surface,
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(0, 16, 16, 16),
+          padding: const EdgeInsets.fromLTRB(0, 18, 16, 18),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -1307,7 +1339,41 @@ class _CastingListTileBody extends StatelessWidget {
       if (casting.datesText.isNotEmpty) casting.datesText,
     ].join(' · ');
 
-    return Column(
+    final cover = _firstImageReference(casting);
+    final thumb = SizedBox(
+      width: 64,
+      height: 64,
+      child: Material(
+        color: Tokens.surfaceAlt,
+        borderRadius: BorderRadius.circular(Tokens.radiusSm),
+        clipBehavior: Clip.antiAlias,
+        child: cover == null
+            ? Icon(
+                castingProjectStageIcon(casting.projectStage),
+                color: Tokens.textTertiary,
+                size: 24,
+              )
+            : CachedNetworkImage(
+                imageUrl: cover.url,
+                fit: BoxFit.cover,
+                memCacheWidth: 200,
+                placeholder: (_, _) =>
+                    const ColoredBox(color: Tokens.surfaceAlt),
+                errorWidget: (_, _, _) => const Icon(
+                  Icons.image_outlined,
+                  color: Tokens.textTertiary,
+                ),
+              ),
+      ),
+    );
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        thumb,
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
@@ -1319,6 +1385,7 @@ class _CastingListTileBody extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: AppText.bodyStrong.copyWith(
+                        fontSize: 17,
                         height: 1.3,
                         color: selected ? Tokens.text : const Color(0xFF3A3A3A),
                       ),
@@ -1382,6 +1449,9 @@ class _CastingListTileBody extends StatelessWidget {
                 ],
               ),
             ],
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1414,6 +1484,9 @@ class _CastingStatusBadge extends StatelessWidget {
   }
 }
 
+/// Editorial layout of one casting: cover from the first image reference,
+/// a large title, the text in a readable column and a sticky-looking side
+/// card with the fee, the facts and the one primary action.
 class _CastingDesktopDetailPanel extends StatelessWidget {
   const _CastingDesktopDetailPanel({
     required this.casting,
@@ -1441,106 +1514,106 @@ class _CastingDesktopDetailPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = AppLocalizations.of(context)!;
-    final canRespond = !isResponding && !isDisabled;
-    final responseLabel = isResponding
-        ? t.loadingDots
-        : (status == null ? t.respond : t.addParticipant);
-    final adminActions = isAdmin && onDeleteTap != null;
-
-    return Column(
+    final cover = _firstImageReference(casting);
+    final side = _CastingSideCard(
+      casting: casting,
+      status: status,
+      isResponding: isResponding,
+      isDisabled: isDisabled,
+      isAdmin: isAdmin && onDeleteTap != null,
+      onRespondTap: onRespondTap,
+      onStageTap: onStageTap,
+      onReferencesTap: onReferencesTap,
+      onDeleteTap: onDeleteTap,
+    );
+    final main = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Expanded(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              // Wide panel: texts on the left, references in a column on
-              // the right, so the page width is used instead of a strip.
-              final twoColumns =
-                  constraints.maxWidth >= _castingDetailTwoColumnWidth &&
-                  casting.referenceMedia.isNotEmpty;
-              return ListView(
-                padding: const EdgeInsets.fromLTRB(40, 32, 40, 32),
-                children: [
-                  _CastingDetailHeader(casting: casting, status: status),
-                  const SizedBox(height: 32),
-                  if (twoColumns)
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          flex: 5,
-                          child: _CastingDetailTextSections(
-                            casting: casting,
-                            onReferenceMediaChanged: onReferenceMediaChanged,
-                            includeReferences: false,
-                          ),
-                        ),
-                        const SizedBox(width: 48),
-                        Expanded(
-                          flex: 4,
-                          child: _CastingReferenceGallery(
-                            casting: casting,
-                            items: casting.referenceMedia,
-                            onChanged: onReferenceMediaChanged,
-                          ),
-                        ),
-                      ],
-                    )
-                  else
-                    _CastingDetailTextSections(
-                      casting: casting,
-                      onReferenceMediaChanged: onReferenceMediaChanged,
-                    ),
-                ],
-              );
-            },
-          ),
-        ),
-        const Divider(height: 1, thickness: 1, color: Tokens.border),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(40, 16, 40, 20),
-          child: Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              FilledButton(
-                onPressed: canRespond ? onRespondTap : null,
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size(200, Tokens.controlHeight),
-                ),
-                child: Text(responseLabel),
-              ),
-              if (adminActions) ...[
-                OutlinedButton.icon(
-                  onPressed: () => context.go(
-                    '${Routes.adminSelection}/${casting.id}?from=castings',
-                  ),
-                  icon: const Icon(Icons.people_outline_rounded, size: 18),
-                  label: Text(t.castingResponsesAction),
-                ),
-                OutlinedButton.icon(
-                  onPressed: onStageTap,
-                  icon: const Icon(Icons.flag_outlined, size: 18),
-                  label: Text(t.castingStageAction),
-                ),
-                OutlinedButton.icon(
-                  onPressed: onReferencesTap,
-                  icon: const Icon(Icons.attach_file_rounded, size: 18),
-                  label: Text(t.castingReferencesLabel),
-                ),
-                TextButton.icon(
-                  onPressed: onDeleteTap,
-                  style: TextButton.styleFrom(foregroundColor: Tokens.danger),
-                  icon: const Icon(Icons.delete_outline_rounded, size: 18),
-                  label: Text(_castingLocaleText(context, 'Удалить', 'Delete')),
-                ),
-              ],
-            ],
-          ),
+        _CastingDetailTextSections(
+          casting: casting,
+          onReferenceMediaChanged: onReferenceMediaChanged,
         ),
       ],
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final twoColumns = constraints.maxWidth >= _castingDetailTwoColumnWidth;
+        final padding = twoColumns
+            ? const EdgeInsets.fromLTRB(48, 36, 48, 56)
+            : const EdgeInsets.fromLTRB(32, 28, 32, 48);
+        return ListView(
+          padding: padding,
+          children: [
+            if (cover != null) ...[
+              _CastingCover(item: cover),
+              const SizedBox(height: 32),
+            ],
+            _CastingDetailHeader(casting: casting, status: status),
+            const SizedBox(height: 36),
+            if (twoColumns)
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: main),
+                  const SizedBox(width: 56),
+                  SizedBox(width: _castingSideCardWidth, child: side),
+                ],
+              )
+            else ...[
+              side,
+              const SizedBox(height: 32),
+              main,
+            ],
+          ],
+        );
+      },
+    );
+  }
+}
+
+CastingReferenceMedia? _firstImageReference(CastingModel casting) {
+  for (final item in casting.referenceMedia) {
+    if (item.kind == CastingReferenceMediaKind.image && item.url.isNotEmpty) {
+      return item;
+    }
+  }
+  return null;
+}
+
+/// Wide cover (first image reference), 21:9, opens the lightbox.
+class _CastingCover extends StatelessWidget {
+  const _CastingCover({required this.item});
+
+  final CastingReferenceMedia item;
+
+  @override
+  Widget build(BuildContext context) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxHeight: 380),
+      child: AspectRatio(
+        aspectRatio: 21 / 9,
+        child: Material(
+          color: Tokens.surfaceAlt,
+          borderRadius: BorderRadius.circular(Tokens.radiusLg),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: () => _showCastingReferenceLightbox(context, item),
+            child: CachedNetworkImage(
+              imageUrl: item.url,
+              fit: BoxFit.cover,
+              memCacheWidth: 1600,
+              placeholder: (_, _) => const ColoredBox(color: Tokens.surfaceAlt),
+              errorWidget: (_, _, _) => const Center(
+                child: Icon(
+                  Icons.broken_image_outlined,
+                  color: Tokens.textSecondary,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -1553,13 +1626,283 @@ class _CastingDetailHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(casting.title, style: AppText.display.copyWith(fontSize: 32)),
+        Row(
+          children: [
+            _CastingMetaPill(
+              icon: castingProjectStageIcon(casting.projectStage),
+              label: castingProjectStageLabel(context, casting.projectStage),
+              color: castingProjectStageColor(casting.projectStage),
+            ),
+            if (status != null) ...[
+              const SizedBox(width: 8),
+              _CastingMetaPill(
+                icon: Icons.check_circle_outline_rounded,
+                label: castingResponseStatusLabel(t, status!),
+                color: castingResponseStatusColor(status!),
+              ),
+            ],
+          ],
+        ),
         const SizedBox(height: 16),
-        _CastingMetaRow(casting: casting, status: status),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 900),
+          child: Text(
+            casting.title,
+            style: AppText.display.copyWith(fontSize: 40, height: 1.1),
+          ),
+        ),
+        if (casting.datesText.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              const Icon(
+                Icons.event_outlined,
+                size: 18,
+                color: Tokens.textSecondary,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                casting.datesText,
+                style: AppText.body.copyWith(color: Tokens.textSecondary),
+              ),
+            ],
+          ),
+        ],
       ],
+    );
+  }
+}
+
+/// Side card: fee as the headline, facts, the primary action and the
+/// admin tools below a hairline.
+class _CastingSideCard extends StatelessWidget {
+  const _CastingSideCard({
+    required this.casting,
+    required this.status,
+    required this.isResponding,
+    required this.isDisabled,
+    required this.isAdmin,
+    required this.onRespondTap,
+    required this.onStageTap,
+    required this.onReferencesTap,
+    required this.onDeleteTap,
+  });
+
+  final CastingModel casting;
+  final CastingResponseStatus? status;
+  final bool isResponding;
+  final bool isDisabled;
+  final bool isAdmin;
+  final VoidCallback onRespondTap;
+  final VoidCallback? onStageTap;
+  final VoidCallback? onReferencesTap;
+  final VoidCallback? onDeleteTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+    final canRespond = !isResponding && !isDisabled;
+    final responseLabel = isResponding
+        ? t.loadingDots
+        : (status == null ? t.respond : t.addParticipant);
+    final statusText = status == null
+        ? _castingLocaleText(context, 'Не отправлен', 'Not sent')
+        : castingResponseStatusLabel(t, status!);
+
+    return Container(
+      padding: const EdgeInsets.all(28),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(Tokens.radiusLg),
+        border: Border.all(color: Tokens.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (casting.fee.isNotEmpty) ...[
+            Text(t.fee.toUpperCase(), style: AppText.label),
+            const SizedBox(height: 6),
+            Text(
+              casting.fee,
+              style: AppText.h1.copyWith(fontSize: 30, height: 1.15),
+            ),
+            const SizedBox(height: 24),
+            const Divider(height: 1, thickness: 1, color: Tokens.border),
+            const SizedBox(height: 20),
+          ],
+          _CastingFactRow(
+            icon: castingProjectStageIcon(casting.projectStage),
+            label: t.castingProjectStageLabel,
+            value: castingProjectStageLabel(context, casting.projectStage),
+          ),
+          if (casting.datesText.isNotEmpty)
+            _CastingFactRow(
+              icon: Icons.event_outlined,
+              label: t.dates,
+              value: casting.datesText,
+            ),
+          _CastingFactRow(
+            icon: Icons.attach_file_rounded,
+            label: t.castingReferencesLabel,
+            value: casting.referenceMedia.isEmpty
+                ? _castingLocaleText(context, 'Нет', 'None')
+                : '${casting.referenceMedia.length}',
+          ),
+          _CastingFactRow(
+            icon: Icons.how_to_reg_outlined,
+            label: _castingLocaleText(context, 'Мой отклик', 'My response'),
+            value: statusText,
+            valueColor: status == null
+                ? null
+                : castingResponseStatusColor(status!),
+          ),
+          const SizedBox(height: 24),
+          FilledButton(
+            onPressed: canRespond ? onRespondTap : null,
+            style: FilledButton.styleFrom(
+              minimumSize: const Size.fromHeight(52),
+              textStyle: AppText.button.copyWith(fontSize: 15),
+            ),
+            child: Text(responseLabel),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            _castingLocaleText(
+              context,
+              'Отклик уходит агентству вместе с выбранными анкетами.',
+              'Your response goes to the agency with the selected profiles.',
+            ),
+            textAlign: TextAlign.center,
+            style: AppText.caption,
+          ),
+          if (isAdmin) ...[
+            const SizedBox(height: 24),
+            const Divider(height: 1, thickness: 1, color: Tokens.border),
+            const SizedBox(height: 20),
+            Text(
+              _castingLocaleText(context, 'УПРАВЛЕНИЕ', 'MANAGE'),
+              style: AppText.label,
+            ),
+            const SizedBox(height: 12),
+            _CastingAdminAction(
+              icon: Icons.people_outline_rounded,
+              label: t.castingResponsesAction,
+              onTap: () => context.go(
+                '${Routes.adminSelection}/${casting.id}?from=castings',
+              ),
+            ),
+            _CastingAdminAction(
+              icon: Icons.flag_outlined,
+              label: _castingLocaleText(context, 'Сменить этап', 'Change stage'),
+              onTap: onStageTap,
+            ),
+            _CastingAdminAction(
+              icon: Icons.add_photo_alternate_outlined,
+              label: _castingLocaleText(
+                context,
+                'Добавить референсы',
+                'Add references',
+              ),
+              onTap: onReferencesTap,
+            ),
+            _CastingAdminAction(
+              icon: Icons.delete_outline_rounded,
+              label: _castingLocaleText(
+                context,
+                'Удалить кастинг',
+                'Delete casting',
+              ),
+              onTap: onDeleteTap,
+              danger: true,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _CastingFactRow extends StatelessWidget {
+  const _CastingFactRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.valueColor,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color? valueColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 7),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 20, color: Tokens.textSecondary),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              label,
+              style: AppText.small.copyWith(color: Tokens.textSecondary),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: AppText.smallStrong.copyWith(color: valueColor),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One admin tool in the side card: icon, label, chevron.
+class _CastingAdminAction extends StatelessWidget {
+  const _CastingAdminAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.danger = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback? onTap;
+  final bool danger;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = danger ? Tokens.danger : Tokens.text;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(Tokens.radiusSm),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          child: Row(
+            children: [
+              Icon(icon, size: 20, color: color),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(label, style: AppText.small.copyWith(color: color)),
+              ),
+              Icon(Icons.chevron_right_rounded, size: 20, color: color),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -1629,15 +1972,11 @@ class _CastingDetailTextSections extends StatelessWidget {
             text: casting.description,
           ),
         if (casting.rights.isNotEmpty) ...[
-          const SizedBox(height: 24),
+          const SizedBox(height: 32),
           _CastingDetailSection(title: t.rights, text: casting.rights),
         ],
-        if (casting.fee.isNotEmpty) ...[
-          const SizedBox(height: 24),
-          _CastingDetailSection(title: t.fee, text: casting.fee),
-        ],
         if (includeReferences && casting.referenceMedia.isNotEmpty) ...[
-          const SizedBox(height: 24),
+          const SizedBox(height: 32),
           _CastingReferenceGallery(
             casting: casting,
             items: casting.referenceMedia,
@@ -1682,7 +2021,7 @@ class _CastingReferenceGallery extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _CastingSectionLabel(t.castingReferencesLabel),
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
         LayoutBuilder(
           builder: (context, constraints) {
             // Few references get bigger tiles instead of an empty row.
@@ -1696,8 +2035,8 @@ class _CastingReferenceGallery extends StatelessWidget {
               itemCount: items.length,
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: columns,
-                crossAxisSpacing: 10,
-                mainAxisSpacing: 10,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
                 childAspectRatio: 1.22,
               ),
               itemBuilder: (context, index) => _CastingReferenceTile(
@@ -2020,7 +2359,10 @@ class _CastingSectionLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(text.toUpperCase(), style: AppText.label);
+    return Text(
+      text.toUpperCase(),
+      style: AppText.label.copyWith(fontSize: 12, letterSpacing: 1),
+    );
   }
 }
 
@@ -2036,10 +2378,13 @@ class _CastingDetailSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _CastingSectionLabel(title),
-        const SizedBox(height: 8),
+        const SizedBox(height: 10),
         ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 760),
-          child: Text(text, style: AppText.body),
+          child: Text(
+            text,
+            style: AppText.body.copyWith(fontSize: 17, height: 1.6),
+          ),
         ),
       ],
     );
