@@ -90,6 +90,7 @@ flutter:
     - assets/images/pk-logo-red-512.png
     - assets/images/pk-logo-splash-512.png
     - assets/images/landing-hero-draft.png
+    - assets/images/auth-hero.jpg
 
   # Brand typeface: Golos Text (SIL Open Font License, see assets/fonts/OFL-GolosText.txt).
   # Static instances generated from the variable font so every platform

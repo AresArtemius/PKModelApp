@@ -29,7 +29,9 @@ class AuthSplitLayout extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Expanded(child: AuthBrandPanel()),
+        const Expanded(
+          child: AuthBrandPanel(imageAsset: 'assets/images/auth-hero.jpg'),
+        ),
         SizedBox(
           width: panelWidth,
           child: ColoredBox(
@@ -88,30 +90,49 @@ class AuthBrandPanel extends StatelessWidget {
             fit: BoxFit.cover,
             alignment: Alignment.topCenter,
           ),
-        const DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                Color(0xFF020202),
-                Color(0xFF140507),
-                Color(0xFF42000A),
-                Color(0xFF760012),
-              ],
-              stops: [0, 0.46, 0.78, 1],
+        if (imageAsset == null) ...[
+          const DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Color(0xFF020202),
+                  Color(0xFF140507),
+                  Color(0xFF42000A),
+                  Color(0xFF760012),
+                ],
+                stops: [0, 0.46, 0.78, 1],
+              ),
             ),
           ),
-        ),
-        const DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: RadialGradient(
-              center: Alignment(0, 0.2),
-              radius: 0.9,
-              colors: [Color(0x55B00000), Color(0x00B00000)],
+          const DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: RadialGradient(
+                center: Alignment(0, 0.2),
+                radius: 0.9,
+                colors: [Color(0x55B00000), Color(0x00B00000)],
+              ),
             ),
           ),
-        ),
+        ] else
+          // Light studio photo: darken only the top strip (logo) and the
+          // bottom third (claim) so the picture itself stays bright.
+          const DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Color(0x66000000),
+                  Color(0x00000000),
+                  Color(0x00000000),
+                  Color(0xB3000000),
+                ],
+                stops: [0, 0.22, 0.55, 1],
+              ),
+            ),
+          ),
         Padding(
           padding: const EdgeInsets.fromLTRB(48, 40, 48, 48),
           child: Column(
