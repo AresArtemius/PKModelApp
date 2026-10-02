@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'app_top_bar.dart';
 import 'admin_dashboard_counts_provider.dart';
 import 'roles_provider.dart';
 import 'deferred_page.dart';
@@ -118,10 +119,6 @@ abstract class Routes {
 const _routeParamId = 'id';
 const _routeParamTag = 'tag';
 const double _kDesktopShellBreakpoint = 900;
-const double _kExpandedDesktopShellBreakpoint = 1180;
-const double _kCompactDesktopNavWidth = 112;
-const double _kExpandedDesktopNavWidth = 232;
-const double _kDesktopContentMaxWidth = 1720;
 
 class AppShell extends StatelessWidget {
   const AppShell({super.key, required this.child});
@@ -166,24 +163,16 @@ class AppShell extends StatelessWidget {
     final currentIndex = _indexFromLocation(path);
     final width = MediaQuery.sizeOf(context).width;
     final isDesktop = width >= _kDesktopShellBreakpoint;
-    final isExpandedDesktop = width >= _kExpandedDesktopShellBreakpoint;
     // On web, text behaves like on any site: names and parameters can be
     // selected with the mouse and copied. Mobile apps keep native behaviour.
     final content = kIsWeb ? SelectionArea(child: child) : child;
 
     if (isDesktop) {
+      // v2 shell: white top bar, content in a centred column.
       return Scaffold(
-        body: Row(
+        body: Column(
           children: [
-            SizedBox(
-              width: isExpandedDesktop
-                  ? _kExpandedDesktopNavWidth
-                  : _kCompactDesktopNavWidth,
-              child: AppDesktopNav(
-                currentIndex: currentIndex,
-                expanded: isExpandedDesktop,
-              ),
-            ),
+            AppTopBar(currentIndex: currentIndex),
             Expanded(
               child: ColoredBox(
                 color: Tokens.bg,
@@ -191,7 +180,7 @@ class AppShell extends StatelessWidget {
                   alignment: Alignment.topCenter,
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(
-                      maxWidth: _kDesktopContentMaxWidth,
+                      maxWidth: Tokens.contentMaxWidth,
                     ),
                     child: content,
                   ),
@@ -206,232 +195,6 @@ class AppShell extends StatelessWidget {
     return Scaffold(
       body: content,
       bottomNavigationBar: AppBottomNav(currentIndex: currentIndex),
-    );
-  }
-}
-
-class AppDesktopNav extends ConsumerWidget {
-  const AppDesktopNav({super.key, this.currentIndex, this.expanded = false});
-
-  final int? currentIndex;
-  final bool expanded;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    ref.watch(appNotificationsRealtimeProvider);
-    final t = AppLocalizations.of(context)!;
-    final isAdmin = ref
-        .watch(isAdminProvider)
-        .maybeWhen(data: (value) => value, orElse: () => false);
-    final unreadChats = ref
-        .watch(unreadChatCountProvider)
-        .maybeWhen(data: (value) => value, orElse: () => 0);
-    final unreadNotifications = ref
-        .watch(unreadNotificationsCountProvider)
-        .maybeWhen(data: (value) => value, orElse: () => 0);
-    final adminBadge = ref
-        .watch(adminDashboardCountsProvider)
-        .maybeWhen(data: (value) => value.total, orElse: () => 0);
-    final castingsBadge = ref
-        .watch(actionableCastingsCountProvider)
-        .maybeWhen(data: (value) => value, orElse: () => 0);
-    final items = [
-      (
-        icon: Icons.videocam,
-        label: t.castingsTab,
-        route: Routes.castings,
-        badge: castingsBadge,
-      ),
-      (icon: Icons.search, label: t.catalogTab, route: Routes.search, badge: 0),
-      (
-        icon: Icons.mail_rounded,
-        label: 'Чаты',
-        route: Routes.chats,
-        badge: unreadChats,
-      ),
-      (
-        icon: Icons.person,
-        label: t.myProfileTab,
-        route: Routes.me,
-        badge: unreadNotifications,
-      ),
-      if (isAdmin)
-        (
-          icon: Icons.admin_panel_settings_rounded,
-          label: t.adminTab,
-          route: Routes.admin,
-          badge: adminBadge,
-        ),
-    ];
-
-    return DecoratedBox(
-      decoration: const BoxDecoration(gradient: BrandTheme.darkPillGradient),
-      child: SafeArea(
-        child: Padding(
-          padding: EdgeInsets.symmetric(
-            vertical: 22,
-            horizontal: expanded ? 16 : 10,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _DesktopNavBrand(expanded: expanded),
-              SizedBox(height: expanded ? 26 : 18),
-              for (var i = 0; i < items.length; i++) ...[
-                _DesktopNavItem(
-                  icon: items[i].icon,
-                  label: items[i].label,
-                  selected: currentIndex == i,
-                  expanded: expanded,
-                  badge: items[i].badge,
-                  onTap: () => context.go(items[i].route),
-                ),
-                const SizedBox(height: 10),
-              ],
-              const Spacer(),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _DesktopNavBrand extends StatelessWidget {
-  const _DesktopNavBrand({required this.expanded});
-
-  final bool expanded;
-
-  @override
-  Widget build(BuildContext context) {
-    if (!expanded) {
-      return Center(
-        child: Image.asset(
-          'assets/images/pk-logo-red-512.png',
-          width: 54,
-          height: 54,
-          fit: BoxFit.contain,
-        ),
-      );
-    }
-
-    return Row(
-      children: [
-        Image.asset(
-          'assets/images/pk-logo-red-512.png',
-          width: 48,
-          height: 48,
-          fit: BoxFit.contain,
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Text(
-            'PK\nMANAGEMENT',
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: BrandTheme.pillText.copyWith(
-              color: Colors.white,
-              fontSize: 13,
-              height: 1.08,
-              letterSpacing: 2.2,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _DesktopNavItem extends StatelessWidget {
-  const _DesktopNavItem({
-    required this.icon,
-    required this.label,
-    required this.selected,
-    required this.expanded,
-    required this.badge,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool selected;
-  final bool expanded;
-  final int badge;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = selected ? Colors.white : Colors.white70;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(22),
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          width: double.infinity,
-          constraints: BoxConstraints(minHeight: expanded ? 58 : 0),
-          padding: EdgeInsets.symmetric(
-            vertical: expanded ? 13 : 12,
-            horizontal: expanded ? 14 : 8,
-          ),
-          decoration: BoxDecoration(
-            color: selected
-                ? Colors.white.withValues(alpha: 0.14)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(
-              color: selected
-                  ? Colors.white.withValues(alpha: 0.20)
-                  : Colors.transparent,
-            ),
-          ),
-          child: expanded
-              ? Row(
-                  children: [
-                    _NavIconWithBadge(icon: icon, color: color, badge: badge),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: BrandTheme.pillText.copyWith(
-                          color: color,
-                          fontSize: 13,
-                          letterSpacing: 0.3,
-                          fontWeight: selected
-                              ? FontWeight.w800
-                              : FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
-                )
-              : Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _NavIconWithBadge(icon: icon, color: color, badge: badge),
-                    const SizedBox(height: 6),
-                    Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: color,
-                        fontWeight: selected
-                            ? FontWeight.w800
-                            : FontWeight.w500,
-                        fontSize: 11,
-                        height: 1.05,
-                      ),
-                    ),
-                  ],
-                ),
-        ),
-      ),
     );
   }
 }
