@@ -3746,6 +3746,12 @@ abstract class AppLocalizations {
   /// **'No notifications yet'**
   String get notificationsEmpty;
 
+  /// Age in years with the right plural form.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{{count} year} other{{count} years}}'**
+  String ageYears(int count);
+
   /// No description provided for @authHeroTitle.
   ///
   /// In en, this message translates to:
