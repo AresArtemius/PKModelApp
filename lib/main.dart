@@ -12,6 +12,7 @@ import 'core/app_logger.dart';
 import 'core/auth_providers.dart';
 import 'core/go_router_provider.dart';
 import 'core/push_notifications_service.dart';
+import 'core/error_reporting.dart';
 import 'core/release_update.dart';
 import 'gen_l10n/app_localizations.dart';
 import 'core/locale_provider.dart';
@@ -161,12 +162,19 @@ Future<void> main() async {
       usePathUrlStrategy();
       WidgetsFlutterBinding.ensureInitialized();
       _configureImageCache();
+      await ErrorReporting.init();
 
       FlutterError.onError = (details) {
         FlutterError.presentError(details);
+        ErrorReporting.capture(
+          details.exception,
+          details.stack,
+          hint: details.context?.toDescription(),
+        );
       };
 
       ui.PlatformDispatcher.instance.onError = (error, stack) {
+        ErrorReporting.capture(error, stack, hint: 'platform_dispatcher');
         FlutterError.reportError(
           FlutterErrorDetails(
             exception: error,
@@ -203,6 +211,7 @@ Future<void> main() async {
       appStarted = true;
     },
     (error, stack) {
+      ErrorReporting.capture(error, stack, hint: 'zone');
       final reference = AppLogger.report(
         'App zone error',
         error: error,

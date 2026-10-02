@@ -66,6 +66,16 @@ Then point the DNS A record for `app.pk.management` to the server IP; Caddy
 obtains the certificate automatically (if DNS changed after Caddy started,
 `systemctl restart caddy` forces an immediate retry).
 
+## Analytics and error reporting
+
+- **Yandex Metrika**: the deploy workflow writes `web/analytics-config.js`
+  from the `YANDEX_METRIKA_ID` secret; `index.html` loads the tag only when
+  an id is present and reports SPA route changes as hits (webvisor on).
+- **Sentry**: `sentry_flutter`, enabled by `--dart-define=SENTRY_DSN` from the
+  `SENTRY_DSN` secret (`lib/core/error_reporting.dart`); release is
+  `pk-web@<sha>`. Flutter, platform and zone errors are captured.
+  Without the secrets both stay off, builds are unaffected.
+
 ## Updates in open tabs
 
 There is no service worker (`--pwa-strategy=none`; Flutter's SW loading is
