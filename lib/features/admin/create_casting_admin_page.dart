@@ -20,9 +20,12 @@ import 'admin_style.dart';
 
 const double _createCastingDesktopBreakpoint = 900;
 
-/// Width of the v2 form column and of its calendar.
+/// Single-column width (narrow screens) and the two-column editor's cap,
+/// aligned to the left gutter so the page is used, not a strip in the middle.
 const double _createCastingFormWidth = 720;
-const double _createCastingCalendarWidth = 420;
+const double _createCastingMaxWidth = 1480;
+const double _createCastingSideWidth = 440;
+const double _createCastingTwoColumnBreakpoint = 1100;
 
 class CreateCastingAdminPage extends ConsumerStatefulWidget {
   const CreateCastingAdminPage({super.key});
@@ -169,8 +172,9 @@ class _CreateCastingAdminPageState
     return _buildLegacy(context, t);
   }
 
-  /// v2: a centred 720 px column — back link, title, flat fields, calendar,
-  /// stage chips and the «Publish / Cancel» row at the end.
+  /// v2 (web): on wide screens a two-column editor — the texts on the left,
+  /// a «publish» panel (dates, stage, buttons) on the right; narrower
+  /// screens stack the same blocks in one column.
   Widget _buildV2(
     BuildContext context,
     AppLocalizations t, {
@@ -180,6 +184,185 @@ class _CreateCastingAdminPageState
     final backLabel = from == 'admin' ? t.adminTab : t.castingsTab;
     final canPublish =
         !_creating && !_pickingReferences && _titleC.text.trim().isNotEmpty;
+    final width = MediaQuery.sizeOf(context).width;
+    final twoColumns = width >= _createCastingTwoColumnBreakpoint;
+
+    final header = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: () => context.go(_returnRoute(context)),
+            style: TextButton.styleFrom(
+              foregroundColor: Tokens.textSecondary,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+            ),
+            icon: const Icon(Icons.arrow_back_rounded, size: 18),
+            label: Text(backLabel),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Text(t.newCastingTitle, style: AppText.h1),
+        const SizedBox(height: 6),
+        Text(
+          t.newCastingHint,
+          style: AppText.small.copyWith(color: Tokens.textSecondary),
+        ),
+      ],
+    );
+
+    final rightsField = _FormField(
+      label: t.rights,
+      child: _TextField(
+        controller: _rightsC,
+        hint: t.castingRightsHint,
+        minLines: 2,
+        maxLines: 5,
+        flat: true,
+      ),
+    );
+    final feeField = _FormField(
+      label: t.fee,
+      child: _TextField(controller: _feeC, hint: t.castingFeeHint, flat: true),
+    );
+
+    final mainFields = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _FormField(
+          label: t.castingTitle,
+          child: _TextField(
+            controller: _titleC,
+            hint: t.castingTitleHint,
+            flat: true,
+          ),
+        ),
+        const SizedBox(height: 24),
+        _FormField(
+          label: t.projectDescription,
+          child: _TextField(
+            controller: _descC,
+            hint: t.castingDescriptionHint,
+            minLines: 5,
+            maxLines: 12,
+            flat: true,
+          ),
+        ),
+        const SizedBox(height: 24),
+        if (twoColumns)
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: rightsField),
+              const SizedBox(width: 24),
+              Expanded(child: feeField),
+            ],
+          )
+        else ...[
+          rightsField,
+          const SizedBox(height: 24),
+          feeField,
+        ],
+        const SizedBox(height: 28),
+        _FormField(
+          label: t.castingReferencesLabel,
+          child: _ReferencesPicker(
+            items: _pendingReferences,
+            picking: _pickingReferences,
+            flat: true,
+            onPick: _pickReferences,
+            onRemove: (index) {
+              setState(() => _pendingReferences.removeAt(index));
+            },
+          ),
+        ),
+      ],
+    );
+
+    final calendar = _MultiMonthCalendar(
+      initialSelected: _selectedDates,
+      flat: true,
+      onToggle: _toggleDate,
+    );
+    final stage = _StageSelector(
+      value: _stage,
+      flat: true,
+      onChanged: (stage) => setState(() => _stage = stage),
+    );
+    final publishButton = FilledButton(
+      onPressed: canPublish ? _createCasting : null,
+      style: FilledButton.styleFrom(
+        minimumSize: const Size(180, Tokens.controlHeight),
+      ),
+      child: _creating
+          ? const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white,
+              ),
+            )
+          : Text(t.publish),
+    );
+    final cancelButton = OutlinedButton(
+      onPressed: _creating ? null : () => context.go(_returnRoute(context)),
+      child: Text(t.cancel),
+    );
+
+    // Publish panel: dates, stage and the two buttons in one bordered block.
+    final sidePanel = Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(Tokens.radiusMd),
+        border: Border.all(color: Tokens.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _FormField(label: t.dates, hint: t.castingDatesHint, child: calendar),
+          const SizedBox(height: 24),
+          _FormField(label: t.castingProjectStageLabel, child: stage),
+          const SizedBox(height: 24),
+          const Divider(height: 1, thickness: 1, color: Tokens.border),
+          const SizedBox(height: 20),
+          publishButton,
+          const SizedBox(height: 10),
+          cancelButton,
+        ],
+      ),
+    );
+
+    final Widget body;
+    if (twoColumns) {
+      body = Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          header,
+          const SizedBox(height: 32),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: mainFields),
+              const SizedBox(width: 48),
+              SizedBox(width: _createCastingSideWidth, child: sidePanel),
+            ],
+          ),
+        ],
+      );
+    } else {
+      body = Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          header,
+          const SizedBox(height: 32),
+          mainFields,
+          const SizedBox(height: 28),
+          sidePanel,
+        ],
+      );
+    }
 
     return Scaffold(
       backgroundColor: Tokens.bg,
@@ -188,148 +371,15 @@ class _CreateCastingAdminPageState
           padding: isDesktop
               ? const EdgeInsets.fromLTRB(32, 20, 32, 48)
               : const EdgeInsets.fromLTRB(16, 8, 16, 32),
-          child: Center(
+          child: Align(
+            alignment: Alignment.topLeft,
             child: ConstrainedBox(
-              constraints: const BoxConstraints(
-                maxWidth: _createCastingFormWidth,
+              constraints: BoxConstraints(
+                maxWidth: twoColumns
+                    ? _createCastingMaxWidth
+                    : _createCastingFormWidth,
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: TextButton.icon(
-                      onPressed: () => context.go(_returnRoute(context)),
-                      style: TextButton.styleFrom(
-                        foregroundColor: Tokens.textSecondary,
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                      ),
-                      icon: const Icon(Icons.arrow_back_rounded, size: 18),
-                      label: Text(backLabel),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(t.newCastingTitle, style: AppText.h1),
-                  const SizedBox(height: 6),
-                  Text(
-                    t.newCastingHint,
-                    style: AppText.small.copyWith(color: Tokens.textSecondary),
-                  ),
-                  const SizedBox(height: 32),
-                  _FormField(
-                    label: t.castingTitle,
-                    child: _TextField(
-                      controller: _titleC,
-                      hint: t.castingTitleHint,
-                      flat: true,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  _FormField(
-                    label: t.projectDescription,
-                    child: _TextField(
-                      controller: _descC,
-                      hint: t.castingDescriptionHint,
-                      minLines: 3,
-                      maxLines: 8,
-                      flat: true,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  _FormField(
-                    label: t.rights,
-                    child: _TextField(
-                      controller: _rightsC,
-                      hint: t.castingRightsHint,
-                      minLines: 2,
-                      maxLines: 5,
-                      flat: true,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  _FormField(
-                    label: t.fee,
-                    child: _TextField(
-                      controller: _feeC,
-                      hint: t.castingFeeHint,
-                      flat: true,
-                    ),
-                  ),
-                  const SizedBox(height: 28),
-                  _FormField(
-                    label: t.castingReferencesLabel,
-                    child: _ReferencesPicker(
-                      items: _pendingReferences,
-                      picking: _pickingReferences,
-                      flat: true,
-                      onPick: _pickReferences,
-                      onRemove: (index) {
-                        setState(() => _pendingReferences.removeAt(index));
-                      },
-                    ),
-                  ),
-                  const SizedBox(height: 28),
-                  _FormField(
-                    label: t.dates,
-                    hint: t.castingDatesHint,
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: Container(
-                        width: _createCastingCalendarWidth,
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(Tokens.radiusMd),
-                          border: Border.all(color: Tokens.border),
-                        ),
-                        child: _MultiMonthCalendar(
-                          initialSelected: _selectedDates,
-                          flat: true,
-                          onToggle: _toggleDate,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 28),
-                  _FormField(
-                    label: t.castingProjectStageLabel,
-                    child: _StageSelector(
-                      value: _stage,
-                      flat: true,
-                      onChanged: (stage) => setState(() => _stage = stage),
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-                  const Divider(height: 1, thickness: 1, color: Tokens.border),
-                  const SizedBox(height: 20),
-                  Row(
-                    children: [
-                      FilledButton(
-                        onPressed: canPublish ? _createCasting : null,
-                        style: FilledButton.styleFrom(
-                          minimumSize: const Size(180, Tokens.controlHeight),
-                        ),
-                        child: _creating
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : Text(t.publish),
-                      ),
-                      const SizedBox(width: 12),
-                      OutlinedButton(
-                        onPressed: _creating
-                            ? null
-                            : () => context.go(_returnRoute(context)),
-                        child: Text(t.cancel),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+              child: body,
             ),
           ),
         ),

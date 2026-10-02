@@ -22,7 +22,7 @@ class AppTopBar extends ConsumerWidget {
   /// 0 castings, 1 catalogue, 2 chats, 3 account, 4 admin (AppShell order).
   final int currentIndex;
 
-  static const double height = 64;
+  static const double height = 72;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -51,24 +51,62 @@ class AppTopBar extends ConsumerWidget {
       (label: 'Чаты', route: Routes.chats, badge: unreadChats),
     ];
 
+    final rightActions = <Widget>[
+      if (!signedIn)
+        OutlinedButton(
+          onPressed: () => context.go(Routes.login),
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size(0, 40),
+            padding: const EdgeInsets.symmetric(horizontal: 18),
+          ),
+          child: Text(t.signInTitle),
+        )
+      else ...[
+        if (isAdmin)
+          _IconAction(
+            icon: Icons.admin_panel_settings_outlined,
+            tooltip: t.adminTab,
+            badge: adminBadge,
+            selected: currentIndex == 4,
+            onTap: () => context.go(Routes.admin),
+          ),
+        _IconAction(
+          icon: Icons.notifications_none_rounded,
+          tooltip: _sentenceCase(t.notificationsUpper),
+          badge: unreadNotifications,
+          selected: false,
+          onTap: () => context.go(Routes.notifications),
+        ),
+        const SizedBox(width: Tokens.s8),
+        _AvatarMenu(isAdmin: isAdmin, selected: currentIndex == 3),
+      ],
+    ];
+
+    // Full-width bar: the logo sits on the page's left gutter, the sections
+    // are centred on the screen, the account actions on the right gutter.
     return Material(
       color: Tokens.bg,
       child: Container(
         height: height,
+        padding: const EdgeInsets.symmetric(horizontal: Tokens.s32),
         decoration: const BoxDecoration(
           border: Border(bottom: BorderSide(color: Tokens.border)),
         ),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(
-              maxWidth: Tokens.contentMaxWidth,
-            ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: Tokens.s24),
+        child: Stack(
+          children: [
+            Positioned.fill(
               child: Row(
                 children: [
                   _Brand(onTap: () => context.go(Routes.castings)),
-                  const SizedBox(width: Tokens.s32),
+                  const Spacer(),
+                  ...rightActions,
+                ],
+              ),
+            ),
+            Center(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
                   for (var i = 0; i < sections.length; i++)
                     _SectionLink(
                       label: sections[i].label,
@@ -76,42 +114,10 @@ class AppTopBar extends ConsumerWidget {
                       selected: currentIndex == i,
                       onTap: () => context.go(sections[i].route),
                     ),
-                  const Spacer(),
-                  if (!signedIn)
-                    OutlinedButton(
-                      onPressed: () => context.go(Routes.login),
-                      style: OutlinedButton.styleFrom(
-                        minimumSize: const Size(0, 38),
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                      ),
-                      child: Text(t.signInTitle),
-                    )
-                  else ...[
-                    if (isAdmin)
-                      _IconAction(
-                        icon: Icons.admin_panel_settings_outlined,
-                        tooltip: t.adminTab,
-                        badge: adminBadge,
-                        selected: currentIndex == 4,
-                        onTap: () => context.go(Routes.admin),
-                      ),
-                    _IconAction(
-                      icon: Icons.notifications_none_rounded,
-                      tooltip: _sentenceCase(t.notificationsUpper),
-                      badge: unreadNotifications,
-                      selected: false,
-                      onTap: () => context.go(Routes.notifications),
-                    ),
-                    const SizedBox(width: Tokens.s8),
-                    _AvatarMenu(
-                      isAdmin: isAdmin,
-                      selected: currentIndex == 3,
-                    ),
-                  ],
                 ],
               ),
             ),
-          ),
+          ],
         ),
       ),
     );
@@ -134,18 +140,18 @@ class _Brand extends StatelessWidget {
           children: [
             Image.asset(
               'assets/images/pk-logo-red-512.png',
-              width: 36,
-              height: 36,
+              width: 40,
+              height: 40,
               fit: BoxFit.contain,
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 12),
             const Text(
               'PK MANAGEMENT',
               style: TextStyle(
                 color: Tokens.text,
-                fontSize: 12,
+                fontSize: 13,
                 fontWeight: FontWeight.w700,
-                letterSpacing: 2,
+                letterSpacing: 2.6,
               ),
             ),
           ],
@@ -179,13 +185,15 @@ class _SectionLink extends StatelessWidget {
           alignment: Alignment.center,
           children: [
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14),
+              padding: const EdgeInsets.symmetric(horizontal: 18),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
                     label,
-                    style: AppText.smallStrong.copyWith(
+                    style: AppText.small.copyWith(
+                      fontSize: 15,
+                      fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
                       color: selected ? Tokens.text : Tokens.textSecondary,
                     ),
                   ),
@@ -198,8 +206,8 @@ class _SectionLink extends StatelessWidget {
             ),
             if (selected)
               Positioned(
-                left: 14,
-                right: 14,
+                left: 18,
+                right: 18,
                 bottom: 0,
                 child: Container(height: 2, color: Tokens.accent),
               ),
