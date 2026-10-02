@@ -33,6 +33,8 @@ fi
 
 fetch "/manifest.json" "$tmp_dir/manifest.json"
 fetch "/release.json" "$tmp_dir/release.json"
+fetch "/robots.txt" "$tmp_dir/robots.txt"
+grep -q '^User-agent' "$tmp_dir/robots.txt" || { echo "robots.txt is not served as a file (SPA fallback?)"; exit 1; }
 grep -q '"sha":"[0-9a-f]\{40\}"' "$tmp_dir/release.json" || { echo "release.json has no commit sha"; cat "$tmp_dir/release.json"; exit 1; }
 fetch "/logo-144.png" "$tmp_dir/logo-144.png"
 test -s "$tmp_dir/logo-144.png"
