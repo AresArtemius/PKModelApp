@@ -574,6 +574,15 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Image.asset(
+              'assets/images/pk-logo-red-512.png',
+              height: 64,
+              semanticLabel: 'PK Management',
+            ),
+          ),
+          const SizedBox(height: 28),
           Text(t.signInTitle, style: AppText.h1),
           const SizedBox(height: 6),
           Text(
