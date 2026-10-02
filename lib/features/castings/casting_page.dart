@@ -1414,20 +1414,25 @@ class _CastingDesktopDetailPanel extends StatelessWidget {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(40, 32, 40, 32),
             children: [
-              ConstrainedBox(
-                constraints: const BoxConstraints(
-                  maxWidth: _castingDetailMaxWidth,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _CastingDetailHeader(casting: casting, status: status),
-                    const SizedBox(height: 28),
-                    _CastingDetailTextSections(
-                      casting: casting,
-                      onReferenceMediaChanged: onReferenceMediaChanged,
-                    ),
-                  ],
+              // A ListView hands its children a tight width, so the cap
+              // needs a loose parent (Align) to take effect.
+              Align(
+                alignment: Alignment.topLeft,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    maxWidth: _castingDetailMaxWidth,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _CastingDetailHeader(casting: casting, status: status),
+                      const SizedBox(height: 28),
+                      _CastingDetailTextSections(
+                        casting: casting,
+                        onReferenceMediaChanged: onReferenceMediaChanged,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
