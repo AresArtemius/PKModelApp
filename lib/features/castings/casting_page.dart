@@ -1951,14 +1951,10 @@ class _CastingDetailTextSections extends StatelessWidget {
   const _CastingDetailTextSections({
     required this.casting,
     required this.onReferenceMediaChanged,
-    this.includeReferences = true,
   });
 
   final CastingModel casting;
   final _ReferenceMediaChanged? onReferenceMediaChanged;
-
-  /// False when the gallery is rendered in its own column.
-  final bool includeReferences;
 
   @override
   Widget build(BuildContext context) {
@@ -1975,7 +1971,7 @@ class _CastingDetailTextSections extends StatelessWidget {
           const SizedBox(height: 32),
           _CastingDetailSection(title: t.rights, text: casting.rights),
         ],
-        if (includeReferences && casting.referenceMedia.isNotEmpty) ...[
+        if (casting.referenceMedia.isNotEmpty) ...[
           const SizedBox(height: 32),
           _CastingReferenceGallery(
             casting: casting,
