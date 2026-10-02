@@ -66,6 +66,18 @@ Then point the DNS A record for `app.pk.management` to the server IP; Caddy
 obtains the certificate automatically (if DNS changed after Caddy started,
 `systemctl restart caddy` forces an immediate retry).
 
+## Link previews (Open Graph)
+
+Messenger bots (Telegram, WhatsApp, VK, …) requesting `/p/:id` or `/s/:id`
+are matched by User-Agent in `deploy/Caddyfile` and proxied to the
+`og-page` Edge Function (`supabase/functions/og-page`), which returns a
+small HTML page with `og:title / og:description / og:image` (first photo
+via Storage image transform, 1200 px). Browsers still get the app. The
+function reads with the service role key and shows approved profiles only.
+Deploy: `supabase functions deploy og-page` or the "Supabase Functions
+Deploy" workflow (secrets `SUPABASE_ACCESS_TOKEN`, `SUPABASE_PROJECT_REF`).
+After changing the Caddyfile, re-run "Server Setup (Timeweb Cloud)".
+
 ## Analytics and error reporting
 
 - **Yandex Metrika**: the deploy workflow writes `web/analytics-config.js`

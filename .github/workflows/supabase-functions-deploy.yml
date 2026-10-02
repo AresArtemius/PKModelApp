@@ -1,0 +1,52 @@
+name: Supabase Functions Deploy
+
+# Deploys the Edge Functions in supabase/functions. Needs the secrets
+# SUPABASE_ACCESS_TOKEN (personal access token from supabase.com/dashboard/account/tokens)
+# and SUPABASE_PROJECT_REF (the project id, e.g. dherzlobdrknoajeidbz).
+
+on:
+  workflow_dispatch:
+    inputs:
+      function:
+        description: Function name (empty = all)
+        required: false
+        default: ''
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/functions/**'
+      - 'supabase/config.toml'
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check secrets
+        run: |
+          if [ -z "$SUPABASE_ACCESS_TOKEN" ] || [ -z "$SUPABASE_PROJECT_REF" ]; then
+            echo "SUPABASE_ACCESS_TOKEN / SUPABASE_PROJECT_REF are not set; skipping."
+            echo "skip=true" >> "$GITHUB_ENV"
+          fi
+
+      - uses: supabase/setup-cli@v1
+        if: env.skip != 'true'
+        with:
+          version: latest
+
+      - name: Deploy
+        if: env.skip != 'true'
+        run: |
+          name="${{ github.event.inputs.function }}"
+          if [ -n "$name" ]; then
+            supabase functions deploy "$name" --project-ref "$SUPABASE_PROJECT_REF"
+          else
+            supabase functions deploy --project-ref "$SUPABASE_PROJECT_REF"
+          fi

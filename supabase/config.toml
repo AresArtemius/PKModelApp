@@ -12,3 +12,6 @@ verify_jwt = false
 
 [functions.telegram-support]
 verify_jwt = false
+
+[functions.og-page]
+verify_jwt = false
