@@ -33,7 +33,7 @@ app.pk.management {
 	# Edge Function; browsers keep getting the app.
 	@og {
 		path /p/* /s/*
-		header_regexp bot User-Agent (?i)(telegrambot|whatsapp|facebookexternalhit|facebot|twitterbot|vkshare|vkontakte|slackbot|linkedinbot|discordbot|skypeuripreview|viber|pinterest|applebot|googlebot|yandexbot|bingbot|duckduckbot|embedly|quora link preview|outbrain|redditbot|mastodon|iframely|telegram)
+		header_regexp bot User-Agent "(?i)(telegrambot|whatsapp|facebookexternalhit|facebot|twitterbot|vkshare|vkontakte|slackbot|linkedinbot|discordbot|skypeuripreview|viber|pinterest|applebot|googlebot|yandexbot|bingbot|duckduckbot|embedly|quora.link.preview|outbrain|redditbot|mastodon|iframely|telegram)"
 	}
 	handle @og {
 		rewrite * /functions/v1/og-page?path={path}
