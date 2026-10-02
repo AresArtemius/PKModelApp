@@ -721,6 +721,26 @@
 "@advancedFeeTo": { "placeholders": { "value": { "type": "int" } } },
 "advancedClearDateUpper": "СБРОСИТЬ ДАТУ",
 "catalogNoFilterResults": "По выбранным параметрам ничего не найдено",
-"catalogAdjustFiltersHint": "Измените или сбросьте фильтры"
+"catalogAdjustFiltersHint": "Измените или сбросьте фильтры",
+"castingsCount": "{count, plural, one{{count} кастинг} few{{count} кастинга} many{{count} кастингов} other{{count} кастингов}}",
+"@castingsCount": { "placeholders": { "count": { "type": "int" } } },
+"createCasting": "Создать кастинг",
+"newCastingTitle": "Новый кастинг",
+"newCastingHint": "Заполните описание, даты и этап — кастинг появится в ленте сразу после публикации",
+"publish": "Опубликовать",
+"respond": "Откликнуться",
+"addParticipant": "Добавить участника",
+"castingSelectHint": "Выберите кастинг слева, чтобы увидеть детали",
+"castingResponsesAction": "Отклики",
+"castingStageAction": "Этап",
+"castingReferencesLabel": "Референсы",
+"castingDescriptionLabel": "Описание",
+"castingAddFiles": "Добавить файлы",
+"castingProjectStageLabel": "Этап проекта",
+"castingTitleHint": "Например, съёмка для каталога детской одежды",
+"castingDescriptionHint": "Кого ищем, формат съёмки, локация",
+"castingRightsHint": "Срок и территория использования материалов",
+"castingFeeHint": "Например, 15 000 ₽ за смену",
+"castingDatesHint": "Отметьте один или несколько дней съёмки"
 
 }

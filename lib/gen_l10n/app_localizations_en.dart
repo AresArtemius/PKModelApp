@@ -1986,6 +1986,71 @@ class AppLocalizationsEn extends AppLocalizations {
   String get castingsEmptySignInAction => 'Sign in to get notified';
 
   @override
+  String castingsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count castings',
+      one: '$count casting',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get createCasting => 'Create casting';
+
+  @override
+  String get newCastingTitle => 'New casting';
+
+  @override
+  String get newCastingHint => 'Fill in the description, dates and stage — the casting goes live right after publishing';
+
+  @override
+  String get publish => 'Publish';
+
+  @override
+  String get respond => 'Respond';
+
+  @override
+  String get addParticipant => 'Add participant';
+
+  @override
+  String get castingSelectHint => 'Select a casting on the left to see the details';
+
+  @override
+  String get castingResponsesAction => 'Responses';
+
+  @override
+  String get castingStageAction => 'Stage';
+
+  @override
+  String get castingReferencesLabel => 'References';
+
+  @override
+  String get castingDescriptionLabel => 'Description';
+
+  @override
+  String get castingAddFiles => 'Add files';
+
+  @override
+  String get castingProjectStageLabel => 'Project stage';
+
+  @override
+  String get castingTitleHint => 'e.g. Shoot for a kids\' clothing catalogue';
+
+  @override
+  String get castingDescriptionHint => 'Who you are looking for, shoot format, location';
+
+  @override
+  String get castingRightsHint => 'Usage term and territory';
+
+  @override
+  String get castingFeeHint => 'e.g. ₽15,000 per shift';
+
+  @override
+  String get castingDatesHint => 'Mark one or more shooting days';
+
+  @override
   String get analyticsUpper => 'ANALYTICS';
 
   @override

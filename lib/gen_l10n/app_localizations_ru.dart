@@ -1989,6 +1989,73 @@ class AppLocalizationsRu extends AppLocalizations {
   String get castingsEmptySignInAction => 'Войти, чтобы получать уведомления';
 
   @override
+  String castingsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count кастингов',
+      many: '$count кастингов',
+      few: '$count кастинга',
+      one: '$count кастинг',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get createCasting => 'Создать кастинг';
+
+  @override
+  String get newCastingTitle => 'Новый кастинг';
+
+  @override
+  String get newCastingHint => 'Заполните описание, даты и этап — кастинг появится в ленте сразу после публикации';
+
+  @override
+  String get publish => 'Опубликовать';
+
+  @override
+  String get respond => 'Откликнуться';
+
+  @override
+  String get addParticipant => 'Добавить участника';
+
+  @override
+  String get castingSelectHint => 'Выберите кастинг слева, чтобы увидеть детали';
+
+  @override
+  String get castingResponsesAction => 'Отклики';
+
+  @override
+  String get castingStageAction => 'Этап';
+
+  @override
+  String get castingReferencesLabel => 'Референсы';
+
+  @override
+  String get castingDescriptionLabel => 'Описание';
+
+  @override
+  String get castingAddFiles => 'Добавить файлы';
+
+  @override
+  String get castingProjectStageLabel => 'Этап проекта';
+
+  @override
+  String get castingTitleHint => 'Например, съёмка для каталога детской одежды';
+
+  @override
+  String get castingDescriptionHint => 'Кого ищем, формат съёмки, локация';
+
+  @override
+  String get castingRightsHint => 'Срок и территория использования материалов';
+
+  @override
+  String get castingFeeHint => 'Например, 15 000 ₽ за смену';
+
+  @override
+  String get castingDatesHint => 'Отметьте один или несколько дней съёмки';
+
+  @override
   String get analyticsUpper => 'АНАЛИТИКА';
 
   @override
