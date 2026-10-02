@@ -1685,9 +1685,11 @@ class _CastingReferenceGallery extends StatelessWidget {
         const SizedBox(height: 10),
         LayoutBuilder(
           builder: (context, constraints) {
-            final columns = constraints.maxWidth >= 900
+            // Few references get bigger tiles instead of an empty row.
+            final maxColumns = constraints.maxWidth >= 900
                 ? 4
                 : (constraints.maxWidth >= 560 ? 3 : 2);
+            final columns = maxColumns.clamp(1, items.length);
             return GridView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
