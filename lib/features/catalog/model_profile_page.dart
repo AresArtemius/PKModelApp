@@ -41,6 +41,8 @@ const double _pagePadBottom = 24;
 
 const double _sectionGap = 14;
 const double _innerGap = 10;
+const double _kProfileDesktopBreakpoint = 1000;
+const double _kProfileSideWidth = 380;
 
 const double _topBarTitleFontSize = 20;
 const double _notFoundLetterSpacing = 1.6;
@@ -646,282 +648,353 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
                     GoRouterState.of(context).uri.queryParameters['preview'] ==
                     '1';
 
-                return PageTitle(
-                  title: m.fullName,
-                  child: RefreshIndicator(
-                  onRefresh: _refresh,
-                  child: ListView(
-                    padding: const EdgeInsets.fromLTRB(
-                      _pagePadH,
-                      _pagePadTop,
-                      _pagePadH,
-                      _pagePadBottom,
-                    ),
+                final isDesktop =
+                    MediaQuery.sizeOf(context).width >= _kProfileDesktopBreakpoint;
+                final showProInfo =
+                    m.hasProfessionalInfoRole &&
+                    [
+                      m.experience,
+                      m.skills,
+                      m.services,
+                      m.genres,
+                      m.equipment,
+                    ].any((value) => value.trim().isNotEmpty);
+
+                final historyFuture = isAdmin
+                    ? _loadProfileActionHistory(m.id)
+                    : null;
+
+                final topBar = _TopBar(
+                  backKey: _backKey,
+                  title: m.fullName.trim().isEmpty
+                      ? t.profileNoName
+                      : m.fullName,
+                  isPro: m.isProActive,
+                  onCopyLink: () => _copyPublicLink(m.id),
+                  onBack: () => _back(isAdmin: isAdmin),
+                );
+                final heroCard = _Card(
+                  child: _PortfolioHeroCard(
+                    model: m,
+                    t: t,
+                    displayPhotoUrls: displayPhotoUrls,
+                    coverAlignment: _profileCoverAlignmentFor(m),
+                    onOpenPhotos: (index) =>
+                        _openPhotos(context, displayPhotoUrls, index),
+                    onOpenVideo: m.videoUrls.isEmpty
+                        ? null
+                        : () => _openVideo(context, m.videoUrls.first),
+                    onOpenShowreel: m.hasShowreel
+                        ? () => _openVideo(context, m.showreelUrl)
+                        : null,
+                    onCompositePdf: () => _openCompositePdf(m),
+                    onCopyLink: () => _copyPublicLink(m.id),
+                    canUseAgentActions: canUseAgentTools,
+                    actionHistoryFuture: historyFuture,
+                    isBusy: _isPortfolioActionBusy,
+                    onInvite: () => _inviteFromProfile(m),
+                    onAddToSelection: () => _openPortfolioAddSheet(m),
+                    onMessage: () => _openProfileChat(m),
+                  ),
+                );
+                final showreelCard = _Card(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      _TopBar(
-                        backKey: _backKey,
-                        title: m.fullName.trim().isEmpty
-                            ? t.profileNoName
-                            : m.fullName,
-                        isPro: m.isProActive,
-                        onCopyLink: () => _copyPublicLink(m.id),
-                        onBack: () => _back(isAdmin: isAdmin),
-                      ),
-                      const SizedBox(height: _sectionGap),
-
-                      if (adminPreview) ...[
-                        _AdminCatalogPreviewNotice(),
-                        const SizedBox(height: _sectionGap),
-                      ],
-
-                      _Card(
-                        child: _PortfolioHeroCard(
-                          model: m,
-                          t: t,
-                          displayPhotoUrls: displayPhotoUrls,
-                          coverAlignment: _profileCoverAlignmentFor(m),
-                          onOpenPhotos: (index) =>
-                              _openPhotos(context, displayPhotoUrls, index),
-                          onOpenVideo: m.videoUrls.isEmpty
-                              ? null
-                              : () => _openVideo(context, m.videoUrls.first),
-                          onOpenShowreel: m.hasShowreel
-                              ? () => _openVideo(context, m.showreelUrl)
-                              : null,
-                          onCompositePdf: () => _openCompositePdf(m),
-                          onCopyLink: () => _copyPublicLink(m.id),
-                          canUseAgentActions: canUseAgentTools,
-                          actionHistoryFuture: isAdmin
-                              ? _loadProfileActionHistory(m.id)
-                              : null,
-                          isBusy: _isPortfolioActionBusy,
-                          onInvite: () => _inviteFromProfile(m),
-                          onAddToSelection: () => _openPortfolioAddSheet(m),
-                          onMessage: () => _openProfileChat(m),
-                        ),
-                      ),
-                      const SizedBox(height: _sectionGap),
-
-                      if (m.hasShowreel) ...[
-                        _Card(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Text('SHOWREEL', style: _commandStyle()),
-                              const SizedBox(height: 14),
-                              _ShowreelCard(
-                                videoUrl: m.showreelUrl,
-                                previewUrl: m.showreelPreviewUrl,
-                                onTap: () => _openVideo(context, m.showreelUrl),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: _sectionGap),
-                      ],
-
-                      if (canUseAgentTools) ...[
-                        ModelAgentToolsCard(
-                          folders: ref.watch(
-                            agentFoldersForProfileProvider(m.id),
-                          ),
-                          note: ref.watch(agentModelNoteProvider(m.id)),
-                          onCreateFolder: () => _createAgentFolder(m.id),
-                          onToggleFolder: (folder) =>
-                              _toggleAgentFolder(m.id, folder),
-                          onEditNote: (initial) =>
-                              _editAgentNote(profileId: m.id, initial: initial),
-                        ),
-                        const SizedBox(height: _sectionGap),
-                      ],
-
-                      _Card(
-                        child: Theme(
-                          data: Theme.of(
-                            context,
-                          ).copyWith(dividerColor: Colors.transparent),
-                          child: ExpansionTile(
-                            tilePadding: EdgeInsets.zero,
-                            childrenPadding: const EdgeInsets.only(top: 10),
-                            iconColor: _titleColor,
-                            collapsedIconColor: _titleColor,
-                            title: Text(
-                              t.profileDetailsUpper,
-                              style: _commandStyle(),
-                            ),
-                            children: [
-                              _DetailsTable(
-                                rows: <MapEntry<String, String>>[
-                                  MapEntry(
-                                    t.profileTypeUpper,
-                                    _profileRolesLabel(
-                                      t,
-                                      m.effectiveProfileRoles,
-                                    ),
-                                  ),
-                                  MapEntry(
-                                    t.profileCountry,
-                                    _displayText(m.country),
-                                  ),
-                                  MapEntry(t.profileCity, _displayText(m.city)),
-                                  if (m.usesPhysicalBasics) ...[
-                                    MapEntry(t.profileAge, _displayInt(m.age)),
-                                    MapEntry(
-                                      t.profileHeightCm,
-                                      _displayCm(m.height, t.cm),
-                                    ),
-                                  ],
-                                  if (m.usesModelMeasurements) ...[
-                                    MapEntry(
-                                      t.profileBustCm,
-                                      _displayCm(m.bust, t.cm),
-                                    ),
-                                    MapEntry(
-                                      t.profileWaistCm,
-                                      _displayCm(m.waist, t.cm),
-                                    ),
-                                    MapEntry(
-                                      t.profileHipsCm,
-                                      _displayCm(m.hips, t.cm),
-                                    ),
-                                    MapEntry(
-                                      t.profileShoeSize,
-                                      _displayNullableInt(m.shoeSize),
-                                    ),
-                                    MapEntry(
-                                      t.profileEyeColor,
-                                      _displayText(
-                                        eyeColorDisplayValue(
-                                          m.eyeColor,
-                                          Localizations.localeOf(context),
-                                        ),
-                                      ),
-                                    ),
-                                    MapEntry(
-                                      t.profileHairColor,
-                                      _displayText(
-                                        hairColorDisplayValue(
-                                          m.hairColor,
-                                          Localizations.localeOf(context),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                  MapEntry(
-                                    t.profileMinHourlyRate,
-                                    _displayNullableInt(m.minHourlyRate),
-                                  ),
-                                  MapEntry(
-                                    t.profileMinDailyFee,
-                                    _displayNullableInt(m.minDailyFee),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: _sectionGap),
-
-                      if (m.hasProfessionalInfoRole &&
-                          [
-                            m.experience,
-                            m.skills,
-                            m.services,
-                            m.genres,
-                            m.equipment,
-                          ].any((value) => value.trim().isNotEmpty)) ...[
-                        _Card(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Text(
-                                t.profileProfessionalInfoUpper,
-                                style: _commandStyle(),
-                              ),
-                              const SizedBox(height: _innerGap),
-                              _DetailsTable(
-                                rows: <MapEntry<String, String>>[
-                                  if (m.experience.trim().isNotEmpty)
-                                    MapEntry(
-                                      t.profileExperience,
-                                      _displayText(m.experience),
-                                    ),
-                                  if (m.skills.trim().isNotEmpty)
-                                    MapEntry(
-                                      t.profileSkills,
-                                      _displayText(m.skills),
-                                    ),
-                                  if (m.services.trim().isNotEmpty)
-                                    MapEntry(
-                                      t.profileServices,
-                                      _displayText(m.services),
-                                    ),
-                                  if (m.genres.trim().isNotEmpty)
-                                    MapEntry(
-                                      t.profileWorkGenres,
-                                      _displayText(m.genres),
-                                    ),
-                                  if (m.equipment.trim().isNotEmpty)
-                                    MapEntry(
-                                      t.profileEquipment,
-                                      _displayText(m.equipment),
-                                    ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: _sectionGap),
-                      ],
-
-                      _Card(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Text(t.profileMediaUpper, style: _commandStyle()),
-                            const SizedBox(height: 14),
-                            if (displayPhotoUrls.isEmpty && m.videoUrls.isEmpty)
-                              Text(t.profileMediaEmpty, style: _bodyStyle())
-                            else
-                              _MediaGrid(
-                                photoUrls: displayPhotoUrls,
-                                photoCategoryLabels: m.photoCategoryLabels,
-                                videoUrls: m.videoUrls,
-                                videoPreviewUrls: m.videoPreviewUrls,
-                                videoCategoryLabels: m.videoCategoryLabels,
-                                showreelUrl: m.showreelUrl,
-                                onOpenPhotos: (index) => _openPhotos(
-                                  context,
-                                  displayPhotoUrls,
-                                  index,
-                                ),
-                                onOpenVideo: (index) =>
-                                    _openVideo(context, m.videoUrls[index]),
-                              ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: _sectionGap),
-                      _Card(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Text(t.profileResumeUpper, style: _commandStyle()),
-                            const SizedBox(height: _innerGap),
-                            Text(
-                              m.resume.trim().isEmpty
-                                  ? t.profileResumeEmpty
-                                  : m.resume,
-                              style: _bodyStyle(),
-                            ),
-                          ],
-                        ),
+                      Text('SHOWREEL', style: _commandStyle()),
+                      const SizedBox(height: 14),
+                      _ShowreelCard(
+                        videoUrl: m.showreelUrl,
+                        previewUrl: m.showreelPreviewUrl,
+                        onTap: () => _openVideo(context, m.showreelUrl),
                       ),
                     ],
                   ),
+                );
+                final agentCard = ModelAgentToolsCard(
+                  folders: ref.watch(
+                    agentFoldersForProfileProvider(m.id),
+                  ),
+                  note: ref.watch(agentModelNoteProvider(m.id)),
+                  onCreateFolder: () => _createAgentFolder(m.id),
+                  onToggleFolder: (folder) =>
+                      _toggleAgentFolder(m.id, folder),
+                  onEditNote: (initial) =>
+                      _editAgentNote(profileId: m.id, initial: initial),
+                );
+                final detailsCard = _Card(
+                  child: Theme(
+                    data: Theme.of(
+                      context,
+                    ).copyWith(dividerColor: Colors.transparent),
+                    child: ExpansionTile(
+                      initiallyExpanded: isDesktop,
+                      tilePadding: EdgeInsets.zero,
+                      childrenPadding: const EdgeInsets.only(top: 10),
+                      iconColor: _titleColor,
+                      collapsedIconColor: _titleColor,
+                      title: Text(
+                        t.profileDetailsUpper,
+                        style: _commandStyle(),
+                      ),
+                      children: [
+                        _DetailsTable(
+                          rows: <MapEntry<String, String>>[
+                            MapEntry(
+                              t.profileTypeUpper,
+                              _profileRolesLabel(
+                                t,
+                                m.effectiveProfileRoles,
+                              ),
+                            ),
+                            MapEntry(
+                              t.profileCountry,
+                              _displayText(m.country),
+                            ),
+                            MapEntry(t.profileCity, _displayText(m.city)),
+                            if (m.usesPhysicalBasics) ...[
+                              MapEntry(t.profileAge, _displayInt(m.age)),
+                              MapEntry(
+                                t.profileHeightCm,
+                                _displayCm(m.height, t.cm),
+                              ),
+                            ],
+                            if (m.usesModelMeasurements) ...[
+                              MapEntry(
+                                t.profileBustCm,
+                                _displayCm(m.bust, t.cm),
+                              ),
+                              MapEntry(
+                                t.profileWaistCm,
+                                _displayCm(m.waist, t.cm),
+                              ),
+                              MapEntry(
+                                t.profileHipsCm,
+                                _displayCm(m.hips, t.cm),
+                              ),
+                              MapEntry(
+                                t.profileShoeSize,
+                                _displayNullableInt(m.shoeSize),
+                              ),
+                              MapEntry(
+                                t.profileEyeColor,
+                                _displayText(
+                                  eyeColorDisplayValue(
+                                    m.eyeColor,
+                                    Localizations.localeOf(context),
+                                  ),
+                                ),
+                              ),
+                              MapEntry(
+                                t.profileHairColor,
+                                _displayText(
+                                  hairColorDisplayValue(
+                                    m.hairColor,
+                                    Localizations.localeOf(context),
+                                  ),
+                                ),
+                              ),
+                            ],
+                            MapEntry(
+                              t.profileMinHourlyRate,
+                              _displayNullableInt(m.minHourlyRate),
+                            ),
+                            MapEntry(
+                              t.profileMinDailyFee,
+                              _displayNullableInt(m.minDailyFee),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 );
+                final proCard = _Card(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        t.profileProfessionalInfoUpper,
+                        style: _commandStyle(),
+                      ),
+                      const SizedBox(height: _innerGap),
+                      _DetailsTable(
+                        rows: <MapEntry<String, String>>[
+                          if (m.experience.trim().isNotEmpty)
+                            MapEntry(
+                              t.profileExperience,
+                              _displayText(m.experience),
+                            ),
+                          if (m.skills.trim().isNotEmpty)
+                            MapEntry(
+                              t.profileSkills,
+                              _displayText(m.skills),
+                            ),
+                          if (m.services.trim().isNotEmpty)
+                            MapEntry(
+                              t.profileServices,
+                              _displayText(m.services),
+                            ),
+                          if (m.genres.trim().isNotEmpty)
+                            MapEntry(
+                              t.profileWorkGenres,
+                              _displayText(m.genres),
+                            ),
+                          if (m.equipment.trim().isNotEmpty)
+                            MapEntry(
+                              t.profileEquipment,
+                              _displayText(m.equipment),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
+                );
+                final mediaCard = _Card(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(t.profileMediaUpper, style: _commandStyle()),
+                      const SizedBox(height: 14),
+                      if (displayPhotoUrls.isEmpty && m.videoUrls.isEmpty)
+                        Text(t.profileMediaEmpty, style: _bodyStyle())
+                      else
+                        _MediaGrid(
+                          photoUrls: displayPhotoUrls,
+                          photoCategoryLabels: m.photoCategoryLabels,
+                          videoUrls: m.videoUrls,
+                          videoPreviewUrls: m.videoPreviewUrls,
+                          videoCategoryLabels: m.videoCategoryLabels,
+                          showreelUrl: m.showreelUrl,
+                          onOpenPhotos: (index) => _openPhotos(
+                            context,
+                            displayPhotoUrls,
+                            index,
+                          ),
+                          onOpenVideo: (index) =>
+                              _openVideo(context, m.videoUrls[index]),
+                        ),
+                    ],
+                  ),
+                );
+                final resumeCard = _Card(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(t.profileResumeUpper, style: _commandStyle()),
+                      const SizedBox(height: _innerGap),
+                      Text(
+                        m.resume.trim().isEmpty
+                            ? t.profileResumeEmpty
+                            : m.resume,
+                        style: _bodyStyle(),
+                      ),
+                    ],
+                  ),
+                );
+
+                final gap = const SizedBox(height: _sectionGap);
+                final body = isDesktop
+                    ? _ProfileDesktopBody(
+                        topBar: topBar,
+                        adminNotice: adminPreview
+                            ? _AdminCatalogPreviewNotice()
+                            : null,
+                        gallery: [
+                          _Card(
+                            child: _PortfolioHeroCard(
+                              model: m,
+                              t: t,
+                              displayPhotoUrls: displayPhotoUrls,
+                              coverAlignment: _profileCoverAlignmentFor(m),
+                              onOpenPhotos: (index) =>
+                                  _openPhotos(context, displayPhotoUrls, index),
+                              onOpenVideo: m.videoUrls.isEmpty
+                                  ? null
+                                  : () => _openVideo(context, m.videoUrls.first),
+                              onOpenShowreel: m.hasShowreel
+                                  ? () => _openVideo(context, m.showreelUrl)
+                                  : null,
+                              onCompositePdf: () => _openCompositePdf(m),
+                              onCopyLink: () => _copyPublicLink(m.id),
+                              canUseAgentActions: canUseAgentTools,
+                              actionHistoryFuture: null,
+                              isBusy: _isPortfolioActionBusy,
+                              onInvite: () => _inviteFromProfile(m),
+                              onAddToSelection: () => _openPortfolioAddSheet(m),
+                              onMessage: () => _openProfileChat(m),
+                              layout: _HeroCardLayout.mediaOnly,
+                            ),
+                          ),
+                          gap,
+                          mediaCard,
+                          if (m.hasShowreel) ...[gap, showreelCard],
+                          if (showProInfo) ...[gap, proCard],
+                          gap,
+                          resumeCard,
+                        ],
+                        side: [
+                          _Card(
+                            child: _PortfolioHeroCard(
+                              model: m,
+                              t: t,
+                              displayPhotoUrls: displayPhotoUrls,
+                              coverAlignment: _profileCoverAlignmentFor(m),
+                              onOpenPhotos: (index) =>
+                                  _openPhotos(context, displayPhotoUrls, index),
+                              onOpenVideo: m.videoUrls.isEmpty
+                                  ? null
+                                  : () => _openVideo(context, m.videoUrls.first),
+                              onOpenShowreel: m.hasShowreel
+                                  ? () => _openVideo(context, m.showreelUrl)
+                                  : null,
+                              onCompositePdf: () => _openCompositePdf(m),
+                              onCopyLink: () => _copyPublicLink(m.id),
+                              canUseAgentActions: canUseAgentTools,
+                              actionHistoryFuture: historyFuture,
+                              isBusy: _isPortfolioActionBusy,
+                              onInvite: () => _inviteFromProfile(m),
+                              onAddToSelection: () => _openPortfolioAddSheet(m),
+                              onMessage: () => _openProfileChat(m),
+                              layout: _HeroCardLayout.infoOnly,
+                            ),
+                          ),
+                          gap,
+                          detailsCard,
+                          if (canUseAgentTools) ...[gap, agentCard],
+                        ],
+                      )
+                    : RefreshIndicator(
+                        onRefresh: _refresh,
+                        child: ListView(
+                          padding: const EdgeInsets.fromLTRB(
+                            _pagePadH,
+                            _pagePadTop,
+                            _pagePadH,
+                            _pagePadBottom,
+                          ),
+                          children: [
+                            topBar,
+                            gap,
+                            if (adminPreview) ...[
+                              _AdminCatalogPreviewNotice(),
+                              gap,
+                            ],
+                            heroCard,
+                            gap,
+                            if (m.hasShowreel) ...[showreelCard, gap],
+                            if (canUseAgentTools) ...[agentCard, gap],
+                            detailsCard,
+                            gap,
+                            if (showProInfo) ...[proCard, gap],
+                            mediaCard,
+                            gap,
+                            resumeCard,
+                          ],
+                        ),
+                      );
+
+                return PageTitle(title: m.fullName, child: body);
               },
             ),
           ),
@@ -1669,5 +1742,60 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
         .read(agentWorkspaceServiceProvider)
         .saveNote(profileId: profileId, note: note);
     ref.invalidate(agentModelNoteProvider(profileId));
+  }
+}
+
+/// Desktop layout (step 21а): gallery on the left, a sticky side panel with
+/// the identity, actions and details on the right; each scrolls on its own.
+class _ProfileDesktopBody extends StatelessWidget {
+  const _ProfileDesktopBody({
+    required this.topBar,
+    required this.gallery,
+    required this.side,
+    this.adminNotice,
+  });
+
+  final Widget topBar;
+  final Widget? adminNotice;
+  final List<Widget> gallery;
+  final List<Widget> side;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(32, 20, 32, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          topBar,
+          const SizedBox(height: _sectionGap),
+          if (adminNotice != null) ...[
+            adminNotice!,
+            const SizedBox(height: _sectionGap),
+          ],
+          Expanded(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.only(bottom: _pagePadBottom),
+                    children: gallery,
+                  ),
+                ),
+                const SizedBox(width: 24),
+                SizedBox(
+                  width: _kProfileSideWidth,
+                  child: ListView(
+                    padding: const EdgeInsets.only(bottom: _pagePadBottom),
+                    children: side,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
