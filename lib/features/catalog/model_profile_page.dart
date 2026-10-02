@@ -573,7 +573,7 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
               future: _future,
               builder: (context, snap) {
                 if (snap.connectionState != ConnectionState.done) {
-                  return const Center(child: CircularProgressIndicator());
+                  return const _ProfileSkeleton();
                 }
                 if (snap.hasError) {
                   return Center(
@@ -1795,6 +1795,51 @@ class _ProfileDesktopBody extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Loading placeholder in the shape of the profile page.
+class _ProfileSkeleton extends StatelessWidget {
+  const _ProfileSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    final isDesktop =
+        MediaQuery.sizeOf(context).width >= _kProfileDesktopBreakpoint;
+    const media = SkeletonBox(aspectRatio: 16 / 9, radius: Tokens.radiusMd);
+    final info = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: const [
+        SkeletonLine(width: 220, height: 22),
+        SizedBox(height: 14),
+        SkeletonLine(width: 280, height: 12),
+        SizedBox(height: 8),
+        SkeletonLine(width: 200, height: 12),
+        SizedBox(height: 22),
+        SkeletonBox(width: 160, height: 44, radius: Tokens.radiusMd),
+      ],
+    );
+    return Skeleton(
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: isDesktop ? 32 : _pagePadH,
+          vertical: 20,
+        ),
+        child: isDesktop
+            ? Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: media),
+                  const SizedBox(width: 24),
+                  SizedBox(width: _kProfileSideWidth, child: info),
+                ],
+              )
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [media, const SizedBox(height: 16), info],
+              ),
       ),
     );
   }

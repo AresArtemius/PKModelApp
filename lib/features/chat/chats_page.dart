@@ -285,8 +285,7 @@ class _ChatsPageState extends ConsumerState<ChatsPage> {
                   const SizedBox(height: 14),
                   Expanded(
                     child: chats.when(
-                      loading: () =>
-                          const Center(child: CircularProgressIndicator()),
+                      loading: () => const SkeletonList(rows: 7),
                       error: (e, _) => _ChatsEmptyState(
                         title: t.errorUpper,
                         message: AppErrorMapper.message(e, t),
