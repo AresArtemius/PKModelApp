@@ -162,7 +162,10 @@ Future<void> main() async {
       usePathUrlStrategy();
       WidgetsFlutterBinding.ensureInitialized();
       _configureImageCache();
-      await ErrorReporting.init();
+      // Not awaited: on web the Sentry SDK is fetched from its CDN, which can
+      // take seconds (or hang) on some networks — the first frame must not
+      // wait for it. Errors raised before it is ready are simply not sent.
+      unawaited(ErrorReporting.init());
 
       FlutterError.onError = (details) {
         FlutterError.presentError(details);

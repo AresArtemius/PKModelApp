@@ -14,6 +14,14 @@ class ErrorReporting {
 
   static Future<void> init() async {
     if (!enabled) return;
+    try {
+      await _initSentry().timeout(const Duration(seconds: 15));
+    } catch (_) {
+      // A slow or blocked CDN must never affect the app.
+    }
+  }
+
+  static Future<void> _initSentry() async {
     await SentryFlutter.init((options) {
       options.dsn = _dsn;
       options.environment = kReleaseMode ? 'production' : 'development';
