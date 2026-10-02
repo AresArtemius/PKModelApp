@@ -912,12 +912,9 @@ class _CastingPageState extends ConsumerState<CastingPage> {
                   const SizedBox(height: kGap14),
                   Expanded(
                     child: castings.when(
-                      loading: () => const Center(
-                        child: CircularProgressIndicator(
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            BrandTheme.redTop,
-                          ),
-                        ),
+                      loading: () => const SkeletonList(
+                        rows: 5,
+                        leadingSize: 72,
                       ),
                       error: (err, st) {
                         AppLogger.error(

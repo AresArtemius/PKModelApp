@@ -1352,10 +1352,15 @@ class _CatalogResultsBody extends StatelessWidget {
     final t = AppLocalizations.of(context)!;
 
     if (controller.isInitialLoading) {
-      return const Center(
-        child: CircularProgressIndicator(
-          valueColor: AlwaysStoppedAnimation<Color>(kTextDark),
-        ),
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          final columns = _CatalogGrid._columnsFor(constraints.maxWidth);
+          return SingleChildScrollView(
+            physics: const NeverScrollableScrollPhysics(),
+            padding: kGridPadding,
+            child: SkeletonCardGrid(columns: columns, gap: kGridGap),
+          );
+        },
       );
     }
 
@@ -1706,11 +1711,13 @@ class _CatalogGrid extends StatelessWidget {
   final double bottomInset;
 
   /// ~240 px cards on desktop (3–6 columns); phones keep two columns.
-  int _crossAxisCount(double width) {
+  static int _columnsFor(double width) {
     if (width < 600) return kGridCrossAxisCount;
     final columns = ((width + kGridGap) / (240 + kGridGap)).floor();
     return columns.clamp(2, 6);
   }
+
+  int _crossAxisCount(double width) => _columnsFor(width);
 
   /// Card = 3:4 photo + text block, so the ratio depends on the column width.
   double _childAspectRatio(double width, int columns) {
