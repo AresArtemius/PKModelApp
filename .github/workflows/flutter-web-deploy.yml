@@ -23,6 +23,8 @@ env:
   FIREBASE_WEB_APP_ID: ${{ secrets.FIREBASE_WEB_APP_ID }}
   FIREBASE_WEB_MEASUREMENT_ID: ${{ secrets.FIREBASE_WEB_MEASUREMENT_ID }}
   FIREBASE_WEB_VAPID_KEY: ${{ secrets.FIREBASE_WEB_VAPID_KEY }}
+  SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+  YANDEX_METRIKA_ID: ${{ secrets.YANDEX_METRIKA_ID }}
 
 jobs:
   build:
@@ -64,6 +66,15 @@ jobs:
             echo "self.firebaseWebConfig = {};" > web/firebase-web-config.js
           fi
 
+      - name: Write analytics config (Yandex Metrika)
+        run: |
+          if [ -n "$YANDEX_METRIKA_ID" ]; then
+            printf 'self.pkAnalytics = { metrikaId: %s };\n' "$YANDEX_METRIKA_ID" > web/analytics-config.js
+          else
+            echo "YANDEX_METRIKA_ID is not set; analytics will be disabled for this build."
+            echo 'self.pkAnalytics = {};' > web/analytics-config.js
+          fi
+
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -85,6 +96,7 @@ jobs:
           --base-href=/
           --dart-define=PUBLIC_BASE_URL=https://app.pk.management
           --dart-define=APP_RELEASE_SHA=$GITHUB_SHA
+          --dart-define=SENTRY_DSN=$SENTRY_DSN
           --dart-define=SUPABASE_URL=$SUPABASE_URL
           --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY
           --dart-define=FIREBASE_WEB_API_KEY=$FIREBASE_WEB_API_KEY

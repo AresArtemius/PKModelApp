@@ -204,9 +204,14 @@
       }, LOAD_TIMEOUT_MS);
 
       // A script or wasm file that failed to download (CDN blocked, offline).
+      // Only our own scripts count: a blocked analytics tag must not look
+      // like a broken app.
       function onResourceError(event) {
         var target = event.target;
-        if (target && target.tagName === 'SCRIPT') fail('script failed: ' + target.src);
+        if (!target || target.tagName !== 'SCRIPT') return;
+        var src = String(target.src || '');
+        if (src.indexOf(location.origin) !== 0) return;
+        fail('script failed: ' + src);
       }
       // flutter_bootstrap.js reports fetch failures as rejected promises.
       function onRejection(event) {
@@ -220,6 +225,41 @@
         retry.disabled = true;
         window.location.reload();
       });
+    })();
+  </script>
+  <!-- Yandex Metrika: the counter id comes from analytics-config.js, written
+       by the deploy workflow from a secret; nothing loads without it. Route
+       changes inside the app are reported as hits (SPA mode). -->
+  <script src="analytics-config.js"></script>
+  <script>
+    (function () {
+      var cfg = self.pkAnalytics || {};
+      var id = cfg.metrikaId;
+      if (!id) return;
+      (function (m, e, t, r, i, k, a) {
+        m[i] = m[i] || function () { (m[i].a = m[i].a || []).push(arguments); };
+        m[i].l = 1 * new Date();
+        k = e.createElement(t); a = e.getElementsByTagName(t)[0];
+        k.async = 1; k.src = r; a.parentNode.insertBefore(k, a);
+      })(window, document, 'script', 'https://mc.yandex.ru/metrika/tag.js', 'ym');
+      ym(id, 'init', {
+        clickmap: true,
+        trackLinks: true,
+        accurateTrackBounce: true,
+        webvisor: true,
+        defer: true
+      });
+      ym(id, 'hit', location.href);
+      var lastUrl = location.href;
+      function hit() {
+        if (location.href === lastUrl) return;
+        lastUrl = location.href;
+        ym(id, 'hit', location.href);
+      }
+      var push = history.pushState, replace = history.replaceState;
+      history.pushState = function () { push.apply(this, arguments); hit(); };
+      history.replaceState = function () { replace.apply(this, arguments); hit(); };
+      window.addEventListener('popstate', hit);
     })();
   </script>
   <script src="flutter_bootstrap.js" async></script>
