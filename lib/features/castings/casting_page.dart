@@ -1526,9 +1526,13 @@ class _CastingDesktopDetailPanel extends StatelessWidget {
       onReferencesTap: onReferencesTap,
       onDeleteTap: onDeleteTap,
     );
+    // The header lives in the text column so the side card sits level with
+    // the title, straight under the cover — no empty corner on the right.
     final main = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        _CastingDetailHeader(casting: casting, status: status),
+        const SizedBox(height: 36),
         _CastingDetailTextSections(
           casting: casting,
           onReferenceMediaChanged: onReferenceMediaChanged,
@@ -1547,10 +1551,8 @@ class _CastingDesktopDetailPanel extends StatelessWidget {
           children: [
             if (cover != null) ...[
               _CastingCover(item: cover),
-              const SizedBox(height: 32),
+              const SizedBox(height: 36),
             ],
-            _CastingDetailHeader(casting: casting, status: status),
-            const SizedBox(height: 36),
             if (twoColumns)
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1561,9 +1563,14 @@ class _CastingDesktopDetailPanel extends StatelessWidget {
                 ],
               )
             else ...[
+              _CastingDetailHeader(casting: casting, status: status),
+              const SizedBox(height: 28),
               side,
               const SizedBox(height: 32),
-              main,
+              _CastingDetailTextSections(
+                casting: casting,
+                onReferenceMediaChanged: onReferenceMediaChanged,
+              ),
             ],
           ],
         );
