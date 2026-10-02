@@ -32,8 +32,8 @@ const double _castingsDesktopBreakpoint = 900;
 /// Left column with the list on desktop.
 const double _castingsListWidth = 380;
 
-/// Readable width of the detail column; the panel itself takes the rest.
-const double _castingDetailMaxWidth = 880;
+/// Detail panel width from which texts and references sit side by side.
+const double _castingDetailTwoColumnWidth = 1000;
 const EdgeInsets _castingsDesktopPadding = EdgeInsets.fromLTRB(32, 24, 32, 28);
 
 /// The v2 look (white page, flat cards, sentence case) is the web standard
@@ -1208,12 +1208,13 @@ class _CastingsDesktopQueuePanel extends StatelessWidget {
             backgroundColor: Tokens.bg,
             onRefresh: onRefresh,
             child: ListView.separated(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+              padding: const EdgeInsets.fromLTRB(32, 0, 16, 24),
               physics: const BouncingScrollPhysics(
                 parent: AlwaysScrollableScrollPhysics(),
               ),
               itemCount: items.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 4),
+              separatorBuilder: (_, _) =>
+                  const Divider(height: 1, thickness: 1, color: Tokens.border),
               itemBuilder: (context, index) {
                 final casting = items[index];
                 return _CastingListTile(
@@ -1250,6 +1251,55 @@ class _CastingListTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // No filled «card»: rows are separated by hairlines, the selected one
+    // carries a thin accent bar on the left and a black title.
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        hoverColor: Tokens.surface,
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(0, 16, 16, 16),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              AnimatedContainer(
+                duration: Tokens.fast,
+                width: 2,
+                margin: const EdgeInsets.only(right: 18),
+                color: selected ? Tokens.accent : Colors.transparent,
+              ),
+              Expanded(
+                child: _CastingListTileBody(
+                  casting: casting,
+                  selected: selected,
+                  status: status,
+                  isResponding: isResponding,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CastingListTileBody extends StatelessWidget {
+  const _CastingListTileBody({
+    required this.casting,
+    required this.selected,
+    required this.status,
+    required this.isResponding,
+  });
+
+  final CastingModel casting;
+  final bool selected;
+  final CastingResponseStatus? status;
+  final bool isResponding;
+
+  @override
+  Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
     final stageColor = castingProjectStageColor(casting.projectStage);
     final meta = [
@@ -1257,16 +1307,7 @@ class _CastingListTile extends StatelessWidget {
       if (casting.datesText.isNotEmpty) casting.datesText,
     ].join(' · ');
 
-    return Material(
-      color: selected ? Tokens.surface : Colors.transparent,
-      borderRadius: BorderRadius.circular(Tokens.radiusMd),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(Tokens.radiusMd),
-        hoverColor: Tokens.surfaceAlt.withValues(alpha: 0.6),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-          child: Column(
+    return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
@@ -1277,7 +1318,10 @@ class _CastingListTile extends StatelessWidget {
                       casting.title,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: AppText.bodyStrong.copyWith(height: 1.3),
+                      style: AppText.bodyStrong.copyWith(
+                        height: 1.3,
+                        color: selected ? Tokens.text : const Color(0xFF3A3A3A),
+                      ),
                     ),
                   ),
                   if (isResponding || status != null) ...[
@@ -1338,9 +1382,6 @@ class _CastingListTile extends StatelessWidget {
                 ],
               ),
             ],
-          ),
-        ),
-      ),
     );
   }
 }
@@ -1411,31 +1452,49 @@ class _CastingDesktopDetailPanel extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Expanded(
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(40, 32, 40, 32),
-            children: [
-              // A ListView hands its children a tight width, so the cap
-              // needs a loose parent (Align) to take effect.
-              Align(
-                alignment: Alignment.topLeft,
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(
-                    maxWidth: _castingDetailMaxWidth,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _CastingDetailHeader(casting: casting, status: status),
-                      const SizedBox(height: 28),
-                      _CastingDetailTextSections(
-                        casting: casting,
-                        onReferenceMediaChanged: onReferenceMediaChanged,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              // Wide panel: texts on the left, references in a column on
+              // the right, so the page width is used instead of a strip.
+              final twoColumns =
+                  constraints.maxWidth >= _castingDetailTwoColumnWidth &&
+                  casting.referenceMedia.isNotEmpty;
+              return ListView(
+                padding: const EdgeInsets.fromLTRB(40, 32, 40, 32),
+                children: [
+                  _CastingDetailHeader(casting: casting, status: status),
+                  const SizedBox(height: 32),
+                  if (twoColumns)
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          flex: 5,
+                          child: _CastingDetailTextSections(
+                            casting: casting,
+                            onReferenceMediaChanged: onReferenceMediaChanged,
+                            includeReferences: false,
+                          ),
+                        ),
+                        const SizedBox(width: 48),
+                        Expanded(
+                          flex: 4,
+                          child: _CastingReferenceGallery(
+                            casting: casting,
+                            items: casting.referenceMedia,
+                            onChanged: onReferenceMediaChanged,
+                          ),
+                        ),
+                      ],
+                    )
+                  else
+                    _CastingDetailTextSections(
+                      casting: casting,
+                      onReferenceMediaChanged: onReferenceMediaChanged,
+                    ),
+                ],
+              );
+            },
           ),
         ),
         const Divider(height: 1, thickness: 1, color: Tokens.border),
@@ -1549,10 +1608,14 @@ class _CastingDetailTextSections extends StatelessWidget {
   const _CastingDetailTextSections({
     required this.casting,
     required this.onReferenceMediaChanged,
+    this.includeReferences = true,
   });
 
   final CastingModel casting;
   final _ReferenceMediaChanged? onReferenceMediaChanged;
+
+  /// False when the gallery is rendered in its own column.
+  final bool includeReferences;
 
   @override
   Widget build(BuildContext context) {
@@ -1573,7 +1636,7 @@ class _CastingDetailTextSections extends StatelessWidget {
           const SizedBox(height: 24),
           _CastingDetailSection(title: t.fee, text: casting.fee),
         ],
-        if (casting.referenceMedia.isNotEmpty) ...[
+        if (includeReferences && casting.referenceMedia.isNotEmpty) ...[
           const SizedBox(height: 24),
           _CastingReferenceGallery(
             casting: casting,
@@ -1622,9 +1685,9 @@ class _CastingReferenceGallery extends StatelessWidget {
         const SizedBox(height: 10),
         LayoutBuilder(
           builder: (context, constraints) {
-            final columns = constraints.maxWidth >= 720
+            final columns = constraints.maxWidth >= 900
                 ? 4
-                : (constraints.maxWidth >= 460 ? 3 : 2);
+                : (constraints.maxWidth >= 560 ? 3 : 2);
             return GridView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
@@ -1972,7 +2035,10 @@ class _CastingDetailSection extends StatelessWidget {
       children: [
         _CastingSectionLabel(title),
         const SizedBox(height: 8),
-        Text(text, style: AppText.body),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 760),
+          child: Text(text, style: AppText.body),
+        ),
       ],
     );
   }
