@@ -28,6 +28,21 @@ app.pk.management {
 	@wasm path *.wasm
 	header @wasm Content-Type application/wasm
 
+	# Link previews (step 17): preview bots asking for a public profile or
+	# selection get a small HTML page with Open Graph tags from the og-page
+	# Edge Function; browsers keep getting the app.
+	@og {
+		path /p/* /s/*
+		header_regexp bot User-Agent (?i)(telegrambot|whatsapp|facebookexternalhit|facebot|twitterbot|vkshare|vkontakte|slackbot|linkedinbot|discordbot|skypeuripreview|viber|pinterest|applebot|googlebot|yandexbot|bingbot|duckduckbot|embedly|quora link preview|outbrain|redditbot|mastodon|iframely|telegram)
+	}
+	handle @og {
+		rewrite * /functions/v1/og-page?path={path}
+		reverse_proxy https://dherzlobdrknoajeidbz.supabase.co {
+			header_up Host dherzlobdrknoajeidbz.supabase.co
+			header_up -Cookie
+		}
+	}
+
 	try_files {path} /index.html
 
 	file_server {
