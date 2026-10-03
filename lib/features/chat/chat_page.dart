@@ -1121,7 +1121,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     if (!await _ensureCanUseChat()) return;
     if (!mounted) return;
 
-    if (kIsWeb && widget.embedded) {
+    if (kIsWeb) {
       // v2: record right in the composer, send with one click.
       setState(() => _inlineVoice = true);
       return;
@@ -1734,7 +1734,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     final chatContext = summary.valueOrNull;
     // v2 (web, inside the two-column chats page): flat full-height column —
     // 72 px header with a hairline, the feed, the composer at the bottom.
-    final v2 = kIsWeb && widget.embedded;
+    final v2 = kIsWeb;
 
     final profileId = chatContext?.profileId.trim() ?? '';
     final selectionId = chatContext?.selectionId.trim() ?? '';
@@ -1749,6 +1749,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
             subtitle: headerData.subtitle,
             otherUserId: otherUserId,
             avatarUrl: headerData.avatarUrl,
+            onBack: widget.embedded ? null : _goBack,
             onSearch: _toggleSearch,
             searchActive: _searchOpen,
             onDeleteChat: _deleteChat,
@@ -2027,7 +2028,9 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                 ],
                 Padding(
                   padding: v2
-                      ? const EdgeInsets.fromLTRB(24, 0, 24, 20)
+                      ? (MediaQuery.sizeOf(context).width < 600
+                            ? const EdgeInsets.fromLTRB(12, 0, 12, 12)
+                            : const EdgeInsets.fromLTRB(24, 0, 24, 20))
                       : EdgeInsets.zero,
                   child: _Composer(
                     controller: _messageController,
@@ -2159,10 +2162,10 @@ class _ChatPageState extends ConsumerState<ChatPage> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final maxBubbleWidth = math.min(
-          560.0,
-          math.max(280.0, constraints.maxWidth * 0.55),
-        );
+        final narrow = constraints.maxWidth < 600;
+        final maxBubbleWidth = narrow
+            ? constraints.maxWidth * 0.8
+            : math.min(560.0, math.max(280.0, constraints.maxWidth * 0.55));
         return Stack(
           children: [
             SelectionArea(
@@ -2854,7 +2857,10 @@ class _BubbleV2State extends State<_BubbleV2> {
     }
 
     final pending = message.metadata['pending'] == true;
-    final hoverBar = AnimatedOpacity(
+    final narrowScreen = MediaQuery.sizeOf(context).width < 600;
+    final hoverBar = narrowScreen
+        ? const SizedBox.shrink()
+        : AnimatedOpacity(
       duration: Tokens.fast,
       opacity: _hovered && !widget.selectionMode && !pending ? 1 : 0,
       child: IgnorePointer(
@@ -3942,8 +3948,9 @@ class _V2Pad extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!enabled) return child;
+    final narrow = MediaQuery.sizeOf(context).width < 600;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
+      padding: EdgeInsets.symmetric(horizontal: narrow ? 12 : 24),
       child: child,
     );
   }
@@ -3960,8 +3967,12 @@ class _ChatHeaderV2 extends ConsumerWidget {
     required this.onDeleteChat,
     this.onOpenProfile,
     this.onOpenCasting,
+    this.onBack,
   });
 
+  /// Set on the standalone (phone-width) page; the two-column layout has
+  /// the list beside the chat and needs no back arrow.
+  final VoidCallback? onBack;
   final String title;
   final String subtitle;
   final String otherUserId;
@@ -3979,15 +3990,25 @@ class _ChatHeaderV2 extends ConsumerWidget {
         ? null
         : ref.watch(userPresenceProvider(otherUserId)).valueOrNull;
     final online = presence?.isOnlineNow ?? false;
+    final narrow = MediaQuery.sizeOf(context).width < 600;
     return Container(
-      height: 72,
-      padding: const EdgeInsets.fromLTRB(24, 0, 12, 0),
+      height: narrow ? 64 : 72,
+      padding: EdgeInsets.fromLTRB(onBack == null ? 24 : 8, 0, narrow ? 4 : 12, 0),
       decoration: const BoxDecoration(
         color: Tokens.bg,
         border: Border(bottom: BorderSide(color: Tokens.border)),
       ),
       child: Row(
         children: [
+          if (onBack != null) ...[
+            IconButton(
+              tooltip: ru ? 'Назад' : 'Back',
+              onPressed: onBack,
+              style: _headerIconStyle,
+              icon: const Icon(Icons.arrow_back_rounded, size: 22),
+            ),
+            const SizedBox(width: 4),
+          ],
           Stack(
             clipBehavior: Clip.none,
             children: [
@@ -4058,21 +4079,43 @@ class _ChatHeaderV2 extends ConsumerWidget {
             ),
           ),
           const SizedBox(width: 12),
-          if (onOpenProfile != null)
+          if (onOpenProfile != null && !narrow)
             IconButton(
               tooltip: ru ? 'Открыть анкету' : 'Open profile',
               onPressed: onOpenProfile,
               style: _headerIconStyle,
               icon: const Icon(Icons.badge_outlined, size: 22),
             ),
-          if (onOpenCasting != null)
+          if (onOpenCasting != null && !narrow)
             IconButton(
               tooltip: ru ? 'Открыть кастинг' : 'Open casting',
               onPressed: onOpenCasting,
               style: _headerIconStyle,
               icon: const Icon(Icons.video_camera_front_outlined, size: 22),
             ),
-          if (onOpenProfile != null || onOpenCasting != null)
+          if (narrow && (onOpenProfile != null || onOpenCasting != null))
+            PopupMenuButton<String>(
+              tooltip: ru ? 'Ещё' : 'More',
+              style: _headerIconStyle,
+              icon: const Icon(Icons.more_vert_rounded, size: 22),
+              onSelected: (value) {
+                if (value == 'profile') onOpenProfile?.call();
+                if (value == 'casting') onOpenCasting?.call();
+              },
+              itemBuilder: (context) => [
+                if (onOpenProfile != null)
+                  PopupMenuItem(
+                    value: 'profile',
+                    child: Text(ru ? 'Открыть анкету' : 'Open profile'),
+                  ),
+                if (onOpenCasting != null)
+                  PopupMenuItem(
+                    value: 'casting',
+                    child: Text(ru ? 'Открыть кастинг' : 'Open casting'),
+                  ),
+              ],
+            ),
+          if (!narrow && (onOpenProfile != null || onOpenCasting != null))
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 6),
               child: SizedBox(
