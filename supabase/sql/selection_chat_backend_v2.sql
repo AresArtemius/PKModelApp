@@ -13,6 +13,35 @@
 --     chat list and presence update live.
 
 -- ---------------------------------------------------------------------------
+-- Б1. Per-participant list state (pinned / archived / hidden) — the list RPC
+-- relies on these columns, so make sure they exist even if
+-- selection_chat_list_states.sql was never applied.
+-- ---------------------------------------------------------------------------
+
+alter table public.selection_chats
+  add column if not exists model_deleted_at timestamptz,
+  add column if not exists agent_deleted_at timestamptz,
+  add column if not exists model_pinned_at timestamptz,
+  add column if not exists agent_pinned_at timestamptz,
+  add column if not exists model_archived_at timestamptz,
+  add column if not exists agent_archived_at timestamptz;
+
+alter table public.selection_chat_messages
+  add column if not exists media_type text not null default 'text',
+  add column if not exists media_url text,
+  add column if not exists media_thumbnail_url text,
+  add column if not exists file_name text,
+  add column if not exists file_size bigint,
+  add column if not exists file_mime text,
+  add column if not exists metadata jsonb not null default '{}'::jsonb,
+  add column if not exists read_at timestamptz,
+  add column if not exists listened_at timestamptz,
+  add column if not exists pinned_at timestamptz,
+  add column if not exists pinned_by uuid references auth.users(id) on delete set null,
+  add column if not exists edited_at timestamptz,
+  add column if not exists deleted_at timestamptz;
+
+-- ---------------------------------------------------------------------------
 -- Б1. Indexes
 -- ---------------------------------------------------------------------------
 
@@ -187,9 +216,13 @@ begin
     last_seen_at = now(),
     updated_at = now();
 
-  update public.user_profiles
-  set last_seen_at = now()
-  where user_id = v_user_id;
+  begin
+    update public.user_profiles
+    set last_seen_at = now()
+    where user_id = v_user_id;
+  exception when undefined_column or undefined_table then
+    null;
+  end;
 end;
 $$;
 
