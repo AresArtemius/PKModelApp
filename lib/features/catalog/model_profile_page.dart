@@ -1623,12 +1623,12 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
     ref.invalidate(adminSelectionListProvider);
   }
 
+  /// The gallery is a router page (not an imperative push) so that the
+  /// browser Back button closes it instead of leaving the profile.
   void _openPhotos(BuildContext context, List<String> urls, int initialIndex) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) =>
-            _PhotoGalleryPage(urls: urls, initialIndex: initialIndex),
-      ),
+    context.push(
+      Routes.modelPhotosLocation(widget.modelId, initialIndex),
+      extra: List<String>.unmodifiable(urls),
     );
   }
 
@@ -1649,9 +1649,7 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
   }
 
   void _openVideo(BuildContext context, String url) {
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => _FullScreenVideoPage(url: url)));
+    context.push(Routes.modelVideoLocation(widget.modelId), extra: url);
   }
 
   Future<void> _createAgentFolder(String profileId) async {
