@@ -148,6 +148,22 @@ class _AgentFoldersPageState extends ConsumerState<AgentFoldersPage> {
     }
   }
 
+  Future<void> _setCover(AgentFolder folder, AgentFolderProfile p) async {
+    final clear = folder.coverProfileId == p.id;
+    try {
+      await ref
+          .read(agentWorkspaceServiceProvider)
+          .setFolderCover(folder.id, clear ? '' : p.id);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(AppErrorMapper.message(e, AppLocalizations.of(context)!))),
+      );
+      return;
+    }
+    ref.invalidate(agentFoldersProvider);
+  }
+
   Future<void> _removeProfile(AgentFolder folder, AgentFolderProfile p) async {
     await ref
         .read(agentWorkspaceServiceProvider)
@@ -270,6 +286,7 @@ class _AgentFoldersPageState extends ConsumerState<AgentFoldersPage> {
                   onRename: () => _renameFolder(selected),
                   onDelete: () => _deleteFolder(selected),
                   onRemoveProfile: (p) => _removeProfile(selected, p),
+                  onSetCover: (p) => _setCover(selected, p),
                 ),
               ),
             ],
@@ -295,6 +312,7 @@ class _AgentFoldersPageState extends ConsumerState<AgentFoldersPage> {
               onRename: () => _renameFolder(current),
               onDelete: () => _deleteFolder(current),
               onRemoveProfile: (p) => _removeProfile(current, p),
+              onSetCover: (p) => _setCover(current, p),
             );
           }
           if (items.isEmpty) {
@@ -500,9 +518,13 @@ class _FolderRow extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final details = ref.watch(agentFolderDetailsProvider(folder.id));
     final profiles = details.value?.profiles ?? const <AgentFolderProfile>[];
-    final covers = profiles
-        .map((p) => p.photoUrl)
-        .where((u) => u.isNotEmpty)
+    // The chosen cover first, then the rest in folder order.
+    final ordered = [
+      ...profiles.where((p) => p.id == folder.coverProfileId),
+      ...profiles.where((p) => p.id != folder.coverProfileId),
+    ];
+    final covers = ordered
+        .where((p) => p.photoUrl.isNotEmpty)
         .take(3)
         .toList(growable: false);
     final countText = details.isLoading
@@ -527,7 +549,7 @@ class _FolderRow extends ConsumerWidget {
                 margin: const EdgeInsets.only(right: 16),
                 color: selected ? Tokens.accent : Colors.transparent,
               ),
-              _FolderCovers(urls: covers),
+              _FolderCovers(profiles: covers),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
@@ -562,12 +584,13 @@ class _FolderRow extends ConsumerWidget {
 
 /// Up to three stacked thumbnails — a folder «cover».
 class _FolderCovers extends StatelessWidget {
-  const _FolderCovers({required this.urls});
+  const _FolderCovers({required this.profiles});
 
-  final List<String> urls;
+  final List<AgentFolderProfile> profiles;
 
   @override
   Widget build(BuildContext context) {
+    final urls = profiles;
     if (urls.isEmpty) {
       return Container(
         width: 56,
@@ -601,8 +624,9 @@ class _FolderCovers extends StatelessWidget {
                 ),
                 clipBehavior: Clip.antiAlias,
                 child: CachedNetworkImage(
-                  imageUrl: storageImageVariant(urls[i], width: 160),
+                  imageUrl: storageImageVariant(urls[i].photoUrl, width: 160),
                   fit: BoxFit.cover,
+                  alignment: urls[i].photoAlignment,
                   memCacheWidth: 160,
                   placeholder: (_, _) =>
                       const ColoredBox(color: Tokens.surfaceAlt),
@@ -624,6 +648,7 @@ class _FolderDetail extends ConsumerWidget {
     required this.onRename,
     required this.onDelete,
     required this.onRemoveProfile,
+    required this.onSetCover,
     this.onBack,
   });
 
@@ -631,6 +656,7 @@ class _FolderDetail extends ConsumerWidget {
   final VoidCallback onRename;
   final VoidCallback onDelete;
   final ValueChanged<AgentFolderProfile> onRemoveProfile;
+  final ValueChanged<AgentFolderProfile> onSetCover;
   final VoidCallback? onBack;
 
   @override
@@ -776,9 +802,11 @@ class _FolderDetail extends ConsumerWidget {
                     ),
                     itemBuilder: (context, i) => _FolderProfileCard(
                       profile: profiles[i],
+                      isCover: profiles[i].id == folder.coverProfileId,
                       onOpen: () =>
                           context.push('${Routes.modelPrefix}${profiles[i].id}'),
                       onRemove: () => onRemoveProfile(profiles[i]),
+                      onSetCover: () => onSetCover(profiles[i]),
                     ),
                   );
                 },
@@ -797,11 +825,15 @@ class _FolderProfileCard extends StatefulWidget {
     required this.profile,
     required this.onOpen,
     required this.onRemove,
+    this.onSetCover,
+    this.isCover = false,
   });
 
   final AgentFolderProfile profile;
   final VoidCallback onOpen;
   final VoidCallback onRemove;
+  final VoidCallback? onSetCover;
+  final bool isCover;
 
   @override
   State<_FolderProfileCard> createState() => _FolderProfileCardState();
@@ -850,6 +882,7 @@ class _FolderProfileCardState extends State<_FolderProfileCard> {
                               width: kCatalogCardImageWidth,
                             ),
                             fit: BoxFit.cover,
+                            alignment: p.photoAlignment,
                             memCacheWidth: 600,
                             placeholder: (_, _) =>
                                 const ColoredBox(color: Tokens.surfaceAlt),
@@ -863,32 +896,52 @@ class _FolderProfileCardState extends State<_FolderProfileCard> {
                     child: AnimatedOpacity(
                       duration: Tokens.fast,
                       opacity: _hovered ? 1 : 0,
-                      child: Material(
-                        color: Colors.white.withValues(alpha: 0.92),
-                        shape: const CircleBorder(),
-                        clipBehavior: Clip.antiAlias,
-                        child: InkWell(
-                          onTap: widget.onRemove,
-                          child: Tooltip(
-                            message: _foldersText(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (widget.onSetCover != null) ...[
+                            _CardIconButton(
+                              icon: widget.isCover
+                                  ? Icons.star_rounded
+                                  : Icons.star_outline_rounded,
+                              tooltip: widget.isCover
+                                  ? _foldersText(
+                                      context,
+                                      'Обложка папки',
+                                      'Folder cover',
+                                    )
+                                  : _foldersText(
+                                      context,
+                                      'Сделать обложкой папки',
+                                      'Use as folder cover',
+                                    ),
+                              onTap: widget.onSetCover!,
+                            ),
+                            const SizedBox(width: 6),
+                          ],
+                          _CardIconButton(
+                            icon: Icons.close_rounded,
+                            tooltip: _foldersText(
                               context,
                               'Убрать из папки',
                               'Remove from folder',
                             ),
-                            child: const SizedBox(
-                              width: 30,
-                              height: 30,
-                              child: Icon(
-                                Icons.close_rounded,
-                                size: 16,
-                                color: Tokens.text,
-                              ),
-                            ),
+                            onTap: widget.onRemove,
                           ),
-                        ),
+                        ],
                       ),
                     ),
                   ),
+                  if (widget.isCover && !_hovered)
+                    const Positioned(
+                      top: 8,
+                      right: 8,
+                      child: _CardIconButton(
+                        icon: Icons.star_rounded,
+                        tooltip: '',
+                        onTap: null,
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -912,6 +965,37 @@ class _FolderProfileCardState extends State<_FolderProfileCard> {
         ),
       ),
     );
+  }
+}
+
+class _CardIconButton extends StatelessWidget {
+  const _CardIconButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final button = Material(
+      color: Colors.white.withValues(alpha: 0.92),
+      shape: const CircleBorder(),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: SizedBox(
+          width: 30,
+          height: 30,
+          child: Icon(icon, size: 16, color: Tokens.text),
+        ),
+      ),
+    );
+    if (tooltip.isEmpty) return button;
+    return Tooltip(message: tooltip, child: button);
   }
 }
 

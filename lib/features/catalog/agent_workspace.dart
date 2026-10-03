@@ -1,3 +1,4 @@
+import 'package:flutter/painting.dart' show Alignment;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -10,11 +11,15 @@ class AgentFolder {
     required this.id,
     required this.title,
     required this.containsProfile,
+    this.coverProfileId = '',
   });
 
   final String id;
   final String title;
   final bool containsProfile;
+
+  /// Profile whose photo is the folder cover ('' = first profile).
+  final String coverProfileId;
 
   factory AgentFolder.fromMap(Map<String, dynamic> map, Set<String> selected) {
     final id = (map['id'] ?? '').toString();
@@ -22,6 +27,7 @@ class AgentFolder {
       id: id,
       title: (map['title'] ?? '').toString().trim(),
       containsProfile: selected.contains(id),
+      coverProfileId: (map['cover_profile_id'] ?? '').toString().trim(),
     );
   }
 }
@@ -34,6 +40,8 @@ class AgentFolderProfile {
     required this.height,
     required this.city,
     required this.photoUrl,
+    this.focalX = 0,
+    this.focalY = -0.72,
   });
 
   final String id;
@@ -43,11 +51,23 @@ class AgentFolderProfile {
   final String city;
   final String photoUrl;
 
+  /// Focal point of the cover photo (−1…1), as on the catalogue cards.
+  final double focalX;
+  final double focalY;
+
+  Alignment get photoAlignment =>
+      Alignment(focalX.clamp(-1.0, 1.0), focalY.clamp(-1.0, 1.0));
+
   factory AgentFolderProfile.fromMap(Map<String, dynamic> map) {
     final photos = map['photo_urls'] is List
         ? map['photo_urls'] as List
         : const [];
     final coverPhotoUrl = (map['cover_photo_url'] ?? '').toString().trim();
+    double focal(dynamic v, double fallback) {
+      if (v is num) return v.toDouble();
+      return double.tryParse('${v ?? ''}') ?? fallback;
+    }
+
     return AgentFolderProfile(
       id: (map['id'] ?? '').toString(),
       fullName: (map['full_name'] ?? '').toString().trim(),
@@ -57,6 +77,9 @@ class AgentFolderProfile {
       photoUrl: coverPhotoUrl.isNotEmpty
           ? coverPhotoUrl
           : (photos.isEmpty ? '' : photos.first.toString().trim()),
+      focalX: focal(map['cover_photo_focal_x'], 0),
+      // Faces sit in the upper part of a portrait: default to the top.
+      focalY: focal(map['cover_photo_focal_y'], -0.72),
     );
   }
 }
@@ -83,14 +106,25 @@ class AgentWorkspaceService {
     if (userId == null) return const <AgentFolder>[];
 
     try {
-      final rows = await _sb
-          .from('casting_agent_folders')
-          .select('id,title')
-          .eq('user_id', userId)
-          .order('title')
-          .limit(_foldersLimit);
+      List<dynamic> rows;
+      try {
+        rows = await _sb
+            .from('casting_agent_folders')
+            .select('id,title,cover_profile_id')
+            .eq('user_id', userId)
+            .order('title')
+            .limit(_foldersLimit);
+      } on PostgrestException catch (e) {
+        if (!SupabaseCompat.isMissingColumn(e, 'cover_profile_id')) rethrow;
+        rows = await _sb
+            .from('casting_agent_folders')
+            .select('id,title')
+            .eq('user_id', userId)
+            .order('title')
+            .limit(_foldersLimit);
+      }
 
-      return (rows as List)
+      return rows
           .map(
             (row) => AgentFolder.fromMap(
               Map<String, dynamic>.from(row as Map),
@@ -121,7 +155,7 @@ class AgentWorkspaceService {
       final itemRows = await _sb
           .from('casting_agent_folder_items')
           .select(
-            'profile:profiles(id,full_name,birth_date,age,height,city,photo_urls,cover_photo_url)',
+            'profile:profiles(id,full_name,birth_date,age,height,city,photo_urls,cover_photo_url,cover_photo_focal_x,cover_photo_focal_y)',
           )
           .eq('user_id', userId)
           .eq('folder_id', folderId)
@@ -196,6 +230,18 @@ class AgentWorkspaceService {
       'user_id': userId,
       'title': cleanTitle,
     });
+  }
+
+  /// Makes [profileId]'s photo the folder cover (needs the
+  /// `cover_profile_id` column, see supabase/sql/agent_folder_cover.sql).
+  Future<void> setFolderCover(String folderId, String profileId) async {
+    final userId = _userId;
+    if (userId == null || folderId.isEmpty) return;
+    await _sb
+        .from('casting_agent_folders')
+        .update({'cover_profile_id': profileId.isEmpty ? null : profileId})
+        .eq('user_id', userId)
+        .eq('id', folderId);
   }
 
   Future<void> renameFolder(String folderId, String title) async {
