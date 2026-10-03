@@ -417,6 +417,7 @@ class ChatMessage {
     required this.pinnedBy,
     required this.editedAt,
     required this.createdAt,
+    this.deliveredAt,
   });
 
   final String id;
@@ -437,6 +438,13 @@ class ChatMessage {
   final String pinnedBy;
   final DateTime? editedAt;
   final DateTime? createdAt;
+
+  /// When the recipient's client received the message (✓✓ grey); null
+  /// means only sent (✓). [readAt] (✓✓ black) implies delivered.
+  final DateTime? deliveredAt;
+
+  bool get isDelivered => deliveredAt != null || readAt != null;
+  bool get isRead => readAt != null;
 
   bool get isDeleted => deletedAt != null;
   bool get isPinned => pinnedAt != null;
@@ -470,6 +478,7 @@ class ChatMessage {
       metadata: _mapOrEmpty(map['metadata']),
       deletedAt: DateTime.tryParse((map['deleted_at'] ?? '').toString()),
       readAt: DateTime.tryParse((map['read_at'] ?? '').toString()),
+      deliveredAt: DateTime.tryParse((map['delivered_at'] ?? '').toString()),
       listenedAt: DateTime.tryParse((map['listened_at'] ?? '').toString()),
       pinnedAt: DateTime.tryParse((map['pinned_at'] ?? '').toString()),
       pinnedBy: (map['pinned_by'] ?? '').toString(),
