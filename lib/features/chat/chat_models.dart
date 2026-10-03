@@ -171,7 +171,15 @@ class ChatListItem {
     required this.hasFileMessages,
     required this.hasAudioMessages,
     required this.hasPinnedMessages,
+    this.lastMessageMine = false,
+    this.lastMessageDelivered = false,
+    this.lastMessageRead = false,
   });
+
+  /// Status of my own last message, for the ✓ / ✓✓ before the preview.
+  final bool lastMessageMine;
+  final bool lastMessageDelivered;
+  final bool lastMessageRead;
 
   final String id;
   final String selectionTitle;
@@ -217,8 +225,14 @@ class ChatListItem {
     bool? hasFileMessages,
     bool? hasAudioMessages,
     bool? hasPinnedMessages,
+    bool? lastMessageMine,
+    bool? lastMessageDelivered,
+    bool? lastMessageRead,
   }) {
     return ChatListItem(
+      lastMessageMine: lastMessageMine ?? this.lastMessageMine,
+      lastMessageDelivered: lastMessageDelivered ?? this.lastMessageDelivered,
+      lastMessageRead: lastMessageRead ?? this.lastMessageRead,
       id: id ?? this.id,
       selectionTitle: selectionTitle ?? this.selectionTitle,
       profileName: profileName ?? this.profileName,
