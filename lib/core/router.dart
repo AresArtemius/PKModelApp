@@ -114,6 +114,17 @@ abstract class Routes {
   static const publicSelection = '/s/:id';
   static const chatPrefix = '/chat/';
   static const chat = '/chat/:id';
+
+  /// Query parameter of [chats] that pre-selects a conversation.
+  static const chatsChatParam = 'chat';
+
+  /// Where "write a message" should take the user: on the web the
+  /// conversation opens inside the two-column chats page, on native apps it
+  /// is a page of its own.
+  static String chatLocation(String chatId) {
+    if (kIsWeb) return '$chats?$chatsChatParam=$chatId';
+    return '$chatPrefix$chatId';
+  }
 }
 
 const _routeParamId = 'id';

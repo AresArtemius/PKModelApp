@@ -1432,6 +1432,28 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       orElse: () => _ChatHeaderData(title: t.chatUpper),
     );
     final chatContext = summary.valueOrNull;
+    // v2 (web, inside the two-column chats page): flat full-height column —
+    // 72 px header with a hairline, the feed, the composer at the bottom.
+    final v2 = kIsWeb && widget.embedded;
+
+    final header = v2
+        ? _ChatHeaderV2(
+            title: headerData.title,
+            subtitle: headerData.subtitle,
+            avatarUrl: headerData.avatarUrl,
+            onSearch: _toggleSearch,
+            searchActive: _searchOpen,
+            onDeleteChat: _deleteChat,
+          )
+        : _ChatHeader(
+            title: headerData.title,
+            subtitle: headerData.subtitle,
+            avatarUrl: headerData.avatarUrl,
+            onBack: widget.embedded ? widget.onClose : _goBack,
+            onSearch: _toggleSearch,
+            searchActive: _searchOpen,
+            onDeleteChat: _deleteChat,
+          );
 
     final content = Stack(
       children: [
@@ -1440,26 +1462,22 @@ class _ChatPageState extends ConsumerState<ChatPage> {
           top: !widget.embedded,
           bottom: !widget.embedded,
           child: Padding(
-            padding: EdgeInsets.fromLTRB(
-              widget.embedded ? 18 : 16,
-              widget.embedded ? 18 : 12,
-              widget.embedded ? 18 : 16,
-              widget.embedded ? 18 : 12,
-            ),
+            padding: v2
+                ? EdgeInsets.zero
+                : EdgeInsets.fromLTRB(
+                    widget.embedded ? 18 : 16,
+                    widget.embedded ? 18 : 12,
+                    widget.embedded ? 18 : 16,
+                    widget.embedded ? 18 : 12,
+                  ),
             child: Column(
               children: [
-                _ChatHeader(
-                  title: headerData.title,
-                  subtitle: headerData.subtitle,
-                  avatarUrl: headerData.avatarUrl,
-                  onBack: widget.embedded ? widget.onClose : _goBack,
-                  onSearch: _toggleSearch,
-                  searchActive: _searchOpen,
-                  onDeleteChat: _deleteChat,
-                ),
+                header,
                 const SizedBox(height: 12),
                 if (_searchOpen) ...[
-                  _ChatSearchPanel(
+                  _V2Pad(
+                    enabled: v2,
+                    child: _ChatSearchPanel(
                     controller: _searchController,
                     query: _searchQuery,
                     hitCount: searchHits.length,
@@ -1484,31 +1502,41 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                       direction: 0,
                     ),
                   ),
+                  ),
                   const SizedBox(height: 12),
                 ],
                 if (chatContext != null &&
                     (chatContext.profileName.trim().isNotEmpty ||
                         chatContext.selectionTitle.trim().isNotEmpty)) ...[
-                  _ChatContextCard(
-                    summary: chatContext,
-                    contexts:
-                        contexts.valueOrNull ?? const <ChatContextEntry>[],
+                  _V2Pad(
+                    enabled: v2,
+                    child: _ChatContextCard(
+                      summary: chatContext,
+                      contexts:
+                          contexts.valueOrNull ?? const <ChatContextEntry>[],
+                      flat: v2,
+                    ),
                   ),
                   const SizedBox(height: 12),
                 ],
                 if (pinnedPanelMessages.isNotEmpty) ...[
-                  _PinnedMessagesPanel(
-                    messages: pinnedPanelMessages,
-                    isRussian: _isRussian,
-                    previewBuilder: _replyPreviewText,
-                    onTap: (message) =>
-                        _jumpToMessage(message.id, searchVisibleMessages),
-                    onUnpin: (message) => _setMessagePinned(message, false),
+                  _V2Pad(
+                    enabled: v2,
+                    child: _PinnedMessagesPanel(
+                      messages: pinnedPanelMessages,
+                      isRussian: _isRussian,
+                      previewBuilder: _replyPreviewText,
+                      onTap: (message) =>
+                          _jumpToMessage(message.id, searchVisibleMessages),
+                      onUnpin: (message) => _setMessagePinned(message, false),
+                    ),
                   ),
                   const SizedBox(height: 12),
                 ],
                 Expanded(
-                  child: messages.when(
+                  child: _V2Pad(
+                    enabled: v2,
+                    child: messages.when(
                     loading: () =>
                         const Center(child: CircularProgressIndicator()),
                     error: (e, _) => Center(
@@ -1598,26 +1626,32 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                             },
                           ),
                   ),
+                  ),
                 ),
                 const SizedBox(height: 12),
                 if (_uploadingMedia) ...[
-                  const _ChatUploadProgress(),
+                  _V2Pad(enabled: v2, child: const _ChatUploadProgress()),
                   const SizedBox(height: 10),
                 ],
                 if ((typingStates.valueOrNull ?? const <ChatTypingState>[])
                     .isNotEmpty) ...[
-                  const _TypingIndicator(),
+                  _V2Pad(enabled: v2, child: const _TypingIndicator()),
                   const SizedBox(height: 10),
                 ],
                 if (mentionQuery != null && mentionTargets.isNotEmpty) ...[
-                  _MentionSuggestions(
-                    targets: mentionTargets,
-                    onSelect: _insertMention,
+                  _V2Pad(
+                    enabled: v2,
+                    child: _MentionSuggestions(
+                      targets: mentionTargets,
+                      onSelect: _insertMention,
+                    ),
                   ),
                   const SizedBox(height: 10),
                 ],
                 if (_selectionMode) ...[
-                  _MessageSelectionBar(
+                  _V2Pad(
+                    enabled: v2,
+                    child: _MessageSelectionBar(
                     count: _selectedMessageIds.length,
                     singleMessage: selectedMessage,
                     onCancel: _clearMessageSelection,
@@ -1636,22 +1670,29 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                           )
                         : null,
                   ),
+                  ),
                   const SizedBox(height: 10),
                 ],
-                _Composer(
-                  controller: _messageController,
-                  hintText: t.messageHint,
-                  sending: _sending || _uploadingMedia,
-                  replyingToText: _replyingTo == null
-                      ? null
-                      : _replyPreviewText(_replyingTo!),
-                  attachment: _pendingAttachment,
-                  onCancelReply: () => setState(() => _replyingTo = null),
-                  onRemoveAttachment: () =>
-                      setState(() => _pendingAttachment = null),
-                  onSend: _send,
-                  onAttach: _showAttachMenu,
-                  onRecordVoice: _recordVoiceMessage,
+                Padding(
+                  padding: v2
+                      ? const EdgeInsets.fromLTRB(24, 0, 24, 20)
+                      : EdgeInsets.zero,
+                  child: _Composer(
+                    controller: _messageController,
+                    hintText: t.messageHint,
+                    sending: _sending || _uploadingMedia,
+                    replyingToText: _replyingTo == null
+                        ? null
+                        : _replyPreviewText(_replyingTo!),
+                    attachment: _pendingAttachment,
+                    onCancelReply: () => setState(() => _replyingTo = null),
+                    onRemoveAttachment: () =>
+                        setState(() => _pendingAttachment = null),
+                    onSend: _send,
+                    onAttach: _showAttachMenu,
+                    onRecordVoice: _recordVoiceMessage,
+                    flat: v2,
+                  ),
                 ),
               ],
             ),
@@ -2120,6 +2161,124 @@ class _MentionSuggestionChip extends StatelessWidget {
   }
 }
 
+/// Horizontal page gutter of the v2 conversation column.
+class _V2Pad extends StatelessWidget {
+  const _V2Pad({required this.enabled, required this.child});
+
+  final bool enabled;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!enabled) return child;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: child,
+    );
+  }
+}
+
+class _ChatHeaderV2 extends StatelessWidget {
+  const _ChatHeaderV2({
+    required this.title,
+    required this.subtitle,
+    required this.avatarUrl,
+    required this.onSearch,
+    required this.searchActive,
+    required this.onDeleteChat,
+  });
+
+  final String title;
+  final String subtitle;
+  final String avatarUrl;
+  final VoidCallback onSearch;
+  final bool searchActive;
+  final VoidCallback onDeleteChat;
+
+  @override
+  Widget build(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    return Container(
+      height: 72,
+      padding: const EdgeInsets.fromLTRB(24, 0, 12, 0),
+      decoration: const BoxDecoration(
+        color: Tokens.bg,
+        border: Border(bottom: BorderSide(color: Tokens.border)),
+      ),
+      child: Row(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(Tokens.radiusMd),
+            child: SizedBox(
+              width: 44,
+              height: 44,
+              child: avatarUrl.trim().isEmpty
+                  ? const ColoredBox(
+                      color: Tokens.surfaceAlt,
+                      child: Icon(
+                        Icons.person_outline_rounded,
+                        color: Tokens.textTertiary,
+                      ),
+                    )
+                  : CachedNetworkImage(
+                      imageUrl: avatarUrl,
+                      fit: BoxFit.cover,
+                      alignment: const Alignment(0, -0.6),
+                      errorWidget: (_, _, _) => const ColoredBox(
+                        color: Tokens.surfaceAlt,
+                        child: Icon(
+                          Icons.person_outline_rounded,
+                          color: Tokens.textTertiary,
+                        ),
+                      ),
+                    ),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppText.h2.copyWith(height: 1.2),
+                ),
+                if (subtitle.trim().isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppText.caption.copyWith(fontSize: 13),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          IconButton(
+            tooltip: ru ? 'Поиск по переписке' : 'Search messages',
+            onPressed: onSearch,
+            style: IconButton.styleFrom(
+              foregroundColor: searchActive ? Tokens.accent : Tokens.ink,
+            ),
+            icon: const Icon(Icons.search_rounded, size: 22),
+          ),
+          IconButton(
+            tooltip: ru ? 'Удалить диалог' : 'Delete chat',
+            onPressed: onDeleteChat,
+            style: IconButton.styleFrom(foregroundColor: Tokens.ink),
+            icon: const Icon(Icons.delete_outline_rounded, size: 22),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ChatHeaderData {
   const _ChatHeaderData({
     required this.title,
@@ -2249,10 +2408,17 @@ class _ChatHeaderAvatar extends StatelessWidget {
 }
 
 class _ChatContextCard extends StatelessWidget {
-  const _ChatContextCard({required this.summary, required this.contexts});
+  const _ChatContextCard({
+    required this.summary,
+    required this.contexts,
+    this.flat = false,
+  });
 
   final ChatSummary summary;
   final List<ChatContextEntry> contexts;
+
+  /// v2: white, hairline border, no shadow or dark icon plate.
+  final bool flat;
 
   @override
   Widget build(BuildContext context) {
@@ -2273,18 +2439,24 @@ class _ChatContextCard extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.72),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: kBorderColor),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
+      decoration: flat
+          ? BoxDecoration(
+              color: Tokens.bg,
+              borderRadius: BorderRadius.circular(Tokens.radiusMd),
+              border: Border.all(color: Tokens.border),
+            )
+          : BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.72),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: kBorderColor),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.06),
+                  blurRadius: 18,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
       child: Column(
         children: [
           Row(
@@ -2292,10 +2464,15 @@ class _ChatContextCard extends StatelessWidget {
               Container(
                 width: 38,
                 height: 38,
-                decoration: pillDecoration(isDark: true, radius: 15),
-                child: const Icon(
+                decoration: flat
+                    ? BoxDecoration(
+                        color: Tokens.surfaceAlt,
+                        borderRadius: BorderRadius.circular(10),
+                      )
+                    : pillDecoration(isDark: true, radius: 15),
+                child: Icon(
                   Icons.account_tree_rounded,
-                  color: Colors.white,
+                  color: flat ? Tokens.ink : Colors.white,
                   size: 20,
                 ),
               ),
@@ -2309,12 +2486,14 @@ class _ChatContextCard extends StatelessWidget {
                       isRussian ? 'КОНТЕКСТ ДИАЛОГА' : 'CHAT CONTEXT',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: kTextMuted,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 1.2,
-                      ),
+                      style: flat
+                          ? AppText.label
+                          : const TextStyle(
+                              color: kTextMuted,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 1.2,
+                            ),
                     ),
                     const SizedBox(height: 5),
                     if (profileName.isNotEmpty)
@@ -4765,6 +4944,7 @@ class _Composer extends StatelessWidget {
     required this.onSend,
     required this.onAttach,
     required this.onRecordVoice,
+    this.flat = false,
   });
 
   final TextEditingController controller;
@@ -4778,16 +4958,25 @@ class _Composer extends StatelessWidget {
   final VoidCallback onAttach;
   final VoidCallback onRecordVoice;
 
+  /// v2: white field with a hairline border, no shadow.
+  final bool flat;
+
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        color: Colors.white.withValues(alpha: 0.92),
-        border: Border.all(color: kBorderColor, width: 1),
-        boxShadow: BrandTheme.basePillShadow(isDark: false),
-      ),
+      decoration: flat
+          ? BoxDecoration(
+              borderRadius: BorderRadius.circular(Tokens.radiusLg),
+              color: Tokens.bg,
+              border: Border.all(color: Tokens.borderStrong),
+            )
+          : BoxDecoration(
+              borderRadius: BorderRadius.circular(24),
+              color: Colors.white.withValues(alpha: 0.92),
+              border: Border.all(color: kBorderColor, width: 1),
+              boxShadow: BrandTheme.basePillShadow(isDark: false),
+            ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [

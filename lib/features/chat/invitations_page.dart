@@ -95,7 +95,7 @@ class _InvitationsPageState extends ConsumerState<InvitationsPage> {
   ) async {
     final chatId = await _ensureChat(context, item);
     if (!context.mounted || chatId == null) return;
-    context.push('${Routes.chatPrefix}$chatId');
+    context.push(Routes.chatLocation(chatId));
   }
 
   Future<void> _openChatDesktop(

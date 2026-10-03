@@ -1329,7 +1329,7 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
       final chatId = await _ensurePortfolioChat(model);
       if (!mounted || chatId.isEmpty) return;
       ref.invalidate(myChatsProvider(false));
-      context.push('${Routes.chatPrefix}$chatId');
+      context.push(Routes.chatLocation(chatId));
     });
   }
 
@@ -1397,7 +1397,7 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
             ? 'Приглашение отправлено'
             : 'Invitation sent',
       );
-      context.push('${Routes.chatPrefix}$chatId');
+      context.push(Routes.chatLocation(chatId));
     });
   }
 

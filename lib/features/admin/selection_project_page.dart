@@ -568,7 +568,7 @@ class _SelectionChatButtonState extends ConsumerState<_SelectionChatButton> {
             modelUserId: widget.modelUserId,
           );
       if (!mounted || chatId.isEmpty) return;
-      context.push('${Routes.chatPrefix}$chatId');
+      context.push(Routes.chatLocation(chatId));
     } finally {
       if (mounted) setState(() => _busy = false);
     }

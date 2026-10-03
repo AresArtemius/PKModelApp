@@ -566,12 +566,19 @@ class ChatService {
     final modelProfileName = (profile['full_name'] ?? '').toString().trim();
     final selectionTitle = (selection['title'] ?? '').toString().trim();
 
+    final otherIsModel = otherUserId == modelUserId;
     return ChatSummary.fromMap(
       map,
-      accountTitle: accountPreview?.displayName ?? modelProfileName,
-      accountAvatarUrl:
-          accountPreview?.avatarUrl ??
-          _chatCoverPhoto(profile['cover_photo_url'], photoUrls),
+      accountTitle: _counterpartTitle(
+        account: accountPreview,
+        otherIsModel: otherIsModel,
+        profileName: modelProfileName,
+      ),
+      accountAvatarUrl: (accountPreview?.avatarUrl ?? '').isNotEmpty
+          ? accountPreview!.avatarUrl
+          : (otherIsModel
+                ? _chatCoverPhoto(profile['cover_photo_url'], photoUrls)
+                : ''),
       contextLabel: _chatContextLabel(
         profileName: modelProfileName,
         selectionTitle: selectionTitle,
@@ -649,13 +656,20 @@ class ChatService {
         (map['updated_at'] ?? map['created_at'] ?? '').toString(),
       );
       final unreadCount = (map['unread_count'] as num?)?.toInt() ?? 0;
+      final profilePhotoUrl = (map['profile_photo_url'] ?? '')
+          .toString()
+          .trim();
       final nextItem = ChatListItem(
         id: chatId,
-        selectionTitle: account?.displayName ?? modelProfileName,
+        selectionTitle: _counterpartTitle(
+          account: account,
+          otherIsModel: !isModel,
+          profileName: modelProfileName,
+        ),
         profileName: '',
-        photoUrl:
-            account?.avatarUrl ??
-            (map['profile_photo_url'] ?? '').toString().trim(),
+        photoUrl: (account?.avatarUrl ?? '').isNotEmpty
+            ? account!.avatarUrl
+            : (!isModel ? profilePhotoUrl : ''),
         accountTag: account?.accountTag ?? '',
         contextLabel: _chatContextLabel(
           profileName: modelProfileName,
@@ -798,11 +812,17 @@ class ChatService {
       final unreadCount = await _fetchUnreadCount(chatId, userId);
       final nextItem = ChatListItem(
         id: chatId,
-        selectionTitle: accountPreview?.displayName ?? modelProfileName,
+        selectionTitle: _counterpartTitle(
+          account: accountPreview,
+          otherIsModel: !isModel,
+          profileName: modelProfileName,
+        ),
         profileName: '',
-        photoUrl:
-            accountPreview?.avatarUrl ??
-            _chatCoverPhoto(profile['cover_photo_url'], photoUrls),
+        photoUrl: (accountPreview?.avatarUrl ?? '').isNotEmpty
+            ? accountPreview!.avatarUrl
+            : (!isModel
+                  ? _chatCoverPhoto(profile['cover_photo_url'], photoUrls)
+                  : ''),
         accountTag: accountPreview?.accountTag ?? '',
         contextLabel: _chatContextLabel(
           profileName: modelProfileName,
@@ -993,6 +1013,21 @@ class ChatService {
       result[userId] = _ChatAccountPreview.fromMap(map);
     }
     return result;
+  }
+
+  /// Title of the other participant: their account name when they have one,
+  /// otherwise the model profile the chat is about (a model who never filled
+  /// in the account name is still "Синёв Максим", not "Аккаунт").
+  String _counterpartTitle({
+    required _ChatAccountPreview? account,
+    required bool otherIsModel,
+    required String profileName,
+  }) {
+    if (account != null && account.hasName) return account.displayName;
+    if (otherIsModel && profileName.trim().isNotEmpty) {
+      return profileName.trim();
+    }
+    return account?.displayName ?? profileName.trim();
   }
 
   String _chatContextLabel({
@@ -2186,11 +2221,16 @@ class _ChatAccountPreview {
     required this.displayName,
     required this.avatarUrl,
     required this.accountTag,
+    this.hasName = true,
   });
 
   final String displayName;
   final String avatarUrl;
   final String accountTag;
+
+  /// False when the account has neither a name, a company nor a position
+  /// and [displayName] is the generic placeholder.
+  final bool hasName;
 
   factory _ChatAccountPreview.fromMap(Map<String, dynamic> map) {
     final companyName = (map['company_name'] ?? '').toString().trim();
@@ -2210,6 +2250,8 @@ class _ChatAccountPreview {
 
     return _ChatAccountPreview(
       displayName: title,
+      hasName:
+          fullName.isNotEmpty || companyName.isNotEmpty || position.isNotEmpty,
       avatarUrl: (map['avatar_url'] ?? '').toString().trim(),
       accountTag: tagVisibility == 'hidden'
           ? ''
