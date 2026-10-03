@@ -222,11 +222,17 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     }
   }
 
+  bool _markReadInFlight = false;
+
   Future<void> _markRead() async {
+    if (_markReadInFlight || !mounted) return;
+    _markReadInFlight = true;
     try {
       await ref.read(chatServiceProvider).markChatRead(widget.chatId);
     } catch (_) {
       // Read receipts are best effort while older SQL is still possible.
+    } finally {
+      _markReadInFlight = false;
     }
   }
 
@@ -1583,7 +1589,12 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                               final canLoadOlder =
                                   _hasOlderMessages &&
                                   items.length >= _chatRealtimeMessageLimit;
-                              if (items.any((e) => e.senderId != userId)) {
+                              if (items.any(
+                                (e) =>
+                                    e.senderId != userId &&
+                                    e.readAt == null &&
+                                    !e.isDeleted,
+                              )) {
                                 WidgetsBinding.instance.addPostFrameCallback(
                                   (_) => _markRead(),
                                 );
@@ -1698,6 +1709,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                             Set<String>.from(_selectedMessageIds),
                           )
                         : null,
+                    flat: v2,
                   ),
                   ),
                   const SizedBox(height: 10),
@@ -1777,7 +1789,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
           620.0,
           math.max(280.0, constraints.maxWidth * 0.62),
         );
-        return ListView.builder(
+        return SelectionArea(
+          child: ListView.builder(
           controller: _messageListController,
           reverse: true,
           padding: const EdgeInsets.only(top: 8, bottom: 4),
@@ -1795,7 +1808,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
             }
             final item = entry.message!;
             final mine = item.senderId == userId;
-            return _BubbleV2(
+            return RepaintBoundary(
+              child: _BubbleV2(
               key: ValueKey('v2-${item.id}'),
               message: item,
               mine: mine,
@@ -1825,8 +1839,10 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                   _showMessageMenuV2(item, mine: mine, position: position),
               onReact: (emoji) => _toggleReaction(item, emoji),
               onReply: () => setState(() => _replyingTo = item),
+              ),
             );
           },
+          ),
         );
       },
     );
@@ -2257,8 +2273,7 @@ class _BubbleV2State extends State<_BubbleV2> {
       ],
     );
 
-    final bubble = AnimatedContainer(
-      duration: Tokens.fast,
+    final bubble = Container(
       constraints: BoxConstraints(maxWidth: widget.maxWidth),
       padding: const EdgeInsets.fromLTRB(14, 9, 12, 8),
       decoration: BoxDecoration(
@@ -2293,6 +2308,7 @@ class _BubbleV2State extends State<_BubbleV2> {
             _HighlightedMessageText(
               text: visibleBody,
               query: widget.searchQuery,
+              selectable: false,
               style: AppText.body.copyWith(
                 color: textColor,
                 height: 1.4,
@@ -3836,6 +3852,7 @@ class _MessageSelectionBar extends StatelessWidget {
     required this.onForward,
     required this.onTogglePin,
     required this.onDelete,
+    this.flat = false,
   });
 
   final int count;
@@ -3846,6 +3863,9 @@ class _MessageSelectionBar extends StatelessWidget {
   final VoidCallback? onTogglePin;
   final VoidCallback? onDelete;
 
+  /// v2: white bar with a hairline, sentence-case label, text actions.
+  final bool flat;
+
   @override
   Widget build(BuildContext context) {
     final isRussian =
@@ -3853,6 +3873,68 @@ class _MessageSelectionBar extends StatelessWidget {
     final pinTooltip = singleMessage?.isPinned == true
         ? (isRussian ? 'Открепить' : 'Unpin')
         : (isRussian ? 'Закрепить' : 'Pin');
+    if (flat) {
+      Widget action(IconData icon, String label, VoidCallback? onTap,
+          {bool danger = false}) {
+        return TextButton.icon(
+          onPressed: onTap,
+          style: TextButton.styleFrom(
+            foregroundColor: danger ? Tokens.danger : Tokens.ink,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(Tokens.radiusSm),
+            ),
+          ),
+          icon: Icon(icon, size: 18),
+          label: Text(label, style: AppText.button),
+        );
+      }
+
+      final selectedLabel = isRussian
+          ? _pluralRu(count, 'Выбрано $count сообщение',
+              'Выбрано $count сообщения', 'Выбрано $count сообщений')
+          : '$count selected';
+      return Container(
+        height: 48,
+        padding: const EdgeInsets.fromLTRB(6, 0, 6, 0),
+        decoration: BoxDecoration(
+          color: Tokens.bg,
+          borderRadius: BorderRadius.circular(Tokens.radiusMd),
+          border: Border.all(color: Tokens.border),
+        ),
+        child: Row(
+          children: [
+            IconButton(
+              tooltip: isRussian ? 'Снять выделение' : 'Clear selection',
+              onPressed: onCancel,
+              icon: const Icon(Icons.close_rounded, size: 20),
+              style: IconButton.styleFrom(foregroundColor: Tokens.ink),
+            ),
+            const SizedBox(width: 4),
+            Expanded(
+              child: Text(selectedLabel, style: AppText.smallStrong),
+            ),
+            if (onReply != null)
+              action(Icons.reply_rounded,
+                  isRussian ? 'Ответить' : 'Reply', onReply),
+            if (onForward != null)
+              action(Icons.forward_rounded,
+                  isRussian ? 'Переслать' : 'Forward', onForward),
+            if (onTogglePin != null)
+              action(
+                singleMessage?.isPinned == true
+                    ? Icons.push_pin_rounded
+                    : Icons.push_pin_outlined,
+                pinTooltip,
+                onTogglePin,
+              ),
+            action(Icons.delete_outline_rounded,
+                isRussian ? 'Удалить' : 'Delete', onDelete,
+                danger: true),
+          ],
+        ),
+      );
+    }
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
       decoration: BoxDecoration(
@@ -3926,6 +4008,14 @@ class _MessageSelectionBar extends StatelessWidget {
       ),
     );
   }
+}
+
+String _pluralRu(int n, String one, String few, String many) {
+  final mod10 = n % 10;
+  final mod100 = n % 100;
+  if (mod10 == 1 && mod100 != 11) return one;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few;
+  return many;
 }
 
 class _MessageBubble extends StatelessWidget {
@@ -4189,6 +4279,7 @@ class _HighlightedMessageText extends StatelessWidget {
     required this.query,
     required this.style,
     required this.highlightColor,
+    this.selectable = true,
   });
 
   final String text;
@@ -4196,11 +4287,18 @@ class _HighlightedMessageText extends StatelessWidget {
   final TextStyle style;
   final Color highlightColor;
 
+  /// False when an ancestor already provides a [SelectionArea] (the v2
+  /// feed wraps the whole list in one instead of one per bubble).
+  final bool selectable;
+
+  Widget _wrap(Widget child) =>
+      selectable ? SelectionArea(child: child) : child;
+
   @override
   Widget build(BuildContext context) {
     final cleanQuery = query.trim();
     if (cleanQuery.isEmpty || text.isEmpty) {
-      return SelectionArea(child: Text(text, style: style));
+      return _wrap(Text(text, style: style));
     }
 
     final lowerText = text.toLowerCase();
@@ -4227,15 +4325,13 @@ class _HighlightedMessageText extends StatelessWidget {
     }
 
     if (spans.isEmpty) {
-      return SelectionArea(child: Text(text, style: style));
+      return _wrap(Text(text, style: style));
     }
     if (cursor < text.length) {
       spans.add(TextSpan(text: text.substring(cursor)));
     }
 
-    return SelectionArea(
-      child: Text.rich(TextSpan(style: style, children: spans)),
-    );
+    return _wrap(Text.rich(TextSpan(style: style, children: spans)));
   }
 }
 
@@ -5938,14 +6034,46 @@ class _Composer extends StatelessWidget {
                 icon: const Icon(Icons.add_rounded, color: kTextDark),
               ),
               Expanded(
-                child: TextField(
-                  controller: controller,
-                  minLines: 1,
-                  maxLines: 4,
-                  textInputAction: TextInputAction.newline,
-                  decoration: InputDecoration(
-                    hintText: hintText,
-                    border: InputBorder.none,
+                child: Focus(
+                  // Desktop / web: Enter sends, Shift+Enter inserts a line
+                  // break. Touch keyboards keep their own "new line" key.
+                  onKeyEvent: !flat
+                      ? null
+                      : (node, event) {
+                          if (event is! KeyDownEvent) {
+                            return KeyEventResult.ignored;
+                          }
+                          final isEnter =
+                              event.logicalKey == LogicalKeyboardKey.enter ||
+                              event.logicalKey ==
+                                  LogicalKeyboardKey.numpadEnter;
+                          if (!isEnter) return KeyEventResult.ignored;
+                          final shift =
+                              HardwareKeyboard.instance.isShiftPressed;
+                          if (shift) return KeyEventResult.ignored;
+                          if (!sending) onSend();
+                          return KeyEventResult.handled;
+                        },
+                  child: TextField(
+                    controller: controller,
+                    minLines: 1,
+                    maxLines: flat ? 8 : 4,
+                    textInputAction: TextInputAction.newline,
+                    style: flat ? AppText.body : null,
+                    decoration: InputDecoration(
+                      hintText: hintText,
+                      hintStyle: flat
+                          ? AppText.body.copyWith(color: Tokens.textTertiary)
+                          : null,
+                      border: InputBorder.none,
+                      enabledBorder: flat ? InputBorder.none : null,
+                      focusedBorder: flat ? InputBorder.none : null,
+                      filled: flat ? false : null,
+                      isDense: flat ? true : null,
+                      contentPadding: flat
+                          ? const EdgeInsets.symmetric(vertical: 12)
+                          : null,
+                    ),
                   ),
                 ),
               ),
