@@ -2887,8 +2887,10 @@ class _BubbleV2State extends State<_BubbleV2> {
   }
 }
 
+/// Pictographs plus the pieces that build them: skin tones, regional
+/// indicators (flags), variation selector, zero-width joiner, tag letters.
 final RegExp _emojiOnlyPattern = RegExp(
-  r'^[\p{Extended_Pictographic}\p{Emoji_Component}\uFE0F\u200D\u20E3\s]+$',
+  r'^(?:\p{Extended_Pictographic}|[\u{1F3FB}-\u{1F3FF}]|[\u{1F1E6}-\u{1F1FF}]|\u{FE0F}|\u{200D}|[\u{E0020}-\u{E007F}]|\s)+$',
   unicode: true,
 );
 
@@ -2897,9 +2899,6 @@ bool _isEmojiOnly(String text) {
   final clean = text.trim();
   if (clean.isEmpty || clean.length > 32) return false;
   if (!_emojiOnlyPattern.hasMatch(clean)) return false;
-  if (RegExp(r'[0-9#*]').hasMatch(clean.replaceAll('\u20E3', ''))) {
-    return false;
-  }
   final graphemes = clean.replaceAll(RegExp(r'\s'), '').characters.length;
   return graphemes >= 1 && graphemes <= 3;
 }
