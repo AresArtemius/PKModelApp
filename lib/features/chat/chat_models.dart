@@ -290,6 +290,7 @@ class ChatSummary {
     required this.accountTitle,
     required this.accountAvatarUrl,
     required this.contextLabel,
+    this.selectionIsPublic = false,
   });
 
   final String id;
@@ -302,6 +303,10 @@ class ChatSummary {
   final String accountTitle;
   final String accountAvatarUrl;
   final String contextLabel;
+
+  /// True when the casting (selection) is published and its public page
+  /// can be opened; otherwise "open casting" leads to an "unavailable" page.
+  final bool selectionIsPublic;
 
   factory ChatSummary.fromMap(
     Map<String, dynamic> map, {
@@ -328,6 +333,7 @@ class ChatSummary {
           : profileName,
       accountAvatarUrl: accountAvatarUrl.trim(),
       contextLabel: contextLabel.trim(),
+      selectionIsPublic: selection['is_public'] == true,
     );
   }
 }

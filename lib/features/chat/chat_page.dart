@@ -1436,6 +1436,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     // 72 px header with a hairline, the feed, the composer at the bottom.
     final v2 = kIsWeb && widget.embedded;
 
+    final profileId = chatContext?.profileId.trim() ?? '';
+    final selectionId = chatContext?.selectionId.trim() ?? '';
     final header = v2
         ? _ChatHeaderV2(
             title: headerData.title,
@@ -1444,6 +1446,17 @@ class _ChatPageState extends ConsumerState<ChatPage> {
             onSearch: _toggleSearch,
             searchActive: _searchOpen,
             onDeleteChat: _deleteChat,
+            onOpenProfile: profileId.isEmpty
+                ? null
+                : () => context.push('${Routes.modelPrefix}$profileId'),
+            // The public casting page only works for a published casting;
+            // otherwise the button has nowhere useful to go.
+            onOpenCasting:
+                selectionId.isEmpty || chatContext?.selectionIsPublic != true
+                ? null
+                : () => context.push(
+                    '${Routes.publicSelectionPrefix}$selectionId',
+                  ),
           )
         : _ChatHeader(
             title: headerData.title,
@@ -1505,7 +1518,9 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                   ),
                   const SizedBox(height: 12),
                 ],
-                if (chatContext != null &&
+                // v2 carries the context in the header line and its actions.
+                if (!v2 &&
+                    chatContext != null &&
                     (chatContext.profileName.trim().isNotEmpty ||
                         chatContext.selectionTitle.trim().isNotEmpty)) ...[
                   _V2Pad(
@@ -2186,6 +2201,8 @@ class _ChatHeaderV2 extends StatelessWidget {
     required this.onSearch,
     required this.searchActive,
     required this.onDeleteChat,
+    this.onOpenProfile,
+    this.onOpenCasting,
   });
 
   final String title;
@@ -2194,6 +2211,8 @@ class _ChatHeaderV2 extends StatelessWidget {
   final VoidCallback onSearch;
   final bool searchActive;
   final VoidCallback onDeleteChat;
+  final VoidCallback? onOpenProfile;
+  final VoidCallback? onOpenCasting;
 
   @override
   Widget build(BuildContext context) {
@@ -2249,7 +2268,7 @@ class _ChatHeaderV2 extends StatelessWidget {
                 if (subtitle.trim().isNotEmpty) ...[
                   const SizedBox(height: 2),
                   Text(
-                    subtitle,
+                    subtitle.replaceAll(' • ', ' · '),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: AppText.caption.copyWith(fontSize: 13),
@@ -2259,6 +2278,28 @@ class _ChatHeaderV2 extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
+          if (onOpenProfile != null)
+            IconButton(
+              tooltip: ru ? 'Открыть анкету' : 'Open profile',
+              onPressed: onOpenProfile,
+              style: IconButton.styleFrom(foregroundColor: Tokens.ink),
+              icon: const Icon(Icons.badge_outlined, size: 22),
+            ),
+          if (onOpenCasting != null)
+            IconButton(
+              tooltip: ru ? 'Открыть кастинг' : 'Open casting',
+              onPressed: onOpenCasting,
+              style: IconButton.styleFrom(foregroundColor: Tokens.ink),
+              icon: const Icon(Icons.video_camera_front_outlined, size: 22),
+            ),
+          if (onOpenProfile != null || onOpenCasting != null)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 6),
+              child: SizedBox(
+                height: 24,
+                child: VerticalDivider(width: 1, color: Tokens.border),
+              ),
+            ),
           IconButton(
             tooltip: ru ? 'Поиск по переписке' : 'Search messages',
             onPressed: onSearch,

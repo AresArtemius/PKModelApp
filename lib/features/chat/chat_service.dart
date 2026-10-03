@@ -529,19 +529,30 @@ class ChatService {
     required String chatId,
     required String currentUserId,
   }) async {
-    final row = await _sb
-        .from('selection_chats')
-        .select('''
-          id,
-          selection_id,
-          profile_id,
-          model_user_id,
-          agent_user_id,
-          selection:selections(title),
-          profile:profiles(full_name,photo_urls,cover_photo_url)
-        ''')
-        .eq('id', chatId)
-        .maybeSingle();
+    Future<Map<String, dynamic>?> load({required bool includePublic}) async {
+      final row = await _sb
+          .from('selection_chats')
+          .select('''
+            id,
+            selection_id,
+            profile_id,
+            model_user_id,
+            agent_user_id,
+            selection:selections(title${includePublic ? ',is_public' : ''}),
+            profile:profiles(full_name,photo_urls,cover_photo_url)
+          ''')
+          .eq('id', chatId)
+          .maybeSingle();
+      return row;
+    }
+
+    Map<String, dynamic>? row;
+    try {
+      row = await load(includePublic: true);
+    } on PostgrestException catch (e) {
+      if (!SupabaseCompat.isMissingColumn(e, 'is_public')) rethrow;
+      row = await load(includePublic: false);
+    }
 
     if (row == null) return null;
     final map = Map<String, dynamic>.from(row);
