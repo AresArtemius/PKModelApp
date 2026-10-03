@@ -27,6 +27,8 @@ class AppTopBar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     ref.watch(appNotificationsRealtimeProvider);
+    ref.watch(presenceHeartbeatProvider);
+    ref.watch(chatListRealtimeProvider);
     final t = AppLocalizations.of(context)!;
     final signedIn = ref.watch(isAuthenticatedProvider);
     final isAdmin = ref

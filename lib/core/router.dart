@@ -251,6 +251,8 @@ class AppBottomNav extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     ref.watch(appNotificationsRealtimeProvider);
+    ref.watch(presenceHeartbeatProvider);
+    ref.watch(chatListRealtimeProvider);
     final t = AppLocalizations.of(context)!;
     final isAdmin = ref
         .watch(isAdminProvider)

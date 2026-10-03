@@ -2014,6 +2014,32 @@ class ChatService {
     }
   }
 
+  /// Heartbeat for "в сети / был(а) в …". Silently ignored when the
+  /// backend v2 SQL is not applied.
+  Future<void> touchPresence({required bool online}) async {
+    if (_sb.auth.currentUser == null) return;
+    try {
+      await _sb.rpc('touch_presence', params: {'p_online': online});
+    } on PostgrestException catch (e) {
+      if (SupabaseCompat.isMissingRpc(e, 'touch_presence')) return;
+      rethrow;
+    }
+  }
+
+  Stream<UserPresence?> watchPresence(String userId) {
+    final id = userId.trim();
+    if (id.isEmpty) return Stream<UserPresence?>.value(null);
+    return _sb
+        .from('user_presence')
+        .stream(primaryKey: ['user_id'])
+        .eq('user_id', id)
+        .limit(1)
+        .map((rows) {
+          if (rows.isEmpty) return null;
+          return UserPresence.fromMap(Map<String, dynamic>.from(rows.first));
+        });
+  }
+
   Future<void> setTyping({
     required String chatId,
     required bool isTyping,
