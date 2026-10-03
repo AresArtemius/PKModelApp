@@ -1037,6 +1037,7 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
     Future<void> applyRange(void Function() set) async {
       _unfocus();
       set();
+      c.touch();
       await c.reload();
     }
 

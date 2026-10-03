@@ -292,23 +292,25 @@ const double kCalendarDayRadius = 12.0;
 // CATALOG FILTER LIMITS
 // ===============================================================
 
-const int kAgeMin = 1;
-const int kAgeMax = 90;
+// Sanity caps only: the real slider edges come from the published
+// profiles (`catalog_filter_bounds`), babies to seniors included.
+const int kAgeMin = 0;
+const int kAgeMax = 120;
 
 const int kHeightMin = 20;
-const int kHeightMax = 210;
+const int kHeightMax = 250;
 
 const int kShoeMin = 5;
 const int kShoeMax = 55;
 
-const int kBustMin = 60;
-const int kBustMax = 130;
+const int kBustMin = 30;
+const int kBustMax = 160;
 
 const int kWaistMin = 30;
-const int kWaistMax = 90;
+const int kWaistMax = 150;
 
-const int kHipsMin = 60;
-const int kHipsMax = 150;
+const int kHipsMin = 30;
+const int kHipsMax = 160;
 
 /// Catalog / selection animations
 const Duration kAnim160 = Duration(milliseconds: 160);
