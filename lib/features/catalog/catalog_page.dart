@@ -18,12 +18,13 @@ import '../../core/router.dart';
 import '../../gen_l10n/app_localizations.dart';
 import '../../ui/brand/brand_logo.dart';
 import '../../ui/brand/brand_theme.dart';
+import '../../ui/brand/appearance_lookups.dart';
 import '../../ui/brand/ui_constants.dart';
 import '../analytics/profile_analytics.dart';
 import '../chat/chat_providers.dart';
 import '../profile/profile_model.dart';
 import 'catalog_controller.dart';
-import 'advanced_search_dialog.dart';
+import 'catalog_repository.dart' show CatalogSort;
 import 'catalog_providers.dart';
 import 'catalog_saved_searches.dart';
 import 'create_selection_dialog.dart';
@@ -85,7 +86,7 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
   /// pushed, so Back still leaves the catalog.
   void _syncUrlWithFilters(CatalogController c) {
     if (!mounted) return;
-    final params = c.filterSnapshot.toQueryParameters();
+    final params = c.urlParameters;
     if (_lastUrlFilters != null && mapEquals(_lastUrlFilters, params)) return;
     _lastUrlFilters = params;
     final router = GoRouter.of(context);
@@ -103,10 +104,12 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
   /// catalog links).
   void _restoreFiltersFromUrl(CatalogController c) {
     final params = GoRouterState.of(context).uri.queryParameters;
+    final sortName = params[CatalogController.sortUrlKey];
+    if (sortName != null) c.sort = CatalogController.sortFromName(sortName);
     if (!CatalogFilterSnapshot.hasQueryParameters(params)) return;
     final snapshot = CatalogFilterSnapshot.fromQueryParameters(params);
-    _lastUrlFilters = snapshot.toQueryParameters();
     c.applyFilterSnapshot(snapshot);
+    _lastUrlFilters = c.urlParameters;
   }
 
   void _syncSearchController(String value) {
@@ -138,7 +141,7 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
       if (_catalogSavedSearchesEnabled) {
         unawaited(ref.read(catalogSavedSearchesProvider).load());
       }
-      await controller.loadBounds();
+      await Future.wait([controller.loadBounds(), controller.loadFacets()]);
       if (!mounted) return;
       await controller.reload();
     });
@@ -238,82 +241,31 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
 
   void _unfocus() => FocusManager.instance.primaryFocus?.unfocus();
 
+  /// Mutates filter fields inside [set], then reloads (filters apply live).
+  Future<void> _applyFilterChange(void Function() set) async {
+    _unfocus();
+    set();
+    _c.touch();
+    await _c.reload();
+  }
+
+  Future<void> _onRoleChanged(ProfessionalProfileType? role) async {
+    _unfocus();
+    _c.setProfileRole(role);
+    await _c.reload();
+  }
+
+  /// Mobile: every filter group in a full-height sheet.
   Future<void> _openAdvancedSearch() async {
     _unfocus();
-    final res = await showDialog<AdvancedSearchResult>(
-      context: context,
-      barrierDismissible: true,
-      builder: (_) => AdvancedSearchDialog(
-        initialAgeFrom: _c.ageFrom,
-        initialAgeTo: _c.ageTo,
-        initialHeightFrom: _c.heightFrom,
-        initialHeightTo: _c.heightTo,
-        initialShoeFrom: _c.shoeFrom,
-        initialShoeTo: _c.shoeTo,
-        initialBustFrom: _c.bustFrom,
-        initialBustTo: _c.bustTo,
-        initialWaistFrom: _c.waistFrom,
-        initialWaistTo: _c.waistTo,
-        initialHipsFrom: _c.hipsFrom,
-        initialHipsTo: _c.hipsTo,
-        initialMinHourlyRateFrom: _c.minHourlyRateFrom,
-        initialMinHourlyRateTo: _c.minHourlyRateTo,
-        initialMinDailyFeeFrom: _c.minDailyFeeFrom,
-        initialMinDailyFeeTo: _c.minDailyFeeTo,
-        initialEyeColor: _c.eyeColor,
-        initialHairColor: _c.hairColor,
-        initialCountry: _c.country,
-        initialCity: _c.city,
-        initialNeedDate: _c.needDate,
-        ageMin: _c.bounds?.ageMin ?? kAgeMin,
-        ageMax: _c.bounds?.ageMax ?? kAgeMax,
-        heightMin: _c.bounds?.heightMin ?? kHeightMin,
-        heightMax: _c.bounds?.heightMax ?? kHeightMax,
-        shoeMin: _c.bounds?.shoeMin ?? kShoeMin,
-        shoeMax: _c.bounds?.shoeMax ?? kShoeMax,
-        bustMin: _c.bounds?.bustMin ?? kBustMin,
-        bustMax: _c.bounds?.bustMax ?? kBustMax,
-        waistMin: _c.bounds?.waistMin ?? kWaistMin,
-        waistMax: _c.bounds?.waistMax ?? kWaistMax,
-        hipsMin: _c.bounds?.hipsMin ?? kHipsMin,
-        hipsMax: _c.bounds?.hipsMax ?? kHipsMax,
-        minHourlyRateMin: _c.bounds?.minHourlyRateMin ?? 0,
-        minHourlyRateMax: _c.bounds?.minHourlyRateMax ?? 10000,
-        minDailyFeeMin: _c.bounds?.minDailyFeeMin ?? 0,
-        minDailyFeeMax: _c.bounds?.minDailyFeeMax ?? 100000,
-      ),
+    await showCatalogFilterSheet(
+      context,
+      controller: _c,
+      onApply: _applyFilterChange,
+      onRoleChanged: _onRoleChanged,
+      onReset: _c.hasActiveFilters ? _clearCatalogFilters : null,
     );
-
     _unfocus();
-
-    if (!mounted || res == null) return;
-
-    _c.applyAdvancedFilters(
-      reset: res.reset,
-      ageFrom: res.ageFrom,
-      ageTo: res.ageTo,
-      heightFrom: res.heightFrom,
-      heightTo: res.heightTo,
-      shoeFrom: res.shoeFrom,
-      shoeTo: res.shoeTo,
-      bustFrom: res.bustFrom,
-      bustTo: res.bustTo,
-      waistFrom: res.waistFrom,
-      waistTo: res.waistTo,
-      hipsFrom: res.hipsFrom,
-      hipsTo: res.hipsTo,
-      minHourlyRateFrom: res.minHourlyRateFrom,
-      minHourlyRateTo: res.minHourlyRateTo,
-      minDailyFeeFrom: res.minDailyFeeFrom,
-      minDailyFeeTo: res.minDailyFeeTo,
-      eyeColor: res.eyeColor,
-      hairColor: res.hairColor,
-      country: res.country,
-      city: res.city,
-      needDate: res.needDate,
-    );
-
-    await _c.reload();
   }
 
   Future<void> _clearCatalogFilters() async {
@@ -1023,99 +975,13 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
             orElse: () => filteredItems.first,
           )
         : null;
-    Future<void> onRoleChanged(ProfessionalProfileType? role) async {
-      _unfocus();
-      c.setProfileRole(role);
-      await c.reload();
-    }
-
     final roleTabs = isDesktop
-        ? _CatalogRoleList(selectedRole: c.profileRole, onChanged: onRoleChanged)
-        : _CatalogRoleTabs(selectedRole: c.profileRole, onChanged: onRoleChanged);
+        ? _CatalogRoleList(selectedRole: c.profileRole, onChanged: _onRoleChanged)
+        : _CatalogRoleTabs(selectedRole: c.profileRole, onChanged: _onRoleChanged);
 
-    // Inline ranges in the rail; the dialog keeps the rarer filters.
-    Future<void> applyRange(void Function() set) async {
-      _unfocus();
-      set();
-      c.touch();
-      await c.reload();
-    }
-
-    final b = c.bounds;
+    // Desktop: every filter group lives in the rail and applies live.
     final inlineFilters = isDesktop
-        ? Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _CatalogRangeFilter(
-                label: t.age,
-                min: b?.ageMin ?? kAgeMin,
-                max: b?.ageMax ?? kAgeMax,
-                from: c.ageFrom,
-                to: c.ageTo,
-                initiallyOpen: true,
-                onChanged: (from, to) => applyRange(() {
-                  c.ageFrom = from;
-                  c.ageTo = to;
-                }),
-              ),
-              _CatalogRangeFilter(
-                label: t.height,
-                unit: t.cm,
-                min: b?.heightMin ?? kHeightMin,
-                max: b?.heightMax ?? kHeightMax,
-                from: c.heightFrom,
-                to: c.heightTo,
-                onChanged: (from, to) => applyRange(() {
-                  c.heightFrom = from;
-                  c.heightTo = to;
-                }),
-              ),
-              _CatalogRangeFilter(
-                label: t.shoeSize,
-                min: b?.shoeMin ?? kShoeMin,
-                max: b?.shoeMax ?? kShoeMax,
-                from: c.shoeFrom,
-                to: c.shoeTo,
-                onChanged: (from, to) => applyRange(() {
-                  c.shoeFrom = from;
-                  c.shoeTo = to;
-                }),
-              ),
-              _CatalogRangeFilter(
-                label: t.bust,
-                min: b?.bustMin ?? kBustMin,
-                max: b?.bustMax ?? kBustMax,
-                from: c.bustFrom,
-                to: c.bustTo,
-                onChanged: (from, to) => applyRange(() {
-                  c.bustFrom = from;
-                  c.bustTo = to;
-                }),
-              ),
-              _CatalogRangeFilter(
-                label: t.waist,
-                min: b?.waistMin ?? kWaistMin,
-                max: b?.waistMax ?? kWaistMax,
-                from: c.waistFrom,
-                to: c.waistTo,
-                onChanged: (from, to) => applyRange(() {
-                  c.waistFrom = from;
-                  c.waistTo = to;
-                }),
-              ),
-              _CatalogRangeFilter(
-                label: t.hips,
-                min: b?.hipsMin ?? kHipsMin,
-                max: b?.hipsMax ?? kHipsMax,
-                from: c.hipsFrom,
-                to: c.hipsTo,
-                onChanged: (from, to) => applyRange(() {
-                  c.hipsFrom = from;
-                  c.hipsTo = to;
-                }),
-              ),
-            ],
-          )
+        ? _CatalogFilterGroups(controller: c, onApply: _applyFilterChange)
         : null;
 
     return Scaffold(
@@ -1183,6 +1049,12 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                                     _toggleSelectAllVisible(filteredItems);
                                   }
                                 : null,
+                            sort: c.sort,
+                            onSortChanged: (sort) async {
+                              _unfocus();
+                              c.setSort(sort);
+                              await c.reload();
+                            },
                           ),
                           onAdvancedSearch: _openAdvancedSearch,
                           advancedSearchEnabled: !c.isInitialLoading,

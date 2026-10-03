@@ -279,6 +279,34 @@ class CatalogController extends ChangeNotifier {
   Object? lastError;
   CatalogFilterBounds? bounds;
 
+  /// Distinct eye/hair colours, countries and cities with counts.
+  CatalogFacets facets = const CatalogFacets();
+
+  /// Result ordering (not part of the filter snapshot: it never makes the
+  /// «reset filters» link appear).
+  CatalogSort sort = CatalogSort.recommended;
+
+  static const String sortUrlKey = 'sort';
+
+  static CatalogSort sortFromName(String? name) {
+    for (final value in CatalogSort.values) {
+      if (value.name == name) return value;
+    }
+    return CatalogSort.recommended;
+  }
+
+  /// Filters plus sort, for the catalogue URL.
+  Map<String, String> get urlParameters => {
+    ...filterSnapshot.toQueryParameters(),
+    if (sort != CatalogSort.recommended) sortUrlKey: sort.name,
+  };
+
+  void setSort(CatalogSort value) {
+    if (sort == value) return;
+    sort = value;
+    notifyListeners();
+  }
+
   int _loadToken = 0;
   int _autoFillLoads = 0;
   Timer? _loadMoreThrottle;
@@ -468,6 +496,60 @@ class CatalogController extends ChangeNotifier {
     needDate = snapshot.needDate;
     profileRole = snapshot.profileRole;
     notifyListeners();
+  }
+
+  /// Facet values for the rail (chips with counts); failures only leave
+  /// the groups empty.
+  Future<void> loadFacets() async {
+    try {
+      facets = await _repo.loadFacets();
+    } catch (e, st) {
+      assert(() {
+        AppLogger.error('Catalog facets load failed', error: e, stackTrace: st);
+        return true;
+      }());
+    } finally {
+      notifyListeners();
+    }
+  }
+
+  /// How many profiles the current filters would match if [field] took the
+  /// range [from]–[to] (the live hint under a slider).
+  Future<int> previewCount({
+    required String field,
+    int? from,
+    int? to,
+  }) {
+    int? pick(String name, int? current, bool isFrom) {
+      if (name != field) return current;
+      return isFrom ? from : to;
+    }
+
+    return _repo.countApprovedProfiles(
+      query: query,
+      needDate: needDate,
+      ageFrom: pick('age', ageFrom, true),
+      ageTo: pick('age', ageTo, false),
+      heightFrom: pick('height', heightFrom, true),
+      heightTo: pick('height', heightTo, false),
+      shoeFrom: pick('shoe', shoeFrom, true),
+      shoeTo: pick('shoe', shoeTo, false),
+      bustFrom: pick('bust', bustFrom, true),
+      bustTo: pick('bust', bustTo, false),
+      waistFrom: pick('waist', waistFrom, true),
+      waistTo: pick('waist', waistTo, false),
+      hipsFrom: pick('hips', hipsFrom, true),
+      hipsTo: pick('hips', hipsTo, false),
+      minHourlyRateFrom: pick('hourly', minHourlyRateFrom, true),
+      minHourlyRateTo: pick('hourly', minHourlyRateTo, false),
+      minDailyFeeFrom: pick('daily', minDailyFeeFrom, true),
+      minDailyFeeTo: pick('daily', minDailyFeeTo, false),
+      eyeColor: eyeColor,
+      hairColor: hairColor,
+      country: country,
+      city: city,
+      profileRole: profileRole,
+    );
   }
 
   Future<void> loadBounds() async {
@@ -679,6 +761,7 @@ class CatalogController extends ChangeNotifier {
       country: country,
       city: city,
       profileRole: profileRole,
+      sort: sort,
     );
   }
 }
