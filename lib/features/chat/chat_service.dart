@@ -59,7 +59,9 @@ class ChatService {
     bool includePinnedFields = false,
     bool includeMetadata = true,
   }) {
-    final readFields = includeReadFields ? ',read_at,listened_at' : '';
+    final readFields = includeReadFields
+        ? ',read_at,listened_at,delivered_at'
+        : '';
     final fileFields = includeFileFields ? _fileMessageFields : '';
     final pinnedFields = includePinnedFields ? ',pinned_at,pinned_by' : '';
     final metadataFields = includeMetadata ? _metadataMessageFields : '';
@@ -285,7 +287,31 @@ class ChatService {
 
   bool _isMissingChatReadField(PostgrestException e) {
     return SupabaseCompat.isMissingColumn(e, 'read_at') ||
-        SupabaseCompat.isMissingColumn(e, 'listened_at');
+        SupabaseCompat.isMissingColumn(e, 'listened_at') ||
+        SupabaseCompat.isMissingColumn(e, 'delivered_at');
+  }
+
+  /// Marks every message addressed to me in [chatIds] as delivered (✓✓).
+  /// Called when the client receives messages; silently ignored when the
+  /// backend v2 SQL is not applied yet.
+  Future<void> markChatsDelivered(Iterable<String> chatIds) async {
+    final ids = chatIds
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    if (ids.isEmpty || _sb.auth.currentUser == null) return;
+    try {
+      await _sb.rpc(
+        'mark_selection_chats_delivered',
+        params: {'p_chat_ids': ids},
+      );
+    } on PostgrestException catch (e) {
+      if (SupabaseCompat.isMissingRpc(e, 'mark_selection_chats_delivered')) {
+        return;
+      }
+      rethrow;
+    }
   }
 
   Future<String> ensureSelectionChat({
@@ -610,7 +636,12 @@ class ChatService {
         'selection_chat_list',
         params: {'p_archived': archived},
       );
-      return _chatListFromRpc(rows as List<dynamic>, userId);
+      final items = _chatListFromRpc(rows as List<dynamic>, userId);
+      // Receiving the list means the unread messages reached this device.
+      markChatsDelivered(
+        items.where((e) => e.unreadCount > 0).map((e) => e.id),
+      ).ignore();
+      return items;
     } on PostgrestException catch (e) {
       if (!SupabaseCompat.isMissingRpc(e, 'selection_chat_list')) rethrow;
     }

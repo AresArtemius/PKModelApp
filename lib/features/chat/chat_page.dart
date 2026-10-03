@@ -1562,16 +1562,21 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                       ),
                     ),
                     data: (items) => items.isEmpty
-                        ? Center(
-                            child: Text(
-                              t.chatEmptyMessage,
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                color: kTextMuted,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          )
+                        ? (v2
+                              ? _EmptyConversationV2(
+                                  title: headerData.title,
+                                  ru: _isRussian,
+                                )
+                              : Center(
+                                  child: Text(
+                                    t.chatEmptyMessage,
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                      color: kTextMuted,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ))
                         : Builder(
                             builder: (context) {
                               final visibleMessages = _mergedMessages(items);
@@ -1581,6 +1586,15 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                               if (items.any((e) => e.senderId != userId)) {
                                 WidgetsBinding.instance.addPostFrameCallback(
                                   (_) => _markRead(),
+                                );
+                              }
+                              if (v2) {
+                                _markDeliveredIfNeeded(items, userId);
+                                return _buildFeedV2(
+                                  context,
+                                  visibleMessages: visibleMessages,
+                                  userId: userId,
+                                  canLoadOlder: canLoadOlder,
                                 );
                               }
 
@@ -1721,11 +1735,861 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     return Scaffold(resizeToAvoidBottomInset: true, body: content);
   }
 
+  bool _deliveredMarkPending = false;
+
+  /// Incoming messages that reached this client are ✓✓ for the sender.
+  void _markDeliveredIfNeeded(List<ChatMessage> items, String userId) {
+    if (_deliveredMarkPending) return;
+    final pending = items.any(
+      (m) => m.senderId != userId && !m.isDelivered && !m.isDeleted,
+    );
+    if (!pending) return;
+    _deliveredMarkPending = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        await ref.read(chatServiceProvider).markChatsDelivered([widget.chatId]);
+      } catch (_) {
+        // Best effort: the read receipt covers it later.
+      } finally {
+        _deliveredMarkPending = false;
+      }
+    });
+  }
+
+  Widget _buildFeedV2(
+    BuildContext context, {
+    required List<ChatMessage> visibleMessages,
+    required String userId,
+    required bool canLoadOlder,
+  }) {
+    final reactions =
+        ref.watch(chatReactionsProvider(widget.chatId)).valueOrNull ??
+        const <ChatReaction>[];
+    final reactionsByMessage = <String, List<ChatReaction>>{};
+    for (final reaction in reactions) {
+      reactionsByMessage.putIfAbsent(reaction.messageId, () => []).add(reaction);
+    }
+    final entries = _feedEntriesV2(visibleMessages, userId);
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxBubbleWidth = math.min(
+          620.0,
+          math.max(280.0, constraints.maxWidth * 0.62),
+        );
+        return ListView.builder(
+          controller: _messageListController,
+          reverse: true,
+          padding: const EdgeInsets.only(top: 8, bottom: 4),
+          itemCount: entries.length + (canLoadOlder ? 1 : 0),
+          itemBuilder: (context, index) {
+            if (index == entries.length) {
+              return _LoadOlderMessagesButton(
+                loading: _loadingOlderMessages,
+                onTap: () => _loadOlderMessages(visibleMessages),
+              );
+            }
+            final entry = entries[entries.length - 1 - index];
+            if (entry.dayLabel != null) {
+              return _DaySeparatorV2(label: entry.dayLabel!);
+            }
+            final item = entry.message!;
+            final mine = item.senderId == userId;
+            return _BubbleV2(
+              key: ValueKey('v2-${item.id}'),
+              message: item,
+              mine: mine,
+              firstInGroup: entry.firstInGroup,
+              lastInGroup: entry.lastInGroup,
+              maxWidth: maxBubbleWidth,
+              reactions:
+                  reactionsByMessage[item.id] ?? const <ChatReaction>[],
+              currentUserId: userId,
+              selected: _selectedMessageIds.contains(item.id),
+              selectionMode: _selectionMode,
+              searchQuery: _searchQuery,
+              activeSearchResult: _activeSearchMessageId == item.id,
+              onMediaTap: () => _openMediaViewer(context, item),
+              onVoiceListened: () => _markVoiceListened(item),
+              onTap: _selectionMode
+                  ? () => _toggleMessageSelection(item)
+                  : null,
+              onLongPress: () {
+                if (_selectionMode) {
+                  _toggleMessageSelection(item);
+                  return;
+                }
+                _showMessageActions(message: item, mine: mine);
+              },
+              onContextMenu: (position) =>
+                  _showMessageMenuV2(item, mine: mine, position: position),
+              onReact: (emoji) => _toggleReaction(item, emoji),
+              onReply: () => setState(() => _replyingTo = item),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  /// Day separators + author grouping: a message is "first in group" when
+  /// the previous one is from someone else, on another day, or more than
+  /// ten minutes older; "last in group" symmetrically.
+  List<_FeedEntryV2> _feedEntriesV2(List<ChatMessage> messages, String userId) {
+    final entries = <_FeedEntryV2>[];
+    const gap = Duration(minutes: 10);
+    for (var i = 0; i < messages.length; i++) {
+      final m = messages[i];
+      final prev = i > 0 ? messages[i - 1] : null;
+      final next = i + 1 < messages.length ? messages[i + 1] : null;
+      final day = m.createdAt?.toLocal();
+      final prevDay = prev?.createdAt?.toLocal();
+      final newDay =
+          day != null &&
+          (prevDay == null ||
+              prevDay.year != day.year ||
+              prevDay.month != day.month ||
+              prevDay.day != day.day);
+      if (newDay) {
+        entries.add(_FeedEntryV2.day(_dayLabelV2(day, _isRussian)));
+      }
+      bool sameGroup(ChatMessage? other) {
+        if (other == null || other.senderId != m.senderId) return false;
+        final a = m.createdAt;
+        final b = other.createdAt;
+        if (a == null || b == null) return true;
+        final aL = a.toLocal();
+        final bL = b.toLocal();
+        if (aL.year != bL.year || aL.month != bL.month || aL.day != bL.day) {
+          return false;
+        }
+        return (a.difference(b)).abs() <= gap;
+      }
+
+      entries.add(
+        _FeedEntryV2.message(
+          m,
+          firstInGroup: newDay || !sameGroup(prev),
+          lastInGroup: !sameGroup(next),
+        ),
+      );
+    }
+    return entries;
+  }
+
+  Future<void> _toggleReaction(ChatMessage message, String emoji) async {
+    final userId = ref.read(currentUserIdProvider) ?? '';
+    final service = ref.read(chatServiceProvider);
+    final current =
+        (ref.read(chatReactionsProvider(widget.chatId)).valueOrNull ??
+                const <ChatReaction>[])
+            .where((r) => r.messageId == message.id && r.userId == userId)
+            .map((r) => r.emoji)
+            .firstOrNull;
+    try {
+      if (current == emoji) {
+        await service.clearReaction(message.id);
+      } else {
+        await service.setReaction(
+          chatId: widget.chatId,
+          messageId: message.id,
+          emoji: emoji,
+        );
+      }
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            AppErrorMapper.message(error, AppLocalizations.of(context)!),
+          ),
+        ),
+      );
+    }
+  }
+
+  /// Desktop context menu (right click) with the same actions as the
+  /// mobile action sheet.
+  Future<void> _showMessageMenuV2(
+    ChatMessage message, {
+    required bool mine,
+    required Offset position,
+  }) async {
+    final overlay =
+        Overlay.of(context).context.findRenderObject() as RenderBox?;
+    if (overlay == null) return;
+    final rect = RelativeRect.fromRect(
+      Rect.fromLTWH(position.dx, position.dy, 1, 1),
+      Offset.zero & overlay.size,
+    );
+    PopupMenuItem<String> item(String value, IconData icon, String label,
+        {bool danger = false}) {
+      return PopupMenuItem<String>(
+        value: value,
+        height: 40,
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              size: 18,
+              color: danger ? Tokens.danger : Tokens.textSecondary,
+            ),
+            const SizedBox(width: 12),
+            Text(
+              label,
+              style: AppText.small.copyWith(
+                color: danger ? Tokens.danger : Tokens.text,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final parsed = _ParsedMessageBody.from(message.body);
+    final selected = await showMenu<String>(
+      context: context,
+      position: rect,
+      color: Tokens.bg,
+      elevation: 6,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(Tokens.radiusMd),
+        side: const BorderSide(color: Tokens.border),
+      ),
+      items: [
+        item('reply', Icons.reply_rounded, _isRussian ? 'Ответить' : 'Reply'),
+        if (mine && message.mediaType == 'text' && !message.isDeleted)
+          item('edit', Icons.edit_outlined,
+              _isRussian ? 'Редактировать' : 'Edit'),
+        if (parsed.body.trim().isNotEmpty)
+          item('copy', Icons.copy_rounded,
+              _isRussian ? 'Копировать текст' : 'Copy text'),
+        item('forward', Icons.forward_rounded,
+            _isRussian ? 'Переслать' : 'Forward'),
+        item(
+          'pin',
+          message.isPinned ? Icons.push_pin_rounded : Icons.push_pin_outlined,
+          message.isPinned
+              ? (_isRussian ? 'Открепить' : 'Unpin')
+              : (_isRussian ? 'Закрепить' : 'Pin'),
+        ),
+        item('select', Icons.checklist_rounded,
+            _isRussian ? 'Выбрать' : 'Select'),
+        if (mine)
+          item('delete', Icons.delete_outline_rounded,
+              _isRussian ? 'Удалить' : 'Delete', danger: true),
+      ],
+    );
+    if (!mounted || selected == null) return;
+    switch (selected) {
+      case 'reply':
+        setState(() => _replyingTo = message);
+      case 'edit':
+        await _editMessage(message);
+      case 'copy':
+        await Clipboard.setData(ClipboardData(text: parsed.body.trim()));
+      case 'forward':
+        await _forwardSelectedMessages([message]);
+      case 'pin':
+        await _setMessagePinned(message, !message.isPinned);
+      case 'select':
+        _toggleMessageSelection(message);
+      case 'delete':
+        await _deleteSelectedMessages({message.id});
+    }
+  }
+
   void _openMediaViewer(BuildContext context, ChatMessage message) {
     if (!message.hasMedia) return;
     showDialog<void>(
       context: context,
       builder: (context) => _MediaViewerDialog(message: message),
+    );
+  }
+}
+
+class _FeedEntryV2 {
+  const _FeedEntryV2._({
+    this.message,
+    this.dayLabel,
+    this.firstInGroup = false,
+    this.lastInGroup = false,
+  });
+
+  factory _FeedEntryV2.day(String label) => _FeedEntryV2._(dayLabel: label);
+
+  factory _FeedEntryV2.message(
+    ChatMessage message, {
+    required bool firstInGroup,
+    required bool lastInGroup,
+  }) => _FeedEntryV2._(
+    message: message,
+    firstInGroup: firstInGroup,
+    lastInGroup: lastInGroup,
+  );
+
+  final ChatMessage? message;
+  final String? dayLabel;
+  final bool firstInGroup;
+  final bool lastInGroup;
+}
+
+const List<String> _monthsGenitiveRu = [
+  'января',
+  'февраля',
+  'марта',
+  'апреля',
+  'мая',
+  'июня',
+  'июля',
+  'августа',
+  'сентября',
+  'октября',
+  'ноября',
+  'декабря',
+];
+
+const List<String> _monthsEn = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
+
+String _dayLabelV2(DateTime day, bool ru) {
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final date = DateTime(day.year, day.month, day.day);
+  final diff = today.difference(date).inDays;
+  if (diff == 0) return ru ? 'Сегодня' : 'Today';
+  if (diff == 1) return ru ? 'Вчера' : 'Yesterday';
+  final month = ru
+      ? _monthsGenitiveRu[day.month - 1]
+      : _monthsEn[day.month - 1];
+  final sameYear = day.year == now.year;
+  if (ru) return sameYear ? '${day.day} $month' : '${day.day} $month ${day.year}';
+  return sameYear ? '$month ${day.day}' : '$month ${day.day}, ${day.year}';
+}
+
+String _timeLabelV2(DateTime? value) {
+  if (value == null) return '';
+  final local = value.toLocal();
+  return '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
+}
+
+class _DaySeparatorV2 extends StatelessWidget {
+  const _DaySeparatorV2({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          decoration: BoxDecoration(
+            color: Tokens.surface,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: Tokens.border),
+          ),
+          child: Text(
+            label,
+            style: AppText.caption.copyWith(
+              fontWeight: FontWeight.w500,
+              color: Tokens.textSecondary,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyConversationV2 extends StatelessWidget {
+  const _EmptyConversationV2({required this.title, required this.ru});
+
+  final String title;
+  final bool ru;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            ru ? 'Сообщений пока нет' : 'No messages yet',
+            style: AppText.h2,
+          ),
+          const SizedBox(height: 6),
+          Text(
+            ru
+                ? 'Напишите $title первое сообщение.'
+                : 'Send $title the first message.',
+            textAlign: TextAlign.center,
+            style: AppText.small.copyWith(color: Tokens.textSecondary),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+const List<String> _quickReactionsV2 = ['👍', '❤️', '🔥', '👏', '😂', '😮'];
+
+/// Telegram-style bubble: mine on the right (ink), theirs on the left
+/// (light), time and ✓/✓✓ inside the bubble, reactions beneath, a hover
+/// toolbar with reply / react, and a right-click context menu.
+class _BubbleV2 extends StatefulWidget {
+  const _BubbleV2({
+    super.key,
+    required this.message,
+    required this.mine,
+    required this.firstInGroup,
+    required this.lastInGroup,
+    required this.maxWidth,
+    required this.reactions,
+    required this.currentUserId,
+    required this.selected,
+    required this.selectionMode,
+    required this.searchQuery,
+    required this.activeSearchResult,
+    required this.onMediaTap,
+    required this.onVoiceListened,
+    required this.onTap,
+    required this.onLongPress,
+    required this.onContextMenu,
+    required this.onReact,
+    required this.onReply,
+  });
+
+  final ChatMessage message;
+  final bool mine;
+  final bool firstInGroup;
+  final bool lastInGroup;
+  final double maxWidth;
+  final List<ChatReaction> reactions;
+  final String currentUserId;
+  final bool selected;
+  final bool selectionMode;
+  final String searchQuery;
+  final bool activeSearchResult;
+  final VoidCallback onMediaTap;
+  final VoidCallback onVoiceListened;
+  final VoidCallback? onTap;
+  final VoidCallback onLongPress;
+  final ValueChanged<Offset> onContextMenu;
+  final ValueChanged<String> onReact;
+  final VoidCallback onReply;
+
+  @override
+  State<_BubbleV2> createState() => _BubbleV2State();
+}
+
+class _BubbleV2State extends State<_BubbleV2> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final message = widget.message;
+    final mine = widget.mine;
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final parsedBody = _ParsedMessageBody.from(message.body);
+    final visibleBody =
+        message.hasMedia &&
+            ((message.isImage && parsedBody.body.trim() == 'Фото') ||
+                (message.isVideo && parsedBody.body.trim() == 'Видео') ||
+                (message.isAudio &&
+                    parsedBody.body.trim() == 'Голосовое сообщение'))
+        ? ''
+        : parsedBody.body.trim();
+    final textColor = mine ? Colors.white : Tokens.text;
+    final metaColor = mine
+        ? Colors.white.withValues(alpha: 0.66)
+        : Tokens.textTertiary;
+    final highlight = widget.activeSearchResult || widget.selected;
+
+    const big = Radius.circular(18);
+    const small = Radius.circular(6);
+    final radius = BorderRadius.only(
+      topLeft: big,
+      topRight: big,
+      bottomLeft: !mine && widget.lastInGroup ? small : big,
+      bottomRight: mine && widget.lastInGroup ? small : big,
+    );
+
+    final meta = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (message.isPinned) ...[
+          Icon(Icons.push_pin_rounded, size: 12, color: metaColor),
+          const SizedBox(width: 4),
+        ],
+        if (message.editedAt != null) ...[
+          Text(
+            ru ? 'изменено' : 'edited',
+            style: TextStyle(fontSize: 11, color: metaColor, height: 1),
+          ),
+          const SizedBox(width: 4),
+        ],
+        Text(
+          _timeLabelV2(message.createdAt),
+          style: TextStyle(fontSize: 11, color: metaColor, height: 1),
+        ),
+        if (mine) ...[
+          const SizedBox(width: 4),
+          Icon(
+            message.isDelivered ? Icons.done_all_rounded : Icons.done_rounded,
+            size: 14,
+            color: message.isRead ? Colors.white : metaColor,
+          ),
+        ],
+      ],
+    );
+
+    final bubble = AnimatedContainer(
+      duration: Tokens.fast,
+      constraints: BoxConstraints(maxWidth: widget.maxWidth),
+      padding: const EdgeInsets.fromLTRB(14, 9, 12, 8),
+      decoration: BoxDecoration(
+        color: mine ? Tokens.ink : Tokens.surfaceAlt,
+        borderRadius: radius,
+        border: highlight
+            ? Border.all(color: Tokens.accent, width: 2)
+            : null,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (message.metadata['forwarded'] == true) ...[
+            _ForwardedLabel(mine: mine),
+            const SizedBox(height: 6),
+          ],
+          if (parsedBody.replyQuote.isNotEmpty) ...[
+            _ReplyPreview(text: parsedBody.replyQuote, mine: mine),
+            const SizedBox(height: 8),
+          ],
+          if (message.hasMedia) ...[
+            _MessageMedia(
+              message: message,
+              onTap: widget.onMediaTap,
+              showReadStatus: false,
+              onVoiceListened: widget.onVoiceListened,
+            ),
+            if (visibleBody.isNotEmpty) const SizedBox(height: 8),
+          ],
+          if (visibleBody.isNotEmpty)
+            _HighlightedMessageText(
+              text: visibleBody,
+              query: widget.searchQuery,
+              style: AppText.body.copyWith(
+                color: textColor,
+                height: 1.4,
+                fontSize: 15.5,
+              ),
+              highlightColor: mine
+                  ? Colors.white.withValues(alpha: 0.26)
+                  : Tokens.accent.withValues(alpha: 0.18),
+            ),
+          const SizedBox(height: 4),
+          Align(alignment: Alignment.centerRight, child: meta),
+        ],
+      ),
+    );
+
+    final myReaction = widget.reactions
+        .where((r) => r.userId == widget.currentUserId)
+        .map((r) => r.emoji)
+        .firstOrNull;
+    final reactionCounts = <String, int>{};
+    for (final r in widget.reactions) {
+      reactionCounts[r.emoji] = (reactionCounts[r.emoji] ?? 0) + 1;
+    }
+
+    final hoverBar = AnimatedOpacity(
+      duration: Tokens.fast,
+      opacity: _hovered && !widget.selectionMode ? 1 : 0,
+      child: IgnorePointer(
+        ignoring: !_hovered || widget.selectionMode,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _BubbleHoverButton(
+              icon: Icons.reply_rounded,
+              tooltip: ru ? 'Ответить' : 'Reply',
+              onTap: widget.onReply,
+            ),
+            const SizedBox(width: 4),
+            _ReactionPickerButton(
+              tooltip: ru ? 'Реакция' : 'React',
+              current: myReaction,
+              onPick: widget.onReact,
+            ),
+            const SizedBox(width: 4),
+            _BubbleHoverButton(
+              icon: Icons.more_horiz_rounded,
+              tooltip: ru ? 'Ещё' : 'More',
+              onTapDown: widget.onContextMenu,
+            ),
+          ],
+        ),
+      ),
+    );
+
+    final column = Column(
+      crossAxisAlignment: mine
+          ? CrossAxisAlignment.end
+          : CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: widget.onTap,
+          onLongPress: widget.onLongPress,
+          onSecondaryTapDown: (details) =>
+              widget.onContextMenu(details.globalPosition),
+          child: bubble,
+        ),
+        if (reactionCounts.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Wrap(
+            spacing: 4,
+            runSpacing: 4,
+            children: [
+              for (final entry in reactionCounts.entries)
+                _ReactionChipV2(
+                  emoji: entry.key,
+                  count: entry.value,
+                  mine: myReaction == entry.key,
+                  onTap: () => widget.onReact(entry.key),
+                ),
+            ],
+          ),
+        ],
+      ],
+    );
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: Padding(
+        padding: EdgeInsets.only(
+          top: widget.firstInGroup ? 8 : 2,
+          bottom: widget.lastInGroup ? 6 : 0,
+        ),
+        child: Row(
+          mainAxisAlignment: mine
+              ? MainAxisAlignment.end
+              : MainAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: mine
+              ? [
+                  hoverBar,
+                  const SizedBox(width: 8),
+                  if (widget.selected) ...[
+                    const _SelectedMarkV2(),
+                    const SizedBox(width: 8),
+                  ],
+                  Flexible(child: column),
+                ]
+              : [
+                  if (widget.selected) ...[
+                    const _SelectedMarkV2(),
+                    const SizedBox(width: 8),
+                  ],
+                  Flexible(child: column),
+                  const SizedBox(width: 8),
+                  hoverBar,
+                ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SelectedMarkV2 extends StatelessWidget {
+  const _SelectedMarkV2();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 22,
+      height: 22,
+      decoration: const BoxDecoration(
+        color: Tokens.accent,
+        shape: BoxShape.circle,
+      ),
+      child: const Icon(Icons.check_rounded, size: 15, color: Colors.white),
+    );
+  }
+}
+
+class _BubbleHoverButton extends StatelessWidget {
+  const _BubbleHoverButton({
+    required this.icon,
+    required this.tooltip,
+    this.onTap,
+    this.onTapDown,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback? onTap;
+  final ValueChanged<Offset>? onTapDown;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Tokens.bg,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(999),
+          side: const BorderSide(color: Tokens.border),
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(999),
+          onTap: onTap ?? () {},
+          onTapDown: onTapDown == null
+              ? null
+              : (details) => onTapDown!(details.globalPosition),
+          child: SizedBox(
+            width: 30,
+            height: 30,
+            child: Icon(icon, size: 16, color: Tokens.ink),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ReactionPickerButton extends StatelessWidget {
+  const _ReactionPickerButton({
+    required this.tooltip,
+    required this.current,
+    required this.onPick,
+  });
+
+  final String tooltip;
+  final String? current;
+  final ValueChanged<String> onPick;
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<String>(
+      tooltip: tooltip,
+      onSelected: onPick,
+      color: Tokens.bg,
+      elevation: 6,
+      padding: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(999),
+        side: const BorderSide(color: Tokens.border),
+      ),
+      itemBuilder: (context) => [
+        PopupMenuItem<String>(
+          enabled: false,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final emoji in _quickReactionsV2)
+                InkWell(
+                  borderRadius: BorderRadius.circular(999),
+                  onTap: () => Navigator.of(context).pop(emoji),
+                  child: Container(
+                    width: 36,
+                    height: 36,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: current == emoji
+                          ? Tokens.surfaceAlt
+                          : Colors.transparent,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Text(emoji, style: const TextStyle(fontSize: 20)),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+      child: Material(
+        color: Tokens.bg,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(999),
+          side: const BorderSide(color: Tokens.border),
+        ),
+        child: const SizedBox(
+          width: 30,
+          height: 30,
+          child: Icon(
+            Icons.add_reaction_outlined,
+            size: 16,
+            color: Tokens.ink,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ReactionChipV2 extends StatelessWidget {
+  const _ReactionChipV2({
+    required this.emoji,
+    required this.count,
+    required this.mine,
+    required this.onTap,
+  });
+
+  final String emoji;
+  final int count;
+  final bool mine;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: mine ? Tokens.ink : Tokens.bg,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(999),
+        side: BorderSide(color: mine ? Tokens.ink : Tokens.border),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(8, 3, 9, 3),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(emoji, style: const TextStyle(fontSize: 14, height: 1.2)),
+              const SizedBox(width: 5),
+              Text(
+                '$count',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  height: 1,
+                  color: mine ? Colors.white : Tokens.text,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
