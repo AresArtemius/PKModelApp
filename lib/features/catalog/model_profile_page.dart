@@ -11,6 +11,8 @@ import 'package:video_thumbnail/video_thumbnail.dart';
 
 import '../../core/app_error_mapper.dart';
 import '../../core/app_logger.dart';
+import '../../core/app_top_bar.dart';
+import '../../core/storage_image_variant.dart';
 import '../../core/profile_action_log_service.dart';
 import '../../core/roles_provider.dart';
 import '../../core/page_titles.dart';
@@ -895,74 +897,32 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
 
                 final gap = const SizedBox(height: _sectionGap);
                 final body = isDesktop
-                    ? _ProfileDesktopBody(
-                        topBar: topBar,
+                    ? _ProfileDesktopBodyV2(
+                        model: m,
+                        t: t,
+                        displayPhotoUrls: displayPhotoUrls,
+                        coverAlignment: _profileCoverAlignmentFor(m),
                         adminNotice: adminPreview
                             ? _AdminCatalogPreviewNotice()
                             : null,
-                        gallery: [
-                          _Card(
-                            child: _PortfolioHeroCard(
-                              model: m,
-                              t: t,
-                              displayPhotoUrls: displayPhotoUrls,
-                              coverAlignment: _profileCoverAlignmentFor(m),
-                              onOpenPhotos: (index) =>
-                                  _openPhotos(context, displayPhotoUrls, index),
-                              onOpenVideo: m.videoUrls.isEmpty
-                                  ? null
-                                  : () => _openVideo(context, m.videoUrls.first),
-                              onOpenShowreel: m.hasShowreel
-                                  ? () => _openVideo(context, m.showreelUrl)
-                                  : null,
-                              onCompositePdf: () => _openCompositePdf(m),
-                              onCopyLink: () => _copyPublicLink(m.id),
-                              canUseAgentActions: canUseAgentTools,
-                              actionHistoryFuture: null,
-                              isBusy: _isPortfolioActionBusy,
-                              onInvite: () => _inviteFromProfile(m),
-                              onAddToSelection: () => _openPortfolioAddSheet(m),
-                              onMessage: () => _openProfileChat(m),
-                              layout: _HeroCardLayout.mediaOnly,
-                            ),
-                          ),
-                          gap,
-                          mediaCard,
-                          if (m.hasShowreel) ...[gap, showreelCard],
-                          if (showProInfo) ...[gap, proCard],
-                          gap,
-                          resumeCard,
-                        ],
-                        side: [
-                          _Card(
-                            child: _PortfolioHeroCard(
-                              model: m,
-                              t: t,
-                              displayPhotoUrls: displayPhotoUrls,
-                              coverAlignment: _profileCoverAlignmentFor(m),
-                              onOpenPhotos: (index) =>
-                                  _openPhotos(context, displayPhotoUrls, index),
-                              onOpenVideo: m.videoUrls.isEmpty
-                                  ? null
-                                  : () => _openVideo(context, m.videoUrls.first),
-                              onOpenShowreel: m.hasShowreel
-                                  ? () => _openVideo(context, m.showreelUrl)
-                                  : null,
-                              onCompositePdf: () => _openCompositePdf(m),
-                              onCopyLink: () => _copyPublicLink(m.id),
-                              canUseAgentActions: canUseAgentTools,
-                              actionHistoryFuture: historyFuture,
-                              isBusy: _isPortfolioActionBusy,
-                              onInvite: () => _inviteFromProfile(m),
-                              onAddToSelection: () => _openPortfolioAddSheet(m),
-                              onMessage: () => _openProfileChat(m),
-                              layout: _HeroCardLayout.infoOnly,
-                            ),
-                          ),
-                          gap,
-                          detailsCard,
-                          if (canUseAgentTools) ...[gap, agentCard],
-                        ],
+                        onBack: () => _back(isAdmin: isAdmin),
+                        onOpenPhotos: (index) =>
+                            _openPhotos(context, displayPhotoUrls, index),
+                        onOpenVideo: (index) =>
+                            _openVideo(context, m.videoUrls[index]),
+                        onOpenShowreel: m.hasShowreel
+                            ? () => _openVideo(context, m.showreelUrl)
+                            : null,
+                        onCompositePdf: () => _openCompositePdf(m),
+                        onCopyLink: () => _copyPublicLink(m.id),
+                        canUseAgentActions: canUseAgentTools,
+                        actionHistoryFuture: historyFuture,
+                        isBusy: _isPortfolioActionBusy,
+                        onInvite: () => _inviteFromProfile(m),
+                        onAddToSelection: () => _openPortfolioAddSheet(m),
+                        onMessage: () => _openProfileChat(m),
+                        showProInfo: showProInfo,
+                        agentCard: canUseAgentTools ? agentCard : null,
                       )
                     : RefreshIndicator(
                         onRefresh: _refresh,
@@ -1747,53 +1707,572 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
 
 /// Desktop layout (step 21а): gallery on the left, a sticky side panel with
 /// the identity, actions and details on the right; each scrolls on its own.
-class _ProfileDesktopBody extends StatelessWidget {
-  const _ProfileDesktopBody({
-    required this.topBar,
-    required this.gallery,
-    required this.side,
+/// Desktop profile (v2): site header, then the name and the tabbed
+/// portfolio on the left, a portrait with the facts and the actions on the
+/// right — the layout of an agency's model page.
+class _ProfileDesktopBodyV2 extends StatefulWidget {
+  const _ProfileDesktopBodyV2({
+    required this.model,
+    required this.t,
+    required this.displayPhotoUrls,
+    required this.coverAlignment,
+    required this.onBack,
+    required this.onOpenPhotos,
+    required this.onOpenVideo,
+    required this.onOpenShowreel,
+    required this.onCompositePdf,
+    required this.onCopyLink,
+    required this.canUseAgentActions,
+    required this.actionHistoryFuture,
+    required this.isBusy,
+    required this.onInvite,
+    required this.onAddToSelection,
+    required this.onMessage,
+    required this.showProInfo,
     this.adminNotice,
+    this.agentCard,
   });
 
-  final Widget topBar;
+  final ModelVm model;
+  final AppLocalizations t;
+  final List<String> displayPhotoUrls;
+  final Alignment coverAlignment;
+  final VoidCallback onBack;
+  final void Function(int index) onOpenPhotos;
+  final void Function(int index) onOpenVideo;
+  final VoidCallback? onOpenShowreel;
+  final VoidCallback onCompositePdf;
+  final VoidCallback onCopyLink;
+  final bool canUseAgentActions;
+  final Future<List<_ProfileActionHistoryItem>>? actionHistoryFuture;
+  final bool isBusy;
+  final VoidCallback onInvite;
+  final VoidCallback onAddToSelection;
+  final VoidCallback onMessage;
+  final bool showProInfo;
   final Widget? adminNotice;
-  final List<Widget> gallery;
-  final List<Widget> side;
+  final Widget? agentCard;
+
+  @override
+  State<_ProfileDesktopBodyV2> createState() => _ProfileDesktopBodyV2State();
+}
+
+enum _ProfileTab { photos, videos, about }
+
+class _ProfileDesktopBodyV2State extends State<_ProfileDesktopBodyV2> {
+  _ProfileTab _tab = _ProfileTab.photos;
+
+  @override
+  Widget build(BuildContext context) {
+    final m = widget.model;
+    final t = widget.t;
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final title = m.fullName.trim().isEmpty ? t.profileNoName : m.fullName;
+    final location = [
+      m.city.trim(),
+      m.country.trim(),
+    ].where((v) => v.isNotEmpty).join(', ');
+    final subtitle = [
+      _profileRolesLabel(t, m.effectiveProfileRoles),
+      if (m.usesPhysicalBasics && m.age > 0) t.ageYears(m.age),
+      if (m.usesPhysicalBasics && m.height > 0) '${m.height} ${t.cm}',
+      if (location.isNotEmpty) location,
+    ].where((v) => v.trim().isNotEmpty).join(' · ');
+
+    final videoCount = m.videoUrls.length + (m.hasShowreel ? 1 : 0);
+    final tabs = <(_ProfileTab, String)>[
+      (
+        _ProfileTab.photos,
+        '${ru ? 'Фото' : 'Photos'} ${widget.displayPhotoUrls.length}',
+      ),
+      (_ProfileTab.videos, '${ru ? 'Видео' : 'Videos'} $videoCount'),
+      (_ProfileTab.about, ru ? 'Опыт' : 'About'),
+    ];
+
+    return Column(
+      children: [
+        const AppTopBar(currentIndex: 1),
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(40, 20, 40, 56),
+            children: [
+              if (widget.adminNotice != null) ...[
+                widget.adminNotice!,
+                const SizedBox(height: 20),
+              ],
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: widget.onBack,
+                  style: TextButton.styleFrom(
+                    foregroundColor: Tokens.textSecondary,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                  ),
+                  icon: const Icon(Icons.arrow_back_rounded, size: 18),
+                  label: Text(t.catalogTab),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                title,
+                                style: AppText.display.copyWith(
+                                  fontSize: 40,
+                                  height: 1.1,
+                                ),
+                              ),
+                            ),
+                            if (m.isProActive) ...[
+                              const SizedBox(width: 12),
+                              const Padding(
+                                padding: EdgeInsets.only(top: 10),
+                                child: _ProBadge(),
+                              ),
+                            ],
+                          ],
+                        ),
+                        if (subtitle.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            subtitle,
+                            style: AppText.body.copyWith(
+                              fontSize: 17,
+                              color: Tokens.textSecondary,
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 28),
+                        _ProfileTabBar(
+                          tabs: tabs,
+                          selected: _tab,
+                          onChanged: (tab) => setState(() => _tab = tab),
+                        ),
+                        const SizedBox(height: 24),
+                        _tabContent(context),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 48),
+                  SizedBox(width: _kProfileSideWidth, child: _side(context)),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _tabContent(BuildContext context) {
+    final m = widget.model;
+    final t = widget.t;
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    switch (_tab) {
+      case _ProfileTab.photos:
+        if (widget.displayPhotoUrls.isEmpty) {
+          return _ProfileEmptyTab(text: t.profileMediaEmpty);
+        }
+        return _MediaGrid(
+          photoUrls: widget.displayPhotoUrls,
+          photoCategoryLabels: m.photoCategoryLabels,
+          videoUrls: const [],
+          videoPreviewUrls: const [],
+          videoCategoryLabels: const [],
+          showreelUrl: '',
+          onOpenPhotos: widget.onOpenPhotos,
+          onOpenVideo: (_) {},
+        );
+      case _ProfileTab.videos:
+        if (m.videoUrls.isEmpty && !m.hasShowreel) {
+          return _ProfileEmptyTab(
+            text: ru ? 'Видео пока нет' : 'No videos yet',
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (m.hasShowreel) ...[
+              Text('SHOWREEL', style: AppText.label),
+              const SizedBox(height: 10),
+              _ShowreelCard(
+                videoUrl: m.showreelUrl,
+                previewUrl: m.showreelPreviewUrl,
+                onTap: widget.onOpenShowreel ?? () {},
+              ),
+              const SizedBox(height: 24),
+            ],
+            if (m.videoUrls.isNotEmpty)
+              _MediaGrid(
+                photoUrls: const [],
+                photoCategoryLabels: const [],
+                videoUrls: m.videoUrls,
+                videoPreviewUrls: m.videoPreviewUrls,
+                videoCategoryLabels: m.videoCategoryLabels,
+                showreelUrl: m.showreelUrl,
+                onOpenPhotos: (_) {},
+                onOpenVideo: widget.onOpenVideo,
+              ),
+          ],
+        );
+      case _ProfileTab.about:
+        final resume = m.resume.trim();
+        return ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 760),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(t.profileResumeUpper.toUpperCase(), style: AppText.label),
+              const SizedBox(height: 10),
+              Text(
+                resume.isEmpty ? t.profileResumeEmpty : resume,
+                style: AppText.body.copyWith(
+                  fontSize: 17,
+                  height: 1.6,
+                  color: resume.isEmpty ? Tokens.textSecondary : Tokens.text,
+                ),
+              ),
+              if (widget.showProInfo) ...[
+                const SizedBox(height: 32),
+                Text(
+                  t.profileProfessionalInfoUpper.toUpperCase(),
+                  style: AppText.label,
+                ),
+                const SizedBox(height: 10),
+                for (final entry in <MapEntry<String, String>>[
+                  if (m.experience.trim().isNotEmpty)
+                    MapEntry(t.profileExperience, m.experience.trim()),
+                  if (m.skills.trim().isNotEmpty)
+                    MapEntry(t.profileSkills, m.skills.trim()),
+                  if (m.services.trim().isNotEmpty)
+                    MapEntry(t.profileServices, m.services.trim()),
+                  if (m.genres.trim().isNotEmpty)
+                    MapEntry(t.profileWorkGenres, m.genres.trim()),
+                  if (m.equipment.trim().isNotEmpty)
+                    MapEntry(t.profileEquipment, m.equipment.trim()),
+                ])
+                  _ProfileFactRow(label: entry.key, value: entry.value),
+              ],
+            ],
+          ),
+        );
+    }
+  }
+
+  Widget _side(BuildContext context) {
+    final m = widget.model;
+    final t = widget.t;
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final locale = Localizations.localeOf(context);
+    final cover = widget.displayPhotoUrls.isEmpty
+        ? null
+        : widget.displayPhotoUrls.first;
+
+    final facts = <MapEntry<String, String>>[
+      MapEntry(
+        _sentenceCaseProfile(t.profileTypeUpper),
+        _profileRolesLabel(t, m.effectiveProfileRoles),
+      ),
+      if (m.country.trim().isNotEmpty) MapEntry(t.profileCountry, m.country),
+      if (m.city.trim().isNotEmpty) MapEntry(t.profileCity, m.city),
+      if (m.usesPhysicalBasics) ...[
+        if (m.age > 0) MapEntry(t.profileAge, t.ageYears(m.age)),
+        if (m.height > 0) MapEntry(t.profileHeightCm, '${m.height} ${t.cm}'),
+      ],
+      if (m.usesModelMeasurements) ...[
+        if (m.bust > 0) MapEntry(t.profileBustCm, '${m.bust} ${t.cm}'),
+        if (m.waist > 0) MapEntry(t.profileWaistCm, '${m.waist} ${t.cm}'),
+        if (m.hips > 0) MapEntry(t.profileHipsCm, '${m.hips} ${t.cm}'),
+        if ((m.shoeSize ?? 0) > 0)
+          MapEntry(t.profileShoeSize, '${m.shoeSize}'),
+        if (m.eyeColor.trim().isNotEmpty)
+          MapEntry(t.profileEyeColor, eyeColorDisplayValue(m.eyeColor, locale)),
+        if (m.hairColor.trim().isNotEmpty)
+          MapEntry(
+            t.profileHairColor,
+            hairColorDisplayValue(m.hairColor, locale),
+          ),
+      ],
+      if ((m.minHourlyRate ?? 0) > 0)
+        MapEntry(t.profileMinHourlyRate, '${m.minHourlyRate} ₽'),
+      if ((m.minDailyFee ?? 0) > 0)
+        MapEntry(t.profileMinDailyFee, '${m.minDailyFee} ₽'),
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (cover != null)
+          Hero(
+            tag: 'model-photo-${m.id}',
+            child: Material(
+              color: Tokens.surfaceAlt,
+              borderRadius: BorderRadius.circular(Tokens.radiusLg),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                onTap: () => widget.onOpenPhotos(0),
+                child: AspectRatio(
+                  aspectRatio: 3 / 4,
+                  child: CachedNetworkImage(
+                    imageUrl: storageImageVariant(cover, width: 900),
+                    fit: BoxFit.cover,
+                    alignment: widget.coverAlignment,
+                    memCacheWidth: 1000,
+                    placeholder: (_, _) =>
+                        const ColoredBox(color: Tokens.surfaceAlt),
+                    errorWidget: (_, _, _) => CachedNetworkImage(
+                      imageUrl: cover,
+                      fit: BoxFit.cover,
+                      alignment: widget.coverAlignment,
+                      memCacheWidth: 1000,
+                      placeholder: (_, _) =>
+                          const ColoredBox(color: Tokens.surfaceAlt),
+                      errorWidget: (_, _, _) =>
+                          const ColoredBox(color: Tokens.surfaceAlt),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        const SizedBox(height: 20),
+        Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(Tokens.radiusLg),
+            border: Border.all(color: Tokens.border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (final f in facts)
+                _ProfileFactRow(label: f.key, value: f.value, compact: true),
+              if (widget.canUseAgentActions) ...[
+                const SizedBox(height: 16),
+                const Divider(height: 1, thickness: 1, color: Tokens.border),
+                const SizedBox(height: 20),
+                FilledButton.icon(
+                  onPressed: widget.isBusy ? null : widget.onInvite,
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(50),
+                  ),
+                  icon: const Icon(Icons.send_rounded, size: 18),
+                  label: Text(
+                    ru ? 'Пригласить на кастинг' : 'Invite to a casting',
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: widget.isBusy
+                            ? null
+                            : widget.onAddToSelection,
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(46),
+                        ),
+                        icon: const Icon(Icons.playlist_add_rounded, size: 18),
+                        label: Text(ru ? 'В подборку' : 'Add'),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: widget.isBusy ? null : widget.onMessage,
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(46),
+                        ),
+                        icon: const Icon(
+                          Icons.chat_bubble_outline_rounded,
+                          size: 18,
+                        ),
+                        label: Text(ru ? 'Написать' : 'Message'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 4,
+                children: [
+                  TextButton.icon(
+                    onPressed: widget.isBusy ? null : widget.onCompositePdf,
+                    style: TextButton.styleFrom(
+                      foregroundColor: Tokens.textSecondary,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                    ),
+                    icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
+                    label: Text(ru ? 'Композитка' : 'Comp card'),
+                  ),
+                  TextButton.icon(
+                    onPressed: widget.isBusy ? null : widget.onCopyLink,
+                    style: TextButton.styleFrom(
+                      foregroundColor: Tokens.textSecondary,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                    ),
+                    icon: const Icon(Icons.link_rounded, size: 18),
+                    label: Text(ru ? 'Скопировать ссылку' : 'Copy link'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        if (widget.canUseAgentActions &&
+            widget.actionHistoryFuture != null) ...[
+          const SizedBox(height: 16),
+          _PortfolioActionHistoryStrip(
+            future: widget.actionHistoryFuture,
+            isRu: ru,
+          ),
+        ],
+        if (widget.agentCard != null) ...[
+          const SizedBox(height: 16),
+          widget.agentCard!,
+        ],
+      ],
+    );
+  }
+}
+
+String _sentenceCaseProfile(String text) {
+  if (text.isEmpty) return text;
+  final lower = text.toLowerCase();
+  return lower[0].toUpperCase() + lower.substring(1);
+}
+
+/// Underlined tab strip (Photos · Videos · About).
+class _ProfileTabBar extends StatelessWidget {
+  const _ProfileTabBar({
+    required this.tabs,
+    required this.selected,
+    required this.onChanged,
+  });
+
+  final List<(_ProfileTab, String)> tabs;
+  final _ProfileTab selected;
+  final ValueChanged<_ProfileTab> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: Tokens.border)),
+      ),
+      child: Row(
+        children: [
+          for (final (tab, label) in tabs)
+            InkWell(
+              onTap: () => onChanged(tab),
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(4, 10, 4, 12),
+                margin: const EdgeInsets.only(right: 28),
+                decoration: BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(
+                      color: tab == selected
+                          ? Tokens.accent
+                          : Colors.transparent,
+                      width: 2,
+                    ),
+                  ),
+                ),
+                child: Text(
+                  label,
+                  style: AppText.body.copyWith(
+                    fontSize: 16,
+                    fontWeight: tab == selected
+                        ? FontWeight.w600
+                        : FontWeight.w500,
+                    color: tab == selected
+                        ? Tokens.text
+                        : Tokens.textSecondary,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProfileEmptyTab extends StatelessWidget {
+  const _ProfileEmptyTab({required this.text});
+
+  final String text;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(32, 20, 32, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          topBar,
-          const SizedBox(height: _sectionGap),
-          if (adminNotice != null) ...[
-            adminNotice!,
-            const SizedBox(height: _sectionGap),
-          ],
-          Expanded(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: ListView(
-                    padding: const EdgeInsets.only(bottom: _pagePadBottom),
-                    children: gallery,
-                  ),
-                ),
-                const SizedBox(width: 24),
-                SizedBox(
-                  width: _kProfileSideWidth,
-                  child: ListView(
-                    padding: const EdgeInsets.only(bottom: _pagePadBottom),
-                    children: side,
-                  ),
-                ),
-              ],
+      padding: const EdgeInsets.symmetric(vertical: 48),
+      child: Center(
+        child: Text(
+          text,
+          style: AppText.small.copyWith(color: Tokens.textSecondary),
+        ),
+      ),
+    );
+  }
+}
+
+/// «Label … value» row; compact rows for the side card.
+class _ProfileFactRow extends StatelessWidget {
+  const _ProfileFactRow({
+    required this.label,
+    required this.value,
+    this.compact = false,
+  });
+
+  final String label;
+  final String value;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    if (compact) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: AppText.small.copyWith(color: Tokens.textSecondary),
+              ),
             ),
-          ),
+            const SizedBox(width: 16),
+            Flexible(
+              child: Text(
+                value,
+                textAlign: TextAlign.right,
+                style: AppText.smallStrong,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: AppText.smallStrong),
+          const SizedBox(height: 4),
+          Text(value, style: AppText.body.copyWith(height: 1.55)),
         ],
       ),
     );

@@ -112,8 +112,6 @@ class _ProBadge extends StatelessWidget {
   }
 }
 
-enum _HeroCardLayout { auto, mediaOnly, infoOnly }
-
 class _PortfolioHeroCard extends StatelessWidget {
   const _PortfolioHeroCard({
     required this.model,
@@ -131,12 +129,8 @@ class _PortfolioHeroCard extends StatelessWidget {
     required this.onMessage,
     this.onOpenVideo,
     this.onOpenShowreel,
-    this.layout = _HeroCardLayout.auto,
   });
 
-  /// Desktop splits the card: media in the gallery column, info in the
-  /// side panel.
-  final _HeroCardLayout layout;
   final ModelVm model;
   final AppLocalizations t;
   final List<String> displayPhotoUrls;
@@ -218,9 +212,6 @@ class _PortfolioHeroCard extends StatelessWidget {
       onMessage: onMessage,
       onOpenShowreel: onOpenShowreel,
     );
-
-    if (layout == _HeroCardLayout.mediaOnly) return media;
-    if (layout == _HeroCardLayout.infoOnly) return info;
 
     return LayoutBuilder(
       builder: (context, constraints) {
