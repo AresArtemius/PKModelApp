@@ -82,6 +82,8 @@ class ChatPage extends ConsumerStatefulWidget {
 
 class _ChatPageState extends ConsumerState<ChatPage> {
   final _messageController = TextEditingController();
+  final _composerFocus = FocusNode(debugLabel: 'chat-composer');
+  bool _inlineVoice = false;
   final _searchController = TextEditingController();
   final _messageListController = ScrollController();
   bool _sending = false;
@@ -149,6 +151,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
 
   @override
   void dispose() {
+    _composerFocus.dispose();
     _typingStopTimer?.cancel();
     _searchDebounceTimer?.cancel();
     unawaited(_setTyping(false));
@@ -715,17 +718,18 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       return;
     }
 
-    final targets = chats
-        .where((chat) => chat.id != widget.chatId)
-        .toList(growable: false);
+    // The current chat is a valid target too (forward "to myself" here),
+    // listed first.
+    final targets = [
+      ...chats.where((chat) => chat.id == widget.chatId),
+      ...chats.where((chat) => chat.id != widget.chatId),
+    ];
     if (!mounted) return;
     if (targets.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            _isRussian
-                ? 'Нет другого диалога для пересылки.'
-                : 'No other chat to forward to.',
+            _isRussian ? 'Нет диалога для пересылки.' : 'No chat to forward to.',
           ),
         ),
       );
@@ -994,6 +998,12 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     if (!await _ensureCanUseChat()) return;
     if (!mounted) return;
 
+    if (kIsWeb && widget.embedded) {
+      // v2: record right in the composer, send with one click.
+      setState(() => _inlineVoice = true);
+      return;
+    }
+
     final attachment = await showModalBottomSheet<_PendingChatAttachment>(
       context: context,
       isScrollControlled: true,
@@ -1002,6 +1012,27 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     );
     if (attachment == null || !mounted) return;
     setState(() => _pendingAttachment = attachment);
+  }
+
+  Future<void> _sendInlineVoice(_PendingChatAttachment attachment) async {
+    setState(() {
+      _inlineVoice = false;
+      _sending = true;
+    });
+    try {
+      await _sendAttachment(attachment: attachment, body: '');
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            AppErrorMapper.message(error, AppLocalizations.of(context)!),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
   }
 
   Future<void> _sendAttachment({
@@ -1251,7 +1282,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
             title: _isRussian ? 'Ответить' : 'Reply',
             onTap: () {
               Navigator.of(context).pop();
-              setState(() => _replyingTo = message);
+              _startReply(message);
             },
           ),
           if (mine && message.mediaType == 'text' && !message.isDeleted)
@@ -1306,9 +1337,18 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     );
   }
 
+  void _startReply(ChatMessage message) {
+    setState(() {
+      _replyingTo = message;
+      _editingMessage = null;
+    });
+    _composerFocus.requestFocus();
+  }
+
   /// Puts the message text into the composer for editing.
   Future<void> _editMessage(ChatMessage message) async {
     final parsed = _ParsedMessageBody.from(message.body);
+    _composerFocus.requestFocus();
     setState(() {
       _editingMessage = message;
       _replyingTo = null;
@@ -1858,6 +1898,13 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                       : EdgeInsets.zero,
                   child: _Composer(
                     controller: _messageController,
+                    focusNode: _composerFocus,
+                    recorder: _inlineVoice
+                        ? _InlineVoiceRecorder(
+                            onCancel: () => setState(() => _inlineVoice = false),
+                            onSend: _sendInlineVoice,
+                          )
+                        : null,
                     hintText: t.messageHint,
                     sending: _sending || _uploadingMedia,
                     replyingToText: _replyingTo == null
@@ -1980,7 +2027,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
               onContextMenu: (position) =>
                   _showMessageMenuV2(item, mine: mine, position: position),
               onReact: (emoji) => _toggleReaction(item, emoji),
-              onReply: () => setState(() => _replyingTo = item),
+              onReply: () => _startReply(item),
               ),
             );
           },
@@ -2142,7 +2189,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     if (!mounted || selected == null) return;
     switch (selected) {
       case 'reply':
-        setState(() => _replyingTo = message);
+        _startReply(message);
       case 'edit':
         await _editMessage(message);
       case 'copy':
@@ -2448,6 +2495,8 @@ class _BubbleV2State extends State<_BubbleV2> {
               onTap: widget.onMediaTap,
               showReadStatus: false,
               onVoiceListened: widget.onVoiceListened,
+              flat: true,
+              mine: mine,
             ),
             if (visibleBody.isNotEmpty) const SizedBox(height: 8),
           ],
@@ -4601,12 +4650,16 @@ class _MessageMedia extends StatelessWidget {
     required this.onTap,
     required this.showReadStatus,
     required this.onVoiceListened,
+    this.flat = false,
+    this.mine = false,
   });
 
   final ChatMessage message;
   final VoidCallback onTap;
   final bool showReadStatus;
   final VoidCallback onVoiceListened;
+  final bool flat;
+  final bool mine;
 
   @override
   Widget build(BuildContext context) {
@@ -4618,6 +4671,8 @@ class _MessageMedia extends StatelessWidget {
         message: message,
         showReadStatus: showReadStatus,
         onListened: onVoiceListened,
+        flat: flat,
+        mine: mine,
       );
     }
     final imageUrl = message.mediaThumbnailUrl.isNotEmpty
@@ -4670,11 +4725,17 @@ class _AudioMessagePlayer extends ConsumerStatefulWidget {
     required this.message,
     required this.showReadStatus,
     required this.onListened,
+    this.flat = false,
+    this.mine = false,
   });
 
   final ChatMessage message;
   final bool showReadStatus;
   final VoidCallback onListened;
+
+  /// v2: play circle + waveform + duration, no inner card.
+  final bool flat;
+  final bool mine;
 
   @override
   ConsumerState<_AudioMessagePlayer> createState() =>
@@ -4784,6 +4845,81 @@ class _AudioMessagePlayerState extends ConsumerState<_AudioMessagePlayer> {
         : read
         ? (isRussian ? 'прочитано' : 'read')
         : (isRussian ? 'доставлено' : 'delivered');
+    if (widget.flat) {
+      final mine = widget.mine;
+      final fg = mine ? Colors.white : Tokens.ink;
+      final muted = mine
+          ? Colors.white.withValues(alpha: 0.7)
+          : Tokens.textSecondary;
+      return SizedBox(
+        width: 260,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            InkWell(
+              onTap: _loading ? null : _toggle,
+              borderRadius: BorderRadius.circular(22),
+              child: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: mine ? Colors.white : Tokens.ink,
+                  shape: BoxShape.circle,
+                ),
+                child: _loading
+                    ? Padding(
+                        padding: const EdgeInsets.all(11),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: mine ? Tokens.ink : Colors.white,
+                        ),
+                      )
+                    : Icon(
+                        _playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                        color: mine ? Tokens.ink : Colors.white,
+                        size: 26,
+                      ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _VoiceWaveform(
+                    seed: widget.message.id,
+                    progress: progress,
+                    active: _playing,
+                    activeColor: fg,
+                    inactiveColor: fg.withValues(alpha: 0.3),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Text(
+                        _formatVoiceDuration(
+                          _playing ? _position : displayDuration,
+                        ),
+                        style: TextStyle(
+                          color: muted,
+                          fontSize: 12,
+                          height: 1,
+                        ),
+                      ),
+                      if (mine && listened) ...[
+                        const SizedBox(width: 6),
+                        Icon(Icons.graphic_eq_rounded, size: 13, color: muted),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
     return Container(
       width: 232,
       padding: const EdgeInsets.fromLTRB(10, 10, 12, 10),
@@ -4903,11 +5039,15 @@ class _VoiceWaveform extends StatelessWidget {
     required this.seed,
     required this.progress,
     required this.active,
+    this.activeColor,
+    this.inactiveColor,
   });
 
   final String seed;
   final double progress;
   final bool active;
+  final Color? activeColor;
+  final Color? inactiveColor;
 
   @override
   Widget build(BuildContext context) {
@@ -4919,6 +5059,8 @@ class _VoiceWaveform extends StatelessWidget {
           seed: seed,
           progress: progress.clamp(0.0, 1.0),
           active: active,
+          activeColor: activeColor,
+          inactiveColor: inactiveColor,
         ),
       ),
     );
@@ -4930,11 +5072,15 @@ class _VoiceWaveformPainter extends CustomPainter {
     required this.seed,
     required this.progress,
     required this.active,
+    this.activeColor,
+    this.inactiveColor,
   });
 
   final String seed;
   final double progress;
   final bool active;
+  final Color? activeColor;
+  final Color? inactiveColor;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -4945,10 +5091,12 @@ class _VoiceWaveformPainter extends CustomPainter {
     final barWidth = math.min(3.0, step * 0.56);
     final radius = Radius.circular(barWidth);
     final inactivePaint = Paint()
-      ..color = kTextDark.withValues(alpha: 0.18)
+      ..color = inactiveColor ?? kTextDark.withValues(alpha: 0.18)
       ..style = PaintingStyle.fill;
     final activePaint = Paint()
-      ..color = active ? BrandTheme.redTop : kTextDark.withValues(alpha: 0.84)
+      ..color =
+          activeColor ??
+          (active ? BrandTheme.redTop : kTextDark.withValues(alpha: 0.84))
       ..style = PaintingStyle.fill;
 
     for (var i = 0; i < bars; i++) {
@@ -4971,7 +5119,9 @@ class _VoiceWaveformPainter extends CustomPainter {
   bool shouldRepaint(covariant _VoiceWaveformPainter oldDelegate) {
     return oldDelegate.seed != seed ||
         oldDelegate.progress != progress ||
-        oldDelegate.active != active;
+        oldDelegate.active != active ||
+        oldDelegate.activeColor != activeColor ||
+        oldDelegate.inactiveColor != inactiveColor;
   }
 }
 
@@ -5464,6 +5614,272 @@ class _ChatAvatar extends StatelessWidget {
                 ),
               ),
             ),
+    );
+  }
+}
+
+/// Telegram-style voice recording inside the composer (web v2): recording
+/// starts at once, one click sends, ✕ discards.
+class _InlineVoiceRecorder extends StatefulWidget {
+  const _InlineVoiceRecorder({required this.onCancel, required this.onSend});
+
+  final VoidCallback onCancel;
+  final ValueChanged<_PendingChatAttachment> onSend;
+
+  @override
+  State<_InlineVoiceRecorder> createState() => _InlineVoiceRecorderState();
+}
+
+class _InlineVoiceRecorderState extends State<_InlineVoiceRecorder> {
+  final _recorder = AudioRecorder();
+  Timer? _timer;
+  StreamSubscription<Amplitude>? _amplitudeSub;
+  bool _recording = false;
+  bool _finishing = false;
+  Duration _duration = Duration.zero;
+  DateTime? _startedAt;
+  String _error = '';
+  final List<double> _levels = List<double>.filled(48, 0.12);
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_start());
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    unawaited(_amplitudeSub?.cancel());
+    unawaited(_recorder.cancel());
+    unawaited(_recorder.dispose());
+    super.dispose();
+  }
+
+  Future<String> _recordingPath() async {
+    final stamp = DateTime.now().millisecondsSinceEpoch;
+    if (kIsWeb) return 'voice_$stamp.m4a';
+    final dir = await getTemporaryDirectory();
+    return '${dir.path}/voice_$stamp.m4a';
+  }
+
+  bool get _ru => Localizations.localeOf(context).languageCode == 'ru';
+
+  Future<void> _start() async {
+    try {
+      final allowed = await _recorder.hasPermission();
+      if (!allowed) {
+        if (!mounted) return;
+        final ru = _ru;
+        setState(
+          () => _error = ru
+              ? 'Нет доступа к микрофону. Разрешите микрофон в браузере.'
+              : 'Microphone access is disabled. Allow it in the browser.',
+        );
+        return;
+      }
+      final path = await _recordingPath();
+      await _recorder.start(
+        const RecordConfig(
+          encoder: AudioEncoder.aacLc,
+          bitRate: 96000,
+          sampleRate: 44100,
+          numChannels: 1,
+          autoGain: true,
+          echoCancel: true,
+          noiseSuppress: true,
+        ),
+        path: path,
+      );
+      _amplitudeSub = _recorder
+          .onAmplitudeChanged(const Duration(milliseconds: 80))
+          .listen((amplitude) {
+            if (!mounted || !_recording) return;
+            final current = amplitude.current.isFinite
+                ? amplitude.current
+                : -60.0;
+            final normalized = ((current + 55) / 55).clamp(0.08, 1.0);
+            setState(() {
+              _levels
+                ..removeAt(0)
+                ..add(normalized.toDouble());
+            });
+          });
+      _startedAt = DateTime.now();
+      _timer = Timer.periodic(const Duration(milliseconds: 200), (_) {
+        if (!mounted) return;
+        final started = _startedAt;
+        if (started == null) return;
+        setState(() => _duration = DateTime.now().difference(started));
+      });
+      if (!mounted) return;
+      setState(() => _recording = true);
+    } catch (_) {
+      if (!mounted) return;
+      final ru = _ru;
+      setState(
+        () => _error = ru
+            ? 'Не удалось начать запись.'
+            : 'Could not start recording.',
+      );
+    }
+  }
+
+  Future<void> _finishAndSend() async {
+    if (_finishing || !_recording) return;
+    setState(() => _finishing = true);
+    try {
+      _timer?.cancel();
+      await _amplitudeSub?.cancel();
+      _amplitudeSub = null;
+      final path = await _recorder.stop();
+      if (path == null || path.trim().isEmpty) {
+        throw StateError('Файл записи не создан');
+      }
+      final bytes = await XFile(path).readAsBytes();
+      if (bytes.isEmpty) throw StateError('Файл записи пустой');
+      final started = _startedAt;
+      final duration = started == null
+          ? _duration
+          : DateTime.now().difference(started);
+      if (duration < const Duration(milliseconds: 600)) {
+        // Too short to be a message: treat as an accidental click.
+        widget.onCancel();
+        return;
+      }
+      final stamp = DateTime.now().millisecondsSinceEpoch;
+      widget.onSend(
+        _PendingChatAttachment(
+          file: XFile(path),
+          kind: _PendingAttachmentKind.audio,
+          fileName: 'voice_$stamp.m4a',
+          fileSize: bytes.length,
+          mimeType: 'audio/mp4',
+          duration: duration,
+          bytes: bytes,
+          previewBytes: null,
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      final ru = Localizations.localeOf(context).languageCode == 'ru';
+      setState(() {
+        _finishing = false;
+        _recording = false;
+        _error = ru
+            ? 'Не удалось сохранить запись.'
+            : 'Could not save the recording.';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    if (_error.isNotEmpty) {
+      return SizedBox(
+        height: 48,
+        child: Row(
+          children: [
+            const SizedBox(width: 12),
+            const Icon(Icons.mic_off_rounded, size: 20, color: Tokens.danger),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                _error,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: AppText.small.copyWith(color: Tokens.danger),
+              ),
+            ),
+            TextButton(
+              onPressed: widget.onCancel,
+              child: Text(ru ? 'Закрыть' : 'Close'),
+            ),
+          ],
+        ),
+      );
+    }
+    return SizedBox(
+      height: 48,
+      child: Row(
+        children: [
+          IconButton(
+            tooltip: ru ? 'Отменить запись' : 'Discard recording',
+            onPressed: _finishing ? null : widget.onCancel,
+            icon: const Icon(Icons.delete_outline_rounded, color: Tokens.ink),
+          ),
+          const SizedBox(width: 4),
+          const _RecordingDot(),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 44,
+            child: Text(
+              _formatVoiceDuration(_duration),
+              style: AppText.smallStrong.copyWith(
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: _LiveVoiceWaveform(levels: _levels, active: _recording),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            ru ? 'Запись…' : 'Recording…',
+            style: AppText.caption.copyWith(color: Tokens.textSecondary),
+          ),
+          const SizedBox(width: 8),
+          IconButton(
+            tooltip: ru ? 'Отправить голосовое' : 'Send voice message',
+            onPressed: _finishing || !_recording ? null : _finishAndSend,
+            icon: _finishing
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.send_rounded, color: BrandTheme.redTop),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RecordingDot extends StatefulWidget {
+  const _RecordingDot();
+
+  @override
+  State<_RecordingDot> createState() => _RecordingDotState();
+}
+
+class _RecordingDotState extends State<_RecordingDot>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  )..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: Tween<double>(begin: 0.35, end: 1).animate(_controller),
+      child: Container(
+        width: 10,
+        height: 10,
+        decoration: const BoxDecoration(
+          color: Tokens.accent,
+          shape: BoxShape.circle,
+        ),
+      ),
     );
   }
 }
@@ -6131,10 +6547,16 @@ class _Composer extends StatelessWidget {
     required this.onRecordVoice,
     this.editingText,
     this.onCancelEdit,
+    this.focusNode,
+    this.recorder,
     this.flat = false,
   });
 
   final TextEditingController controller;
+  final FocusNode? focusNode;
+
+  /// When set, replaces the text row with an inline voice recorder.
+  final Widget? recorder;
   final String hintText;
   final bool sending;
   final String? replyingToText;
@@ -6291,6 +6713,9 @@ class _Composer extends StatelessWidget {
             ),
             const SizedBox(height: 8),
           ],
+          if (recorder != null)
+            recorder!
+          else
           Row(
             children: [
               if (editingText == null)
@@ -6328,6 +6753,7 @@ class _Composer extends StatelessWidget {
                         },
                   child: TextField(
                     controller: controller,
+                    focusNode: focusNode,
                     minLines: 1,
                     maxLines: flat ? 8 : 4,
                     textInputAction: TextInputAction.newline,
