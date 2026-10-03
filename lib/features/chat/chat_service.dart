@@ -1624,7 +1624,10 @@ class ChatService {
     }
   }
 
-  Future<void> sendMessage({
+  /// Inserts the message and returns its id after a single round trip.
+  /// Audit logging and mention notifications run in the background so
+  /// the composer is free as soon as the message is stored.
+  Future<String?> sendMessage({
     required String chatId,
     required String body,
     String mediaType = 'text',
@@ -1638,7 +1641,7 @@ class ChatService {
     final text = body.trim();
     final userId = _sb.auth.currentUser?.id;
     final hasMedia = mediaUrl.trim().isNotEmpty;
-    if ((text.isEmpty && !hasMedia) || userId == null) return;
+    if ((text.isEmpty && !hasMedia) || userId == null) return null;
 
     final payload = <String, dynamic>{
       'chat_id': chatId,
@@ -1703,19 +1706,25 @@ class ChatService {
       }
     }
 
-    await _logMessageProfileAction(
-      chatId: chatId,
-      messageId: (inserted['id'] ?? '').toString(),
-      body: payload['body']?.toString() ?? text,
-      mediaType: mediaType,
-      userId: userId,
-      readAt: DateTime.tryParse((inserted['read_at'] ?? '').toString()),
-    );
-    await _notifyMentionedParticipants(
-      chatId: chatId,
-      body: payload['body']?.toString() ?? text,
-      senderId: userId,
-    );
+    final messageId = (inserted['id'] ?? '').toString();
+    final storedBody = payload['body']?.toString() ?? text;
+    final readAt = DateTime.tryParse((inserted['read_at'] ?? '').toString());
+    Future<void>(() async {
+      await _logMessageProfileAction(
+        chatId: chatId,
+        messageId: messageId,
+        body: storedBody,
+        mediaType: mediaType,
+        userId: userId,
+        readAt: readAt,
+      );
+      await _notifyMentionedParticipants(
+        chatId: chatId,
+        body: storedBody,
+        senderId: userId,
+      );
+    }).ignore();
+    return messageId;
   }
 
   Future<List<ChatMentionTarget>> fetchMentionTargets({

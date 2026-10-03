@@ -93,6 +93,11 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   /// Message being edited in the composer (Telegram-style: the text goes
   /// into the main input, Enter / send saves, ✕ or Esc cancels).
   ChatMessage? _editingMessage;
+
+  /// Optimistic outgoing messages shown until the realtime stream carries
+  /// the stored row (temp id → stored id in [_pendingSentIds]).
+  final List<ChatMessage> _pendingMessages = <ChatMessage>[];
+  final Map<String, String> _pendingSentIds = <String, String>{};
   final Set<String> _selectedMessageIds = <String>{};
   bool _searchOpen = false;
   String _searchQuery = '';
@@ -277,15 +282,14 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       return;
     }
 
+    if (attachment == null) {
+      await _sendTextOptimistic(body: body, rawText: text);
+      return;
+    }
+
     setState(() => _sending = true);
     try {
-      if (attachment == null) {
-        await ref
-            .read(chatServiceProvider)
-            .sendMessage(chatId: widget.chatId, body: body);
-      } else {
-        await _sendAttachment(attachment: attachment, body: body);
-      }
+      await _sendAttachment(attachment: attachment, body: body);
       _messageController.clear();
       setState(() {
         _replyingTo = null;
@@ -295,6 +299,91 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     } finally {
       if (mounted) setState(() => _sending = false);
     }
+  }
+
+  /// Telegram-style send: the composer clears at once, the message shows
+  /// with a clock until the server confirms it; on failure the text comes
+  /// back into the composer.
+  Future<void> _sendTextOptimistic({
+    required String body,
+    required String rawText,
+  }) async {
+    final userId = ref.read(currentUserIdProvider) ?? '';
+    final pending = ChatMessage(
+      id: 'pending-${DateTime.now().microsecondsSinceEpoch}',
+      chatId: widget.chatId,
+      senderId: userId,
+      body: body,
+      mediaType: 'text',
+      mediaUrl: '',
+      mediaThumbnailUrl: '',
+      fileName: '',
+      fileSize: null,
+      fileMime: '',
+      metadata: const <String, dynamic>{'pending': true},
+      deletedAt: null,
+      readAt: null,
+      listenedAt: null,
+      pinnedAt: null,
+      pinnedBy: '',
+      editedAt: null,
+      createdAt: DateTime.now().toUtc(),
+    );
+    final restoreReply = _replyingTo;
+    setState(() {
+      _pendingMessages.add(pending);
+      _replyingTo = null;
+      _mentionQuery = null;
+      _messageController.clear();
+    });
+    _scrollFeedToBottom();
+    try {
+      final storedId = await ref
+          .read(chatServiceProvider)
+          .sendMessage(chatId: widget.chatId, body: body);
+      if (!mounted) return;
+      if (storedId == null || storedId.isEmpty) {
+        setState(() => _pendingMessages.remove(pending));
+        return;
+      }
+      _pendingSentIds[pending.id] = storedId;
+      // The stream normally carries the row within a moment; make sure the
+      // placeholder never outlives it by much even if the event is missed.
+      Future<void>.delayed(const Duration(seconds: 6), () {
+        if (!mounted) return;
+        if (_pendingMessages.any((m) => m.id == pending.id)) {
+          setState(() => _pendingMessages.remove(pending));
+          ref.invalidate(chatMessagesProvider(widget.chatId));
+        }
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _pendingMessages.remove(pending);
+        _replyingTo = restoreReply;
+        _messageController.value = TextEditingValue(
+          text: rawText,
+          selection: TextSelection.collapsed(offset: rawText.length),
+        );
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            AppErrorMapper.message(error, AppLocalizations.of(context)!),
+          ),
+        ),
+      );
+    }
+  }
+
+  void _scrollFeedToBottom() {
+    if (!_messageListController.hasClients) return;
+    // The feed is a reversed list: offset 0 is the newest message.
+    _messageListController.animateTo(
+      0,
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOut,
+    );
   }
 
   String _composeOutgoingBody(String text) {
@@ -1096,6 +1185,16 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     }
     for (final message in liveMessages) {
       byId[message.id] = message;
+    }
+    // Optimistic messages: drop the ones the stream has caught up with.
+    _pendingMessages.removeWhere((pending) {
+      final storedId = _pendingSentIds[pending.id];
+      final arrived = storedId != null && byId.containsKey(storedId);
+      if (arrived) _pendingSentIds.remove(pending.id);
+      return arrived;
+    });
+    for (final pending in _pendingMessages) {
+      byId[pending.id] = pending;
     }
 
     final items = byId.values.toList(growable: false);
@@ -1974,6 +2073,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     required bool mine,
     required Offset position,
   }) async {
+    if (message.metadata['pending'] == true) return;
     final overlay =
         Overlay.of(context).context.findRenderObject() as RenderBox?;
     if (overlay == null) return;
@@ -2308,7 +2408,11 @@ class _BubbleV2State extends State<_BubbleV2> {
         if (mine) ...[
           const SizedBox(width: 4),
           Icon(
-            message.isDelivered ? Icons.done_all_rounded : Icons.done_rounded,
+            message.metadata['pending'] == true
+                ? Icons.schedule_rounded
+                : message.isDelivered
+                ? Icons.done_all_rounded
+                : Icons.done_rounded,
             size: 14,
             color: message.isRead ? Colors.white : metaColor,
           ),
@@ -2335,8 +2439,8 @@ class _BubbleV2State extends State<_BubbleV2> {
             const SizedBox(height: 6),
           ],
           if (parsedBody.replyQuote.isNotEmpty) ...[
-            _ReplyPreview(text: parsedBody.replyQuote, mine: mine),
-            const SizedBox(height: 8),
+            _ReplyPreview(text: parsedBody.replyQuote, mine: mine, flat: true),
+            const SizedBox(height: 6),
           ],
           if (message.hasMedia) ...[
             _MessageMedia(
@@ -2376,11 +2480,12 @@ class _BubbleV2State extends State<_BubbleV2> {
       reactionCounts[r.emoji] = (reactionCounts[r.emoji] ?? 0) + 1;
     }
 
+    final pending = message.metadata['pending'] == true;
     final hoverBar = AnimatedOpacity(
       duration: Tokens.fast,
-      opacity: _hovered && !widget.selectionMode ? 1 : 0,
+      opacity: _hovered && !widget.selectionMode && !pending ? 1 : 0,
       child: IgnorePointer(
-        ignoring: !_hovered || widget.selectionMode,
+        ignoring: !_hovered || widget.selectionMode || pending,
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -4379,13 +4484,49 @@ class _HighlightedMessageText extends StatelessWidget {
 }
 
 class _ReplyPreview extends StatelessWidget {
-  const _ReplyPreview({required this.text, required this.mine});
+  const _ReplyPreview({
+    required this.text,
+    required this.mine,
+    this.flat = false,
+  });
 
   final String text;
   final bool mine;
 
+  /// v2: a compact quote that hugs its text instead of stretching the
+  /// bubble to its maximum width.
+  final bool flat;
+
   @override
   Widget build(BuildContext context) {
+    if (flat) {
+      return Container(
+        padding: const EdgeInsets.fromLTRB(10, 5, 10, 5),
+        decoration: BoxDecoration(
+          color: mine
+              ? Colors.white.withValues(alpha: 0.12)
+              : Tokens.ink.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(8),
+          border: Border(
+            left: BorderSide(
+              color: mine ? Colors.white.withValues(alpha: 0.8) : Tokens.accent,
+              width: 2,
+            ),
+          ),
+        ),
+        child: Text(
+          text,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: AppText.caption.copyWith(
+            fontSize: 13,
+            color: mine
+                ? Colors.white.withValues(alpha: 0.8)
+                : Tokens.textSecondary,
+          ),
+        ),
+      );
+    }
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
