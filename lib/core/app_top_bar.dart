@@ -185,20 +185,20 @@ class _SectionLink extends StatelessWidget {
           alignment: Alignment.center,
           children: [
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 18),
+              padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
                     label,
-                    style: AppText.small.copyWith(
-                      fontSize: 15,
+                    style: AppText.body.copyWith(
+                      fontSize: 17,
                       fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
                       color: selected ? Tokens.text : Tokens.textSecondary,
                     ),
                   ),
                   if (badge > 0) ...[
-                    const SizedBox(width: 6),
+                    const SizedBox(width: 8),
                     _Badge(count: badge),
                   ],
                 ],
@@ -206,8 +206,8 @@ class _SectionLink extends StatelessWidget {
             ),
             if (selected)
               Positioned(
-                left: 18,
-                right: 18,
+                left: 20,
+                right: 20,
                 bottom: 0,
                 child: Container(height: 2, color: Tokens.accent),
               ),
@@ -271,10 +271,10 @@ class _Badge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      constraints: const BoxConstraints(minWidth: 18),
-      height: 18,
+      constraints: const BoxConstraints(minWidth: 20),
+      height: 20,
       alignment: Alignment.center,
-      padding: const EdgeInsets.symmetric(horizontal: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 6),
       decoration: BoxDecoration(
         color: Tokens.accent,
         borderRadius: BorderRadius.circular(Tokens.radiusPill),

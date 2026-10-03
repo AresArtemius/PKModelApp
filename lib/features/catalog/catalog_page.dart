@@ -43,10 +43,11 @@ const double _catalogGridCacheExtent = 1000;
 const double _catalogDesktopBreakpoint = 900;
 const double _catalogDesktopMaxWidth = double.infinity;
 const double _catalogDetailBreakpoint = 1400;
-const double _catalogDesktopSidePanelWidth = 280;
-const double _catalogDesktopDetailWidth = 360;
+const double _catalogDesktopSidePanelWidth = 300;
+const double _catalogDesktopDetailWidth = 400;
 const bool _catalogSavedSearchesEnabled = false;
-const EdgeInsets _catalogDesktopPadding = EdgeInsets.fromLTRB(32, 24, 32, 24);
+// The desktop layout owns its paddings (three columns with hairlines).
+const EdgeInsets _catalogDesktopPadding = EdgeInsets.zero;
 
 Alignment _catalogCoverAlignmentFor(ModelVm m) {
   return Alignment(
@@ -1022,14 +1023,99 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
             orElse: () => filteredItems.first,
           )
         : null;
-    final roleTabs = _CatalogRoleTabs(
-      selectedRole: c.profileRole,
-      onChanged: (role) async {
-        _unfocus();
-        c.setProfileRole(role);
-        await c.reload();
-      },
-    );
+    Future<void> onRoleChanged(ProfessionalProfileType? role) async {
+      _unfocus();
+      c.setProfileRole(role);
+      await c.reload();
+    }
+
+    final roleTabs = isDesktop
+        ? _CatalogRoleList(selectedRole: c.profileRole, onChanged: onRoleChanged)
+        : _CatalogRoleTabs(selectedRole: c.profileRole, onChanged: onRoleChanged);
+
+    // Inline ranges in the rail; the dialog keeps the rarer filters.
+    Future<void> applyRange(void Function() set) async {
+      _unfocus();
+      set();
+      await c.reload();
+    }
+
+    final b = c.bounds;
+    final inlineFilters = isDesktop
+        ? Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _CatalogRangeFilter(
+                label: t.age,
+                min: b?.ageMin ?? kAgeMin,
+                max: b?.ageMax ?? kAgeMax,
+                from: c.ageFrom,
+                to: c.ageTo,
+                initiallyOpen: true,
+                onChanged: (from, to) => applyRange(() {
+                  c.ageFrom = from;
+                  c.ageTo = to;
+                }),
+              ),
+              _CatalogRangeFilter(
+                label: t.height,
+                unit: t.cm,
+                min: b?.heightMin ?? kHeightMin,
+                max: b?.heightMax ?? kHeightMax,
+                from: c.heightFrom,
+                to: c.heightTo,
+                onChanged: (from, to) => applyRange(() {
+                  c.heightFrom = from;
+                  c.heightTo = to;
+                }),
+              ),
+              _CatalogRangeFilter(
+                label: t.shoeSize,
+                min: b?.shoeMin ?? kShoeMin,
+                max: b?.shoeMax ?? kShoeMax,
+                from: c.shoeFrom,
+                to: c.shoeTo,
+                onChanged: (from, to) => applyRange(() {
+                  c.shoeFrom = from;
+                  c.shoeTo = to;
+                }),
+              ),
+              _CatalogRangeFilter(
+                label: t.bust,
+                min: b?.bustMin ?? kBustMin,
+                max: b?.bustMax ?? kBustMax,
+                from: c.bustFrom,
+                to: c.bustTo,
+                onChanged: (from, to) => applyRange(() {
+                  c.bustFrom = from;
+                  c.bustTo = to;
+                }),
+              ),
+              _CatalogRangeFilter(
+                label: t.waist,
+                min: b?.waistMin ?? kWaistMin,
+                max: b?.waistMax ?? kWaistMax,
+                from: c.waistFrom,
+                to: c.waistTo,
+                onChanged: (from, to) => applyRange(() {
+                  c.waistFrom = from;
+                  c.waistTo = to;
+                }),
+              ),
+              _CatalogRangeFilter(
+                label: t.hips,
+                min: b?.hipsMin ?? kHipsMin,
+                max: b?.hipsMax ?? kHipsMax,
+                from: c.hipsFrom,
+                to: c.hipsTo,
+                onChanged: (from, to) => applyRange(() {
+                  c.hipsFrom = from;
+                  c.hipsTo = to;
+                }),
+              ),
+            ],
+          )
+        : null;
 
     return Scaffold(
       body: Stack(
@@ -1086,6 +1172,7 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                               : null,
                           resetFiltersLabel: resetFiltersLabel,
                           roleTabs: roleTabs,
+                          filters: inlineFilters,
                           search: _CatalogSearchRow(
                             controller: _searchC,
                             onChanged: _onSearchChanged,
