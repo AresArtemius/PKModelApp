@@ -578,3 +578,28 @@ class ChatReaction {
     );
   }
 }
+
+/// Row of `user_presence`: the heartbeat the client sends while the app is
+/// in the foreground.
+class UserPresence {
+  const UserPresence({required this.isOnline, required this.lastSeenAt});
+
+  final bool isOnline;
+  final DateTime? lastSeenAt;
+
+  /// Online means the heartbeat is fresh; a stale "online" row (closed
+  /// laptop, lost connection) counts as offline.
+  bool get isOnlineNow {
+    final seen = lastSeenAt;
+    if (!isOnline || seen == null) return false;
+    return DateTime.now().toUtc().difference(seen.toUtc()) <
+        const Duration(seconds: 75);
+  }
+
+  factory UserPresence.fromMap(Map<String, dynamic> map) {
+    return UserPresence(
+      isOnline: map['is_online'] == true,
+      lastSeenAt: DateTime.tryParse((map['last_seen_at'] ?? '').toString()),
+    );
+  }
+}

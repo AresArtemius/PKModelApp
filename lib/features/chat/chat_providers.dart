@@ -1,4 +1,8 @@
+import 'dart:async';
+
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/auth_providers.dart';
 import '../../core/supabase_provider.dart';
@@ -81,3 +85,94 @@ final chatMentionTargetsProvider = FutureProvider.autoDispose
           .watch(chatServiceProvider)
           .fetchMentionTargets(chatId: chatId, currentUserId: userId);
     });
+
+/// Б3: sends the presence heartbeat every 30 s while the app is visible
+/// and marks the user offline when it goes to the background. Watched by
+/// the app shell so it runs on every page.
+final presenceHeartbeatProvider = Provider.autoDispose<void>((ref) {
+  final userId = ref.watch(currentUserIdProvider);
+  if (userId == null || userId.isEmpty) return;
+  final service = ref.read(chatServiceProvider);
+
+  var visible = true;
+  Future<void> beat() async {
+    try {
+      await service.touchPresence(online: visible);
+    } catch (_) {
+      // Presence is a soft signal; a failed beat is retried next tick.
+    }
+  }
+
+  unawaited(beat());
+  final timer = Timer.periodic(const Duration(seconds: 30), (_) {
+    if (visible) unawaited(beat());
+  });
+  final lifecycle = AppLifecycleListener(
+    onShow: () {
+      visible = true;
+      unawaited(beat());
+    },
+    onResume: () {
+      visible = true;
+      unawaited(beat());
+    },
+    onHide: () {
+      visible = false;
+      unawaited(beat());
+    },
+    onPause: () {
+      visible = false;
+      unawaited(beat());
+    },
+  );
+
+  ref.onDispose(() {
+    timer.cancel();
+    lifecycle.dispose();
+    visible = false;
+    unawaited(beat());
+  });
+});
+
+final userPresenceProvider = StreamProvider.autoDispose
+    .family<UserPresence?, String>((ref, userId) {
+      return ref.watch(chatServiceProvider).watchPresence(userId);
+    });
+
+/// Б4: the chat list and the unread badge follow realtime changes to
+/// messages and chats instead of waiting for a manual refresh.
+final chatListRealtimeProvider = Provider.autoDispose<void>((ref) {
+  final userId = ref.watch(currentUserIdProvider);
+  if (userId == null || userId.isEmpty) return;
+
+  final sb = ref.read(supabaseProvider);
+  Timer? debounce;
+  void refresh() {
+    debounce?.cancel();
+    debounce = Timer(const Duration(milliseconds: 350), () {
+      ref.invalidate(myChatsProvider(false));
+      ref.invalidate(myChatsProvider(true));
+    });
+  }
+
+  final channel = sb
+      .channel('chat-list-$userId')
+      .onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'selection_chat_messages',
+        callback: (_) => refresh(),
+      )
+      .onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'selection_chats',
+        callback: (_) => refresh(),
+      )
+      .subscribe();
+
+  ref.onDispose(() {
+    debounce?.cancel();
+    sb.removeChannel(channel);
+  });
+});

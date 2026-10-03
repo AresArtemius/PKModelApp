@@ -201,7 +201,12 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     if (!kIsWeb || !mounted) return false;
     if (event is! KeyDownEvent) return false;
     final key = event.logicalKey;
-    if (key != LogicalKeyboardKey.enter && key != LogicalKeyboardKey.numpadEnter) {
+    if (key == LogicalKeyboardKey.escape && _searchOpen && !_inlineVoice) {
+      _toggleSearch();
+      return true;
+    }
+    if (key != LogicalKeyboardKey.enter &&
+        key != LogicalKeyboardKey.numpadEnter) {
       return false;
     }
     if (HardwareKeyboard.instance.isShiftPressed) return false;
@@ -1733,10 +1738,16 @@ class _ChatPageState extends ConsumerState<ChatPage> {
 
     final profileId = chatContext?.profileId.trim() ?? '';
     final selectionId = chatContext?.selectionId.trim() ?? '';
+    final otherUserId = chatContext == null
+        ? ''
+        : (chatContext.modelUserId == userId
+              ? chatContext.agentUserId
+              : chatContext.modelUserId);
     final header = v2
         ? _ChatHeaderV2(
             title: headerData.title,
             subtitle: headerData.subtitle,
+            otherUserId: otherUserId,
             avatarUrl: headerData.avatarUrl,
             onSearch: _toggleSearch,
             searchActive: _searchOpen,
@@ -1794,6 +1805,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                   _V2Pad(
                     enabled: v2,
                     child: _ChatSearchPanel(
+                    flat: v2,
                     controller: _searchController,
                     query: _searchQuery,
                     hitCount: searchHits.length,
@@ -1841,6 +1853,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                   _V2Pad(
                     enabled: v2,
                     child: _PinnedMessagesPanel(
+                      flat: v2,
                       messages: pinnedPanelMessages,
                       isRussian: _isRussian,
                       previewBuilder: _replyPreviewText,
@@ -3381,6 +3394,7 @@ class _PinnedMessagesPanel extends StatelessWidget {
     required this.previewBuilder,
     required this.onTap,
     required this.onUnpin,
+    this.flat = false,
   });
 
   final List<ChatMessage> messages;
@@ -3388,10 +3402,69 @@ class _PinnedMessagesPanel extends StatelessWidget {
   final String Function(ChatMessage message) previewBuilder;
   final ValueChanged<ChatMessage> onTap;
   final ValueChanged<ChatMessage> onUnpin;
+  final bool flat;
 
   @override
   Widget build(BuildContext context) {
     final visibleMessages = messages.take(3).toList(growable: false);
+    if (flat) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+        decoration: BoxDecoration(
+          color: Tokens.bg,
+          borderRadius: BorderRadius.circular(Tokens.radiusMd),
+          border: const Border(
+            left: BorderSide(color: Tokens.accent, width: 3),
+            top: BorderSide(color: Tokens.border),
+            right: BorderSide(color: Tokens.border),
+            bottom: BorderSide(color: Tokens.border),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              (isRussian ? 'Закреплено' : 'Pinned') +
+                  (messages.length > 1 ? ' · ${messages.length}' : ''),
+              style: AppText.caption.copyWith(
+                color: Tokens.accent,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            for (final message in visibleMessages)
+              Row(
+                children: [
+                  Expanded(
+                    child: InkWell(
+                      onTap: () => onTap(message),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 3),
+                        child: Text(
+                          previewBuilder(message).trim().isEmpty
+                              ? (isRussian ? 'Сообщение' : 'Message')
+                              : previewBuilder(message).trim(),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppText.small,
+                        ),
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: isRussian ? 'Открепить' : 'Unpin',
+                    onPressed: () => onUnpin(message),
+                    style: _composerIconStyle,
+                    visualDensity: VisualDensity.compact,
+                    icon: const Icon(Icons.close_rounded, size: 16),
+                  ),
+                ],
+              ),
+          ],
+        ),
+      );
+    }
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
@@ -3513,6 +3586,7 @@ class _ChatSearchPanel extends StatelessWidget {
     required this.onPrevious,
     required this.onNext,
     required this.onSubmitted,
+    this.flat = false,
   });
 
   final TextEditingController controller;
@@ -3526,6 +3600,7 @@ class _ChatSearchPanel extends StatelessWidget {
   final VoidCallback onPrevious;
   final VoidCallback onNext;
   final VoidCallback onSubmitted;
+  final bool flat;
 
   @override
   Widget build(BuildContext context) {
@@ -3543,6 +3618,74 @@ class _ChatSearchPanel extends StatelessWidget {
         : hasHits
         ? '$currentPosition / $hitCount'
         : (isRussian ? 'Нет' : 'None');
+
+    if (flat) {
+      return Container(
+        height: 44,
+        padding: const EdgeInsets.fromLTRB(12, 0, 4, 0),
+        decoration: BoxDecoration(
+          color: Tokens.bg,
+          borderRadius: BorderRadius.circular(Tokens.radiusMd),
+          border: Border.all(color: Tokens.border),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.search_rounded, color: Tokens.textSecondary, size: 20),
+            const SizedBox(width: 8),
+            Expanded(
+              child: TextField(
+                controller: controller,
+                autofocus: true,
+                onChanged: onChanged,
+                onSubmitted: (_) => onSubmitted(),
+                textInputAction: TextInputAction.search,
+                style: AppText.small,
+                decoration: InputDecoration(
+                  hintText: isRussian ? 'Поиск по переписке' : 'Search messages',
+                  hintStyle: AppText.small.copyWith(color: Tokens.textTertiary),
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  filled: false,
+                  isDense: true,
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+            ),
+            Text(
+              statusText,
+              style: AppText.caption.copyWith(
+                color: hasError || (hasQuery && !loading && !hasHits)
+                    ? Tokens.danger
+                    : Tokens.textSecondary,
+              ),
+            ),
+            const SizedBox(width: 4),
+            IconButton(
+              visualDensity: VisualDensity.compact,
+              tooltip: isRussian ? 'Предыдущее' : 'Previous',
+              onPressed: hasHits && !loading ? onPrevious : null,
+              style: _composerIconStyle,
+              icon: const Icon(Icons.keyboard_arrow_up_rounded, size: 20),
+            ),
+            IconButton(
+              visualDensity: VisualDensity.compact,
+              tooltip: isRussian ? 'Следующее' : 'Next',
+              onPressed: hasHits && !loading ? onNext : null,
+              style: _composerIconStyle,
+              icon: const Icon(Icons.keyboard_arrow_down_rounded, size: 20),
+            ),
+            IconButton(
+              visualDensity: VisualDensity.compact,
+              tooltip: isRussian ? 'Закрыть (Esc)' : 'Close (Esc)',
+              onPressed: onClose,
+              style: _composerIconStyle,
+              icon: const Icon(Icons.close_rounded, size: 20),
+            ),
+          ],
+        ),
+      );
+    }
 
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
@@ -3781,6 +3924,14 @@ class _MentionSuggestionChip extends StatelessWidget {
   }
 }
 
+/// Header icons: ink, round surface on hover.
+final ButtonStyle _headerIconStyle = IconButton.styleFrom(
+  foregroundColor: Tokens.ink,
+  hoverColor: Tokens.surfaceAlt,
+  highlightColor: Tokens.surfaceAlt,
+  shape: const CircleBorder(),
+);
+
 /// Horizontal page gutter of the v2 conversation column.
 class _V2Pad extends StatelessWidget {
   const _V2Pad({required this.enabled, required this.child});
@@ -3798,10 +3949,11 @@ class _V2Pad extends StatelessWidget {
   }
 }
 
-class _ChatHeaderV2 extends StatelessWidget {
+class _ChatHeaderV2 extends ConsumerWidget {
   const _ChatHeaderV2({
     required this.title,
     required this.subtitle,
+    required this.otherUserId,
     required this.avatarUrl,
     required this.onSearch,
     required this.searchActive,
@@ -3812,6 +3964,7 @@ class _ChatHeaderV2 extends StatelessWidget {
 
   final String title;
   final String subtitle;
+  final String otherUserId;
   final String avatarUrl;
   final VoidCallback onSearch;
   final bool searchActive;
@@ -3820,8 +3973,12 @@ class _ChatHeaderV2 extends StatelessWidget {
   final VoidCallback? onOpenCasting;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final presence = otherUserId.isEmpty
+        ? null
+        : ref.watch(userPresenceProvider(otherUserId)).valueOrNull;
+    final online = presence?.isOnlineNow ?? false;
     return Container(
       height: 72,
       padding: const EdgeInsets.fromLTRB(24, 0, 12, 0),
@@ -3831,32 +3988,51 @@ class _ChatHeaderV2 extends StatelessWidget {
       ),
       child: Row(
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(Tokens.radiusMd),
-            child: SizedBox(
-              width: 44,
-              height: 44,
-              child: avatarUrl.trim().isEmpty
-                  ? const ColoredBox(
-                      color: Tokens.surfaceAlt,
-                      child: Icon(
-                        Icons.person_outline_rounded,
-                        color: Tokens.textTertiary,
-                      ),
-                    )
-                  : CachedNetworkImage(
-                      imageUrl: avatarUrl,
-                      fit: BoxFit.cover,
-                      alignment: const Alignment(0, -0.6),
-                      errorWidget: (_, _, _) => const ColoredBox(
-                        color: Tokens.surfaceAlt,
-                        child: Icon(
-                          Icons.person_outline_rounded,
-                          color: Tokens.textTertiary,
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(Tokens.radiusMd),
+                child: SizedBox(
+                  width: 44,
+                  height: 44,
+                  child: avatarUrl.trim().isEmpty
+                      ? const ColoredBox(
+                          color: Tokens.surfaceAlt,
+                          child: Icon(
+                            Icons.person_outline_rounded,
+                            color: Tokens.textTertiary,
+                          ),
+                        )
+                      : CachedNetworkImage(
+                          imageUrl: avatarUrl,
+                          fit: BoxFit.cover,
+                          alignment: const Alignment(0, -0.6),
+                          errorWidget: (_, _, _) => const ColoredBox(
+                            color: Tokens.surfaceAlt,
+                            child: Icon(
+                              Icons.person_outline_rounded,
+                              color: Tokens.textTertiary,
+                            ),
+                          ),
                         ),
-                      ),
+                ),
+              ),
+              if (online)
+                Positioned(
+                  right: -2,
+                  bottom: -2,
+                  child: Container(
+                    width: 14,
+                    height: 14,
+                    decoration: BoxDecoration(
+                      color: Tokens.success,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Tokens.bg, width: 2.5),
                     ),
-            ),
+                  ),
+                ),
+            ],
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -3870,15 +4046,14 @@ class _ChatHeaderV2 extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: AppText.h2.copyWith(height: 1.2),
                 ),
-                if (subtitle.trim().isNotEmpty) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle.replaceAll(' • ', ' · '),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppText.caption.copyWith(fontSize: 13),
-                  ),
-                ],
+                const SizedBox(height: 2),
+                _PresenceLine(
+                  presence: presence,
+                  context: subtitle
+                      .replaceAll('Анкета: ', '')
+                      .replaceAll('Кастинг: ', '')
+                      .replaceAll(' • ', ' · '),
+                ),
               ],
             ),
           ),
@@ -3887,14 +4062,14 @@ class _ChatHeaderV2 extends StatelessWidget {
             IconButton(
               tooltip: ru ? 'Открыть анкету' : 'Open profile',
               onPressed: onOpenProfile,
-              style: IconButton.styleFrom(foregroundColor: Tokens.ink),
+              style: _headerIconStyle,
               icon: const Icon(Icons.badge_outlined, size: 22),
             ),
           if (onOpenCasting != null)
             IconButton(
               tooltip: ru ? 'Открыть кастинг' : 'Open casting',
               onPressed: onOpenCasting,
-              style: IconButton.styleFrom(foregroundColor: Tokens.ink),
+              style: _headerIconStyle,
               icon: const Icon(Icons.video_camera_front_outlined, size: 22),
             ),
           if (onOpenProfile != null || onOpenCasting != null)
@@ -3908,21 +4083,115 @@ class _ChatHeaderV2 extends StatelessWidget {
           IconButton(
             tooltip: ru ? 'Поиск по переписке' : 'Search messages',
             onPressed: onSearch,
-            style: IconButton.styleFrom(
-              foregroundColor: searchActive ? Tokens.accent : Tokens.ink,
-            ),
+            style: searchActive
+                ? IconButton.styleFrom(
+                    foregroundColor: Tokens.accent,
+                    backgroundColor: Tokens.accentSoft,
+                    shape: const CircleBorder(),
+                  )
+                : _headerIconStyle,
             icon: const Icon(Icons.search_rounded, size: 22),
           ),
           IconButton(
             tooltip: ru ? 'Удалить диалог' : 'Delete chat',
             onPressed: onDeleteChat,
-            style: IconButton.styleFrom(foregroundColor: Tokens.ink),
+            style: _headerIconStyle,
             icon: const Icon(Icons.delete_outline_rounded, size: 22),
           ),
         ],
       ),
     );
   }
+}
+
+/// "в сети" / "был(а) в 15:40" followed by the chat context; re-renders
+/// every 30 s so a stale heartbeat turns into "был(а) …" on its own.
+class _PresenceLine extends StatefulWidget {
+  const _PresenceLine({required this.presence, required this.context});
+
+  final UserPresence? presence;
+  final String context;
+
+  @override
+  State<_PresenceLine> createState() => _PresenceLineState();
+}
+
+class _PresenceLineState extends State<_PresenceLine> {
+  Timer? _tick;
+
+  @override
+  void initState() {
+    super.initState();
+    _tick = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _tick?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final presence = widget.presence;
+    final online = presence?.isOnlineNow ?? false;
+    final seen = presence?.lastSeenAt;
+    final status = online
+        ? (ru ? 'в сети' : 'online')
+        : seen == null
+        ? ''
+        : _lastSeenLabel(seen, ru);
+    final parts = [
+      if (status.isNotEmpty) status,
+      if (widget.context.trim().isNotEmpty) widget.context.trim(),
+    ];
+    if (parts.isEmpty) return const SizedBox.shrink();
+    return Text.rich(
+      TextSpan(
+        children: [
+          if (status.isNotEmpty)
+            TextSpan(
+              text: status,
+              style: TextStyle(
+                color: online ? Tokens.success : Tokens.textSecondary,
+                fontWeight: online ? FontWeight.w600 : FontWeight.w400,
+              ),
+            ),
+          if (parts.length > 1) const TextSpan(text: '  ·  '),
+          if (widget.context.trim().isNotEmpty)
+            TextSpan(text: widget.context.trim()),
+        ],
+      ),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: AppText.caption.copyWith(fontSize: 13),
+    );
+  }
+}
+
+String _lastSeenLabel(DateTime seen, bool ru) {
+  final local = seen.toLocal();
+  final now = DateTime.now();
+  final diff = now.difference(local);
+  if (diff < const Duration(minutes: 1)) {
+    return ru ? 'был(а) только что' : 'last seen just now';
+  }
+  if (diff < const Duration(hours: 1)) {
+    final m = diff.inMinutes;
+    return ru ? 'был(а) $m мин назад' : 'last seen $m min ago';
+  }
+  final today = DateTime(now.year, now.month, now.day);
+  final day = DateTime(local.year, local.month, local.day);
+  final time = _timeLabelV2(seen);
+  if (day == today) return ru ? 'был(а) в $time' : 'last seen at $time';
+  if (today.difference(day).inDays == 1) {
+    return ru ? 'был(а) вчера в $time' : 'last seen yesterday at $time';
+  }
+  final date = _dayLabelV2(local, ru);
+  return ru ? 'был(а) $date' : 'last seen $date';
 }
 
 class _ChatHeaderData {
