@@ -293,20 +293,15 @@ class _ChatsPageState extends ConsumerState<ChatsPage> {
     required AppLocalizations t,
     required bool ru,
     required AsyncValue<List<ChatListItem>> chats,
+    required bool isDesktop,
   }) {
     final selectedId = _selectedChatId;
-    return Scaffold(
-      backgroundColor: Tokens.bg,
-      body: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          SizedBox(
-            width: _chatsV2ListWidth,
-            child: Column(
+    final gutter = isDesktop ? 24.0 : 16.0;
+    final listColumn = Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 20, 12, 0),
+                  padding: EdgeInsets.fromLTRB(gutter, isDesktop ? 20 : 12, 12, 0),
                   child: Row(
                     children: [
                       Expanded(
@@ -340,7 +335,7 @@ class _ChatsPageState extends ConsumerState<ChatsPage> {
                 ),
                 const SizedBox(height: 14),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  padding: EdgeInsets.symmetric(horizontal: gutter),
                   child: _V2SearchField(
                     controller: _searchController,
                     loading: _serverSearchLoading,
@@ -356,7 +351,7 @@ class _ChatsPageState extends ConsumerState<ChatsPage> {
                 ),
                 const SizedBox(height: 8),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  padding: EdgeInsets.symmetric(horizontal: gutter),
                   child: _V2RoleTabs(
                     value: _roleFilter,
                     onChanged: (value) => setState(() {
@@ -367,7 +362,7 @@ class _ChatsPageState extends ConsumerState<ChatsPage> {
                 ),
                 if (_contentFilter != _ChatContentFilter.all)
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 8, 24, 10),
+                    padding: EdgeInsets.fromLTRB(gutter, 8, gutter, 10),
                     child: Row(
                       children: [
                         Icon(
@@ -433,20 +428,25 @@ class _ChatsPageState extends ConsumerState<ChatsPage> {
                       return ListView.separated(
                         padding: const EdgeInsets.only(bottom: 24),
                         itemCount: visible.length,
-                        separatorBuilder: (_, _) => const Divider(
+                        separatorBuilder: (_, _) => Divider(
                           height: 1,
                           thickness: 1,
-                          indent: 90,
+                          indent: gutter + 66,
                           color: Tokens.border,
                         ),
                         itemBuilder: (context, index) {
                           final item = visible[index];
                           return _ChatRowV2(
+                            gutter: gutter,
                             item: item,
-                            selected: item.id == selectedId,
+                            selected: isDesktop && item.id == selectedId,
                             archived: _archived,
-                            onTap: () =>
-                                setState(() => _selectedChatId = item.id),
+                            onTap: isDesktop
+                                ? () =>
+                                      setState(() => _selectedChatId = item.id)
+                                : () => context.push(
+                                    '${Routes.chatPrefix}${item.id}',
+                                  ),
                             onPin: () => _setPinned(item, !item.pinned),
                             onArchive: () => _setArchived(item, !_archived),
                           );
@@ -456,8 +456,20 @@ class _ChatsPageState extends ConsumerState<ChatsPage> {
                   ),
                 ),
               ],
-            ),
-          ),
+            );
+
+    if (!isDesktop) {
+      // Phone-width web: the list fills the screen, a chat opens as its
+      // own page (/chat/:id) with a back arrow.
+      return Scaffold(backgroundColor: Tokens.bg, body: listColumn);
+    }
+
+    return Scaffold(
+      backgroundColor: Tokens.bg,
+      body: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(width: _chatsV2ListWidth, child: listColumn),
           const VerticalDivider(width: 1, thickness: 1, color: Tokens.border),
           Expanded(
             child: selectedId == null || selectedId.isEmpty
@@ -481,8 +493,8 @@ class _ChatsPageState extends ConsumerState<ChatsPage> {
     final isDesktop =
         MediaQuery.sizeOf(context).width >= _chatsDesktopBreakpoint;
     _syncQueryChat(context, isDesktop);
-    if (_chatsV2 && isDesktop) {
-      return _buildV2(context, t: t, ru: ru, chats: chats);
+    if (_chatsV2) {
+      return _buildV2(context, t: t, ru: ru, chats: chats, isDesktop: isDesktop);
     }
     final pagePadding = isDesktop
         ? const EdgeInsets.fromLTRB(32, 24, 32, 28)
@@ -831,8 +843,10 @@ class _ChatRowV2 extends StatefulWidget {
     required this.onTap,
     required this.onPin,
     required this.onArchive,
+    this.gutter = 24,
   });
 
+  final double gutter;
   final ChatListItem item;
   final bool selected;
   final bool archived;
@@ -885,7 +899,7 @@ class _ChatRowV2State extends State<_ChatRowV2> {
           child: Stack(
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(24, 14, 20, 14),
+                padding: EdgeInsets.fromLTRB(widget.gutter, 14, 20, 14),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
