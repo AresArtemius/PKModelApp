@@ -89,6 +89,15 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   bool _loadingOlderMessages = false;
   bool _hasOlderMessages = true;
   ChatMessage? _replyingTo;
+
+  /// Message being edited in the composer (Telegram-style: the text goes
+  /// into the main input, Enter / send saves, ✕ or Esc cancels).
+  ChatMessage? _editingMessage;
+
+  /// Optimistic outgoing messages shown until the realtime stream carries
+  /// the stored row (temp id → stored id in [_pendingSentIds]).
+  final List<ChatMessage> _pendingMessages = <ChatMessage>[];
+  final Map<String, String> _pendingSentIds = <String, String>{};
   final Set<String> _selectedMessageIds = <String>{};
   bool _searchOpen = false;
   String _searchQuery = '';
@@ -246,6 +255,10 @@ class _ChatPageState extends ConsumerState<ChatPage> {
 
   Future<void> _send() async {
     if (_sending || _uploadingMedia) return;
+    if (_editingMessage != null) {
+      await _saveEdit();
+      return;
+    }
     if (!await _ensureCanUseChat()) return;
     final text = _messageController.text.trim();
     final attachment = _pendingAttachment;
@@ -269,15 +282,14 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       return;
     }
 
+    if (attachment == null) {
+      await _sendTextOptimistic(body: body, rawText: text);
+      return;
+    }
+
     setState(() => _sending = true);
     try {
-      if (attachment == null) {
-        await ref
-            .read(chatServiceProvider)
-            .sendMessage(chatId: widget.chatId, body: body);
-      } else {
-        await _sendAttachment(attachment: attachment, body: body);
-      }
+      await _sendAttachment(attachment: attachment, body: body);
       _messageController.clear();
       setState(() {
         _replyingTo = null;
@@ -287,6 +299,91 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     } finally {
       if (mounted) setState(() => _sending = false);
     }
+  }
+
+  /// Telegram-style send: the composer clears at once, the message shows
+  /// with a clock until the server confirms it; on failure the text comes
+  /// back into the composer.
+  Future<void> _sendTextOptimistic({
+    required String body,
+    required String rawText,
+  }) async {
+    final userId = ref.read(currentUserIdProvider) ?? '';
+    final pending = ChatMessage(
+      id: 'pending-${DateTime.now().microsecondsSinceEpoch}',
+      chatId: widget.chatId,
+      senderId: userId,
+      body: body,
+      mediaType: 'text',
+      mediaUrl: '',
+      mediaThumbnailUrl: '',
+      fileName: '',
+      fileSize: null,
+      fileMime: '',
+      metadata: const <String, dynamic>{'pending': true},
+      deletedAt: null,
+      readAt: null,
+      listenedAt: null,
+      pinnedAt: null,
+      pinnedBy: '',
+      editedAt: null,
+      createdAt: DateTime.now().toUtc(),
+    );
+    final restoreReply = _replyingTo;
+    setState(() {
+      _pendingMessages.add(pending);
+      _replyingTo = null;
+      _mentionQuery = null;
+      _messageController.clear();
+    });
+    _scrollFeedToBottom();
+    try {
+      final storedId = await ref
+          .read(chatServiceProvider)
+          .sendMessage(chatId: widget.chatId, body: body);
+      if (!mounted) return;
+      if (storedId == null || storedId.isEmpty) {
+        setState(() => _pendingMessages.remove(pending));
+        return;
+      }
+      _pendingSentIds[pending.id] = storedId;
+      // The stream normally carries the row within a moment; make sure the
+      // placeholder never outlives it by much even if the event is missed.
+      Future<void>.delayed(const Duration(seconds: 6), () {
+        if (!mounted) return;
+        if (_pendingMessages.any((m) => m.id == pending.id)) {
+          setState(() => _pendingMessages.remove(pending));
+          ref.invalidate(chatMessagesProvider(widget.chatId));
+        }
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _pendingMessages.remove(pending);
+        _replyingTo = restoreReply;
+        _messageController.value = TextEditingValue(
+          text: rawText,
+          selection: TextSelection.collapsed(offset: rawText.length),
+        );
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            AppErrorMapper.message(error, AppLocalizations.of(context)!),
+          ),
+        ),
+      );
+    }
+  }
+
+  void _scrollFeedToBottom() {
+    if (!_messageListController.hasClients) return;
+    // The feed is a reversed list: offset 0 is the newest message.
+    _messageListController.animateTo(
+      0,
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOut,
+    );
   }
 
   String _composeOutgoingBody(String text) {
@@ -1089,6 +1186,16 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     for (final message in liveMessages) {
       byId[message.id] = message;
     }
+    // Optimistic messages: drop the ones the stream has caught up with.
+    _pendingMessages.removeWhere((pending) {
+      final storedId = _pendingSentIds[pending.id];
+      final arrived = storedId != null && byId.containsKey(storedId);
+      if (arrived) _pendingSentIds.remove(pending.id);
+      return arrived;
+    });
+    for (final pending in _pendingMessages) {
+      byId[pending.id] = pending;
+    }
 
     final items = byId.values.toList(growable: false);
     items.sort((a, b) {
@@ -1199,49 +1306,71 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     );
   }
 
+  /// Puts the message text into the composer for editing.
   Future<void> _editMessage(ChatMessage message) async {
     final parsed = _ParsedMessageBody.from(message.body);
-    final controller = TextEditingController(text: parsed.body);
-    final updated = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(_isRussian ? 'Редактировать сообщение' : 'Edit message'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          minLines: 3,
-          maxLines: 12,
-          maxLength: 2000,
-          decoration: InputDecoration(
-            hintText: _isRussian ? 'Текст сообщения' : 'Message text',
+    setState(() {
+      _editingMessage = message;
+      _replyingTo = null;
+      _pendingAttachment = null;
+      _mentionQuery = null;
+      _messageController.value = TextEditingValue(
+        text: parsed.body,
+        selection: TextSelection.collapsed(offset: parsed.body.length),
+      );
+    });
+  }
+
+  void _cancelEdit() {
+    if (_editingMessage == null) return;
+    setState(() {
+      _editingMessage = null;
+      _messageController.clear();
+    });
+  }
+
+  Future<void> _saveEdit() async {
+    final message = _editingMessage;
+    if (message == null) return;
+    final parsed = _ParsedMessageBody.from(message.body);
+    final updated = _messageController.text.trim();
+    if (updated.isEmpty) return;
+    if (updated == parsed.body) {
+      _cancelEdit();
+      return;
+    }
+    final contentIssue = ContentSafetyFilter.firstIssue({
+      _isRussian ? 'сообщение' : 'message': updated,
+    });
+    if (contentIssue != null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            ContentSafetyFilter.message(
+              isRussian: _isRussian,
+              fieldLabel: contentIssue.fieldLabel,
+            ),
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text(_isRussian ? 'Отмена' : 'Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              final value = controller.text.trim();
-              if (value.isNotEmpty) Navigator.of(context).pop(value);
-            },
-            child: Text(_isRussian ? 'Сохранить' : 'Save'),
-          ),
-        ],
-      ),
-    );
-    controller.dispose();
-    if (updated == null || updated == parsed.body || !mounted) return;
+      );
+      return;
+    }
 
     final body = parsed.replyQuote.isEmpty
         ? updated
         : '$_replyPrefix${parsed.replyQuote}$_replySeparator$updated';
+    setState(() => _sending = true);
     try {
       await ref
           .read(chatServiceProvider)
           .editTextMessage(messageId: message.id, body: body);
       ref.invalidate(chatMessagesProvider(widget.chatId));
+      if (!mounted) return;
+      setState(() {
+        _editingMessage = null;
+        _messageController.clear();
+      });
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1251,6 +1380,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
           ),
         ),
       );
+    } finally {
+      if (mounted) setState(() => _sending = false);
     }
   }
 
@@ -1732,6 +1863,10 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                     replyingToText: _replyingTo == null
                         ? null
                         : _replyPreviewText(_replyingTo!),
+                    editingText: _editingMessage == null
+                        ? null
+                        : _ParsedMessageBody.from(_editingMessage!.body).body,
+                    onCancelEdit: _cancelEdit,
                     attachment: _pendingAttachment,
                     onCancelReply: () => setState(() => _replyingTo = null),
                     onRemoveAttachment: () =>
@@ -1938,6 +2073,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     required bool mine,
     required Offset position,
   }) async {
+    if (message.metadata['pending'] == true) return;
     final overlay =
         Overlay.of(context).context.findRenderObject() as RenderBox?;
     if (overlay == null) return;
@@ -2272,7 +2408,11 @@ class _BubbleV2State extends State<_BubbleV2> {
         if (mine) ...[
           const SizedBox(width: 4),
           Icon(
-            message.isDelivered ? Icons.done_all_rounded : Icons.done_rounded,
+            message.metadata['pending'] == true
+                ? Icons.schedule_rounded
+                : message.isDelivered
+                ? Icons.done_all_rounded
+                : Icons.done_rounded,
             size: 14,
             color: message.isRead ? Colors.white : metaColor,
           ),
@@ -2299,8 +2439,8 @@ class _BubbleV2State extends State<_BubbleV2> {
             const SizedBox(height: 6),
           ],
           if (parsedBody.replyQuote.isNotEmpty) ...[
-            _ReplyPreview(text: parsedBody.replyQuote, mine: mine),
-            const SizedBox(height: 8),
+            _ReplyPreview(text: parsedBody.replyQuote, mine: mine, flat: true),
+            const SizedBox(height: 6),
           ],
           if (message.hasMedia) ...[
             _MessageMedia(
@@ -2340,11 +2480,12 @@ class _BubbleV2State extends State<_BubbleV2> {
       reactionCounts[r.emoji] = (reactionCounts[r.emoji] ?? 0) + 1;
     }
 
+    final pending = message.metadata['pending'] == true;
     final hoverBar = AnimatedOpacity(
       duration: Tokens.fast,
-      opacity: _hovered && !widget.selectionMode ? 1 : 0,
+      opacity: _hovered && !widget.selectionMode && !pending ? 1 : 0,
       child: IgnorePointer(
-        ignoring: !_hovered || widget.selectionMode,
+        ignoring: !_hovered || widget.selectionMode || pending,
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -4343,13 +4484,49 @@ class _HighlightedMessageText extends StatelessWidget {
 }
 
 class _ReplyPreview extends StatelessWidget {
-  const _ReplyPreview({required this.text, required this.mine});
+  const _ReplyPreview({
+    required this.text,
+    required this.mine,
+    this.flat = false,
+  });
 
   final String text;
   final bool mine;
 
+  /// v2: a compact quote that hugs its text instead of stretching the
+  /// bubble to its maximum width.
+  final bool flat;
+
   @override
   Widget build(BuildContext context) {
+    if (flat) {
+      return Container(
+        padding: const EdgeInsets.fromLTRB(10, 5, 10, 5),
+        decoration: BoxDecoration(
+          color: mine
+              ? Colors.white.withValues(alpha: 0.12)
+              : Tokens.ink.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(8),
+          border: Border(
+            left: BorderSide(
+              color: mine ? Colors.white.withValues(alpha: 0.8) : Tokens.accent,
+              width: 2,
+            ),
+          ),
+        ),
+        child: Text(
+          text,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: AppText.caption.copyWith(
+            fontSize: 13,
+            color: mine
+                ? Colors.white.withValues(alpha: 0.8)
+                : Tokens.textSecondary,
+          ),
+        ),
+      );
+    }
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
@@ -5952,6 +6129,8 @@ class _Composer extends StatelessWidget {
     required this.onSend,
     required this.onAttach,
     required this.onRecordVoice,
+    this.editingText,
+    this.onCancelEdit,
     this.flat = false,
   });
 
@@ -5959,6 +6138,11 @@ class _Composer extends StatelessWidget {
   final String hintText;
   final bool sending;
   final String? replyingToText;
+
+  /// Original text of the message being edited; shows an "editing" banner
+  /// and turns the send button into "save".
+  final String? editingText;
+  final VoidCallback? onCancelEdit;
   final _PendingChatAttachment? attachment;
   final VoidCallback onCancelReply;
   final VoidCallback onRemoveAttachment;
@@ -5988,6 +6172,79 @@ class _Composer extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          if (editingText != null) ...[
+            Container(
+              margin: const EdgeInsets.only(bottom: 6),
+              padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+              decoration: BoxDecoration(
+                color: flat
+                    ? Tokens.surface
+                    : kTextDark.withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(flat ? 10 : 16),
+                border: flat
+                    ? const Border(
+                        left: BorderSide(color: Tokens.accent, width: 3),
+                      )
+                    : Border.all(color: kBorderColor),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.edit_outlined,
+                    size: 18,
+                    color: flat ? Tokens.accent : BrandTheme.redTop,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          Localizations.localeOf(context).languageCode == 'ru'
+                              ? 'Редактирование'
+                              : 'Editing',
+                          style: flat
+                              ? AppText.caption.copyWith(
+                                  color: Tokens.accent,
+                                  fontWeight: FontWeight.w600,
+                                )
+                              : const TextStyle(
+                                  color: BrandTheme.redTop,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                        ),
+                        Text(
+                          editingText!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: flat
+                              ? AppText.caption.copyWith(fontSize: 13)
+                              : const TextStyle(
+                                  color: kTextMuted,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    tooltip: Localizations.localeOf(context).languageCode == 'ru'
+                        ? 'Отменить (Esc)'
+                        : 'Cancel (Esc)',
+                    onPressed: onCancelEdit,
+                    icon: Icon(
+                      Icons.close_rounded,
+                      color: flat ? Tokens.textSecondary : kTextMuted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           if (replyingToText != null && replyingToText!.trim().isNotEmpty) ...[
             Container(
               margin: const EdgeInsets.only(bottom: 6),
@@ -6036,10 +6293,13 @@ class _Composer extends StatelessWidget {
           ],
           Row(
             children: [
-              IconButton(
-                onPressed: sending ? null : onAttach,
-                icon: const Icon(Icons.add_rounded, color: kTextDark),
-              ),
+              if (editingText == null)
+                IconButton(
+                  onPressed: sending ? null : onAttach,
+                  icon: const Icon(Icons.add_rounded, color: kTextDark),
+                )
+              else
+                const SizedBox(width: 12),
               Expanded(
                 child: Focus(
                   // Desktop / web: Enter sends, Shift+Enter inserts a line
@@ -6054,6 +6314,11 @@ class _Composer extends StatelessWidget {
                               event.logicalKey == LogicalKeyboardKey.enter ||
                               event.logicalKey ==
                                   LogicalKeyboardKey.numpadEnter;
+                          if (event.logicalKey == LogicalKeyboardKey.escape &&
+                              editingText != null) {
+                            onCancelEdit?.call();
+                            return KeyEventResult.handled;
+                          }
                           if (!isEnter) return KeyEventResult.ignored;
                           final shift =
                               HardwareKeyboard.instance.isShiftPressed;
@@ -6084,12 +6349,18 @@ class _Composer extends StatelessWidget {
                   ),
                 ),
               ),
+              if (editingText == null)
+                IconButton(
+                  tooltip: 'Голосовое сообщение',
+                  onPressed: sending ? null : onRecordVoice,
+                  icon: const Icon(Icons.mic_rounded, color: kTextDark),
+                ),
               IconButton(
-                tooltip: 'Голосовое сообщение',
-                onPressed: sending ? null : onRecordVoice,
-                icon: const Icon(Icons.mic_rounded, color: kTextDark),
-              ),
-              IconButton(
+                tooltip: editingText != null
+                    ? (Localizations.localeOf(context).languageCode == 'ru'
+                          ? 'Сохранить (Enter)'
+                          : 'Save (Enter)')
+                    : null,
                 onPressed: sending ? null : onSend,
                 icon: sending
                     ? const SizedBox(
@@ -6097,7 +6368,12 @@ class _Composer extends StatelessWidget {
                         height: 18,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Icon(Icons.send_rounded, color: BrandTheme.redTop),
+                    : Icon(
+                        editingText != null
+                            ? Icons.check_circle_rounded
+                            : Icons.send_rounded,
+                        color: BrandTheme.redTop,
+                      ),
               ),
             ],
           ),
