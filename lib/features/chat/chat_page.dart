@@ -2594,58 +2594,187 @@ class _BubbleV2State extends State<_BubbleV2> {
       ],
     );
 
-    final bubble = Container(
-      constraints: BoxConstraints(maxWidth: widget.maxWidth),
-      padding: const EdgeInsets.fromLTRB(14, 9, 12, 8),
-      decoration: BoxDecoration(
-        color: mine ? Tokens.ink : Tokens.surfaceAlt,
-        borderRadius: radius,
-        border: highlight
-            ? Border.all(color: Tokens.accent, width: 2)
+    final forwarded = message.metadata['forwarded'] == true;
+    final hasQuote = parsedBody.replyQuote.isNotEmpty;
+    final isPicture = message.hasMedia && (message.isImage || message.isVideo);
+    // A message that is only a few emoji is shown big, without a bubble.
+    final emojiOnly =
+        !message.hasMedia &&
+        !hasQuote &&
+        !forwarded &&
+        _isEmojiOnly(visibleBody);
+    // A picture without text is the bubble itself: no padding, time on top.
+    final pictureOnly =
+        isPicture && visibleBody.isEmpty && !hasQuote && !forwarded;
+
+    final mediaWidget = message.hasMedia
+        ? _MessageMedia(
+            message: message,
+            onTap: widget.onMediaTap,
+            showReadStatus: false,
+            onVoiceListened: widget.onVoiceListened,
+            flat: true,
+            mine: mine,
+          )
+        : null;
+
+    Widget bubble;
+    if (emojiOnly) {
+      bubble = Container(
+        constraints: BoxConstraints(maxWidth: widget.maxWidth),
+        padding: const EdgeInsets.fromLTRB(4, 2, 4, 2),
+        decoration: highlight
+            ? BoxDecoration(
+                borderRadius: radius,
+                border: Border.all(color: Tokens.accent, width: 2),
+              )
             : null,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (message.metadata['forwarded'] == true) ...[
-            _ForwardedLabel(mine: mine),
-            const SizedBox(height: 6),
+        child: Column(
+          crossAxisAlignment: mine
+              ? CrossAxisAlignment.end
+              : CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(visibleBody, style: const TextStyle(fontSize: 44, height: 1.2)),
+            const SizedBox(height: 2),
+            _BubbleMeta(message: message, mine: mine, color: Tokens.textTertiary),
           ],
-          if (parsedBody.replyQuote.isNotEmpty) ...[
-            _ReplyPreview(text: parsedBody.replyQuote, mine: mine, flat: true),
-            const SizedBox(height: 6),
-          ],
-          if (message.hasMedia) ...[
-            _MessageMedia(
-              message: message,
-              onTap: widget.onMediaTap,
-              showReadStatus: false,
-              onVoiceListened: widget.onVoiceListened,
-              flat: true,
-              mine: mine,
-            ),
-            if (visibleBody.isNotEmpty) const SizedBox(height: 8),
-          ],
-          if (visibleBody.isNotEmpty)
-            _HighlightedMessageText(
-              text: visibleBody,
-              query: widget.searchQuery,
-              selectable: false,
-              style: AppText.body.copyWith(
-                color: textColor,
-                height: 1.4,
-                fontSize: 15.5,
+        ),
+      );
+    } else if (pictureOnly) {
+      bubble = Container(
+        constraints: BoxConstraints(maxWidth: widget.maxWidth),
+        decoration: BoxDecoration(
+          borderRadius: radius,
+          border: highlight
+              ? Border.all(color: Tokens.accent, width: 2)
+              : null,
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Stack(
+          children: [
+            mediaWidget!,
+            Positioned(
+              right: 8,
+              bottom: 8,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.55),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: _BubbleMeta(
+                  message: message,
+                  mine: mine,
+                  color: Colors.white.withValues(alpha: 0.9),
+                  readColor: Colors.white,
+                ),
               ),
-              highlightColor: mine
-                  ? Colors.white.withValues(alpha: 0.26)
-                  : Tokens.accent.withValues(alpha: 0.18),
             ),
-          const SizedBox(height: 4),
-          Align(alignment: Alignment.centerRight, child: meta),
-        ],
-      ),
-    );
+          ],
+        ),
+      );
+    } else {
+      bubble = Container(
+        constraints: BoxConstraints(maxWidth: widget.maxWidth),
+        padding: isPicture
+            ? EdgeInsets.zero
+            : const EdgeInsets.fromLTRB(14, 9, 12, 8),
+        decoration: BoxDecoration(
+          color: mine ? Tokens.ink : Tokens.surfaceAlt,
+          borderRadius: radius,
+          border: highlight
+              ? Border.all(color: Tokens.accent, width: 2)
+              : null,
+        ),
+        clipBehavior: isPicture ? Clip.antiAlias : Clip.none,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (isPicture) ...[
+              if (forwarded || hasQuote)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 9, 12, 6),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (forwarded) _ForwardedLabel(mine: mine),
+                      if (forwarded && hasQuote) const SizedBox(height: 6),
+                      if (hasQuote)
+                        _ReplyPreview(
+                          text: parsedBody.replyQuote,
+                          mine: mine,
+                          flat: true,
+                        ),
+                    ],
+                  ),
+                ),
+              mediaWidget!,
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 8, 12, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (visibleBody.isNotEmpty)
+                      _HighlightedMessageText(
+                        text: visibleBody,
+                        query: widget.searchQuery,
+                        selectable: false,
+                        style: AppText.body.copyWith(
+                          color: textColor,
+                          height: 1.4,
+                          fontSize: 15.5,
+                        ),
+                        highlightColor: mine
+                            ? Colors.white.withValues(alpha: 0.26)
+                            : Tokens.accent.withValues(alpha: 0.18),
+                      ),
+                    const SizedBox(height: 4),
+                    Align(alignment: Alignment.centerRight, child: meta),
+                  ],
+                ),
+              ),
+            ] else ...[
+              if (forwarded) ...[
+                _ForwardedLabel(mine: mine),
+                const SizedBox(height: 6),
+              ],
+              if (hasQuote) ...[
+                _ReplyPreview(
+                  text: parsedBody.replyQuote,
+                  mine: mine,
+                  flat: true,
+                ),
+                const SizedBox(height: 6),
+              ],
+              if (mediaWidget != null) ...[
+                mediaWidget,
+                if (visibleBody.isNotEmpty) const SizedBox(height: 8),
+              ],
+              if (visibleBody.isNotEmpty)
+                _HighlightedMessageText(
+                  text: visibleBody,
+                  query: widget.searchQuery,
+                  selectable: false,
+                  style: AppText.body.copyWith(
+                    color: textColor,
+                    height: 1.4,
+                    fontSize: 15.5,
+                  ),
+                  highlightColor: mine
+                      ? Colors.white.withValues(alpha: 0.26)
+                      : Tokens.accent.withValues(alpha: 0.18),
+                ),
+              const SizedBox(height: 4),
+              Align(alignment: Alignment.centerRight, child: meta),
+            ],
+          ],
+        ),
+      );
+    }
 
     final myReaction = widget.reactions
         .where((r) => r.userId == widget.currentUserId)
@@ -2754,6 +2883,75 @@ class _BubbleV2State extends State<_BubbleV2> {
                 ],
         ),
       ),
+    );
+  }
+}
+
+final RegExp _emojiOnlyPattern = RegExp(
+  r'^[\p{Extended_Pictographic}\p{Emoji_Component}\uFE0F\u200D\u20E3\s]+$',
+  unicode: true,
+);
+
+/// True for a message made of one to three emoji (and nothing else).
+bool _isEmojiOnly(String text) {
+  final clean = text.trim();
+  if (clean.isEmpty || clean.length > 32) return false;
+  if (!_emojiOnlyPattern.hasMatch(clean)) return false;
+  if (RegExp(r'[0-9#*]').hasMatch(clean.replaceAll('\u20E3', ''))) {
+    return false;
+  }
+  final graphemes = clean.replaceAll(RegExp(r'\s'), '').characters.length;
+  return graphemes >= 1 && graphemes <= 3;
+}
+
+/// Time + edited mark + ✓ / ✓✓ used inside and under bubbles.
+class _BubbleMeta extends StatelessWidget {
+  const _BubbleMeta({
+    required this.message,
+    required this.mine,
+    required this.color,
+    this.readColor,
+  });
+
+  final ChatMessage message;
+  final bool mine;
+  final Color color;
+  final Color? readColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (message.isPinned) ...[
+          Icon(Icons.push_pin_rounded, size: 12, color: color),
+          const SizedBox(width: 4),
+        ],
+        if (message.editedAt != null) ...[
+          Text(
+            ru ? 'изменено' : 'edited',
+            style: TextStyle(fontSize: 11, color: color, height: 1),
+          ),
+          const SizedBox(width: 4),
+        ],
+        Text(
+          _timeLabelV2(message.createdAt),
+          style: TextStyle(fontSize: 11, color: color, height: 1),
+        ),
+        if (mine) ...[
+          const SizedBox(width: 4),
+          Icon(
+            message.metadata['pending'] == true
+                ? Icons.schedule_rounded
+                : message.isDelivered
+                ? Icons.done_all_rounded
+                : Icons.done_rounded,
+            size: 14,
+            color: message.isRead ? (readColor ?? Tokens.ink) : color,
+          ),
+        ],
+      ],
     );
   }
 }
@@ -4805,6 +5003,57 @@ class _MessageMedia extends StatelessWidget {
     final imageUrl = message.mediaThumbnailUrl.isNotEmpty
         ? message.mediaThumbnailUrl
         : message.mediaUrl;
+    if (flat) {
+      // v2: the picture keeps its own proportions, up to 420×480.
+      return GestureDetector(
+        onTap: onTap,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            minWidth: 160,
+            maxWidth: 420,
+            maxHeight: 480,
+          ),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              _ProtectedCachedNetworkImage(
+                source: imageUrl,
+                fit: BoxFit.cover,
+                memCacheWidth: 900,
+                maxWidthDiskCache: 1200,
+                placeholder: const SizedBox(
+                  width: 240,
+                  height: 180,
+                  child: ColoredBox(color: Color(0x14000000)),
+                ),
+                errorWidget: const SizedBox(
+                  width: 240,
+                  height: 180,
+                  child: ColoredBox(
+                    color: Color(0x14000000),
+                    child: Icon(Icons.broken_image_rounded),
+                  ),
+                ),
+              ),
+              if (message.isVideo)
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.45),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.play_arrow_rounded,
+                    color: Colors.white,
+                    size: 36,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      );
+    }
     return GestureDetector(
       onTap: onTap,
       child: ClipRRect(
