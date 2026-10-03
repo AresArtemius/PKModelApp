@@ -24,7 +24,7 @@ import '../analytics/profile_analytics.dart';
 import '../chat/chat_providers.dart';
 import '../profile/profile_model.dart';
 import 'catalog_controller.dart';
-import 'catalog_repository.dart' show CatalogSort, CatalogFacets;
+import 'catalog_repository.dart' show CatalogSort;
 import 'catalog_providers.dart';
 import 'catalog_saved_searches.dart';
 import 'create_selection_dialog.dart';
