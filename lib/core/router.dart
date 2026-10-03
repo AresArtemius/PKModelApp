@@ -108,6 +108,12 @@ abstract class Routes {
   static const adminSelectionProject = '/admin_selection_project';
   static const modelPrefix = '/model/';
   static const model = '/model/:id';
+  static const modelPhotos = '/model/:id/photos/:index';
+  static const modelVideo = '/model/:id/video';
+  static String modelPhotosLocation(String modelId, int index) =>
+      '$modelPrefix$modelId/photos/$index';
+  static String modelVideoLocation(String modelId) =>
+      '$modelPrefix$modelId/video';
   static const publicModelPrefix = '/p/';
   static const publicModel = '/p/:id';
   static const publicSelectionPrefix = '/s/';
@@ -129,6 +135,17 @@ abstract class Routes {
 
 const _routeParamId = 'id';
 const _routeParamTag = 'tag';
+
+Page<void> _fadePage(GoRouterState state, Widget child) {
+  return CustomTransitionPage<void>(
+    key: state.pageKey,
+    child: child,
+    transitionDuration: const Duration(milliseconds: 160),
+    reverseTransitionDuration: const Duration(milliseconds: 120),
+    transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+        FadeTransition(opacity: animation, child: child),
+  );
+}
 const double _kDesktopShellBreakpoint = 900;
 
 /// Routes whose content is mostly text and reads better in a 1280 px column.
@@ -490,6 +507,40 @@ final List<RouteBase> appRoutes = [
       final id = state.pathParameters[_routeParamId] ?? '';
       return ModelProfilePage(modelId: id);
     },
+  ),
+
+  // Full-screen photo gallery / video of a profile. Router pages rather than
+  // imperative pushes, so the browser Back button closes them instead of
+  // leaving the profile. The media list travels in `extra`; on a direct
+  // open (reload, shared link) there is none, so we land on the profile.
+  GoRoute(
+    path: Routes.modelPhotos,
+    redirect: (context, state) {
+      if (state.extra is List<String>) return null;
+      return '${Routes.modelPrefix}${state.pathParameters[_routeParamId] ?? ''}';
+    },
+    pageBuilder: (context, state) {
+      final urls = state.extra as List<String>;
+      final index = int.tryParse(state.pathParameters['index'] ?? '') ?? 0;
+      return _fadePage(
+        state,
+        ModelPhotoGalleryPage(
+          urls: urls,
+          initialIndex: index.clamp(0, urls.isEmpty ? 0 : urls.length - 1),
+        ),
+      );
+    },
+  ),
+  GoRoute(
+    path: Routes.modelVideo,
+    redirect: (context, state) {
+      if (state.extra is String && (state.extra as String).isNotEmpty) {
+        return null;
+      }
+      return '${Routes.modelPrefix}${state.pathParameters[_routeParamId] ?? ''}';
+    },
+    pageBuilder: (context, state) =>
+        _fadePage(state, ModelVideoPage(url: state.extra as String)),
   ),
 
   GoRoute(

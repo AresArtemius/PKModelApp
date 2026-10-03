@@ -1835,16 +1835,16 @@ class _DetailsTable extends StatelessWidget {
   }
 }
 
-class _PhotoGalleryPage extends StatefulWidget {
-  const _PhotoGalleryPage({required this.urls, required this.initialIndex});
+class ModelPhotoGalleryPage extends StatefulWidget {
+  const ModelPhotoGalleryPage({required this.urls, required this.initialIndex});
   final List<String> urls;
   final int initialIndex;
 
   @override
-  State<_PhotoGalleryPage> createState() => _PhotoGalleryPageState();
+  State<ModelPhotoGalleryPage> createState() => _ModelPhotoGalleryPageState();
 }
 
-class _PhotoGalleryPageState extends State<_PhotoGalleryPage> {
+class _ModelPhotoGalleryPageState extends State<ModelPhotoGalleryPage> {
   late final PageController _pc;
   late final FocusNode _keyboardFocus;
   late int _currentIndex;
@@ -2022,15 +2022,15 @@ class _PhotoGalleryArrow extends StatelessWidget {
   }
 }
 
-class _FullScreenVideoPage extends StatefulWidget {
-  const _FullScreenVideoPage({required this.url});
+class ModelVideoPage extends StatefulWidget {
+  const ModelVideoPage({required this.url});
   final String url;
 
   @override
-  State<_FullScreenVideoPage> createState() => _FullScreenVideoPageState();
+  State<ModelVideoPage> createState() => _ModelVideoPageState();
 }
 
-class _FullScreenVideoPageState extends State<_FullScreenVideoPage> {
+class _ModelVideoPageState extends State<ModelVideoPage> {
   late final VideoPlayerController _c;
   late final Future<void> _init;
 
