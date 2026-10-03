@@ -694,6 +694,8 @@ class _CatalogResultsHeader extends StatelessWidget {
     this.resetLabel,
     this.selectAllValue,
     this.onSelectAll,
+    this.sort = CatalogSort.recommended,
+    this.onSortChanged,
   });
 
   final String countLabel;
@@ -707,6 +709,9 @@ class _CatalogResultsHeader extends StatelessWidget {
   /// Agent «select all visible» control: true / null (some) / false.
   final bool? selectAllValue;
   final VoidCallback? onSelectAll;
+
+  final CatalogSort sort;
+  final ValueChanged<CatalogSort>? onSortChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -730,11 +735,8 @@ class _CatalogResultsHeader extends StatelessWidget {
               ),
               const SizedBox(width: 8),
             ],
-            _HeaderIconButton(
-              icon: Icons.tune_rounded,
-              tooltip: _sentenceCase(t.advancedSearchUpper),
-              onTap: advancedSearchEnabled ? onAdvancedSearch : null,
-            ),
+            if (onSortChanged != null)
+              _CatalogSortMenu(value: sort, onChanged: onSortChanged!),
           ],
         ),
         if (filters.isNotEmpty) ...[
@@ -760,6 +762,74 @@ class _CatalogResultsHeader extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+/// «Sort: …» text button with a menu (header of the results).
+class _CatalogSortMenu extends StatelessWidget {
+  const _CatalogSortMenu({required this.value, required this.onChanged});
+
+  final CatalogSort value;
+  final ValueChanged<CatalogSort> onChanged;
+
+  static String label(BuildContext context, CatalogSort sort) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    return switch (sort) {
+      CatalogSort.recommended => ru ? 'Рекомендуемые' : 'Recommended',
+      CatalogSort.newest => ru ? 'Сначала новые' : 'Newest first',
+      CatalogSort.ageAsc => ru ? 'Возраст: младше' : 'Age: youngest',
+      CatalogSort.ageDesc => ru ? 'Возраст: старше' : 'Age: oldest',
+      CatalogSort.heightAsc => ru ? 'Рост: ниже' : 'Height: shortest',
+      CatalogSort.heightDesc => ru ? 'Рост: выше' : 'Height: tallest',
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    return PopupMenuButton<CatalogSort>(
+      tooltip: ru ? 'Сортировка' : 'Sort',
+      position: PopupMenuPosition.under,
+      onSelected: onChanged,
+      itemBuilder: (context) => [
+        for (final sort in CatalogSort.values)
+          PopupMenuItem(
+            value: sort,
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(label(context, sort), style: AppText.small),
+                ),
+                if (sort == value)
+                  const Icon(Icons.check_rounded, size: 18),
+              ],
+            ),
+          ),
+      ],
+      child: Container(
+        height: 40,
+        padding: const EdgeInsets.fromLTRB(14, 0, 10, 0),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(Tokens.radiusSm),
+          border: Border.all(color: Tokens.border),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '${ru ? 'Сортировка' : 'Sort'}: ${label(context, value)}',
+              style: AppText.small,
+            ),
+            const SizedBox(width: 4),
+            const Icon(
+              Icons.keyboard_arrow_down_rounded,
+              size: 18,
+              color: Tokens.textSecondary,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -1012,17 +1082,11 @@ class _CatalogDesktopFilterPanel extends StatelessWidget {
         const SizedBox(height: 8),
         roleTabs,
         if (filters != null) ...[
-          const SizedBox(height: 28),
-          _CatalogRailLabel(ru ? 'Параметры' : 'Measurements'),
-          const SizedBox(height: 4),
+          const SizedBox(height: 20),
+          const Divider(height: 1, thickness: 1, color: Tokens.border),
           filters!,
         ],
-        const SizedBox(height: 20),
-        _CatalogRailLink(
-          icon: Icons.tune_rounded,
-          label: ru ? 'Все фильтры' : 'All filters',
-          onTap: advancedSearchEnabled ? onAdvancedSearch : null,
-        ),
+        const SizedBox(height: 12),
         if (onResetFilters != null)
           _CatalogRailLink(
             icon: Icons.restart_alt_rounded,
@@ -1210,8 +1274,372 @@ class _CatalogRoleRow extends StatelessWidget {
   }
 }
 
-/// One range (age, height, …) in the rail: label and the current values in
-/// a row; tapping it opens a compact slider underneath. Applies on release.
+/// Every filter group of the rail (and of the mobile sheet), built straight
+/// from the controller: ranges, appearance facets, place, date, rates.
+class _CatalogFilterGroups extends StatelessWidget {
+  const _CatalogFilterGroups({
+    required this.controller,
+    required this.onApply,
+    this.includeRoles = false,
+    this.onRoleChanged,
+  });
+
+  final CatalogController controller;
+
+  /// Mutates the controller fields inside [set] and reloads.
+  final Future<void> Function(void Function() set) onApply;
+  final bool includeRoles;
+  final ValueChanged<ProfessionalProfileType?>? onRoleChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+    final locale = Localizations.localeOf(context);
+    final ru = locale.languageCode == 'ru';
+    final c = controller;
+    final b = c.bounds;
+    final facets = c.facets;
+
+    String rangeSummary(int? from, int? to, [String unit = '']) {
+      if (from == null && to == null) return '';
+      final u = unit.isEmpty ? '' : ' $unit';
+      if (from != null && to != null) return '$from–$to$u';
+      if (from != null) return '≥ $from$u';
+      return '≤ $to$u';
+    }
+
+    final measurementsSummary = [
+      rangeSummary(c.ageFrom, c.ageTo),
+      rangeSummary(c.heightFrom, c.heightTo, t.cm),
+      rangeSummary(c.shoeFrom, c.shoeTo),
+      rangeSummary(c.bustFrom, c.bustTo),
+      rangeSummary(c.waistFrom, c.waistTo),
+      rangeSummary(c.hipsFrom, c.hipsTo),
+    ].where((v) => v.isNotEmpty).join(' · ');
+    final appearanceSummary = [
+      eyeColorDisplayValue(c.eyeColor, locale),
+      hairColorDisplayValue(c.hairColor, locale),
+    ].where((v) => v.isNotEmpty).join(' · ');
+    final placeSummary = [
+      c.country.trim(),
+      c.city.trim(),
+    ].where((v) => v.isNotEmpty).join(', ');
+    final need = c.needDate;
+    final dateSummary = need == null
+        ? ''
+        : '${need.day.toString().padLeft(2, '0')}.'
+              '${need.month.toString().padLeft(2, '0')}.${need.year}';
+    final ratesSummary = [
+      rangeSummary(c.minHourlyRateFrom, c.minHourlyRateTo, '₽'),
+      rangeSummary(c.minDailyFeeFrom, c.minDailyFeeTo, '₽'),
+    ].where((v) => v.isNotEmpty).join(' · ');
+
+    _CatalogRangeFilter range({
+      required String field,
+      required String label,
+      required int min,
+      required int max,
+      required int? from,
+      required int? to,
+      required void Function(int? from, int? to) set,
+      String unit = '',
+      bool initiallyOpen = false,
+    }) {
+      return _CatalogRangeFilter(
+        label: label,
+        unit: unit,
+        min: min,
+        max: max,
+        from: from,
+        to: to,
+        initiallyOpen: initiallyOpen,
+        onChanged: (f, tt) => onApply(() => set(f, tt)),
+        countPreview: (f, tt) => c.previewCount(field: field, from: f, to: tt),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (includeRoles && onRoleChanged != null) ...[
+          _CatalogRailGroup(
+            title: ru ? 'Роль' : 'Role',
+            summary: c.profileRole == null
+                ? ''
+                : _catalogProfileTypeLabel(t, c.profileRole!),
+            initiallyOpen: true,
+            child: _CatalogRoleList(
+              selectedRole: c.profileRole,
+              onChanged: onRoleChanged!,
+            ),
+          ),
+        ],
+        _CatalogRailGroup(
+          title: ru ? 'Параметры' : 'Measurements',
+          summary: measurementsSummary,
+          initiallyOpen: true,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              range(
+                field: 'age',
+                label: t.age,
+                min: b?.ageMin ?? kAgeMin,
+                max: b?.ageMax ?? kAgeMax,
+                from: c.ageFrom,
+                to: c.ageTo,
+                initiallyOpen: true,
+                set: (f, tt) {
+                  c.ageFrom = f;
+                  c.ageTo = tt;
+                },
+              ),
+              range(
+                field: 'height',
+                label: t.height,
+                unit: t.cm,
+                min: b?.heightMin ?? kHeightMin,
+                max: b?.heightMax ?? kHeightMax,
+                from: c.heightFrom,
+                to: c.heightTo,
+                set: (f, tt) {
+                  c.heightFrom = f;
+                  c.heightTo = tt;
+                },
+              ),
+              range(
+                field: 'shoe',
+                label: t.shoeSize,
+                min: b?.shoeMin ?? kShoeMin,
+                max: b?.shoeMax ?? kShoeMax,
+                from: c.shoeFrom,
+                to: c.shoeTo,
+                set: (f, tt) {
+                  c.shoeFrom = f;
+                  c.shoeTo = tt;
+                },
+              ),
+              range(
+                field: 'bust',
+                label: t.bust,
+                min: b?.bustMin ?? kBustMin,
+                max: b?.bustMax ?? kBustMax,
+                from: c.bustFrom,
+                to: c.bustTo,
+                set: (f, tt) {
+                  c.bustFrom = f;
+                  c.bustTo = tt;
+                },
+              ),
+              range(
+                field: 'waist',
+                label: t.waist,
+                min: b?.waistMin ?? kWaistMin,
+                max: b?.waistMax ?? kWaistMax,
+                from: c.waistFrom,
+                to: c.waistTo,
+                set: (f, tt) {
+                  c.waistFrom = f;
+                  c.waistTo = tt;
+                },
+              ),
+              range(
+                field: 'hips',
+                label: t.hips,
+                min: b?.hipsMin ?? kHipsMin,
+                max: b?.hipsMax ?? kHipsMax,
+                from: c.hipsFrom,
+                to: c.hipsTo,
+                set: (f, tt) {
+                  c.hipsFrom = f;
+                  c.hipsTo = tt;
+                },
+              ),
+            ],
+          ),
+        ),
+        if (facets.eyeColors.isNotEmpty || facets.hairColors.isNotEmpty)
+          _CatalogRailGroup(
+            title: ru ? 'Внешность' : 'Appearance',
+            summary: appearanceSummary,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (facets.eyeColors.isNotEmpty)
+                  _CatalogFacetChips(
+                    title: t.eyeColor,
+                    values: facets.eyeColors,
+                    selected: c.eyeColor,
+                    display: (v) => eyeColorDisplayValue(v, locale),
+                    onChanged: (v) => onApply(() => c.eyeColor = v),
+                  ),
+                if (facets.hairColors.isNotEmpty)
+                  _CatalogFacetChips(
+                    title: t.hairColor,
+                    values: facets.hairColors,
+                    selected: c.hairColor,
+                    display: (v) => hairColorDisplayValue(v, locale),
+                    onChanged: (v) => onApply(() => c.hairColor = v),
+                  ),
+              ],
+            ),
+          ),
+        if (facets.countries.isNotEmpty || facets.cities.isNotEmpty)
+          _CatalogRailGroup(
+            title: ru ? 'Где' : 'Where',
+            summary: placeSummary,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (facets.countries.length > 1)
+                  _CatalogFacetChips(
+                    title: t.country,
+                    values: facets.countries,
+                    selected: c.country,
+                    display: (v) => v,
+                    onChanged: (v) => onApply(() => c.country = v),
+                  ),
+                if (facets.cities.isNotEmpty)
+                  _CatalogFacetChips(
+                    title: t.city,
+                    values: facets.cities,
+                    selected: c.city,
+                    display: (v) => v,
+                    onChanged: (v) => onApply(() => c.city = v),
+                  ),
+              ],
+            ),
+          ),
+        _CatalogRailGroup(
+          title: ru ? 'Доступность' : 'Availability',
+          summary: dateSummary,
+          child: _CatalogDateFilter(
+            value: c.needDate,
+            onChanged: (d) => onApply(() => c.needDate = d),
+          ),
+        ),
+        _CatalogRailGroup(
+          title: ru ? 'Ставки' : 'Rates',
+          summary: ratesSummary,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              range(
+                field: 'hourly',
+                label: ru ? 'За час' : 'Per hour',
+                unit: '₽',
+                min: b?.minHourlyRateMin ?? 0,
+                max: b?.minHourlyRateMax ?? 10000,
+                from: c.minHourlyRateFrom,
+                to: c.minHourlyRateTo,
+                set: (f, tt) {
+                  c.minHourlyRateFrom = f;
+                  c.minHourlyRateTo = tt;
+                },
+              ),
+              range(
+                field: 'daily',
+                label: ru ? 'За смену' : 'Per day',
+                unit: '₽',
+                min: b?.minDailyFeeMin ?? 0,
+                max: b?.minDailyFeeMax ?? 100000,
+                from: c.minDailyFeeFrom,
+                to: c.minDailyFeeTo,
+                set: (f, tt) {
+                  c.minDailyFeeFrom = f;
+                  c.minDailyFeeTo = tt;
+                },
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Collapsible group of the rail: uppercase title, the active values on
+/// the right, hairline underneath.
+class _CatalogRailGroup extends StatefulWidget {
+  const _CatalogRailGroup({
+    required this.title,
+    required this.child,
+    this.summary = '',
+    this.initiallyOpen = false,
+  });
+
+  final String title;
+  final String summary;
+  final bool initiallyOpen;
+  final Widget child;
+
+  @override
+  State<_CatalogRailGroup> createState() => _CatalogRailGroupState();
+}
+
+class _CatalogRailGroupState extends State<_CatalogRailGroup> {
+  late bool _open = widget.initiallyOpen || widget.summary.isNotEmpty;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () => setState(() => _open = !_open),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      widget.title.toUpperCase(),
+                      style: AppText.label.copyWith(
+                        fontSize: 12,
+                        letterSpacing: 1,
+                        color: Tokens.text,
+                      ),
+                    ),
+                  ),
+                  if (widget.summary.isNotEmpty)
+                    Flexible(
+                      child: Text(
+                        widget.summary,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.right,
+                        style: AppText.caption.copyWith(color: Tokens.accent),
+                      ),
+                    ),
+                  const SizedBox(width: 6),
+                  Icon(
+                    _open
+                        ? Icons.keyboard_arrow_up_rounded
+                        : Icons.keyboard_arrow_down_rounded,
+                    size: 18,
+                    color: Tokens.textTertiary,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        if (_open)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: widget.child,
+          ),
+        const Divider(height: 1, thickness: 1, color: Tokens.border),
+      ],
+    );
+  }
+}
+
+/// One range (age, height, …): label and the current values in a row;
+/// tapping opens a slider, «from/to» fields and the live «N profiles» hint.
+/// Applies on slider release or when a field loses focus.
 class _CatalogRangeFilter extends StatefulWidget {
   const _CatalogRangeFilter({
     required this.label,
@@ -1220,6 +1648,7 @@ class _CatalogRangeFilter extends StatefulWidget {
     required this.from,
     required this.to,
     required this.onChanged,
+    this.countPreview,
     this.unit = '',
     this.initiallyOpen = false,
   });
@@ -1232,29 +1661,126 @@ class _CatalogRangeFilter extends StatefulWidget {
   final String unit;
   final bool initiallyOpen;
   final void Function(int? from, int? to) onChanged;
+  final Future<int> Function(int? from, int? to)? countPreview;
 
   @override
   State<_CatalogRangeFilter> createState() => _CatalogRangeFilterState();
 }
 
 class _CatalogRangeFilterState extends State<_CatalogRangeFilter> {
-  late bool _open = widget.initiallyOpen;
+  late bool _open = widget.initiallyOpen || widget.from != null || widget.to != null;
   RangeValues? _dragging;
+  int? _previewCount;
+  Timer? _previewTimer;
+  late final TextEditingController _fromC = TextEditingController();
+  late final TextEditingController _toC = TextEditingController();
+  final _fromFocus = FocusNode();
+  final _toFocus = FocusNode();
+
+  int get _lo => (widget.from ?? widget.min).clamp(widget.min, widget.max);
+  int get _hi => (widget.to ?? widget.max).clamp(widget.min, widget.max);
+
+  @override
+  void initState() {
+    super.initState();
+    _syncFields();
+    _fromFocus.addListener(() {
+      if (!_fromFocus.hasFocus) _commitFields();
+    });
+    _toFocus.addListener(() {
+      if (!_toFocus.hasFocus) _commitFields();
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant _CatalogRangeFilter old) {
+    super.didUpdateWidget(old);
+    if (old.from != widget.from ||
+        old.to != widget.to ||
+        old.min != widget.min ||
+        old.max != widget.max) {
+      _syncFields();
+    }
+  }
+
+  @override
+  void dispose() {
+    _previewTimer?.cancel();
+    _fromC.dispose();
+    _toC.dispose();
+    _fromFocus.dispose();
+    _toFocus.dispose();
+    super.dispose();
+  }
+
+  void _syncFields() {
+    if (!_fromFocus.hasFocus) _fromC.text = '$_lo';
+    if (!_toFocus.hasFocus) _toC.text = '$_hi';
+  }
+
+  void _apply(int lo, int hi) {
+    var from = lo.clamp(widget.min, widget.max);
+    var to = hi.clamp(widget.min, widget.max);
+    if (from > to) {
+      final swap = from;
+      from = to;
+      to = swap;
+    }
+    setState(() {
+      _dragging = null;
+      _previewCount = null;
+    });
+    widget.onChanged(
+      from == widget.min ? null : from,
+      to == widget.max ? null : to,
+    );
+  }
+
+  void _commitFields() {
+    final lo = int.tryParse(_fromC.text.trim()) ?? _lo;
+    final hi = int.tryParse(_toC.text.trim()) ?? _hi;
+    if (lo == _lo && hi == _hi) {
+      _syncFields();
+      return;
+    }
+    _apply(lo, hi);
+  }
+
+  void _schedulePreview(RangeValues values) {
+    final preview = widget.countPreview;
+    if (preview == null) return;
+    _previewTimer?.cancel();
+    _previewTimer = Timer(const Duration(milliseconds: 250), () async {
+      final lo = values.start.round();
+      final hi = values.end.round();
+      try {
+        final n = await preview(
+          lo == widget.min ? null : lo,
+          hi == widget.max ? null : hi,
+        );
+        if (!mounted || _dragging == null) return;
+        setState(() => _previewCount = n);
+      } catch (_) {
+        // The hint is optional.
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
     final min = widget.min.toDouble();
     final max = widget.max.toDouble();
-    final lo = (widget.from ?? widget.min).clamp(widget.min, widget.max);
-    final hi = (widget.to ?? widget.max).clamp(widget.min, widget.max);
     final active = widget.from != null || widget.to != null;
-    final values = _dragging ?? RangeValues(lo.toDouble(), hi.toDouble());
+    final values = _dragging ?? RangeValues(_lo.toDouble(), _hi.toDouble());
     final unit = widget.unit.isEmpty ? '' : ' ${widget.unit}';
-    final valueText = active || _dragging != null
-        ? '${values.start.round()}–${values.end.round()}$unit'
-        : (Localizations.localeOf(context).languageCode == 'ru'
-              ? 'Любой'
-              : 'Any');
+    final single = widget.max <= widget.min;
+    final valueText = single
+        ? '${widget.min}$unit'
+        : (active || _dragging != null
+              ? '${values.start.round()}–${values.end.round()}$unit'
+              : (ru ? 'Любой' : 'Any'));
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1264,7 +1790,7 @@ class _CatalogRangeFilterState extends State<_CatalogRangeFilter> {
           child: InkWell(
             borderRadius: BorderRadius.circular(Tokens.radiusSm),
             hoverColor: Tokens.surface,
-            onTap: () => setState(() => _open = !_open),
+            onTap: single ? null : () => setState(() => _open = !_open),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
               child: Row(
@@ -1284,53 +1810,498 @@ class _CatalogRangeFilterState extends State<_CatalogRangeFilter> {
                       color: active ? Tokens.text : Tokens.textSecondary,
                     ),
                   ),
-                  const SizedBox(width: 4),
-                  Icon(
-                    _open
-                        ? Icons.keyboard_arrow_up_rounded
-                        : Icons.keyboard_arrow_down_rounded,
-                    size: 18,
-                    color: Tokens.textTertiary,
-                  ),
+                  if (!single) ...[
+                    const SizedBox(width: 4),
+                    Icon(
+                      _open
+                          ? Icons.keyboard_arrow_up_rounded
+                          : Icons.keyboard_arrow_down_rounded,
+                      size: 18,
+                      color: Tokens.textTertiary,
+                    ),
+                  ],
                 ],
               ),
             ),
           ),
         ),
-        if (_open && max > min)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(0, 0, 0, 6),
-            child: SliderTheme(
-              data: SliderTheme.of(context).copyWith(
-                trackHeight: 2,
-                activeTrackColor: Tokens.text,
-                inactiveTrackColor: Tokens.border,
-                thumbColor: Tokens.bg,
-                overlayColor: Tokens.text.withValues(alpha: 0.08),
-                rangeThumbShape: const _CatalogRangeThumb(),
-                showValueIndicator: ShowValueIndicator.never,
-              ),
-              child: RangeSlider(
-                min: min,
-                max: max,
-                divisions: (max - min).round(),
-                values: values,
-                onChanged: (next) => setState(() => _dragging = next),
-                onChangeEnd: (next) {
-                  setState(() => _dragging = null);
-                  final from = next.start.round();
-                  final to = next.end.round();
-                  widget.onChanged(
-                    from == widget.min ? null : from,
-                    to == widget.max ? null : to,
-                  );
-                },
-              ),
+        if (_open && !single) ...[
+          SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              trackHeight: 2,
+              activeTrackColor: Tokens.text,
+              inactiveTrackColor: Tokens.border,
+              thumbColor: Tokens.bg,
+              overlayColor: Tokens.text.withValues(alpha: 0.08),
+              rangeThumbShape: const _CatalogRangeThumb(),
+              showValueIndicator: ShowValueIndicator.never,
+            ),
+            child: RangeSlider(
+              min: min,
+              max: max,
+              divisions: (max - min).round(),
+              values: values,
+              onChanged: (next) {
+                setState(() => _dragging = next);
+                _fromC.text = '${next.start.round()}';
+                _toC.text = '${next.end.round()}';
+                _schedulePreview(next);
+              },
+              onChangeEnd: (next) =>
+                  _apply(next.start.round(), next.end.round()),
             ),
           ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 0, 8, 10),
+            child: Row(
+              children: [
+                _CatalogRangeField(
+                  controller: _fromC,
+                  focusNode: _fromFocus,
+                  prefix: ru ? 'от' : 'from',
+                  onSubmitted: _commitFields,
+                ),
+                const SizedBox(width: 8),
+                _CatalogRangeField(
+                  controller: _toC,
+                  focusNode: _toFocus,
+                  prefix: ru ? 'до' : 'to',
+                  onSubmitted: _commitFields,
+                ),
+                const Spacer(),
+                if (_dragging != null && _previewCount != null)
+                  Text(
+                    t.catalogFoundCount(_previewCount!),
+                    style: AppText.caption,
+                  ),
+              ],
+            ),
+          ),
+        ],
       ],
     );
   }
+}
+
+/// Tiny numeric field («от 12») under a range slider.
+class _CatalogRangeField extends StatelessWidget {
+  const _CatalogRangeField({
+    required this.controller,
+    required this.focusNode,
+    required this.prefix,
+    required this.onSubmitted,
+  });
+
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final String prefix;
+  final VoidCallback onSubmitted;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 86,
+      height: 36,
+      child: TextField(
+        controller: controller,
+        focusNode: focusNode,
+        keyboardType: TextInputType.number,
+        textAlign: TextAlign.right,
+        style: AppText.small,
+        onSubmitted: (_) => onSubmitted(),
+        decoration: InputDecoration(
+          isDense: true,
+          prefixText: '$prefix ',
+          prefixStyle: AppText.caption,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 10,
+            vertical: 8,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Chips with counts for one text facet (eye colour, city, …); a single
+/// value can be selected, tapping it again clears the filter.
+class _CatalogFacetChips extends StatelessWidget {
+  const _CatalogFacetChips({
+    required this.title,
+    required this.values,
+    required this.selected,
+    required this.display,
+    required this.onChanged,
+  });
+
+  final String title;
+  final Map<String, int> values;
+  final String selected;
+  final String Function(String value) display;
+  final ValueChanged<String> onChanged;
+
+  static const int _visible = 10;
+
+  @override
+  Widget build(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final entries = values.entries.toList(growable: false);
+    final selectedKey = selected.trim().toLowerCase();
+    final shown = entries.length <= _visible + 1
+        ? entries
+        : entries.take(_visible).toList(growable: false);
+    final hiddenSelected =
+        selectedKey.isNotEmpty &&
+        !shown.any((e) => e.key.toLowerCase() == selectedKey);
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 4, 8, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: AppText.small.copyWith(fontSize: 15)),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final e in shown)
+                _CatalogFacetChip(
+                  label: display(e.key),
+                  count: e.value,
+                  selected: e.key.toLowerCase() == selectedKey,
+                  onTap: () => onChanged(
+                    e.key.toLowerCase() == selectedKey ? '' : e.key,
+                  ),
+                ),
+              if (hiddenSelected)
+                _CatalogFacetChip(
+                  label: display(selected),
+                  count: values[selected] ?? 0,
+                  selected: true,
+                  onTap: () => onChanged(''),
+                ),
+              if (shown.length < entries.length)
+                _CatalogFacetChip(
+                  label: ru
+                      ? 'Ещё ${entries.length - shown.length}'
+                      : '${entries.length - shown.length} more',
+                  count: null,
+                  selected: false,
+                  onTap: () async {
+                    final picked = await _pickFacetValue(
+                      context,
+                      title: title,
+                      values: values,
+                      display: display,
+                      selected: selected,
+                    );
+                    if (picked != null) onChanged(picked);
+                  },
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CatalogFacetChip extends StatelessWidget {
+  const _CatalogFacetChip({
+    required this.label,
+    required this.count,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final int? count;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected ? Tokens.ink : Tokens.surfaceAlt,
+      borderRadius: BorderRadius.circular(Tokens.radiusSm),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(Tokens.radiusSm),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: AppText.small.copyWith(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: selected ? Tokens.textOnDark : Tokens.text,
+                ),
+              ),
+              if (count != null) ...[
+                const SizedBox(width: 5),
+                Text(
+                  '$count',
+                  style: AppText.caption.copyWith(
+                    color: selected
+                        ? Tokens.textOnDark.withValues(alpha: 0.7)
+                        : Tokens.textTertiary,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Dialog with every facet value and a search box (long city lists).
+Future<String?> _pickFacetValue(
+  BuildContext context, {
+  required String title,
+  required Map<String, int> values,
+  required String Function(String value) display,
+  required String selected,
+}) {
+  final ru = Localizations.localeOf(context).languageCode == 'ru';
+  return showDialog<String>(
+    context: context,
+    builder: (ctx) {
+      var filter = '';
+      return StatefulBuilder(
+        builder: (ctx, setState) {
+          final entries = values.entries
+              .where(
+                (e) =>
+                    filter.isEmpty ||
+                    display(e.key).toLowerCase().contains(filter) ||
+                    e.key.toLowerCase().contains(filter),
+              )
+              .toList(growable: false);
+          return AlertDialog(
+            title: Text(title),
+            content: SizedBox(
+              width: 360,
+              height: 420,
+              child: Column(
+                children: [
+                  TextField(
+                    autofocus: true,
+                    onChanged: (v) =>
+                        setState(() => filter = v.trim().toLowerCase()),
+                    decoration: InputDecoration(
+                      hintText: ru ? 'Найти' : 'Search',
+                      prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                      isDense: true,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: ListView.builder(
+                      itemCount: entries.length,
+                      itemBuilder: (_, i) {
+                        final e = entries[i];
+                        final isSelected =
+                            e.key.toLowerCase() == selected.trim().toLowerCase();
+                        return ListTile(
+                          dense: true,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                          ),
+                          title: Text(display(e.key), style: AppText.small),
+                          trailing: Text('${e.value}', style: AppText.caption),
+                          selected: isSelected,
+                          onTap: () => Navigator.of(ctx).pop(e.key),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+            actions: [
+              if (selected.trim().isNotEmpty)
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(''),
+                  child: Text(ru ? 'Сбросить' : 'Clear'),
+                ),
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: Text(AppLocalizations.of(ctx)!.cancel),
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
+}
+
+/// «Shoot date»: profiles unavailable on that day are hidden.
+class _CatalogDateFilter extends StatelessWidget {
+  const _CatalogDateFilter({required this.value, required this.onChanged});
+
+  final DateTime? value;
+  final ValueChanged<DateTime?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final v = value;
+    final text = v == null
+        ? (ru ? 'Любая' : 'Any')
+        : '${v.day.toString().padLeft(2, '0')}.'
+              '${v.month.toString().padLeft(2, '0')}.${v.year}';
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(Tokens.radiusSm),
+        hoverColor: Tokens.surface,
+        onTap: () async {
+          final now = DateTime.now();
+          final picked = await showDatePicker(
+            context: context,
+            initialDate: v ?? now,
+            firstDate: DateTime(now.year, now.month, now.day),
+            lastDate: DateTime(now.year + 2),
+          );
+          if (picked != null) onChanged(picked);
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  ru ? 'Дата съёмки' : 'Shoot date',
+                  style: AppText.small.copyWith(
+                    fontSize: 15,
+                    fontWeight: v == null ? FontWeight.w400 : FontWeight.w600,
+                  ),
+                ),
+              ),
+              Text(
+                text,
+                style: AppText.small.copyWith(
+                  color: v == null ? Tokens.textSecondary : Tokens.text,
+                ),
+              ),
+              if (v != null)
+                IconButton(
+                  onPressed: () => onChanged(null),
+                  visualDensity: VisualDensity.compact,
+                  iconSize: 18,
+                  icon: const Icon(Icons.close_rounded),
+                )
+              else
+                const Padding(
+                  padding: EdgeInsets.only(left: 4),
+                  child: Icon(
+                    Icons.event_outlined,
+                    size: 18,
+                    color: Tokens.textTertiary,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Mobile: the same groups in a full-height sheet with a close button.
+Future<void> showCatalogFilterSheet(
+  BuildContext context, {
+  required CatalogController controller,
+  required Future<void> Function(void Function() set) onApply,
+  required ValueChanged<ProfessionalProfileType?> onRoleChanged,
+  required Future<void> Function()? onReset,
+}) {
+  final ru = Localizations.localeOf(context).languageCode == 'ru';
+  return showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    backgroundColor: Tokens.bg,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(Tokens.radiusLg)),
+    ),
+    builder: (ctx) {
+      return FractionallySizedBox(
+        heightFactor: 0.94,
+        child: AnimatedBuilder(
+          animation: controller,
+          builder: (ctx, _) {
+            final t = AppLocalizations.of(ctx)!;
+            final n = controller.loaded.length;
+            final countLabel = controller.hasMore
+                ? t.catalogFoundMore(n)
+                : t.catalogFoundCount(n);
+            return Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 8, 0),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          ru ? 'Фильтры' : 'Filters',
+                          style: AppText.h2,
+                        ),
+                      ),
+                      if (onReset != null)
+                        TextButton(
+                          onPressed: onReset,
+                          child: Text(ru ? 'Сбросить' : 'Reset'),
+                        ),
+                      IconButton(
+                        onPressed: () => Navigator.of(ctx).pop(),
+                        icon: const Icon(Icons.close_rounded),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                    children: [
+                      _CatalogFilterGroups(
+                        controller: controller,
+                        onApply: onApply,
+                        includeRoles: true,
+                        onRoleChanged: onRoleChanged,
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+                  child: FilledButton(
+                    onPressed: () => Navigator.of(ctx).pop(),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(Tokens.inputHeight),
+                    ),
+                    child: Text(
+                      controller.isInitialLoading
+                          ? t.loadingDots
+                          : (ru ? 'Показать · $countLabel' : 'Show · $countLabel'),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      );
+    },
+  );
 }
 
 /// Small white thumb with a hairline — matches the inputs.

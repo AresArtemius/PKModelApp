@@ -7,6 +7,31 @@ import '../profile/profile_supabase_schema.dart';
 import 'catalog_filter_bounds.dart';
 import 'model_data.dart';
 
+/// Result ordering offered in the catalogue header.
+enum CatalogSort { recommended, newest, ageAsc, ageDesc, heightAsc, heightDesc }
+
+/// Distinct values of the text facets among published profiles, with the
+/// number of profiles per value (eye colour, hair colour, country, city).
+class CatalogFacets {
+  const CatalogFacets({
+    this.eyeColors = const {},
+    this.hairColors = const {},
+    this.countries = const {},
+    this.cities = const {},
+  });
+
+  final Map<String, int> eyeColors;
+  final Map<String, int> hairColors;
+  final Map<String, int> countries;
+  final Map<String, int> cities;
+
+  bool get isEmpty =>
+      eyeColors.isEmpty &&
+      hairColors.isEmpty &&
+      countries.isEmpty &&
+      cities.isEmpty;
+}
+
 class CatalogRepository {
   CatalogRepository(this._client);
 
@@ -48,6 +73,7 @@ class CatalogRepository {
     String country = '',
     String city = '',
     ProfessionalProfileType? profileRole,
+    CatalogSort sort = CatalogSort.recommended,
   }) async {
     assert(offset >= 0 && limit > 0);
 
@@ -70,59 +96,69 @@ class CatalogRepository {
             ),
           );
 
-      q = _applyIntRangeFilter(q, 'age', ageFrom, ageTo);
-      q = _applyIntRangeFilter(q, 'height', heightFrom, heightTo);
-      q = _applyIntRangeFilter(q, 'shoe_size', shoeFrom, shoeTo);
-      q = _applyIntRangeFilter(q, 'bust', bustFrom, bustTo);
-      q = _applyIntRangeFilter(q, 'waist', waistFrom, waistTo);
-      q = _applyIntRangeFilter(q, 'hips', hipsFrom, hipsTo);
-      q = _applyIntRangeFilter(
+      q = _applyFilters(
         q,
-        'min_hourly_rate',
-        minHourlyRateFrom,
-        minHourlyRateTo,
+        query: query,
+        needDate: includeUnavailableDays ? needDate : null,
+        ageFrom: ageFrom,
+        ageTo: ageTo,
+        heightFrom: heightFrom,
+        heightTo: heightTo,
+        shoeFrom: shoeFrom,
+        shoeTo: shoeTo,
+        bustFrom: bustFrom,
+        bustTo: bustTo,
+        waistFrom: waistFrom,
+        waistTo: waistTo,
+        hipsFrom: hipsFrom,
+        hipsTo: hipsTo,
+        minHourlyRateFrom: minHourlyRateFrom,
+        minHourlyRateTo: minHourlyRateTo,
+        minDailyFeeFrom: minDailyFeeFrom,
+        minDailyFeeTo: minDailyFeeTo,
+        eyeColor: eyeColor,
+        hairColor: hairColor,
+        country: country,
+        city: city,
+        profileRole: profileRole,
       );
-      q = _applyIntRangeFilter(
-        q,
-        'min_daily_fee',
-        minDailyFeeFrom,
-        minDailyFeeTo,
-      );
-
-      final search = _clean(query);
-      final eye = _clean(eyeColor);
-      final hair = _clean(hairColor);
-      final ctry = _clean(country);
-      final cty = _clean(city);
-
-      if (needDate != null && includeUnavailableDays) {
-        final dateOnly = DateTime(needDate.year, needDate.month, needDate.day);
-        final dateStr = dateOnly.toIso8601String().split('T').first;
-        q = q.not('unavailable_days', 'cs', '{${_escapeArrayValue(dateStr)}}');
-      }
-
-      if (search.isNotEmpty) {
-        q = q.ilike('full_name', '%${_escapeForIlike(search)}%');
-      }
-
-      q = _applyTextFilter(q, 'eye_color', eye);
-      q = _applyTextFilter(q, 'hair_color', hair);
-      q = _applyTextFilter(q, 'country', ctry);
-      q = _applyTextFilter(q, 'city', cty);
-      if (profileRole != null) {
-        q = q.contains('profile_roles', <String>[profileRole.storageValue]);
-      }
 
       var ordered = q.range(offset, offset + limit - 1);
-      if (includePro) {
-        ordered = ordered.order('is_pro', ascending: false);
+      switch (sort) {
+        case CatalogSort.recommended:
+          if (includePro) {
+            ordered = ordered.order('is_pro', ascending: false);
+          }
+          if (includeVerification) {
+            ordered = ordered.order('is_verified', ascending: false);
+          }
+          ordered = ordered.order('full_name');
+        case CatalogSort.newest:
+          ordered = ordered.order('created_at', ascending: false);
+        case CatalogSort.ageAsc:
+          ordered = ordered.order('age', ascending: true, nullsFirst: false);
+        case CatalogSort.ageDesc:
+          ordered = ordered.order('age', ascending: false, nullsFirst: false);
+        case CatalogSort.heightAsc:
+          ordered = ordered.order('height', ascending: true, nullsFirst: false);
+        case CatalogSort.heightDesc:
+          ordered = ordered.order('height', ascending: false, nullsFirst: false);
       }
-      if (includeVerification) {
-        ordered = ordered.order('is_verified', ascending: false);
+      List<dynamic> rows;
+      try {
+        rows = await ordered.order('id');
+      } on PostgrestException catch (e) {
+        // Older schema without created_at: newest ≈ highest id.
+        if (sort != CatalogSort.newest ||
+            !SupabaseCompat.isMissingColumn(e, 'created_at')) {
+          rethrow;
+        }
+        rows = await q
+            .range(offset, offset + limit - 1)
+            .order('id', ascending: false);
       }
-      final rows = await ordered.order('full_name').order('id');
 
-      return (rows as List)
+      return rows
           .map((e) => ModelVm.fromMap(Map<String, dynamic>.from(e as Map)))
           .where((m) => m.fullName.trim().isNotEmpty)
           .toList(growable: false);
@@ -176,6 +212,183 @@ class CatalogRepository {
     }
   }
 
+  /// Applies every catalogue filter to [q]; shared by the page query and
+  /// the count used for the live «N profiles» hint.
+  PostgrestFilterBuilder<T> _applyFilters<T>(
+    PostgrestFilterBuilder<T> q, {
+    required String query,
+    required DateTime? needDate,
+    required int? ageFrom,
+    required int? ageTo,
+    required int? heightFrom,
+    required int? heightTo,
+    required int? shoeFrom,
+    required int? shoeTo,
+    required int? bustFrom,
+    required int? bustTo,
+    required int? waistFrom,
+    required int? waistTo,
+    required int? hipsFrom,
+    required int? hipsTo,
+    required int? minHourlyRateFrom,
+    required int? minHourlyRateTo,
+    required int? minDailyFeeFrom,
+    required int? minDailyFeeTo,
+    required String eyeColor,
+    required String hairColor,
+    required String country,
+    required String city,
+    required ProfessionalProfileType? profileRole,
+  }) {
+    PostgrestFilterBuilder<T> range(
+      PostgrestFilterBuilder<T> b,
+      String column,
+      int? from,
+      int? to,
+    ) {
+      if (from != null) b = b.gte(column, from);
+      if (to != null) b = b.lte(column, to);
+      return b;
+    }
+
+    PostgrestFilterBuilder<T> text(
+      PostgrestFilterBuilder<T> b,
+      String column,
+      String value,
+    ) {
+      final v = _clean(value);
+      if (v.isEmpty) return b;
+      return b.ilike(column, '%${_escapeForIlike(v)}%');
+    }
+
+    q = range(q, 'age', ageFrom, ageTo);
+    q = range(q, 'height', heightFrom, heightTo);
+    q = range(q, 'shoe_size', shoeFrom, shoeTo);
+    q = range(q, 'bust', bustFrom, bustTo);
+    q = range(q, 'waist', waistFrom, waistTo);
+    q = range(q, 'hips', hipsFrom, hipsTo);
+    q = range(q, 'min_hourly_rate', minHourlyRateFrom, minHourlyRateTo);
+    q = range(q, 'min_daily_fee', minDailyFeeFrom, minDailyFeeTo);
+
+    if (needDate != null) {
+      final dateOnly = DateTime(needDate.year, needDate.month, needDate.day);
+      final dateStr = dateOnly.toIso8601String().split('T').first;
+      q = q.not('unavailable_days', 'cs', '{${_escapeArrayValue(dateStr)}}');
+    }
+
+    final search = _clean(query);
+    if (search.isNotEmpty) {
+      // Name or city, in one request.
+      final safe = _escapeForIlike(search).replaceAll(RegExp(r'[,()]'), ' ');
+      final pattern = '%$safe%';
+      q = q.or('full_name.ilike.$pattern,city.ilike.$pattern');
+    }
+
+    q = text(q, 'eye_color', eyeColor);
+    q = text(q, 'hair_color', hairColor);
+    q = text(q, 'country', country);
+    q = text(q, 'city', city);
+    if (profileRole != null) {
+      q = q.contains('profile_roles', <String>[profileRole.storageValue]);
+    }
+    return q;
+  }
+
+  /// Number of published profiles matching the filters (no rows fetched).
+  Future<int> countApprovedProfiles({
+    String query = '',
+    DateTime? needDate,
+    int? ageFrom,
+    int? ageTo,
+    int? heightFrom,
+    int? heightTo,
+    int? shoeFrom,
+    int? shoeTo,
+    int? bustFrom,
+    int? bustTo,
+    int? waistFrom,
+    int? waistTo,
+    int? hipsFrom,
+    int? hipsTo,
+    int? minHourlyRateFrom,
+    int? minHourlyRateTo,
+    int? minDailyFeeFrom,
+    int? minDailyFeeTo,
+    String eyeColor = '',
+    String hairColor = '',
+    String country = '',
+    String city = '',
+    ProfessionalProfileType? profileRole,
+  }) async {
+    final q = _applyFilters(
+      _client.from(_catalogTable).select('id'),
+      query: query,
+      needDate: needDate,
+      ageFrom: ageFrom,
+      ageTo: ageTo,
+      heightFrom: heightFrom,
+      heightTo: heightTo,
+      shoeFrom: shoeFrom,
+      shoeTo: shoeTo,
+      bustFrom: bustFrom,
+      bustTo: bustTo,
+      waistFrom: waistFrom,
+      waistTo: waistTo,
+      hipsFrom: hipsFrom,
+      hipsTo: hipsTo,
+      minHourlyRateFrom: minHourlyRateFrom,
+      minHourlyRateTo: minHourlyRateTo,
+      minDailyFeeFrom: minDailyFeeFrom,
+      minDailyFeeTo: minDailyFeeTo,
+      eyeColor: eyeColor,
+      hairColor: hairColor,
+      country: country,
+      city: city,
+      profileRole: profileRole,
+    );
+    return q.count(CountOption.exact).then((r) => r.count);
+  }
+
+  /// Distinct text facet values among published profiles, counted on the
+  /// client (one light query; the catalogue is small).
+  Future<CatalogFacets> loadFacets() async {
+    final rows = await _client
+        .from(_catalogTable)
+        .select('eye_color,hair_color,country,city')
+        .limit(5000);
+    final eye = <String, int>{};
+    final hair = <String, int>{};
+    final countries = <String, int>{};
+    final cities = <String, int>{};
+    void bump(Map<String, int> into, Object? raw) {
+      final value = (raw ?? '').toString().trim();
+      if (value.isEmpty) return;
+      into[value] = (into[value] ?? 0) + 1;
+    }
+
+    for (final row in rows) {
+      bump(eye, row['eye_color']);
+      bump(hair, row['hair_color']);
+      bump(countries, row['country']);
+      bump(cities, row['city']);
+    }
+    Map<String, int> sorted(Map<String, int> m) {
+      final entries = m.entries.toList()
+        ..sort((a, b) {
+          final byCount = b.value.compareTo(a.value);
+          return byCount != 0 ? byCount : a.key.compareTo(b.key);
+        });
+      return {for (final e in entries) e.key: e.value};
+    }
+
+    return CatalogFacets(
+      eyeColors: sorted(eye),
+      hairColors: sorted(hair),
+      countries: sorted(countries),
+      cities: sorted(cities),
+    );
+  }
+
   String _clean(String value) => value.trim();
 
   String _escapeForIlike(String value) {
@@ -187,26 +400,6 @@ class CatalogRepository {
 
   String _escapeArrayValue(String value) {
     return value.replaceAll('"', r'\"');
-  }
-
-  PostgrestFilterBuilder<List<Map<String, dynamic>>> _applyIntRangeFilter(
-    PostgrestFilterBuilder<List<Map<String, dynamic>>> q,
-    String column,
-    int? from,
-    int? to,
-  ) {
-    if (from != null) q = q.gte(column, from);
-    if (to != null) q = q.lte(column, to);
-    return q;
-  }
-
-  PostgrestFilterBuilder<List<Map<String, dynamic>>> _applyTextFilter(
-    PostgrestFilterBuilder<List<Map<String, dynamic>>> q,
-    String column,
-    String value,
-  ) {
-    if (value.isEmpty) return q;
-    return q.ilike(column, '%${_escapeForIlike(value)}%');
   }
 
   bool _shouldFallbackToBasicSelect(PostgrestException e) {
