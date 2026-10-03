@@ -448,11 +448,10 @@ class _PortfolioActionHistoryStripState
             ? items
             : items.where((item) => item.kind == _filter).toList();
         return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.72),
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: const Color(0xFFE0E0E0)),
+            borderRadius: BorderRadius.circular(Tokens.radiusLg),
+            border: Border.all(color: Tokens.border),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -461,29 +460,28 @@ class _PortfolioActionHistoryStripState
                 children: [
                   Expanded(
                     child: Text(
-                      widget.isRu ? 'История действий' : 'Action history',
-                      style: _commandStyle(fontSize: 11, letterSpacing: 0.8),
+                      widget.isRu ? 'ИСТОРИЯ ДЕЙСТВИЙ' : 'ACTION HISTORY',
+                      style: AppText.label.copyWith(
+                        fontSize: 12,
+                        letterSpacing: 1,
+                      ),
                     ),
                   ),
                   TextButton(
                     onPressed: () => _openFullHistory(context, items),
                     style: TextButton.styleFrom(
                       visualDensity: VisualDensity.compact,
-                      foregroundColor: BrandTheme.redTop,
+                      foregroundColor: Tokens.text,
                       padding: const EdgeInsets.symmetric(horizontal: 8),
-                    ),
-                    child: Text(
-                      widget.isRu ? 'ВСЕ' : 'ALL',
-                      style: _commandStyle(
-                        fontSize: 10,
-                        color: BrandTheme.redTop,
-                        letterSpacing: 0.8,
+                      textStyle: AppText.small.copyWith(
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
+                    child: Text(widget.isRu ? 'Все' : 'All'),
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 10),
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
@@ -519,15 +517,15 @@ class _PortfolioActionHistoryStripState
                     borderRadius: BorderRadius.circular(12),
                     onTap: () => _openActionDetails(context, item),
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 3),
+                      padding: const EdgeInsets.symmetric(vertical: 6),
                       child: Row(
                         children: [
                           Icon(
                             _actionIcon(item.kind),
-                            color: BrandTheme.redTop,
-                            size: 16,
+                            color: Tokens.textSecondary,
+                            size: 18,
                           ),
-                          const SizedBox(width: 7),
+                          const SizedBox(width: 10),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -536,20 +534,15 @@ class _PortfolioActionHistoryStripState
                                   item.title.trim(),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: _bodyStyle(
-                                    fontSize: 12,
-                                    color: kTextDark,
-                                    weight: FontWeight.w800,
+                                  style: AppText.smallStrong.copyWith(
+                                    fontSize: 13,
                                   ),
                                 ),
                                 Text(
                                   _actionSubtitle(item),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: _bodyStyle(
-                                    fontSize: 11,
-                                    color: kTextMuted,
-                                  ),
+                                  style: AppText.caption,
                                 ),
                               ],
                             ),
@@ -557,11 +550,7 @@ class _PortfolioActionHistoryStripState
                           const SizedBox(width: 8),
                           Text(
                             _formatActionDate(item.createdAt),
-                            style: _commandStyle(
-                              fontSize: 10,
-                              color: kTextMuted,
-                              letterSpacing: 0.4,
-                            ),
+                            style: AppText.caption,
                           ),
                         ],
                       ),
@@ -703,22 +692,21 @@ class _ActionFilterChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
-        decoration: BoxDecoration(
-          color: selected ? kTextDark : Colors.white.withValues(alpha: 0.78),
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: selected ? kTextDark : kBorderColor),
-        ),
-        child: Text(
-          label,
-          style: _bodyStyle(
-            fontSize: 11,
-            color: selected ? Colors.white : kTextDark,
-            weight: FontWeight.w800,
+    return Material(
+      color: selected ? Tokens.ink : Tokens.surfaceAlt,
+      borderRadius: BorderRadius.circular(Tokens.radiusSm),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(Tokens.radiusSm),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          child: Text(
+            label,
+            style: AppText.small.copyWith(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: selected ? Tokens.textOnDark : Tokens.text,
+            ),
           ),
         ),
       ),

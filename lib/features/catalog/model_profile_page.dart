@@ -1813,12 +1813,14 @@ class _ProfileDesktopBodyV2State extends State<_ProfileDesktopBodyV2> {
                 ),
               ),
               const SizedBox(height: 16),
+              // Header across the whole width: identity on the left, the
+              // actions on the right — no empty corner next to the name.
               Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Expanded(
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1851,7 +1853,21 @@ class _ProfileDesktopBodyV2State extends State<_ProfileDesktopBodyV2> {
                             ),
                           ),
                         ],
-                        const SizedBox(height: 28),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 32),
+                  _headerActions(context),
+                ],
+              ),
+              const SizedBox(height: 32),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
                         _ProfileTabBar(
                           tabs: tabs,
                           selected: _tab,
@@ -1968,6 +1984,51 @@ class _ProfileDesktopBodyV2State extends State<_ProfileDesktopBodyV2> {
     }
   }
 
+  /// Primary actions next to the name: agency actions first, the comp card
+  /// and the link for everyone.
+  Widget _headerActions(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final busy = widget.isBusy;
+    return Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        OutlinedButton.icon(
+          onPressed: busy ? null : widget.onCompositePdf,
+          icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
+          label: Text(ru ? 'Композитка' : 'Comp card'),
+        ),
+        OutlinedButton.icon(
+          onPressed: busy ? null : widget.onCopyLink,
+          icon: const Icon(Icons.link_rounded, size: 18),
+          label: Text(ru ? 'Ссылка' : 'Link'),
+        ),
+        if (widget.canUseAgentActions) ...[
+          OutlinedButton.icon(
+            onPressed: busy ? null : widget.onMessage,
+            icon: const Icon(Icons.chat_bubble_outline_rounded, size: 18),
+            label: Text(ru ? 'Написать' : 'Message'),
+          ),
+          OutlinedButton.icon(
+            onPressed: busy ? null : widget.onAddToSelection,
+            icon: const Icon(Icons.playlist_add_rounded, size: 18),
+            label: Text(ru ? 'В подборку' : 'Add to selection'),
+          ),
+          FilledButton.icon(
+            onPressed: busy ? null : widget.onInvite,
+            style: FilledButton.styleFrom(
+              minimumSize: const Size(0, Tokens.controlHeight),
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+            ),
+            icon: const Icon(Icons.send_rounded, size: 18),
+            label: Text(ru ? 'Пригласить на кастинг' : 'Invite to a casting'),
+          ),
+        ],
+      ],
+    );
+  }
+
   Widget _side(BuildContext context) {
     final m = widget.model;
     final t = widget.t;
@@ -2056,76 +2117,6 @@ class _ProfileDesktopBodyV2State extends State<_ProfileDesktopBodyV2> {
             children: [
               for (final f in facts)
                 _ProfileFactRow(label: f.key, value: f.value, compact: true),
-              if (widget.canUseAgentActions) ...[
-                const SizedBox(height: 16),
-                const Divider(height: 1, thickness: 1, color: Tokens.border),
-                const SizedBox(height: 20),
-                FilledButton.icon(
-                  onPressed: widget.isBusy ? null : widget.onInvite,
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size.fromHeight(50),
-                  ),
-                  icon: const Icon(Icons.send_rounded, size: 18),
-                  label: Text(
-                    ru ? 'Пригласить на кастинг' : 'Invite to a casting',
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: widget.isBusy
-                            ? null
-                            : widget.onAddToSelection,
-                        style: OutlinedButton.styleFrom(
-                          minimumSize: const Size.fromHeight(46),
-                        ),
-                        icon: const Icon(Icons.playlist_add_rounded, size: 18),
-                        label: Text(ru ? 'В подборку' : 'Add'),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: widget.isBusy ? null : widget.onMessage,
-                        style: OutlinedButton.styleFrom(
-                          minimumSize: const Size.fromHeight(46),
-                        ),
-                        icon: const Icon(
-                          Icons.chat_bubble_outline_rounded,
-                          size: 18,
-                        ),
-                        label: Text(ru ? 'Написать' : 'Message'),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-              const SizedBox(height: 14),
-              Wrap(
-                spacing: 4,
-                children: [
-                  TextButton.icon(
-                    onPressed: widget.isBusy ? null : widget.onCompositePdf,
-                    style: TextButton.styleFrom(
-                      foregroundColor: Tokens.textSecondary,
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                    ),
-                    icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
-                    label: Text(ru ? 'Композитка' : 'Comp card'),
-                  ),
-                  TextButton.icon(
-                    onPressed: widget.isBusy ? null : widget.onCopyLink,
-                    style: TextButton.styleFrom(
-                      foregroundColor: Tokens.textSecondary,
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                    ),
-                    icon: const Icon(Icons.link_rounded, size: 18),
-                    label: Text(ru ? 'Скопировать ссылку' : 'Copy link'),
-                  ),
-                ],
-              ),
             ],
           ),
         ),
