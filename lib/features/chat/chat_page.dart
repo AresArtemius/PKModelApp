@@ -100,6 +100,11 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   /// into the main input, Enter / send saves, ✕ or Esc cancels).
   ChatMessage? _editingMessage;
 
+  bool _feedSeeded = false;
+  final Set<String> _seenMessageIds = <String>{};
+  bool _showScrollDown = false;
+  int _newWhileScrolled = 0;
+
   /// Optimistic outgoing messages shown until the realtime stream carries
   /// the stored row (temp id → stored id in [_pendingSentIds]).
   final List<ChatMessage> _pendingMessages = <ChatMessage>[];
@@ -151,6 +156,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   void initState() {
     super.initState();
     _messageController.addListener(_handleMessageInputChanged);
+    _messageListController.addListener(_handleFeedScroll);
     HardwareKeyboard.instance.addHandler(_handleGlobalKey);
     if (kIsWeb) {
       _disposeWebInput = ChatWebInput.install(
@@ -160,6 +166,32 @@ class _ChatPageState extends ConsumerState<ChatPage> {
           setState(() => _dragging = dragging);
         },
       );
+    }
+  }
+
+  void _handleFeedScroll() {
+    if (!_messageListController.hasClients) return;
+    // Reversed list: offset 0 is the newest message.
+    final away = _messageListController.offset > 240;
+    if (away != _showScrollDown) {
+      setState(() {
+        _showScrollDown = away;
+        if (!away) _newWhileScrolled = 0;
+      });
+    }
+  }
+
+  /// Counts incoming messages that arrive while the user is scrolled up.
+  void _trackNewWhileScrolled(List<ChatMessage> items, String userId) {
+    if (!_feedSeeded || !_showScrollDown) return;
+    var added = 0;
+    for (final m in items) {
+      if (m.senderId != userId && !_seenMessageIds.contains(m.id)) added++;
+    }
+    if (added > 0) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _newWhileScrolled += added);
+      });
     }
   }
 
@@ -413,6 +445,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
 
   void _scrollFeedToBottom() {
     if (!_messageListController.hasClients) return;
+    if (_newWhileScrolled != 0) setState(() => _newWhileScrolled = 0);
     // The feed is a reversed list: offset 0 is the newest message.
     _messageListController.animateTo(
       0,
@@ -1733,6 +1766,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     final content = Stack(
       children: [
         if (!widget.embedded) const BrandBackground(),
+        if (v2) const Positioned.fill(child: ColoredBox(color: Tokens.surface)),
         SafeArea(
           top: !widget.embedded,
           bottom: !widget.embedded,
@@ -1864,6 +1898,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                               }
                               if (v2) {
                                 _markDeliveredIfNeeded(items, userId);
+                                _trackNewWhileScrolled(items, userId);
                                 return _buildFeedV2(
                                   context,
                                   visibleMessages: visibleMessages,
@@ -2099,13 +2134,25 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     }
     final entries = _feedEntriesV2(visibleMessages, userId);
 
+    final avatarMap =
+        ref.watch(chatParticipantAvatarsProvider(widget.chatId)).valueOrNull ??
+        const <String, String>{};
+    // Messages present at the first frame do not animate in; later ones do.
+    final firstFrame = !_feedSeeded;
+    if (firstFrame) {
+      _feedSeeded = true;
+      _seenMessageIds.addAll(visibleMessages.map((m) => m.id));
+    }
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final maxBubbleWidth = math.min(
-          620.0,
-          math.max(280.0, constraints.maxWidth * 0.62),
+          560.0,
+          math.max(280.0, constraints.maxWidth * 0.55),
         );
-        return SelectionArea(
+        return Stack(
+          children: [
+            SelectionArea(
           child: ListView.builder(
           controller: _messageListController,
           reverse: true,
@@ -2124,11 +2171,16 @@ class _ChatPageState extends ConsumerState<ChatPage> {
             }
             final item = entry.message!;
             final mine = item.senderId == userId;
+            final animateIn = !_seenMessageIds.contains(item.id);
+            _seenMessageIds.add(item.id);
             return RepaintBoundary(
-              child: _BubbleV2(
+              child: _AppearV2(
+                animate: animateIn,
+                child: _BubbleV2(
               key: ValueKey('v2-${item.id}'),
               message: item,
               mine: mine,
+              avatarUrl: mine ? '' : (avatarMap[item.senderId] ?? ''),
               firstInGroup: entry.firstInGroup,
               lastInGroup: entry.lastInGroup,
               maxWidth: maxBubbleWidth,
@@ -2156,9 +2208,21 @@ class _ChatPageState extends ConsumerState<ChatPage> {
               onReact: (emoji) => _toggleReaction(item, emoji),
               onReply: () => _startReply(item),
               ),
+              ),
             );
           },
           ),
+            ),
+            if (_showScrollDown)
+              Positioned(
+                right: 8,
+                bottom: 12,
+                child: _ScrollDownButtonV2(
+                  count: _newWhileScrolled,
+                  onTap: _scrollFeedToBottom,
+                ),
+              ),
+          ],
         );
       },
     );
@@ -2428,20 +2492,9 @@ class _DaySeparatorV2 extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 14),
       child: Center(
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-          decoration: BoxDecoration(
-            color: Tokens.surface,
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: Tokens.border),
-          ),
-          child: Text(
-            label,
-            style: AppText.caption.copyWith(
-              fontWeight: FontWeight.w500,
-              color: Tokens.textSecondary,
-            ),
-          ),
+        child: Text(
+          label.toUpperCase(),
+          style: AppText.label.copyWith(color: Tokens.textTertiary),
         ),
       ),
     );
@@ -2461,16 +2514,14 @@ class _EmptyConversationV2 extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            ru ? 'Сообщений пока нет' : 'No messages yet',
-            style: AppText.h2,
+            ru ? 'Здесь пока пусто' : 'Nothing here yet',
+            style: AppText.h2.copyWith(color: Tokens.textSecondary),
           ),
           const SizedBox(height: 6),
           Text(
-            ru
-                ? 'Напишите $title первое сообщение.'
-                : 'Send $title the first message.',
+            ru ? 'Напишите первое сообщение.' : 'Send the first message.',
             textAlign: TextAlign.center,
-            style: AppText.small.copyWith(color: Tokens.textSecondary),
+            style: AppText.small.copyWith(color: Tokens.textTertiary),
           ),
         ],
       ),
@@ -2488,6 +2539,7 @@ class _BubbleV2 extends StatefulWidget {
     super.key,
     required this.message,
     required this.mine,
+    this.avatarUrl = '',
     required this.firstInGroup,
     required this.lastInGroup,
     required this.maxWidth,
@@ -2508,6 +2560,7 @@ class _BubbleV2 extends StatefulWidget {
 
   final ChatMessage message;
   final bool mine;
+  final String avatarUrl;
   final bool firstInGroup;
   final bool lastInGroup;
   final double maxWidth;
@@ -2548,12 +2601,12 @@ class _BubbleV2State extends State<_BubbleV2> {
         : parsedBody.body.trim();
     final textColor = mine ? Colors.white : Tokens.text;
     final metaColor = mine
-        ? Colors.white.withValues(alpha: 0.66)
+        ? Colors.white.withValues(alpha: 0.55)
         : Tokens.textTertiary;
     final highlight = widget.activeSearchResult || widget.selected;
 
-    const big = Radius.circular(18);
-    const small = Radius.circular(6);
+    const big = Radius.circular(16);
+    const small = Radius.circular(5);
     final radius = BorderRadius.only(
       topLeft: big,
       topRight: big,
@@ -2588,7 +2641,7 @@ class _BubbleV2State extends State<_BubbleV2> {
                 ? Icons.done_all_rounded
                 : Icons.done_rounded,
             size: 14,
-            color: message.isRead ? Colors.white : metaColor,
+            color: message.isRead ? const Color(0xFFFF6B6B) : metaColor,
           ),
         ],
       ],
@@ -2681,11 +2734,13 @@ class _BubbleV2State extends State<_BubbleV2> {
             ? EdgeInsets.zero
             : const EdgeInsets.fromLTRB(14, 9, 12, 8),
         decoration: BoxDecoration(
-          color: mine ? Tokens.ink : Tokens.surfaceAlt,
+          color: mine ? Tokens.ink : Tokens.bg,
           borderRadius: radius,
           border: highlight
               ? Border.all(color: Tokens.accent, width: 2)
-              : null,
+              : mine
+              ? null
+              : Border.all(color: Tokens.border),
         ),
         clipBehavior: isPicture ? Clip.antiAlias : Clip.none,
         child: Column(
@@ -2725,7 +2780,7 @@ class _BubbleV2State extends State<_BubbleV2> {
                         selectable: false,
                         style: AppText.body.copyWith(
                           color: textColor,
-                          height: 1.4,
+                          height: 1.45,
                           fontSize: 15.5,
                         ),
                         highlightColor: mine
@@ -2761,7 +2816,7 @@ class _BubbleV2State extends State<_BubbleV2> {
                   selectable: false,
                   style: AppText.body.copyWith(
                     color: textColor,
-                    height: 1.4,
+                    height: 1.45,
                     fontSize: 15.5,
                   ),
                   highlightColor: mine
@@ -2861,7 +2916,9 @@ class _BubbleV2State extends State<_BubbleV2> {
           mainAxisAlignment: mine
               ? MainAxisAlignment.end
               : MainAxisAlignment.start,
-          crossAxisAlignment: CrossAxisAlignment.center,
+          crossAxisAlignment: mine
+              ? CrossAxisAlignment.center
+              : CrossAxisAlignment.end,
           children: mine
               ? [
                   hoverBar,
@@ -2877,6 +2934,14 @@ class _BubbleV2State extends State<_BubbleV2> {
                     const _SelectedMarkV2(),
                     const SizedBox(width: 8),
                   ],
+                  SizedBox(
+                    width: 32,
+                    height: 32,
+                    child: widget.lastInGroup
+                        ? _V2SmallAvatar(url: widget.avatarUrl)
+                        : null,
+                  ),
+                  const SizedBox(width: 8),
                   Flexible(child: column),
                   const SizedBox(width: 8),
                   hoverBar,
@@ -2971,6 +3036,125 @@ class _BubbleMeta extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+/// Fade + slide for a message that arrived while the feed was open.
+class _AppearV2 extends StatelessWidget {
+  const _AppearV2({required this.animate, required this.child});
+
+  final bool animate;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!animate) return child;
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 160),
+      curve: Curves.easeOut,
+      builder: (context, t, child) => Opacity(
+        opacity: t,
+        child: Transform.translate(
+          offset: Offset(0, (1 - t) * 10),
+          child: child,
+        ),
+      ),
+      child: child,
+    );
+  }
+}
+
+class _ScrollDownButtonV2 extends StatelessWidget {
+  const _ScrollDownButtonV2({required this.count, required this.onTap});
+
+  final int count;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Tokens.bg,
+      shape: const CircleBorder(side: BorderSide(color: Tokens.border)),
+      elevation: 2,
+      shadowColor: Colors.black.withValues(alpha: 0.12),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: SizedBox(
+          width: 40,
+          height: 40,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              const Center(
+                child: Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  size: 24,
+                  color: Tokens.ink,
+                ),
+              ),
+              if (count > 0)
+                Positioned(
+                  top: -6,
+                  right: -4,
+                  child: Container(
+                    constraints: const BoxConstraints(minWidth: 20),
+                    height: 20,
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    alignment: Alignment.center,
+                    decoration: const BoxDecoration(
+                      color: Tokens.accent,
+                      borderRadius: BorderRadius.all(Radius.circular(999)),
+                    ),
+                    child: Text(
+                      count > 99 ? '99+' : '$count',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        height: 1,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _V2SmallAvatar extends StatelessWidget {
+  const _V2SmallAvatar({required this.url});
+
+  final String url;
+
+  @override
+  Widget build(BuildContext context) {
+    final clean = url.trim();
+    return ClipOval(
+      child: clean.isEmpty
+          ? const ColoredBox(
+              color: Tokens.surfaceAlt,
+              child: Icon(
+                Icons.person_outline_rounded,
+                size: 18,
+                color: Tokens.textTertiary,
+              ),
+            )
+          : CachedNetworkImage(
+              imageUrl: clean,
+              fit: BoxFit.cover,
+              alignment: const Alignment(0, -0.6),
+              memCacheWidth: 128,
+              placeholder: (_, _) =>
+                  const ColoredBox(color: Tokens.surfaceAlt),
+              errorWidget: (_, _, _) =>
+                  const ColoredBox(color: Tokens.surfaceAlt),
+            ),
     );
   }
 }
@@ -4766,22 +4950,21 @@ class _ForwardedLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     final isRussian =
         Localizations.localeOf(context).languageCode.toLowerCase() == 'ru';
+    final color = mine
+        ? Colors.white.withValues(alpha: 0.6)
+        : Tokens.textSecondary;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(
-          Icons.forward_rounded,
-          size: 13,
-          color: mine ? Colors.white.withValues(alpha: 0.72) : kTextMuted,
-        ),
+        Icon(Icons.reply_rounded, size: 13, color: color),
         const SizedBox(width: 4),
         Text(
-          isRussian ? 'Переслано' : 'Forwarded',
+          isRussian ? 'Пересланное сообщение' : 'Forwarded message',
           style: TextStyle(
-            color: mine ? Colors.white.withValues(alpha: 0.72) : kTextMuted,
-            fontSize: 10,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 0.2,
+            color: color,
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+            fontStyle: FontStyle.italic,
           ),
         ),
       ],
@@ -4898,7 +5081,7 @@ class _ReplyPreview extends StatelessWidget {
         decoration: BoxDecoration(
           color: mine
               ? Colors.white.withValues(alpha: 0.12)
-              : Tokens.ink.withValues(alpha: 0.06),
+              : Tokens.surfaceAlt,
           borderRadius: BorderRadius.circular(8),
           border: Border(
             left: BorderSide(
@@ -7021,7 +7204,13 @@ class _Composer extends StatelessWidget {
           ? BoxDecoration(
               borderRadius: BorderRadius.circular(Tokens.radiusLg),
               color: Tokens.bg,
-              border: Border.all(color: Tokens.borderStrong),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.06),
+                  blurRadius: 12,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             )
           : BoxDecoration(
               borderRadius: BorderRadius.circular(24),
@@ -7148,6 +7337,7 @@ class _Composer extends StatelessWidget {
             _PendingAttachmentPreview(
               attachment: attachment!,
               onRemove: onRemoveAttachment,
+              flat: flat,
             ),
             const SizedBox(height: 8),
           ],
@@ -7158,8 +7348,14 @@ class _Composer extends StatelessWidget {
             children: [
               if (editingText == null)
                 IconButton(
+                  tooltip: flat ? 'Прикрепить' : null,
                   onPressed: sending ? null : onAttach,
-                  icon: const Icon(Icons.add_rounded, color: kTextDark),
+                  style: flat ? _composerIconStyle : null,
+                  icon: Icon(
+                    Icons.add_rounded,
+                    color: flat ? Tokens.textSecondary : kTextDark,
+                    size: flat ? 24 : null,
+                  ),
                 )
               else
                 const SizedBox(width: 12),
@@ -7219,28 +7415,43 @@ class _Composer extends StatelessWidget {
                 IconButton(
                   tooltip: 'Голосовое сообщение',
                   onPressed: sending ? null : onRecordVoice,
-                  icon: const Icon(Icons.mic_rounded, color: kTextDark),
+                  style: flat ? _composerIconStyle : null,
+                  icon: Icon(
+                    flat ? Icons.mic_none_rounded : Icons.mic_rounded,
+                    color: flat ? Tokens.textSecondary : kTextDark,
+                  ),
                 ),
-              IconButton(
-                tooltip: editingText != null
-                    ? (Localizations.localeOf(context).languageCode == 'ru'
-                          ? 'Сохранить (Enter)'
-                          : 'Save (Enter)')
-                    : null,
-                onPressed: sending ? null : onSend,
-                icon: sending
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : Icon(
-                        editingText != null
-                            ? Icons.check_circle_rounded
-                            : Icons.send_rounded,
-                        color: BrandTheme.redTop,
-                      ),
-              ),
+              if (flat) ...[
+                const SizedBox(width: 4),
+                Padding(
+                  padding: const EdgeInsets.only(right: 4),
+                  child: _SendButtonV2(
+                    sending: sending,
+                    editing: editingText != null,
+                    onTap: sending ? null : onSend,
+                  ),
+                ),
+              ] else
+                IconButton(
+                  tooltip: editingText != null
+                      ? (Localizations.localeOf(context).languageCode == 'ru'
+                            ? 'Сохранить (Enter)'
+                            : 'Save (Enter)')
+                      : null,
+                  onPressed: sending ? null : onSend,
+                  icon: sending
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Icon(
+                          editingText != null
+                              ? Icons.check_circle_rounded
+                              : Icons.send_rounded,
+                          color: BrandTheme.redTop,
+                        ),
+                ),
             ],
           ),
         ],
@@ -7300,7 +7511,72 @@ class _EmojiPickerButton extends StatelessWidget {
           ),
         ),
       ],
-      icon: const Icon(Icons.sentiment_satisfied_alt_rounded, color: kTextDark),
+      style: _composerIconStyle,
+      icon: const Icon(
+        Icons.sentiment_satisfied_alt_rounded,
+        color: Tokens.textSecondary,
+      ),
+    );
+  }
+}
+
+/// Composer icons: quiet by default, ink on hover.
+final ButtonStyle _composerIconStyle = IconButton.styleFrom(
+  foregroundColor: Tokens.textSecondary,
+  hoverColor: Tokens.surfaceAlt,
+  highlightColor: Tokens.surfaceAlt,
+  shape: const CircleBorder(),
+).copyWith(
+  iconColor: WidgetStateProperty.resolveWith(
+    (states) => states.contains(WidgetState.hovered)
+        ? Tokens.ink
+        : Tokens.textSecondary,
+  ),
+);
+
+class _SendButtonV2 extends StatelessWidget {
+  const _SendButtonV2({
+    required this.sending,
+    required this.editing,
+    required this.onTap,
+  });
+
+  final bool sending;
+  final bool editing;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    return Tooltip(
+      message: editing
+          ? (ru ? 'Сохранить (Enter)' : 'Save (Enter)')
+          : (ru ? 'Отправить (Enter)' : 'Send (Enter)'),
+      child: Material(
+        color: onTap == null ? Tokens.borderStrong : Tokens.ink,
+        shape: const CircleBorder(),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onTap,
+          child: SizedBox(
+            width: 36,
+            height: 36,
+            child: sending
+                ? const Padding(
+                    padding: EdgeInsets.all(10),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : Icon(
+                    editing ? Icons.check_rounded : Icons.arrow_upward_rounded,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -7309,10 +7585,12 @@ class _PendingAttachmentPreview extends StatelessWidget {
   const _PendingAttachmentPreview({
     required this.attachment,
     required this.onRemove,
+    this.flat = false,
   });
 
   final _PendingChatAttachment attachment;
   final VoidCallback onRemove;
+  final bool flat;
 
   @override
   Widget build(BuildContext context) {
@@ -7321,6 +7599,80 @@ class _PendingAttachmentPreview extends StatelessWidget {
     final isFile = attachment.isFile;
     final isAudio = attachment.isAudio;
     final size = _formatFileSize(attachment.fileSize);
+    if (flat) {
+      final kindLabel = isFile
+          ? attachment.fileName
+          : isAudio
+          ? (isRussian ? 'Голосовое' : 'Voice message') +
+                (attachment.duration == null
+                    ? ''
+                    : ' · ${_formatVoiceDuration(attachment.duration!)}')
+          : attachment.isVideo
+          ? (isRussian ? 'Видео' : 'Video')
+          : (isRussian ? 'Фото' : 'Photo');
+      final icon = isAudio
+          ? Icons.mic_none_rounded
+          : isFile
+          ? Icons.insert_drive_file_outlined
+          : Icons.play_circle_outline_rounded;
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(4, 4, 0, 2),
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: SizedBox(
+                width: 56,
+                height: 56,
+                child:
+                    !isFile &&
+                        !isAudio &&
+                        !attachment.isVideo &&
+                        attachment.previewBytes != null
+                    ? Image.memory(attachment.previewBytes!, fit: BoxFit.cover)
+                    : ColoredBox(
+                        color: Tokens.surfaceAlt,
+                        child: Icon(icon, color: Tokens.ink, size: 24),
+                      ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    kindLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppText.smallStrong,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    [
+                      if (size.isNotEmpty) size,
+                      isRussian
+                          ? 'Подпись — по желанию, Enter отправит'
+                          : 'Caption is optional, Enter sends',
+                    ].join(' · '),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppText.caption,
+                  ),
+                ],
+              ),
+            ),
+            IconButton(
+              tooltip: isRussian ? 'Убрать' : 'Remove',
+              onPressed: onRemove,
+              style: _composerIconStyle,
+              icon: const Icon(Icons.close_rounded),
+            ),
+          ],
+        ),
+      );
+    }
     return Container(
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(

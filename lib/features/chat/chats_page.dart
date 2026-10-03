@@ -866,9 +866,10 @@ class _ChatRowV2State extends State<_ChatRowV2> {
     final ru = Localizations.localeOf(context).languageCode == 'ru';
     final unread = item.unreadCount > 0;
     final contextLine = _contextLine();
-    final preview = item.lastMessage.trim().isEmpty
-        ? (ru ? 'Диалог создан' : 'Chat created')
-        : item.lastMessage.trim();
+    final hasLast = item.lastMessage.trim().isNotEmpty;
+    final preview = hasLast
+        ? item.lastMessage.trim()
+        : (ru ? 'Нет сообщений' : 'No messages');
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
@@ -913,6 +914,9 @@ class _ChatRowV2State extends State<_ChatRowV2> {
                                     fontSize: 15,
                                     height: 1.3,
                                     color: Tokens.ink,
+                                    fontWeight: unread
+                                        ? FontWeight.w700
+                                        : FontWeight.w600,
                                   ),
                                 ),
                               ),
@@ -944,6 +948,18 @@ class _ChatRowV2State extends State<_ChatRowV2> {
                           const SizedBox(height: 4),
                           Row(
                             children: [
+                              if (hasLast && item.lastMessageMine) ...[
+                                Icon(
+                                  item.lastMessageDelivered
+                                      ? Icons.done_all_rounded
+                                      : Icons.done_rounded,
+                                  size: 15,
+                                  color: item.lastMessageRead
+                                      ? Tokens.accent
+                                      : Tokens.textTertiary,
+                                ),
+                                const SizedBox(width: 4),
+                              ],
                               Expanded(
                                 child: item.lastMessageIsAudio
                                     ? _ChatVoicePreview(item: item)
@@ -952,7 +968,9 @@ class _ChatRowV2State extends State<_ChatRowV2> {
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                         style: AppText.small.copyWith(
-                                          color: unread
+                                          color: !hasLast
+                                              ? Tokens.textTertiary
+                                              : unread
                                               ? Tokens.ink
                                               : Tokens.textSecondary,
                                           fontWeight: unread
@@ -973,7 +991,7 @@ class _ChatRowV2State extends State<_ChatRowV2> {
                                     horizontal: 7,
                                   ),
                                   decoration: const BoxDecoration(
-                                    color: Tokens.ink,
+                                    color: Tokens.accent,
                                     borderRadius: BorderRadius.all(
                                       Radius.circular(999),
                                     ),
@@ -1167,15 +1185,9 @@ class _V2NoChatSelected extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(
-            Icons.chat_bubble_outline_rounded,
-            size: 40,
-            color: Tokens.textTertiary,
-          ),
-          const SizedBox(height: 14),
           Text(
             ru ? 'Выберите диалог' : 'Select a conversation',
-            style: AppText.h2,
+            style: AppText.h2.copyWith(color: Tokens.textSecondary),
           ),
           const SizedBox(height: 6),
           Text(

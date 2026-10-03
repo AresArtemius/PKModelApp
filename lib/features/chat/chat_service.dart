@@ -732,6 +732,9 @@ class ChatService {
         hasFileMessages: map['has_file'] == true,
         hasAudioMessages: map['has_audio'] == true,
         hasPinnedMessages: map['has_pinned'] == true,
+        lastMessageMine: latest != null && latest.senderId == userId,
+        lastMessageDelivered: latest?.isDelivered ?? false,
+        lastMessageRead: latest?.isRead ?? false,
       );
 
       unreadByParticipant[participantKey] =
@@ -886,6 +889,9 @@ class ChatService {
         hasAudioMessages: flags.hasAudio || (latest != null && latest.isAudio),
         hasPinnedMessages:
             flags.hasPinned || (latest != null && latest.isPinned),
+        lastMessageMine: latest != null && latest.senderId == userId,
+        lastMessageDelivered: latest?.isDelivered ?? false,
+        lastMessageRead: latest?.isRead ?? false,
       );
 
       unreadByParticipant[participantKey] =
