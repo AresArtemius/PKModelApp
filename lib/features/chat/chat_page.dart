@@ -151,6 +151,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   void initState() {
     super.initState();
     _messageController.addListener(_handleMessageInputChanged);
+    HardwareKeyboard.instance.addHandler(_handleGlobalKey);
     if (kIsWeb) {
       _disposeWebInput = ChatWebInput.install(
         onFile: _attachWebFile,
@@ -162,8 +163,25 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     }
   }
 
+  /// Enter sends a pending attachment even when the text field is not
+  /// focused (a pasted or dropped file leaves focus on the page).
+  bool _handleGlobalKey(KeyEvent event) {
+    if (!kIsWeb || !mounted) return false;
+    if (event is! KeyDownEvent) return false;
+    final key = event.logicalKey;
+    if (key != LogicalKeyboardKey.enter && key != LogicalKeyboardKey.numpadEnter) {
+      return false;
+    }
+    if (HardwareKeyboard.instance.isShiftPressed) return false;
+    if (_composerFocus.hasFocus || _inlineVoice) return false;
+    if (_pendingAttachment == null || _sending || _uploadingMedia) return false;
+    unawaited(_send());
+    return true;
+  }
+
   @override
   void dispose() {
+    HardwareKeyboard.instance.removeHandler(_handleGlobalKey);
     _disposeWebInput?.call();
     _composerFocus.dispose();
     _typingStopTimer?.cancel();
@@ -1038,7 +1056,9 @@ class _ChatPageState extends ConsumerState<ChatPage> {
         previewBytes: isImage ? file.bytes : null,
       );
     });
-    _composerFocus.requestFocus();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _composerFocus.requestFocus();
+    });
   }
 
   void _insertAtCursor(String text) {
