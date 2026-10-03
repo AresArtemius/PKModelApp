@@ -66,7 +66,7 @@ class _CatalogSearchRow extends StatelessWidget {
               ),
             ),
             if (canSelect) ...[
-              const SizedBox(width: kGap10),
+              SizedBox(width: kIsWeb ? 8 : kGap10),
               _SelectAllPill(
                 value: items.isEmpty
                     ? false
@@ -76,7 +76,7 @@ class _CatalogSearchRow extends StatelessWidget {
             ],
           ],
         ),
-        const SizedBox(height: kGap12),
+        if (!kIsWeb) const SizedBox(height: kGap12),
       ],
     );
   }
@@ -710,7 +710,7 @@ class _CatalogResultsHeader extends StatelessWidget {
       children: [
         Row(
           children: [
-            Text(countLabel, style: AppText.h2),
+            Text(countLabel, style: AppText.h1.copyWith(fontSize: 24)),
             const Spacer(),
             if (onFolders != null) ...[
               _HeaderIconButton(
@@ -900,6 +900,7 @@ class _CatalogDesktopLayout extends StatelessWidget {
     required this.grid,
     required this.detail,
     required this.showDetail,
+    this.filters,
     this.savedSearches,
   });
 
@@ -912,12 +913,17 @@ class _CatalogDesktopLayout extends StatelessWidget {
   final String resetFiltersLabel;
   final Widget roleTabs;
   final Widget search;
+
+  /// Inline range filters (age, height, …) shown in the rail.
+  final Widget? filters;
   final Widget? savedSearches;
   final Widget grid;
   final Widget detail;
 
   @override
   Widget build(BuildContext context) {
+    // Three columns separated by hairlines, like the castings page: the
+    // filter rail, the results and (on wide screens) the live preview.
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -930,22 +936,26 @@ class _CatalogDesktopLayout extends StatelessWidget {
             onResetFilters: onResetFilters,
             resetFiltersLabel: resetFiltersLabel,
             roleTabs: roleTabs,
+            filters: filters,
             savedSearches: savedSearches,
           ),
         ),
-        const SizedBox(width: 32),
+        const VerticalDivider(width: 1, thickness: 1, color: Tokens.border),
         Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              topBar,
-              const SizedBox(height: 16),
-              Expanded(child: grid),
-            ],
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(32, 28, 32, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                topBar,
+                const SizedBox(height: 20),
+                Expanded(child: grid),
+              ],
+            ),
           ),
         ),
         if (showDetail) ...[
-          const SizedBox(width: 32),
+          const VerticalDivider(width: 1, thickness: 1, color: Tokens.border),
           SizedBox(width: _catalogDesktopDetailWidth, child: detail),
         ],
       ],
@@ -953,6 +963,7 @@ class _CatalogDesktopLayout extends StatelessWidget {
   }
 }
 
+/// Filter rail: title, search, role list, inline ranges, links.
 class _CatalogDesktopFilterPanel extends StatelessWidget {
   const _CatalogDesktopFilterPanel({
     required this.search,
@@ -961,6 +972,7 @@ class _CatalogDesktopFilterPanel extends StatelessWidget {
     required this.onResetFilters,
     required this.resetFiltersLabel,
     required this.roleTabs,
+    this.filters,
     this.savedSearches,
   });
 
@@ -970,36 +982,44 @@ class _CatalogDesktopFilterPanel extends StatelessWidget {
   final Future<void> Function()? onResetFilters;
   final String resetFiltersLabel;
   final Widget roleTabs;
+  final Widget? filters;
   final Widget? savedSearches;
 
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
 
-    // Flat column (v2): no card, no shadow — just the controls.
     return ListView(
       physics: const BouncingScrollPhysics(),
-      padding: EdgeInsets.zero,
+      padding: const EdgeInsets.fromLTRB(32, 36, 24, 32),
       children: [
-        Text(t.catalogTab, style: AppText.h1),
-        const SizedBox(height: 16),
+        Text(t.catalogTab, style: AppText.h1.copyWith(fontSize: 32)),
+        const SizedBox(height: 20),
         search,
-        const SizedBox(height: 12),
-        roleTabs,
+        const SizedBox(height: 28),
+        _CatalogRailLabel(ru ? 'Роль' : 'Role'),
         const SizedBox(height: 8),
-        _DesktopFilterAction(
+        roleTabs,
+        if (filters != null) ...[
+          const SizedBox(height: 28),
+          _CatalogRailLabel(ru ? 'Параметры' : 'Measurements'),
+          const SizedBox(height: 4),
+          filters!,
+        ],
+        const SizedBox(height: 20),
+        _CatalogRailLink(
           icon: Icons.tune_rounded,
-          label: _sentenceCase(t.advancedSearchUpper),
+          label: ru ? 'Все фильтры' : 'All filters',
           onTap: advancedSearchEnabled ? onAdvancedSearch : null,
         ),
-        if (onResetFilters != null) ...[
-          const SizedBox(height: 8),
-          _DesktopFilterAction(
+        if (onResetFilters != null)
+          _CatalogRailLink(
             icon: Icons.restart_alt_rounded,
             label: _sentenceCase(resetFiltersLabel),
             onTap: onResetFilters,
+            accent: true,
           ),
-        ],
         if (savedSearches != null) ...[
           const SizedBox(height: 24),
           Text(_sentenceCase(t.savedSearchSaveTitle), style: AppText.label),
@@ -1011,31 +1031,297 @@ class _CatalogDesktopFilterPanel extends StatelessWidget {
   }
 }
 
-class _DesktopFilterAction extends StatelessWidget {
-  const _DesktopFilterAction({
+/// Uppercase group label in the rail.
+class _CatalogRailLabel extends StatelessWidget {
+  const _CatalogRailLabel(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text.toUpperCase(),
+      style: AppText.label.copyWith(fontSize: 12, letterSpacing: 1),
+    );
+  }
+}
+
+/// Text link with an icon at the bottom of the rail.
+class _CatalogRailLink extends StatelessWidget {
+  const _CatalogRailLink({
     required this.icon,
     required this.label,
-    this.onTap,
+    required this.onTap,
+    this.accent = false,
   });
 
   final IconData icon;
   final String label;
   final VoidCallback? onTap;
+  final bool accent;
 
   @override
   Widget build(BuildContext context) {
-    return OutlinedButton.icon(
-      onPressed: onTap,
-      icon: Icon(icon, size: 18),
-      label: Align(
-        alignment: Alignment.centerLeft,
-        child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: TextButton.icon(
+        onPressed: onTap,
+        style: TextButton.styleFrom(
+          foregroundColor: accent ? Tokens.accent : Tokens.text,
+          textStyle: AppText.small.copyWith(fontSize: 15),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+          minimumSize: const Size(0, 40),
+        ),
+        icon: Icon(icon, size: 18),
+        label: Text(label),
       ),
-      style: OutlinedButton.styleFrom(
-        minimumSize: const Size.fromHeight(44),
-        padding: const EdgeInsets.symmetric(horizontal: 14),
-        alignment: Alignment.centerLeft,
+    );
+  }
+}
+
+/// Vertical role list for the rail: every role is one flat row, the
+/// selected one is black with a check mark.
+class _CatalogRoleList extends StatelessWidget {
+  const _CatalogRoleList({required this.selectedRole, required this.onChanged});
+
+  final ProfessionalProfileType? selectedRole;
+  final ValueChanged<ProfessionalProfileType?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final items = <({ProfessionalProfileType? role, String label, IconData icon})>[
+      (role: null, label: ru ? 'Все' : 'All', icon: Icons.grid_view_rounded),
+      for (final role in _CatalogRoleTabs._roles)
+        (
+          role: role,
+          label: _catalogProfileTypeLabel(t, role),
+          icon: _catalogRoleIcon(role),
+        ),
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final item in items)
+          _CatalogRoleRow(
+            label: item.label,
+            icon: item.icon,
+            selected: selectedRole == item.role,
+            onTap: () => onChanged(item.role),
+          ),
+      ],
+    );
+  }
+}
+
+class _CatalogRoleRow extends StatelessWidget {
+  const _CatalogRoleRow({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(Tokens.radiusSm),
+        hoverColor: Tokens.surface,
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 9),
+          child: Row(
+            children: [
+              Icon(
+                icon,
+                size: 18,
+                color: selected ? Tokens.text : Tokens.textSecondary,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  label,
+                  style: AppText.small.copyWith(
+                    fontSize: 15,
+                    fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                    color: selected ? Tokens.text : Tokens.textSecondary,
+                  ),
+                ),
+              ),
+              if (selected)
+                const Icon(Icons.check_rounded, size: 18, color: Tokens.text),
+            ],
+          ),
+        ),
       ),
+    );
+  }
+}
+
+/// One range (age, height, …) in the rail: label and the current values in
+/// a row; tapping it opens a compact slider underneath. Applies on release.
+class _CatalogRangeFilter extends StatefulWidget {
+  const _CatalogRangeFilter({
+    required this.label,
+    required this.min,
+    required this.max,
+    required this.from,
+    required this.to,
+    required this.onChanged,
+    this.unit = '',
+    this.initiallyOpen = false,
+  });
+
+  final String label;
+  final int min;
+  final int max;
+  final int? from;
+  final int? to;
+  final String unit;
+  final bool initiallyOpen;
+  final void Function(int? from, int? to) onChanged;
+
+  @override
+  State<_CatalogRangeFilter> createState() => _CatalogRangeFilterState();
+}
+
+class _CatalogRangeFilterState extends State<_CatalogRangeFilter> {
+  late bool _open = widget.initiallyOpen;
+  RangeValues? _dragging;
+
+  @override
+  Widget build(BuildContext context) {
+    final min = widget.min.toDouble();
+    final max = widget.max.toDouble();
+    final lo = (widget.from ?? widget.min).clamp(widget.min, widget.max);
+    final hi = (widget.to ?? widget.max).clamp(widget.min, widget.max);
+    final active = widget.from != null || widget.to != null;
+    final values = _dragging ?? RangeValues(lo.toDouble(), hi.toDouble());
+    final unit = widget.unit.isEmpty ? '' : ' ${widget.unit}';
+    final valueText = active || _dragging != null
+        ? '${values.start.round()}–${values.end.round()}$unit'
+        : (Localizations.localeOf(context).languageCode == 'ru'
+              ? 'Любой'
+              : 'Any');
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(Tokens.radiusSm),
+            hoverColor: Tokens.surface,
+            onTap: () => setState(() => _open = !_open),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      widget.label,
+                      style: AppText.small.copyWith(
+                        fontSize: 15,
+                        fontWeight: active ? FontWeight.w600 : FontWeight.w400,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    valueText,
+                    style: AppText.small.copyWith(
+                      color: active ? Tokens.text : Tokens.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(
+                    _open
+                        ? Icons.keyboard_arrow_up_rounded
+                        : Icons.keyboard_arrow_down_rounded,
+                    size: 18,
+                    color: Tokens.textTertiary,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        if (_open && max > min)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(0, 0, 0, 6),
+            child: SliderTheme(
+              data: SliderTheme.of(context).copyWith(
+                trackHeight: 2,
+                activeTrackColor: Tokens.text,
+                inactiveTrackColor: Tokens.border,
+                thumbColor: Tokens.bg,
+                overlayColor: Tokens.text.withValues(alpha: 0.08),
+                rangeThumbShape: const _CatalogRangeThumb(),
+                showValueIndicator: ShowValueIndicator.never,
+              ),
+              child: RangeSlider(
+                min: min,
+                max: max,
+                divisions: (max - min).round(),
+                values: values,
+                onChanged: (next) => setState(() => _dragging = next),
+                onChangeEnd: (next) {
+                  setState(() => _dragging = null);
+                  final from = next.start.round();
+                  final to = next.end.round();
+                  widget.onChanged(
+                    from == widget.min ? null : from,
+                    to == widget.max ? null : to,
+                  );
+                },
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// Small white thumb with a hairline — matches the inputs.
+class _CatalogRangeThumb extends RangeSliderThumbShape {
+  const _CatalogRangeThumb();
+
+  static const double _radius = 9;
+
+  @override
+  Size getPreferredSize(bool isEnabled, bool isDiscrete) =>
+      const Size.fromRadius(_radius);
+
+  @override
+  void paint(
+    PaintingContext context,
+    Offset center, {
+    required Animation<double> activationAnimation,
+    required Animation<double> enableAnimation,
+    bool isDiscrete = false,
+    bool isEnabled = false,
+    bool? isOnTop,
+    bool? isPressed,
+    required SliderThemeData sliderTheme,
+    TextDirection? textDirection,
+    Thumb? thumb,
+  }) {
+    final canvas = context.canvas;
+    canvas.drawCircle(center, _radius, Paint()..color = Tokens.bg);
+    canvas.drawCircle(
+      center,
+      _radius - 0.5,
+      Paint()
+        ..color = Tokens.text
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5,
     );
   }
 }
@@ -1408,6 +1694,7 @@ class _CatalogResultsBody extends StatelessWidget {
   }
 }
 
+/// Live preview column: photo, name, facts and the two actions.
 class _CatalogDesktopPreview extends StatelessWidget {
   const _CatalogDesktopPreview({
     required this.model,
@@ -1426,144 +1713,124 @@ class _CatalogDesktopPreview extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
     final m = model;
 
-    return Container(
-      decoration: catalogCardDecoration(),
-      clipBehavior: Clip.antiAlias,
-      child: m == null
-          ? Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Text(
-                  t.noApprovedProfilesYet,
-                  textAlign: TextAlign.center,
-                  style: BrandTheme.pillText.copyWith(
-                    color: kTextMuted,
-                    fontSize: 14,
-                    letterSpacing: 0.4,
-                    height: 1.2,
-                  ),
-                ),
-              ),
-            )
-          : ListView(
-              physics: const BouncingScrollPhysics(),
-              padding: EdgeInsets.zero,
-              children: [
-                AspectRatio(
-                  aspectRatio: 0.86,
-                  child: m.primaryPhotoUrl == null
-                      ? const _CatalogPhotoPlaceholder()
-                      : CachedNetworkImage(
-                          imageUrl: storageImageVariant(
-                            m.primaryPhotoUrl!,
-                            width: kCatalogPreviewImageWidth,
-                          ),
-                          memCacheWidth: _catalogOverlayPhotoCacheWidth,
-                          maxWidthDiskCache: _catalogOverlayPhotoCacheWidth,
-                          fit: BoxFit.cover,
-                          alignment: _catalogCoverAlignmentFor(m),
-                          placeholder: (_, _) =>
-                              const _CatalogPhotoPlaceholder(),
-                          errorWidget: (_, _, _) => CachedNetworkImage(
-                            imageUrl: m.primaryPhotoUrl!,
-                            memCacheWidth: _catalogOverlayPhotoCacheWidth,
-                            maxWidthDiskCache: _catalogOverlayPhotoCacheWidth,
-                            fit: BoxFit.cover,
-                            alignment: _catalogCoverAlignmentFor(m),
-                            placeholder: (_, _) =>
-                                const _CatalogPhotoPlaceholder(),
-                            errorWidget: (_, _, _) =>
-                                const _CatalogPhotoPlaceholder(),
-                          ),
-                        ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(18, 18, 18, 20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              m.fullName,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: kTextTitle,
-                                fontSize: 24,
-                                fontWeight: FontWeight.w800,
-                                height: 1.05,
-                                letterSpacing: 0,
-                              ),
-                            ),
-                          ),
-                          if (m.isProActive) const _ProBadge(),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      _PreviewInfoLine(
-                        icon: Icons.badge_rounded,
-                        text: _catalogProfileRolesLabel(
-                          t,
-                          m.effectiveProfileRoles,
-                        ),
-                      ),
-                      _PreviewInfoLine(
-                        icon: Icons.straighten_rounded,
-                        text: '${m.age} • ${m.height} $cmLabel',
-                      ),
-                      if (m.city.isNotEmpty || m.country.isNotEmpty)
-                        _PreviewInfoLine(
-                          icon: Icons.place_rounded,
-                          text: [m.city, m.country]
-                              .where((value) => value.trim().isNotEmpty)
-                              .join(', '),
-                        ),
-                      if (m.photoUrls.isNotEmpty || m.videoUrls.isNotEmpty)
-                        _PreviewInfoLine(
-                          icon: Icons.perm_media_rounded,
-                          text:
-                              '${m.photoUrls.length} фото • ${m.videoUrls.length} видео',
-                        ),
-                      if (m.resume.isNotEmpty) ...[
-                        const SizedBox(height: 14),
-                        Text(
-                          m.resume,
-                          maxLines: 5,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: kTextMid,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            height: 1.28,
-                            letterSpacing: 0,
-                          ),
-                        ),
-                      ],
-                      const SizedBox(height: 18),
-                      _PreviewButton(
-                        label: t.profileUpper,
-                        isDark: true,
-                        icon: Icons.open_in_new_rounded,
-                        onTap: onOpen,
-                      ),
-                      if (canUseAgentTools) ...[
-                        const SizedBox(height: 10),
-                        _PreviewButton(
-                          label: t.quickAddTitleUpper,
-                          isDark: false,
-                          icon: Icons.playlist_add_rounded,
-                          onTap: onQuickAdd,
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ],
+    if (m == null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Text(
+            t.noApprovedProfilesYet,
+            textAlign: TextAlign.center,
+            style: AppText.small.copyWith(color: Tokens.textSecondary),
+          ),
+        ),
+      );
+    }
+
+    final photo = m.primaryPhotoUrl == null
+        ? const _CatalogPhotoPlaceholder()
+        : CachedNetworkImage(
+            imageUrl: storageImageVariant(
+              m.primaryPhotoUrl!,
+              width: kCatalogPreviewImageWidth,
             ),
+            memCacheWidth: _catalogOverlayPhotoCacheWidth,
+            maxWidthDiskCache: _catalogOverlayPhotoCacheWidth,
+            fit: BoxFit.cover,
+            alignment: _catalogCoverAlignmentFor(m),
+            placeholder: (_, _) => const _CatalogPhotoPlaceholder(),
+            errorWidget: (_, _, _) => CachedNetworkImage(
+              imageUrl: m.primaryPhotoUrl!,
+              memCacheWidth: _catalogOverlayPhotoCacheWidth,
+              maxWidthDiskCache: _catalogOverlayPhotoCacheWidth,
+              fit: BoxFit.cover,
+              alignment: _catalogCoverAlignmentFor(m),
+              placeholder: (_, _) => const _CatalogPhotoPlaceholder(),
+              errorWidget: (_, _, _) => const _CatalogPhotoPlaceholder(),
+            ),
+          );
+
+    return ListView(
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(28, 28, 32, 32),
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(Tokens.radiusLg),
+          child: AspectRatio(aspectRatio: 3 / 4, child: photo),
+        ),
+        const SizedBox(height: 20),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Text(
+                m.fullName,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: AppText.h1.copyWith(fontSize: 24, height: 1.2),
+              ),
+            ),
+            if (m.isProActive) ...[
+              const SizedBox(width: 8),
+              const _ProBadge(),
+            ],
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          _catalogProfileRolesLabel(t, m.effectiveProfileRoles),
+          style: AppText.small.copyWith(color: Tokens.textSecondary),
+        ),
+        const SizedBox(height: 16),
+        _PreviewInfoLine(
+          icon: Icons.cake_outlined,
+          text: '${t.ageYears(m.age)} · ${m.height} $cmLabel',
+        ),
+        if (m.city.isNotEmpty || m.country.isNotEmpty)
+          _PreviewInfoLine(
+            icon: Icons.place_outlined,
+            text: [m.city, m.country]
+                .where((value) => value.trim().isNotEmpty)
+                .join(', '),
+          ),
+        if (m.photoUrls.isNotEmpty || m.videoUrls.isNotEmpty)
+          _PreviewInfoLine(
+            icon: Icons.photo_library_outlined,
+            text: ru
+                ? '${m.photoUrls.length} фото · ${m.videoUrls.length} видео'
+                : '${m.photoUrls.length} photos · ${m.videoUrls.length} videos',
+          ),
+        if (m.resume.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          Text(
+            m.resume,
+            maxLines: 6,
+            overflow: TextOverflow.ellipsis,
+            style: AppText.small.copyWith(color: Tokens.textSecondary),
+          ),
+        ],
+        const SizedBox(height: 24),
+        FilledButton(
+          onPressed: onOpen,
+          style: FilledButton.styleFrom(
+            minimumSize: const Size.fromHeight(Tokens.inputHeight),
+          ),
+          child: Text(ru ? 'Открыть анкету' : 'Open profile'),
+        ),
+        if (canUseAgentTools) ...[
+          const SizedBox(height: 10),
+          OutlinedButton.icon(
+            onPressed: onQuickAdd,
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size.fromHeight(Tokens.inputHeight),
+            ),
+            icon: const Icon(Icons.playlist_add_rounded, size: 18),
+            label: Text(ru ? 'В подборку' : 'Add to selection'),
+          ),
+        ],
+      ],
     );
   }
 }
@@ -1577,77 +1844,20 @@ class _PreviewInfoLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.symmetric(vertical: 5),
       child: Row(
         children: [
-          Icon(icon, size: 18, color: kTextMuted),
-          const SizedBox(width: 8),
+          Icon(icon, size: 18, color: Tokens.textSecondary),
+          const SizedBox(width: 10),
           Expanded(
             child: Text(
               text,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: kTextMid,
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                height: 1.1,
-                letterSpacing: 0,
-              ),
+              style: AppText.small.copyWith(fontSize: 15),
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _PreviewButton extends StatelessWidget {
-  const _PreviewButton({
-    required this.label,
-    required this.isDark,
-    required this.icon,
-    this.onTap,
-  });
-
-  final String label;
-  final bool isDark;
-  final IconData icon;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = isDark ? Colors.white : kTextDark;
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(kPillRadius),
-        onTap: onTap,
-        child: Container(
-          height: 52,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          decoration: pillDecoration(isDark: isDark, radius: kPillRadius),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, color: color, size: 19),
-              const SizedBox(width: 9),
-              Flexible(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: BrandTheme.pillText.copyWith(
-                    color: color,
-                    fontSize: 13,
-                    letterSpacing: 1.0,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -1827,6 +2037,46 @@ class _SearchBarState extends State<_SearchBar> {
   Widget build(BuildContext context) {
     final hasText = widget.controller.text.trim().isNotEmpty;
     final hasFocus = _focusNode.hasFocus;
+
+    if (kIsWeb) {
+      // v2: the theme input (48 px, hairline, no pill), sentence-case hint.
+      return TextField(
+        controller: widget.controller,
+        focusNode: _focusNode,
+        onChanged: widget.onChanged,
+        textInputAction: TextInputAction.search,
+        autocorrect: false,
+        enableSuggestions: false,
+        style: AppText.body,
+        decoration: InputDecoration(
+          hintText: _sentenceCase(widget.hintText),
+          hintStyle: AppText.body.copyWith(color: Tokens.textTertiary),
+          prefixIcon: const Icon(
+            Icons.search_rounded,
+            size: 22,
+            color: Tokens.textSecondary,
+          ),
+          suffixIcon: !hasText
+              ? null
+              : IconButton(
+                  icon: const Icon(
+                    Icons.close_rounded,
+                    size: 20,
+                    color: Tokens.textSecondary,
+                  ),
+                  onPressed: () {
+                    widget.controller.clear();
+                    widget.onChanged('');
+                    FocusManager.instance.primaryFocus?.unfocus();
+                  },
+                ),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 12,
+          ),
+        ),
+      );
+    }
 
     final radius = BorderRadius.circular(BrandTheme.pillRadius);
 
@@ -2366,6 +2616,26 @@ class _SelectAllPill extends StatelessWidget {
               ? Icons.indeterminate_check_box_rounded
               : Icons.check_box_outline_blank_rounded);
 
+    if (kIsWeb) {
+      return Tooltip(
+        message: Localizations.localeOf(context).languageCode == 'ru'
+            ? 'Выбрать все'
+            : 'Select all',
+        child: OutlinedButton(
+          onPressed: onTap,
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size(Tokens.inputHeight, Tokens.inputHeight),
+            padding: EdgeInsets.zero,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+            side: const BorderSide(color: Tokens.border),
+            foregroundColor: value == false ? Tokens.textSecondary : Tokens.text,
+          ),
+          child: Icon(icon, size: 22),
+        ),
+      );
+    }
     return Material(
       color: Colors.transparent,
       child: InkWell(
