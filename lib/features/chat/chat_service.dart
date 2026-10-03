@@ -579,7 +579,139 @@ class ChatService {
     );
   }
 
+  /// Loads the chat list. Prefers the `selection_chat_list` RPC (one request
+  /// for chats, counterparts, last messages, unread counts and content flags)
+  /// and falls back to the legacy per-chat queries when the RPC is not
+  /// installed yet.
   Future<List<ChatListItem>> fetchMyChats({
+    required String userId,
+    required bool archived,
+  }) async {
+    try {
+      final rows = await _sb.rpc(
+        'selection_chat_list',
+        params: {'p_archived': archived},
+      );
+      return _chatListFromRpc(rows as List<dynamic>, userId);
+    } on PostgrestException catch (e) {
+      if (!SupabaseCompat.isMissingRpc(e, 'selection_chat_list')) rethrow;
+    }
+    return _fetchMyChatsLegacy(userId: userId, archived: archived);
+  }
+
+  List<ChatListItem> _chatListFromRpc(List<dynamic> rows, String userId) {
+    final byParticipant = <String, ChatListItem>{};
+    final unreadByParticipant = <String, int>{};
+    for (final raw in rows) {
+      final map = Map<String, dynamic>.from(raw as Map);
+      final chatId = (map['chat_id'] ?? '').toString();
+      if (chatId.isEmpty) continue;
+
+      final otherUserId = (map['other_user_id'] ?? '').toString();
+      final participantKey = otherUserId.isEmpty ? chatId : otherUserId;
+      final isModel = map['is_model'] == true;
+      final modelProfileName = (map['profile_full_name'] ?? '')
+          .toString()
+          .trim();
+      final selectionTitle = (map['selection_title'] ?? '').toString().trim();
+      final hasAccount = map['other_has_account'] == true;
+      final account = hasAccount
+          ? _ChatAccountPreview.fromMap({
+              'full_name': map['other_full_name'],
+              'company_name': map['other_company_name'],
+              'position': map['other_position'],
+              'avatar_url': map['other_avatar_url'],
+              'account_tag': map['other_account_tag'],
+            })
+          : null;
+
+      final lastMessageId = (map['last_message_id'] ?? '').toString();
+      final latest = lastMessageId.isEmpty
+          ? null
+          : ChatMessage.fromMap({
+              'id': lastMessageId,
+              'chat_id': chatId,
+              'sender_id': map['last_message_sender_id'],
+              'body': map['last_message_body'],
+              'media_type': map['last_message_media_type'],
+              'media_url': map['last_message_media_url'],
+              'file_name': map['last_message_file_name'],
+              'file_size': map['last_message_file_size'],
+              'file_mime': map['last_message_file_mime'],
+              'metadata': map['last_message_metadata'],
+              'read_at': map['last_message_read_at'],
+              'listened_at': map['last_message_listened_at'],
+              'pinned_at': map['last_message_pinned_at'],
+              'edited_at': map['last_message_edited_at'],
+              'created_at': map['last_message_created_at'],
+            });
+      final fallbackTime = DateTime.tryParse(
+        (map['updated_at'] ?? map['created_at'] ?? '').toString(),
+      );
+      final unreadCount = (map['unread_count'] as num?)?.toInt() ?? 0;
+      final nextItem = ChatListItem(
+        id: chatId,
+        selectionTitle: account?.displayName ?? modelProfileName,
+        profileName: '',
+        photoUrl:
+            account?.avatarUrl ??
+            (map['profile_photo_url'] ?? '').toString().trim(),
+        accountTag: account?.accountTag ?? '',
+        contextLabel: _chatContextLabel(
+          profileName: modelProfileName,
+          selectionTitle: selectionTitle,
+        ),
+        participantRole: isModel
+            ? ChatParticipantRole.model
+            : ChatParticipantRole.client,
+        lastMessage: latest == null ? '' : _chatPreview(latest),
+        lastMessageMediaType: latest?.mediaType ?? 'text',
+        lastMessageMetadata: latest?.metadata ?? const <String, dynamic>{},
+        lastMessageListenedAt: latest?.listenedAt,
+        lastMessageAt: latest?.createdAt ?? fallbackTime,
+        unreadCount: unreadCount,
+        pinned: map['pinned'] == true,
+        archived: map['archived'] == true,
+        hasMediaMessages: map['has_media'] == true,
+        hasFileMessages: map['has_file'] == true,
+        hasAudioMessages: map['has_audio'] == true,
+        hasPinnedMessages: map['has_pinned'] == true,
+      );
+
+      unreadByParticipant[participantKey] =
+          (unreadByParticipant[participantKey] ?? 0) + unreadCount;
+      final current = byParticipant[participantKey];
+      if (current == null || _chatListItemIsNewer(nextItem, current)) {
+        byParticipant[participantKey] = nextItem;
+      } else if (nextItem.pinned && !current.pinned) {
+        byParticipant[participantKey] = nextItem;
+      }
+    }
+
+    final items = byParticipant.entries
+        .map(
+          (entry) => entry.value.copyWith(
+            unreadCount: unreadByParticipant[entry.key] ?? 0,
+          ),
+        )
+        .toList(growable: false);
+    _sortChatList(items);
+    return items;
+  }
+
+  void _sortChatList(List<ChatListItem> items) {
+    items.sort((a, b) {
+      if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
+      final aTime = a.lastMessageAt;
+      final bTime = b.lastMessageAt;
+      if (aTime == null && bTime == null) return a.title.compareTo(b.title);
+      if (aTime == null) return 1;
+      if (bTime == null) return -1;
+      return bTime.compareTo(aTime);
+    });
+  }
+
+  Future<List<ChatListItem>> _fetchMyChatsLegacy({
     required String userId,
     required bool archived,
   }) async {
@@ -712,16 +844,7 @@ class ChatService {
           );
         })
         .toList(growable: false);
-
-    items.sort((a, b) {
-      if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
-      final aTime = a.lastMessageAt;
-      final bTime = b.lastMessageAt;
-      if (aTime == null && bTime == null) return a.title.compareTo(b.title);
-      if (aTime == null) return 1;
-      if (bTime == null) return -1;
-      return bTime.compareTo(aTime);
-    });
+    _sortChatList(items);
     return items;
   }
 
