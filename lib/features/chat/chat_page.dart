@@ -201,7 +201,12 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     if (!kIsWeb || !mounted) return false;
     if (event is! KeyDownEvent) return false;
     final key = event.logicalKey;
-    if (key != LogicalKeyboardKey.enter && key != LogicalKeyboardKey.numpadEnter) {
+    if (key == LogicalKeyboardKey.escape && _searchOpen && !_inlineVoice) {
+      _toggleSearch();
+      return true;
+    }
+    if (key != LogicalKeyboardKey.enter &&
+        key != LogicalKeyboardKey.numpadEnter) {
       return false;
     }
     if (HardwareKeyboard.instance.isShiftPressed) return false;
