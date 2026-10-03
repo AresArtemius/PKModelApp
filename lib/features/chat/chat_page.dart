@@ -26,7 +26,6 @@ import '../../core/router.dart';
 import '../../core/supabase_provider.dart';
 import '../../gen_l10n/app_localizations.dart';
 import '../../ui/brand/brand_theme.dart';
-import '../../ui/brand/design_tokens.dart';
 import '../../ui/brand/ui_constants.dart';
 import 'chat_models.dart';
 import 'chat_providers.dart';
