@@ -262,6 +262,30 @@
       window.addEventListener('popstate', hit);
     })();
   </script>
+  <!-- Older builds registered flutter_service_worker.js (offline-first);
+       it keeps serving a cached main.dart.js after a deploy, so users see
+       stale builds until the worker updates. The app is built with
+       pwa-strategy=none now: drop any leftover worker and its caches, and
+       reload once if this page was still controlled by one. -->
+  <script>
+    (function () {
+      if (!('serviceWorker' in navigator)) return;
+      var controlled = !!navigator.serviceWorker.controller;
+      navigator.serviceWorker.getRegistrations().then(function (regs) {
+        return Promise.all(regs.map(function (r) { return r.unregister(); }));
+      }).then(function () {
+        if (!self.caches) return;
+        return caches.keys().then(function (keys) {
+          return Promise.all(keys.map(function (k) { return caches.delete(k); }));
+        });
+      }).then(function () {
+        if (controlled && !sessionStorage.getItem('pk-sw-dropped')) {
+          sessionStorage.setItem('pk-sw-dropped', '1');
+          location.reload();
+        }
+      }).catch(function () {});
+    })();
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
