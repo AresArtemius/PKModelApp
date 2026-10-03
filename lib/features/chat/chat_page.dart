@@ -2887,20 +2887,40 @@ class _BubbleV2State extends State<_BubbleV2> {
   }
 }
 
-/// Pictographs plus the pieces that build them: skin tones, regional
-/// indicators (flags), variation selector, zero-width joiner, tag letters.
-final RegExp _emojiOnlyPattern = RegExp(
-  r'^(?:\p{Extended_Pictographic}|[\u{1F3FB}-\u{1F3FF}]|[\u{1F1E6}-\u{1F1FF}]|\u{FE0F}|\u{200D}|[\u{E0020}-\u{E007F}]|\s)+$',
-  unicode: true,
-);
-
 /// True for a message made of one to three emoji (and nothing else).
+/// Checked by code point ranges rather than a regular expression so the
+/// analyzer's regexp lint and older engines are not involved.
 bool _isEmojiOnly(String text) {
   final clean = text.trim();
   if (clean.isEmpty || clean.length > 32) return false;
-  if (!_emojiOnlyPattern.hasMatch(clean)) return false;
+  for (final rune in clean.runes) {
+    if (!_isEmojiRune(rune)) return false;
+  }
   final graphemes = clean.replaceAll(RegExp(r'\s'), '').characters.length;
   return graphemes >= 1 && graphemes <= 3;
+}
+
+bool _isEmojiRune(int c) {
+  // Whitespace between emoji.
+  if (c == 0x20 || c == 0x0A || c == 0x09) return true;
+  // Pieces that build emoji: variation selector, joiner, keycap, skin
+  // tones, regional indicators (flags), tag letters.
+  if (c == 0xFE0F || c == 0x200D || c == 0x20E3) return true;
+  if (c >= 0x1F3FB && c <= 0x1F3FF) return true;
+  if (c >= 0x1F1E6 && c <= 0x1F1FF) return true;
+  if (c >= 0xE0020 && c <= 0xE007F) return true;
+  // Pictographic blocks.
+  if (c >= 0x1F000 && c <= 0x1FAFF) return true;
+  if (c >= 0x2600 && c <= 0x27BF) return true;
+  if (c >= 0x2B00 && c <= 0x2BFF) return true;
+  if (c >= 0x2300 && c <= 0x23FF) return true;
+  if (c >= 0x2190 && c <= 0x21FF) return true;
+  if (c >= 0x25AA && c <= 0x25FE) return true;
+  const singles = {
+    0x00A9, 0x00AE, 0x203C, 0x2049, 0x2122, 0x2139, 0x24C2, 0x2934, 0x2935,
+    0x3030, 0x303D, 0x3297, 0x3299,
+  };
+  return singles.contains(c);
 }
 
 /// Time + edited mark + ✓ / ✓✓ used inside and under bubbles.
