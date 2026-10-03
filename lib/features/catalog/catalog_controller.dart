@@ -374,6 +374,10 @@ class CatalogController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Announces filter fields changed directly (inline sliders) so the URL
+  /// and chips update before the reload finishes.
+  void touch() => notifyListeners();
+
   void setProfileRole(ProfessionalProfileType? value) {
     if (profileRole == value) return;
     profileRole = value;
