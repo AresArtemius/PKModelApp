@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -11,6 +12,7 @@ import '../../core/router.dart';
 import '../../gen_l10n/app_localizations.dart';
 import '../../ui/brand/brand_pill_button.dart';
 import '../../ui/brand/brand_theme.dart';
+import '../../ui/brand/design_tokens.dart';
 import '../../ui/brand/ui_constants.dart';
 import 'chat_models.dart';
 import 'chat_page.dart';
@@ -19,6 +21,12 @@ import 'chat_providers.dart';
 const double _chatsDesktopBreakpoint = 900;
 const double _chatsDesktopMaxWidth = 1480;
 const double _chatsDesktopListWidth = 430;
+
+/// v2 (web): the chats page is a full-width two-column layout — the
+/// conversation list on the left, the open conversation on the right —
+/// with no cards, pills or empty side margins.
+const bool _chatsV2 = kIsWeb;
+const double _chatsV2ListWidth = 400;
 
 enum _ChatRoleFilter {
   all,
@@ -30,6 +38,14 @@ enum _ChatRoleFilter {
       _ChatRoleFilter.all => ru ? 'ВСЕ' : 'ALL',
       _ChatRoleFilter.model => ru ? 'КАК МОДЕЛЬ' : 'AS MODEL',
       _ChatRoleFilter.client => ru ? 'КАК ЗАКАЗЧИК' : 'AS CLIENT',
+    };
+  }
+
+  String labelV2(bool ru) {
+    return switch (this) {
+      _ChatRoleFilter.all => ru ? 'Все' : 'All',
+      _ChatRoleFilter.model => ru ? 'Как модель' : 'As model',
+      _ChatRoleFilter.client => ru ? 'Как заказчик' : 'As client',
     };
   }
 
@@ -87,6 +103,17 @@ enum _ChatContentFilter {
       _ChatContentFilter.media => ru ? 'МЕДИА' : 'MEDIA',
       _ChatContentFilter.files => ru ? 'ФАЙЛЫ' : 'FILES',
       _ChatContentFilter.voice => ru ? 'ГОЛОСОВЫЕ' : 'VOICE',
+    };
+  }
+
+  String labelV2(bool ru) {
+    return switch (this) {
+      _ChatContentFilter.all => ru ? 'Все сообщения' : 'All messages',
+      _ChatContentFilter.unread => ru ? 'Непрочитанные' : 'Unread',
+      _ChatContentFilter.pinned => ru ? 'Закреплённые' : 'Pinned',
+      _ChatContentFilter.media => ru ? 'Медиа' : 'Media',
+      _ChatContentFilter.files => ru ? 'Файлы' : 'Files',
+      _ChatContentFilter.voice => ru ? 'Голосовые' : 'Voice',
     };
   }
 
@@ -150,6 +177,7 @@ class _ChatsPageState extends ConsumerState<ChatsPage> {
   Set<String> _serverSearchChatIds = const <String>{};
   bool _serverSearchLoading = false;
   String? _selectedChatId;
+  String? _lastQueryChatId;
   bool _archived = false;
   _ChatRoleFilter _roleFilter = _ChatRoleFilter.all;
   _ChatContentFilter _contentFilter = _ChatContentFilter.all;
@@ -227,6 +255,225 @@ class _ChatsPageState extends ConsumerState<ChatsPage> {
     ref.invalidate(myChatsProvider(!_archived));
   }
 
+  List<ChatListItem> _visibleItems(List<ChatListItem> items) {
+    final query = _query.trim();
+    return items
+        .where((item) {
+          final localMatch = item.matches(query);
+          final serverMatch =
+              _serverSearchQuery == query &&
+              _serverSearchChatIds.contains(item.id);
+          return (localMatch || serverMatch) &&
+              _roleFilter.matches(item) &&
+              _contentFilter.matches(item);
+        })
+        .toList(growable: false);
+  }
+
+  /// `/chats?chat=<id>` opens that conversation: inside the two-column
+  /// layout on wide screens, as its own page on narrow ones.
+  void _syncQueryChat(BuildContext context, bool isDesktop) {
+    final queryChat = GoRouterState.of(
+      context,
+    ).uri.queryParameters[Routes.chatsChatParam]?.trim();
+    if (queryChat == null || queryChat.isEmpty) return;
+    if (queryChat == _lastQueryChatId) return;
+    _lastQueryChatId = queryChat;
+    if (isDesktop) {
+      _selectedChatId = queryChat;
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.push('${Routes.chatPrefix}$queryChat');
+    });
+  }
+
+  Widget _buildV2(
+    BuildContext context, {
+    required AppLocalizations t,
+    required bool ru,
+    required AsyncValue<List<ChatListItem>> chats,
+  }) {
+    final selectedId = _selectedChatId;
+    return Scaffold(
+      backgroundColor: Tokens.bg,
+      body: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            width: _chatsV2ListWidth,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 20, 12, 0),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          ru
+                              ? (_archived ? 'Архив' : 'Чаты')
+                              : (_archived ? 'Archive' : 'Chats'),
+                          style: AppText.h1.copyWith(fontSize: 32),
+                        ),
+                      ),
+                      _V2IconButton(
+                        icon: _archived
+                            ? Icons.inbox_outlined
+                            : Icons.archive_outlined,
+                        tooltip: _archived
+                            ? (ru ? 'К диалогам' : 'Back to chats')
+                            : (ru ? 'Архив' : 'Archive'),
+                        active: _archived,
+                        onTap: () => setState(() {
+                          _archived = !_archived;
+                          _selectedChatId = null;
+                        }),
+                      ),
+                      _V2IconButton(
+                        icon: Icons.mail_outline_rounded,
+                        tooltip: ru ? 'Приглашения' : 'Invitations',
+                        onTap: () => context.go(Routes.invitations),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: _V2SearchField(
+                    controller: _searchController,
+                    loading: _serverSearchLoading,
+                    hint: ru ? 'Поиск по чатам' : 'Search chats',
+                    trailing: _V2ContentFilterMenu(
+                      value: _contentFilter,
+                      onChanged: (value) => setState(() {
+                        _contentFilter = value;
+                        _selectedChatId = null;
+                      }),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: _V2RoleTabs(
+                    value: _roleFilter,
+                    onChanged: (value) => setState(() {
+                      _roleFilter = value;
+                      _selectedChatId = null;
+                    }),
+                  ),
+                ),
+                if (_contentFilter != _ChatContentFilter.all)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 8, 24, 10),
+                    child: Row(
+                      children: [
+                        Icon(
+                          _contentFilter.icon,
+                          size: 14,
+                          color: Tokens.textSecondary,
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            _contentFilter.labelV2(ru),
+                            style: AppText.caption.copyWith(fontSize: 13),
+                          ),
+                        ),
+                        InkWell(
+                          borderRadius: BorderRadius.circular(999),
+                          onTap: () => setState(() {
+                            _contentFilter = _ChatContentFilter.all;
+                          }),
+                          child: const Padding(
+                            padding: EdgeInsets.all(4),
+                            child: Icon(
+                              Icons.close_rounded,
+                              size: 16,
+                              color: Tokens.textSecondary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                const Divider(height: 1, thickness: 1, color: Tokens.border),
+                Expanded(
+                  child: chats.when(
+                    loading: () => const Padding(
+                      padding: EdgeInsets.all(24),
+                      child: SkeletonList(rows: 7),
+                    ),
+                    error: (e, _) => _V2EmptyState(
+                      title: t.errorUpper,
+                      message: AppErrorMapper.message(e, t),
+                    ),
+                    data: (items) {
+                      final visible = _visibleItems(items);
+                      if (visible.isEmpty) {
+                        return _V2EmptyState(
+                          title: _archived
+                              ? (ru ? 'Архив пуст' : 'Archive is empty')
+                              : _contentFilter == _ChatContentFilter.all
+                              ? _sentenceCaseChats(_roleFilter.emptyTitle(ru))
+                              : (ru ? 'Ничего не найдено' : 'Nothing found'),
+                          message: _archived
+                              ? (ru
+                                    ? 'Архивированные диалоги появятся здесь.'
+                                    : 'Archived conversations will appear here.')
+                              : _contentFilter != _ChatContentFilter.all
+                              ? (ru
+                                    ? 'Попробуйте другой фильтр или очистите поиск.'
+                                    : 'Try another filter or clear the search.')
+                              : _roleFilter.emptyMessage(ru),
+                        );
+                      }
+                      return ListView.separated(
+                        padding: const EdgeInsets.only(bottom: 24),
+                        itemCount: visible.length,
+                        separatorBuilder: (_, _) => const Divider(
+                          height: 1,
+                          thickness: 1,
+                          indent: 90,
+                          color: Tokens.border,
+                        ),
+                        itemBuilder: (context, index) {
+                          final item = visible[index];
+                          return _ChatRowV2(
+                            item: item,
+                            selected: item.id == selectedId,
+                            archived: _archived,
+                            onTap: () =>
+                                setState(() => _selectedChatId = item.id),
+                            onPin: () => _setPinned(item, !item.pinned),
+                            onArchive: () => _setArchived(item, !_archived),
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const VerticalDivider(width: 1, thickness: 1, color: Tokens.border),
+          Expanded(
+            child: selectedId == null || selectedId.isEmpty
+                ? _V2NoChatSelected(ru: ru)
+                : ChatPage(
+                    key: ValueKey(selectedId),
+                    chatId: selectedId,
+                    embedded: true,
+                    onClose: () => setState(() => _selectedChatId = null),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
@@ -234,6 +481,10 @@ class _ChatsPageState extends ConsumerState<ChatsPage> {
     final chats = ref.watch(myChatsProvider(_archived));
     final isDesktop =
         MediaQuery.sizeOf(context).width >= _chatsDesktopBreakpoint;
+    _syncQueryChat(context, isDesktop);
+    if (_chatsV2 && isDesktop) {
+      return _buildV2(context, t: t, ru: ru, chats: chats);
+    }
     final pagePadding = isDesktop
         ? const EdgeInsets.fromLTRB(32, 24, 32, 28)
         : const EdgeInsets.fromLTRB(16, 18, 16, 24);
@@ -291,18 +542,7 @@ class _ChatsPageState extends ConsumerState<ChatsPage> {
                         message: AppErrorMapper.message(e, t),
                       ),
                       data: (items) {
-                        final visible = items
-                            .where((item) {
-                              final query = _query.trim();
-                              final localMatch = item.matches(query);
-                              final serverMatch =
-                                  _serverSearchQuery == query &&
-                                  _serverSearchChatIds.contains(item.id);
-                              return (localMatch || serverMatch) &&
-                                  _roleFilter.matches(item) &&
-                                  _contentFilter.matches(item);
-                            })
-                            .toList(growable: false);
+                        final visible = _visibleItems(items);
                         if (visible.isEmpty) {
                           return _ChatsEmptyState(
                             title: _archived
@@ -367,6 +607,583 @@ class _ChatsPageState extends ConsumerState<ChatsPage> {
                 ],
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _sentenceCaseChats(String value) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) return trimmed;
+  final lower = trimmed.toLowerCase();
+  return lower[0].toUpperCase() + lower.substring(1);
+}
+
+class _V2IconButton extends StatelessWidget {
+  const _V2IconButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+    this.active = false,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+  final bool active;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: tooltip,
+      onPressed: onTap,
+      iconSize: 22,
+      style: IconButton.styleFrom(
+        foregroundColor: active ? Tokens.accent : Tokens.ink,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(Tokens.radiusMd),
+        ),
+      ),
+      icon: Icon(icon),
+    );
+  }
+}
+
+class _V2SearchField extends StatelessWidget {
+  const _V2SearchField({
+    required this.controller,
+    required this.loading,
+    required this.hint,
+    required this.trailing,
+  });
+
+  final TextEditingController controller;
+  final bool loading;
+  final String hint;
+  final Widget trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 44,
+      padding: const EdgeInsets.only(left: 12, right: 4),
+      decoration: BoxDecoration(
+        color: Tokens.surface,
+        borderRadius: BorderRadius.circular(Tokens.radiusMd),
+        border: Border.all(color: Tokens.border),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.search_rounded, size: 20, color: Tokens.textSecondary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              style: AppText.small,
+              decoration: InputDecoration(
+                isDense: true,
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                filled: false,
+                contentPadding: EdgeInsets.zero,
+                hintText: hint,
+                hintStyle: AppText.small.copyWith(color: Tokens.textTertiary),
+              ),
+            ),
+          ),
+          if (loading)
+            const Padding(
+              padding: EdgeInsets.only(right: 8),
+              child: SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Tokens.textSecondary,
+                ),
+              ),
+            ),
+          trailing,
+        ],
+      ),
+    );
+  }
+}
+
+class _V2ContentFilterMenu extends StatelessWidget {
+  const _V2ContentFilterMenu({required this.value, required this.onChanged});
+
+  final _ChatContentFilter value;
+  final ValueChanged<_ChatContentFilter> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final active = value != _ChatContentFilter.all;
+    return PopupMenuButton<_ChatContentFilter>(
+      tooltip: ru ? 'Фильтр' : 'Filter',
+      onSelected: onChanged,
+      color: Tokens.bg,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(Tokens.radiusMd),
+        side: const BorderSide(color: Tokens.border),
+      ),
+      itemBuilder: (context) => [
+        for (final filter in _ChatContentFilter.values)
+          PopupMenuItem<_ChatContentFilter>(
+            value: filter,
+            height: 40,
+            child: Row(
+              children: [
+                Icon(
+                  filter.icon,
+                  size: 18,
+                  color: filter == value ? Tokens.ink : Tokens.textSecondary,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    filter.labelV2(ru),
+                    style: filter == value
+                        ? AppText.smallStrong
+                        : AppText.small,
+                  ),
+                ),
+                if (filter == value)
+                  const Icon(Icons.check_rounded, size: 18, color: Tokens.ink),
+              ],
+            ),
+          ),
+      ],
+      child: Container(
+        width: 36,
+        height: 36,
+        alignment: Alignment.center,
+        child: Icon(
+          Icons.tune_rounded,
+          size: 20,
+          color: active ? Tokens.accent : Tokens.textSecondary,
+        ),
+      ),
+    );
+  }
+}
+
+class _V2RoleTabs extends StatelessWidget {
+  const _V2RoleTabs({required this.value, required this.onChanged});
+
+  final _ChatRoleFilter value;
+  final ValueChanged<_ChatRoleFilter> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    return Row(
+      children: [
+        for (final filter in _ChatRoleFilter.values) ...[
+          InkWell(
+            borderRadius: BorderRadius.circular(Tokens.radiusSm),
+            onTap: () => onChanged(filter),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(2, 10, 2, 0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    filter.labelV2(ru),
+                    style: AppText.small.copyWith(
+                      fontSize: 15,
+                      fontWeight: filter == value
+                          ? FontWeight.w600
+                          : FontWeight.w500,
+                      color: filter == value
+                          ? Tokens.ink
+                          : Tokens.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  AnimatedContainer(
+                    duration: Tokens.fast,
+                    height: 2,
+                    width: 28,
+                    color: filter == value
+                        ? Tokens.accent
+                        : Colors.transparent,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 18),
+        ],
+      ],
+    );
+  }
+}
+
+class _ChatRowV2 extends StatefulWidget {
+  const _ChatRowV2({
+    required this.item,
+    required this.selected,
+    required this.archived,
+    required this.onTap,
+    required this.onPin,
+    required this.onArchive,
+  });
+
+  final ChatListItem item;
+  final bool selected;
+  final bool archived;
+  final VoidCallback onTap;
+  final VoidCallback onPin;
+  final VoidCallback onArchive;
+
+  @override
+  State<_ChatRowV2> createState() => _ChatRowV2State();
+}
+
+class _ChatRowV2State extends State<_ChatRowV2> {
+  bool _hovered = false;
+
+  String _contextLine() {
+    return widget.item.contextLabel
+        .split('•')
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .map(
+          (chunk) => chunk
+              .replaceFirst(RegExp(r'^Анкета:\s*'), '')
+              .replaceFirst(RegExp(r'^Кастинг:\s*'), ''),
+        )
+        .join(' · ');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final item = widget.item;
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final unread = item.unreadCount > 0;
+    final contextLine = _contextLine();
+    final preview = item.lastMessage.trim().isEmpty
+        ? (ru ? 'Диалог создан' : 'Chat created')
+        : item.lastMessage.trim();
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: Material(
+        color: widget.selected
+            ? Tokens.surfaceAlt
+            : _hovered
+            ? Tokens.surface
+            : Colors.transparent,
+        child: InkWell(
+          onTap: widget.onTap,
+          child: Stack(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 14, 20, 14),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _V2Avatar(url: item.photoUrl, size: 52),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              if (item.pinned) ...[
+                                const Icon(
+                                  Icons.push_pin_rounded,
+                                  size: 14,
+                                  color: Tokens.textTertiary,
+                                ),
+                                const SizedBox(width: 4),
+                              ],
+                              Expanded(
+                                child: Text(
+                                  item.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppText.smallStrong.copyWith(
+                                    fontSize: 15,
+                                    height: 1.3,
+                                    color: Tokens.ink,
+                                  ),
+                                ),
+                              ),
+                              if (item.lastMessageAt != null) ...[
+                                const SizedBox(width: 8),
+                                Text(
+                                  _formatChatTime(item.lastMessageAt!),
+                                  style: AppText.caption.copyWith(
+                                    color: unread
+                                        ? Tokens.ink
+                                        : Tokens.textTertiary,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                          if (contextLine.isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              contextLine,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppText.caption.copyWith(
+                                fontSize: 13,
+                                color: Tokens.textSecondary,
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: item.lastMessageIsAudio
+                                    ? _ChatVoicePreview(item: item)
+                                    : Text(
+                                        preview,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: AppText.small.copyWith(
+                                          color: unread
+                                              ? Tokens.ink
+                                              : Tokens.textSecondary,
+                                          fontWeight: unread
+                                              ? FontWeight.w500
+                                              : FontWeight.w400,
+                                        ),
+                                      ),
+                              ),
+                              if (unread) ...[
+                                const SizedBox(width: 10),
+                                Container(
+                                  constraints: const BoxConstraints(
+                                    minWidth: 22,
+                                  ),
+                                  height: 22,
+                                  alignment: Alignment.center,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 7,
+                                  ),
+                                  decoration: const BoxDecoration(
+                                    color: Tokens.ink,
+                                    borderRadius: BorderRadius.all(
+                                      Radius.circular(999),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    item.unreadCount > 99
+                                        ? '99+'
+                                        : '${item.unreadCount}',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      height: 1,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (widget.selected)
+                const Positioned(
+                  left: 0,
+                  top: 0,
+                  bottom: 0,
+                  child: SizedBox(
+                    width: 3,
+                    child: ColoredBox(color: Tokens.accent),
+                  ),
+                ),
+              if (_hovered)
+                Positioned(
+                  right: 10,
+                  bottom: 8,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _V2RowAction(
+                        icon: item.pinned
+                            ? Icons.push_pin_rounded
+                            : Icons.push_pin_outlined,
+                        tooltip: item.pinned
+                            ? (ru ? 'Открепить' : 'Unpin')
+                            : (ru ? 'Закрепить' : 'Pin'),
+                        onTap: widget.onPin,
+                      ),
+                      const SizedBox(width: 4),
+                      _V2RowAction(
+                        icon: widget.archived
+                            ? Icons.unarchive_outlined
+                            : Icons.archive_outlined,
+                        tooltip: widget.archived
+                            ? (ru ? 'Вернуть из архива' : 'Unarchive')
+                            : (ru ? 'В архив' : 'Archive'),
+                        onTap: widget.onArchive,
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _V2RowAction extends StatelessWidget {
+  const _V2RowAction({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Tokens.bg,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(Tokens.radiusSm),
+          side: const BorderSide(color: Tokens.border),
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(Tokens.radiusSm),
+          onTap: onTap,
+          child: SizedBox(
+            width: 30,
+            height: 30,
+            child: Icon(icon, size: 16, color: Tokens.ink),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _V2Avatar extends StatelessWidget {
+  const _V2Avatar({required this.url, required this.size});
+
+  final String url;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final clean = url.trim();
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(Tokens.radiusMd),
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: clean.isEmpty
+            ? const ColoredBox(
+                color: Tokens.surfaceAlt,
+                child: Icon(
+                  Icons.person_outline_rounded,
+                  color: Tokens.textTertiary,
+                ),
+              )
+            : CachedNetworkImage(
+                imageUrl: clean,
+                fit: BoxFit.cover,
+                alignment: const Alignment(0, -0.6),
+                memCacheWidth: 200,
+                maxWidthDiskCache: 400,
+                placeholder: (_, _) =>
+                    const ColoredBox(color: Tokens.surfaceAlt),
+                errorWidget: (_, _, _) => const ColoredBox(
+                  color: Tokens.surfaceAlt,
+                  child: Icon(
+                    Icons.person_outline_rounded,
+                    color: Tokens.textTertiary,
+                  ),
+                ),
+              ),
+      ),
+    );
+  }
+}
+
+class _V2EmptyState extends StatelessWidget {
+  const _V2EmptyState({required this.title, required this.message});
+
+  final String title;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(32, 0, 32, 48),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              _sentenceCaseChats(title),
+              textAlign: TextAlign.center,
+              style: AppText.h2,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: AppText.small.copyWith(color: Tokens.textSecondary),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _V2NoChatSelected extends StatelessWidget {
+  const _V2NoChatSelected({required this.ru});
+
+  final bool ru;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.chat_bubble_outline_rounded,
+            size: 40,
+            color: Tokens.textTertiary,
+          ),
+          const SizedBox(height: 14),
+          Text(
+            ru ? 'Выберите диалог' : 'Select a conversation',
+            style: AppText.h2,
+          ),
+          const SizedBox(height: 6),
+          Text(
+            ru
+                ? 'Переписка откроется здесь.'
+                : 'The conversation will open here.',
+            style: AppText.small.copyWith(color: Tokens.textSecondary),
           ),
         ],
       ),

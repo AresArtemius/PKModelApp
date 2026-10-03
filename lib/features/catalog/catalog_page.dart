@@ -704,7 +704,7 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
           );
       if (!mounted || chatId.isEmpty) return;
       ref.invalidate(myChatsProvider(false));
-      context.push('${Routes.chatPrefix}$chatId');
+      context.push(Routes.chatLocation(chatId));
     } catch (e) {
       assert(() {
         AppLogger.error('Catalog quick message failed', error: e);
