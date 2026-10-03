@@ -1836,7 +1836,11 @@ class _DetailsTable extends StatelessWidget {
 }
 
 class ModelPhotoGalleryPage extends StatefulWidget {
-  const ModelPhotoGalleryPage({required this.urls, required this.initialIndex});
+  const ModelPhotoGalleryPage({
+    super.key,
+    required this.urls,
+    required this.initialIndex,
+  });
   final List<String> urls;
   final int initialIndex;
 
@@ -2023,7 +2027,7 @@ class _PhotoGalleryArrow extends StatelessWidget {
 }
 
 class ModelVideoPage extends StatefulWidget {
-  const ModelVideoPage({required this.url});
+  const ModelVideoPage({super.key, required this.url});
   final String url;
 
   @override
