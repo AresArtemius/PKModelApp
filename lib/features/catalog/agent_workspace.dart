@@ -198,6 +198,33 @@ class AgentWorkspaceService {
     });
   }
 
+  Future<void> renameFolder(String folderId, String title) async {
+    final userId = _userId;
+    final cleanTitle = title.trim();
+    if (userId == null || folderId.isEmpty || cleanTitle.isEmpty) return;
+    await _sb
+        .from('casting_agent_folders')
+        .update({'title': cleanTitle})
+        .eq('user_id', userId)
+        .eq('id', folderId);
+  }
+
+  /// Removes the folder and its items (profiles themselves are untouched).
+  Future<void> deleteFolder(String folderId) async {
+    final userId = _userId;
+    if (userId == null || folderId.isEmpty) return;
+    await _sb
+        .from('casting_agent_folder_items')
+        .delete()
+        .eq('user_id', userId)
+        .eq('folder_id', folderId);
+    await _sb
+        .from('casting_agent_folders')
+        .delete()
+        .eq('user_id', userId)
+        .eq('id', folderId);
+  }
+
   Future<AgentFolder?> findOrCreateFolder(String title) async {
     final userId = _userId;
     final cleanTitle = title.trim();
