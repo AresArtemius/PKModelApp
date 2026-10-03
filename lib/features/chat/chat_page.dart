@@ -1493,6 +1493,13 @@ class _ChatPageState extends ConsumerState<ChatPage> {
               children: [
                 header,
                 const SizedBox(height: 12),
+                // Lays out the quick reactions once so the emoji fallback
+                // font is fetched before the picker opens (otherwise its
+                // first paint shows boxes).
+                if (v2)
+                  Offstage(
+                    child: Text(_quickReactionsV2.join(), maxLines: 1),
+                  ),
                 if (_searchOpen) ...[
                   _V2Pad(
                     enabled: v2,
