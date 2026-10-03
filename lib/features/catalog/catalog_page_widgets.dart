@@ -1031,6 +1031,40 @@ class _CatalogDesktopFilterPanel extends StatelessWidget {
   }
 }
 
+/// Full-width outlined action (mobile «reset filters»).
+class _DesktopFilterAction extends StatelessWidget {
+  const _DesktopFilterAction({
+    required this.icon,
+    required this.label,
+    this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton.icon(
+      onPressed: onTap,
+      icon: Icon(icon, size: 18),
+      label: Align(
+        alignment: Alignment.centerLeft,
+        child: Text(
+          _sentenceCase(label),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size.fromHeight(44),
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        alignment: Alignment.centerLeft,
+      ),
+    );
+  }
+}
+
 /// Uppercase group label in the rail.
 class _CatalogRailLabel extends StatelessWidget {
   const _CatalogRailLabel(this.text);
