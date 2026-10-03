@@ -29,6 +29,8 @@ import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
 import 'chat_models.dart';
 import 'chat_providers.dart';
+import 'chat_web_input_stub.dart'
+    if (dart.library.html) 'chat_web_input_web.dart';
 
 const _chatMediaBucket = 'chat-media';
 const _legacyChatMediaBucket = 'profile-media';
@@ -84,6 +86,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   final _messageController = TextEditingController();
   final _composerFocus = FocusNode(debugLabel: 'chat-composer');
   bool _inlineVoice = false;
+  bool _dragging = false;
+  void Function()? _disposeWebInput;
   final _searchController = TextEditingController();
   final _messageListController = ScrollController();
   bool _sending = false;
@@ -147,10 +151,20 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   void initState() {
     super.initState();
     _messageController.addListener(_handleMessageInputChanged);
+    if (kIsWeb) {
+      _disposeWebInput = ChatWebInput.install(
+        onFile: _attachWebFile,
+        onDragState: (dragging) {
+          if (!mounted || _dragging == dragging) return;
+          setState(() => _dragging = dragging);
+        },
+      );
+    }
   }
 
   @override
   void dispose() {
+    _disposeWebInput?.call();
     _composerFocus.dispose();
     _typingStopTimer?.cancel();
     _searchDebounceTimer?.cancel();
@@ -991,6 +1005,57 @@ class _ChatPageState extends ConsumerState<ChatPage> {
         previewBytes: null,
       );
     });
+  }
+
+  /// A file pasted from the clipboard or dropped onto the page.
+  void _attachWebFile(WebInputFile file) {
+    if (!mounted || _sending || _uploadingMedia || _editingMessage != null) {
+      return;
+    }
+    final mime = file.mimeType.toLowerCase();
+    final isImage = mime.startsWith('image/');
+    final isVideo = mime.startsWith('video/');
+    final stamp = DateTime.now().millisecondsSinceEpoch;
+    final hasName = file.name.trim().isNotEmpty && file.name.contains('.');
+    final name = hasName
+        ? file.name.trim()
+        : isImage
+        ? 'image_$stamp.${mime.split('/').last == 'jpeg' ? 'jpg' : mime.split('/').last}'
+        : isVideo
+        ? 'video_$stamp.${mime.split('/').last}'
+        : 'file_$stamp.bin';
+    setState(() {
+      _pendingAttachment = _PendingChatAttachment(
+        kind: isImage
+            ? _PendingAttachmentKind.image
+            : isVideo
+            ? _PendingAttachmentKind.video
+            : _PendingAttachmentKind.file,
+        fileName: name,
+        fileSize: file.bytes.length,
+        mimeType: file.mimeType,
+        bytes: file.bytes,
+        previewBytes: isImage ? file.bytes : null,
+      );
+    });
+    _composerFocus.requestFocus();
+  }
+
+  void _insertAtCursor(String text) {
+    final value = _messageController.value;
+    final selection = value.selection;
+    final start = selection.isValid
+        ? selection.start.clamp(0, value.text.length)
+        : value.text.length;
+    final end = selection.isValid
+        ? selection.end.clamp(0, value.text.length)
+        : value.text.length;
+    final next = value.text.replaceRange(start, end, text);
+    _messageController.value = TextEditingValue(
+      text: next,
+      selection: TextSelection.collapsed(offset: start + text.length),
+    );
+    _composerFocus.requestFocus();
   }
 
   Future<void> _recordVoiceMessage() async {
@@ -1914,6 +1979,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                         ? null
                         : _ParsedMessageBody.from(_editingMessage!.body).body,
                     onCancelEdit: _cancelEdit,
+                    onInsertEmoji: v2 ? _insertAtCursor : null,
                     attachment: _pendingAttachment,
                     onCancelReply: () => setState(() => _replyingTo = null),
                     onRemoveAttachment: () =>
@@ -1931,9 +1997,50 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       ],
     );
 
-    if (widget.embedded) return content;
+    final withDropOverlay = Stack(
+      children: [
+        content,
+        if (_dragging)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: Container(
+                color: Colors.white.withValues(alpha: 0.82),
+                padding: const EdgeInsets.all(24),
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(Tokens.radiusLg),
+                    border: Border.all(color: Tokens.accent, width: 2),
+                    color: Tokens.accentSoft,
+                  ),
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.file_download_outlined,
+                          size: 40,
+                          color: Tokens.accent,
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          _isRussian
+                              ? 'Отпустите, чтобы прикрепить файл'
+                              : 'Drop to attach the file',
+                          style: AppText.h2,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
 
-    return Scaffold(resizeToAvoidBottomInset: true, body: content);
+    if (widget.embedded) return withDropOverlay;
+
+    return Scaffold(resizeToAvoidBottomInset: true, body: withDropOverlay);
   }
 
   bool _deliveredMarkPending = false;
@@ -5632,28 +5739,44 @@ class _InlineVoiceRecorder extends StatefulWidget {
 
 class _InlineVoiceRecorderState extends State<_InlineVoiceRecorder> {
   final _recorder = AudioRecorder();
+  final _keyFocus = FocusNode(debugLabel: 'voice-recorder');
   Timer? _timer;
   StreamSubscription<Amplitude>? _amplitudeSub;
+  void Function()? _stopWebLevels;
   bool _recording = false;
   bool _finishing = false;
   Duration _duration = Duration.zero;
   DateTime? _startedAt;
   String _error = '';
-  final List<double> _levels = List<double>.filled(48, 0.12);
+  final List<double> _levels = List<double>.filled(56, 0.08);
 
   @override
   void initState() {
     super.initState();
     unawaited(_start());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _keyFocus.requestFocus();
+    });
   }
 
   @override
   void dispose() {
     _timer?.cancel();
+    _stopWebLevels?.call();
+    _keyFocus.dispose();
     unawaited(_amplitudeSub?.cancel());
     unawaited(_recorder.cancel());
     unawaited(_recorder.dispose());
     super.dispose();
+  }
+
+  void _pushLevel(double level) {
+    if (!mounted || !_recording) return;
+    setState(() {
+      _levels
+        ..removeAt(0)
+        ..add(level.clamp(0.08, 1.0));
+    });
   }
 
   Future<String> _recordingPath() async {
@@ -5691,20 +5814,22 @@ class _InlineVoiceRecorderState extends State<_InlineVoiceRecorder> {
         ),
         path: path,
       );
-      _amplitudeSub = _recorder
-          .onAmplitudeChanged(const Duration(milliseconds: 80))
-          .listen((amplitude) {
-            if (!mounted || !_recording) return;
-            final current = amplitude.current.isFinite
-                ? amplitude.current
-                : -60.0;
-            final normalized = ((current + 55) / 55).clamp(0.08, 1.0);
-            setState(() {
-              _levels
-                ..removeAt(0)
-                ..add(normalized.toDouble());
+      if (kIsWeb) {
+        try {
+          _stopWebLevels = await WebMicLevels.start(_pushLevel);
+        } catch (_) {
+          // No level meter: the timer still shows that recording is on.
+        }
+      } else {
+        _amplitudeSub = _recorder
+            .onAmplitudeChanged(const Duration(milliseconds: 80))
+            .listen((amplitude) {
+              final current = amplitude.current.isFinite
+                  ? amplitude.current
+                  : -60.0;
+              _pushLevel(((current + 55) / 55).clamp(0.08, 1.0).toDouble());
             });
-          });
+      }
       _startedAt = DateTime.now();
       _timer = Timer.periodic(const Duration(milliseconds: 200), (_) {
         if (!mounted) return;
@@ -5730,6 +5855,8 @@ class _InlineVoiceRecorderState extends State<_InlineVoiceRecorder> {
     setState(() => _finishing = true);
     try {
       _timer?.cancel();
+      _stopWebLevels?.call();
+      _stopWebLevels = null;
       await _amplitudeSub?.cancel();
       _amplitudeSub = null;
       final path = await _recorder.stop();
@@ -5800,12 +5927,28 @@ class _InlineVoiceRecorderState extends State<_InlineVoiceRecorder> {
         ),
       );
     }
-    return SizedBox(
+    return Focus(
+      focusNode: _keyFocus,
+      onKeyEvent: (node, event) {
+        if (event is! KeyDownEvent) return KeyEventResult.ignored;
+        final key = event.logicalKey;
+        if (key == LogicalKeyboardKey.enter ||
+            key == LogicalKeyboardKey.numpadEnter) {
+          unawaited(_finishAndSend());
+          return KeyEventResult.handled;
+        }
+        if (key == LogicalKeyboardKey.escape) {
+          widget.onCancel();
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
+      child: SizedBox(
       height: 48,
       child: Row(
         children: [
           IconButton(
-            tooltip: ru ? 'Отменить запись' : 'Discard recording',
+            tooltip: ru ? 'Отменить запись (Esc)' : 'Discard recording (Esc)',
             onPressed: _finishing ? null : widget.onCancel,
             icon: const Icon(Icons.delete_outline_rounded, color: Tokens.ink),
           ),
@@ -5832,7 +5975,9 @@ class _InlineVoiceRecorderState extends State<_InlineVoiceRecorder> {
           ),
           const SizedBox(width: 8),
           IconButton(
-            tooltip: ru ? 'Отправить голосовое' : 'Send voice message',
+            tooltip: ru
+                ? 'Отправить голосовое (Enter)'
+                : 'Send voice message (Enter)',
             onPressed: _finishing || !_recording ? null : _finishAndSend,
             icon: _finishing
                 ? const SizedBox(
@@ -5843,6 +5988,7 @@ class _InlineVoiceRecorderState extends State<_InlineVoiceRecorder> {
                 : const Icon(Icons.send_rounded, color: BrandTheme.redTop),
           ),
         ],
+      ),
       ),
     );
   }
@@ -6462,7 +6608,7 @@ class _LiveVoiceWaveformPainter extends CustomPainter {
       ..style = PaintingStyle.fill;
     for (var i = 0; i < bars; i++) {
       final level = levels[i].clamp(0.08, 1.0);
-      final height = math.max(4.0, size.height * level);
+      final height = math.max(3.0, size.height * level);
       final x = i * step + (step - barWidth) / 2;
       final y = (size.height - height) / 2;
       canvas.drawRRect(
@@ -6549,11 +6695,15 @@ class _Composer extends StatelessWidget {
     this.onCancelEdit,
     this.focusNode,
     this.recorder,
+    this.onInsertEmoji,
     this.flat = false,
   });
 
   final TextEditingController controller;
   final FocusNode? focusNode;
+
+  /// Shows the emoji button when set (web).
+  final ValueChanged<String>? onInsertEmoji;
 
   /// When set, replaces the text row with an inline voice recorder.
   final Widget? recorder;
@@ -6775,6 +6925,8 @@ class _Composer extends StatelessWidget {
                   ),
                 ),
               ),
+              if (onInsertEmoji != null)
+                _EmojiPickerButton(onPick: onInsertEmoji!),
               if (editingText == null)
                 IconButton(
                   tooltip: 'Голосовое сообщение',
@@ -6805,6 +6957,62 @@ class _Composer extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+const List<String> _emojiPalette = [
+  '😀', '😁', '😂', '🤣', '😊', '😍', '🥰', '😘', '😎', '🤩', '🥳', '😏',
+  '😉', '🙂', '🤔', '🤗', '😅', '😬', '🙄', '😴', '😢', '😭', '😡', '🤯',
+  '👍', '👎', '👏', '🙏', '🤝', '👋', '✌️', '🤞', '💪', '👀', '🫶', '🙌',
+  '❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '💔', '💯', '🔥', '✨',
+  '⭐', '🎉', '🎬', '📸', '🎥', '👗', '👠', '💄', '🕶️', '🧢', '👜', '💍',
+  '✅', '❌', '❗', '❓', '⏰', '📅', '📍', '💬', '📎', '💡', '🚀', '🏆',
+];
+
+class _EmojiPickerButton extends StatelessWidget {
+  const _EmojiPickerButton({required this.onPick});
+
+  final ValueChanged<String> onPick;
+
+  @override
+  Widget build(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    return PopupMenuButton<String>(
+      tooltip: ru ? 'Эмодзи' : 'Emoji',
+      onSelected: onPick,
+      color: Tokens.bg,
+      elevation: 6,
+      padding: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(Tokens.radiusMd),
+        side: const BorderSide(color: Tokens.border),
+      ),
+      itemBuilder: (context) => [
+        PopupMenuItem<String>(
+          enabled: false,
+          padding: const EdgeInsets.all(8),
+          child: SizedBox(
+            width: 12 * 34,
+            height: 6 * 34,
+            child: GridView.count(
+              crossAxisCount: 12,
+              physics: const NeverScrollableScrollPhysics(),
+              children: [
+                for (final emoji in _emojiPalette)
+                  InkWell(
+                    borderRadius: BorderRadius.circular(8),
+                    onTap: () => Navigator.of(context).pop(emoji),
+                    child: Center(
+                      child: Text(emoji, style: const TextStyle(fontSize: 20)),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ],
+      icon: const Icon(Icons.sentiment_satisfied_alt_rounded, color: kTextDark),
     );
   }
 }
