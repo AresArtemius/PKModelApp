@@ -6225,13 +6225,32 @@ class _InlineVoiceRecorderState extends State<_InlineVoiceRecorder> {
   void initState() {
     super.initState();
     unawaited(_start());
+    // Keys are handled globally: after clicking the mic the Flutter view
+    // may not hand focus to this widget, and Enter / Esc must still work.
+    HardwareKeyboard.instance.addHandler(_handleKey);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _keyFocus.requestFocus();
     });
   }
 
+  bool _handleKey(KeyEvent event) {
+    if (!mounted || event is! KeyDownEvent) return false;
+    final key = event.logicalKey;
+    if (key == LogicalKeyboardKey.enter ||
+        key == LogicalKeyboardKey.numpadEnter) {
+      unawaited(_finishAndSend());
+      return true;
+    }
+    if (key == LogicalKeyboardKey.escape) {
+      widget.onCancel();
+      return true;
+    }
+    return false;
+  }
+
   @override
   void dispose() {
+    HardwareKeyboard.instance.removeHandler(_handleKey);
     _timer?.cancel();
     _stopWebLevels?.call();
     _keyFocus.dispose();
@@ -6400,20 +6419,6 @@ class _InlineVoiceRecorderState extends State<_InlineVoiceRecorder> {
     }
     return Focus(
       focusNode: _keyFocus,
-      onKeyEvent: (node, event) {
-        if (event is! KeyDownEvent) return KeyEventResult.ignored;
-        final key = event.logicalKey;
-        if (key == LogicalKeyboardKey.enter ||
-            key == LogicalKeyboardKey.numpadEnter) {
-          unawaited(_finishAndSend());
-          return KeyEventResult.handled;
-        }
-        if (key == LogicalKeyboardKey.escape) {
-          widget.onCancel();
-          return KeyEventResult.handled;
-        }
-        return KeyEventResult.ignored;
-      },
       child: SizedBox(
       height: 48,
       child: Row(

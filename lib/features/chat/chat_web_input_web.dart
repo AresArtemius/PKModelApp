@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:js_interop';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:web/web.dart' as web;
@@ -31,9 +32,11 @@ class WebMicLevels {
         final centered = (sample - 128) / 128;
         sum += centered * centered;
       }
-      final rms = samples.isEmpty ? 0.0 : (sum / samples.length);
-      // RMS of speech sits around 0.02–0.2; stretch it to the bar range.
-      final level = (rms * 60).clamp(0.0, 1.0);
+      final meanSquare = samples.isEmpty ? 0.0 : (sum / samples.length);
+      final rms = math.sqrt(meanSquare);
+      // RMS of speech sits around 0.03–0.3; stretch it to the bar range
+      // with a soft curve so quiet speech still moves the bars.
+      final level = math.pow((rms * 4).clamp(0.0, 1.0), 0.6).toDouble();
       onLevel(level);
     });
 
