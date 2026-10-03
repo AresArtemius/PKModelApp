@@ -2,18 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../gen_l10n/app_localizations.dart';
-import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
 import 'agent_workspace.dart';
 
-const double _sectionGap = 14;
-const double _innerGap = 10;
-const double _sectionTitleLetterSpacing = 1.4;
 
-const Color _titleColor = kTextDark;
-const Color _subtitleColor = Color(0xFF4A4A4A);
-const Color _labelColor = Color(0xFF5A5A5A);
+String _agentText(BuildContext context, String ru, String en) {
+  return Localizations.localeOf(context).languageCode == 'ru' ? ru : en;
+}
 
+/// Agent tools on a profile (v2): folders as flat chips and a private note,
+/// in one bordered card with sentence-case labels.
 class ModelAgentToolsCard extends StatelessWidget {
   const ModelAgentToolsCard({
     super.key,
@@ -43,27 +41,21 @@ class ModelAgentToolsCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            t.agentWorkspaceUpper,
-            style: const TextStyle(
-              fontWeight: FontWeight.w800,
-              letterSpacing: _sectionTitleLetterSpacing,
-              color: _titleColor,
-            ),
+            _agentText(context, 'РАБОТА АГЕНТА', 'AGENT TOOLS'),
+            style: AppText.label.copyWith(fontSize: 12, letterSpacing: 1),
           ),
-          const SizedBox(height: _innerGap),
+          const SizedBox(height: 16),
           Row(
             children: [
               Expanded(
                 child: Text(
-                  t.agentFoldersUpper,
-                  style: const TextStyle(
-                    color: _labelColor,
-                    fontWeight: FontWeight.w800,
-                  ),
+                  _agentText(context, 'Папки', 'Folders'),
+                  style: AppText.smallStrong,
                 ),
               ),
               _SmallTextButton(
-                label: t.agentFolderCreateUpper,
+                icon: Icons.add_rounded,
+                label: _agentText(context, 'Новая папка', 'New folder'),
                 onTap: onCreateFolder,
               ),
             ],
@@ -73,18 +65,18 @@ class ModelAgentToolsCard extends StatelessWidget {
             loading: () => const LinearProgressIndicator(minHeight: 2),
             error: (_, _) => Text(
               t.unknownError,
-              style: const TextStyle(color: kTextDanger),
+              style: AppText.small.copyWith(color: Tokens.danger),
             ),
             data: (items) {
               if (items.isEmpty) {
                 return Text(
                   t.agentNoFolders,
-                  style: const TextStyle(color: _subtitleColor),
+                  style: AppText.small.copyWith(color: Tokens.textSecondary),
                 );
               }
               return Wrap(
-                spacing: 8,
-                runSpacing: 8,
+                spacing: 6,
+                runSpacing: 6,
                 children: [
                   for (final folder in items)
                     _FolderChip(
@@ -96,34 +88,38 @@ class ModelAgentToolsCard extends StatelessWidget {
               );
             },
           ),
-          const SizedBox(height: _sectionGap),
+          const SizedBox(height: 16),
+          const Divider(height: 1, thickness: 1, color: Tokens.border),
+          const SizedBox(height: 12),
           Row(
             children: [
               Expanded(
                 child: Text(
-                  t.agentPrivateNoteUpper,
-                  style: const TextStyle(
-                    color: _labelColor,
-                    fontWeight: FontWeight.w800,
-                  ),
+                  _agentText(context, 'Приватная заметка', 'Private note'),
+                  style: AppText.smallStrong,
                 ),
               ),
               _SmallTextButton(
-                label: t.agentEditNoteUpper,
+                icon: Icons.edit_outlined,
+                label: _agentText(context, 'Изменить', 'Edit'),
                 onTap: () => onEditNote(noteText),
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           note.when(
             loading: () => const LinearProgressIndicator(minHeight: 2),
             error: (_, _) => Text(
               t.unknownError,
-              style: const TextStyle(color: kTextDanger),
+              style: AppText.small.copyWith(color: Tokens.danger),
             ),
             data: (value) => Text(
               value.trim().isEmpty ? t.agentPrivateNoteEmpty : value.trim(),
-              style: const TextStyle(color: _subtitleColor, height: 1.35),
+              style: AppText.small.copyWith(
+                color: value.trim().isEmpty
+                    ? Tokens.textSecondary
+                    : Tokens.text,
+              ),
             ),
           ),
         ],
@@ -172,18 +168,7 @@ class _AgentTextInputDialogState extends State<AgentTextInputDialog> {
     final t = AppLocalizations.of(context)!;
 
     return AlertDialog(
-      backgroundColor: Colors.white.withValues(alpha: 0.96),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(kCardRadius),
-      ),
-      title: Text(
-        widget.title,
-        style: const TextStyle(
-          color: kTextDark,
-          fontWeight: FontWeight.w900,
-          letterSpacing: 0.8,
-        ),
-      ),
+      title: Text(widget.title),
       content: TextField(
         controller: _controller,
         autofocus: true,
@@ -195,25 +180,17 @@ class _AgentTextInputDialogState extends State<AgentTextInputDialog> {
         onSubmitted: widget.maxLines == 1
             ? (_) => Navigator.of(context).pop(_controller.text)
             : null,
-        decoration: InputDecoration(
-          hintText: widget.hint,
-          border: const OutlineInputBorder(),
-        ),
+        decoration: InputDecoration(hintText: widget.hint),
       ),
+      actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
           child: Text(t.cancel),
         ),
-        TextButton(
+        FilledButton(
           onPressed: () => Navigator.of(context).pop(_controller.text),
-          child: Text(
-            widget.actionLabel,
-            style: const TextStyle(
-              color: BrandTheme.redTop,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
+          child: Text(widget.actionLabel),
         ),
       ],
     );
@@ -229,10 +206,10 @@ class _AgentSurface extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: pillDecoration(isDark: false, radius: kCardRadius).copyWith(
-        border: Border.all(color: kBorderColor),
-        boxShadow: BrandTheme.basePillShadow(isDark: false),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(Tokens.radiusLg),
+        border: Border.all(color: Tokens.border),
       ),
       child: child,
     );
@@ -253,25 +230,33 @@ class _FolderChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.transparent,
+      color: selected ? Tokens.ink : Tokens.surfaceAlt,
+      borderRadius: BorderRadius.circular(Tokens.radiusSm),
       child: InkWell(
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(Tokens.radiusSm),
         onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: pillDecoration(isDark: selected, radius: 999).copyWith(
-            border: Border.all(
-              color: selected ? Colors.transparent : kBorderColor,
-            ),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              color: selected ? Colors.white : kTextDark,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.6,
-              fontSize: 12,
-            ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (selected) ...[
+                const Icon(
+                  Icons.check_rounded,
+                  size: 14,
+                  color: Tokens.textOnDark,
+                ),
+                const SizedBox(width: 4),
+              ],
+              Text(
+                label,
+                style: AppText.small.copyWith(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: selected ? Tokens.textOnDark : Tokens.text,
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -280,23 +265,28 @@ class _FolderChip extends StatelessWidget {
 }
 
 class _SmallTextButton extends StatelessWidget {
-  const _SmallTextButton({required this.label, required this.onTap});
+  const _SmallTextButton({
+    required this.label,
+    required this.onTap,
+    required this.icon,
+  });
 
   final String label;
   final VoidCallback onTap;
+  final IconData icon;
 
   @override
   Widget build(BuildContext context) {
-    return TextButton(
+    return TextButton.icon(
       onPressed: onTap,
       style: TextButton.styleFrom(
-        foregroundColor: BrandTheme.redTop,
-        textStyle: const TextStyle(
-          fontWeight: FontWeight.w900,
-          letterSpacing: 0.8,
-        ),
+        foregroundColor: Tokens.text,
+        visualDensity: VisualDensity.compact,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        textStyle: AppText.small.copyWith(fontWeight: FontWeight.w500),
       ),
-      child: Text(label),
+      icon: Icon(icon, size: 16),
+      label: Text(label),
     );
   }
 }
