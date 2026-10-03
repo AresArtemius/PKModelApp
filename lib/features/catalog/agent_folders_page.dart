@@ -288,12 +288,13 @@ class _AgentFoldersPageState extends ConsumerState<AgentFoldersPage> {
             if (f.id == urlFolder) open = f;
           }
           if (open != null) {
+            final current = open;
             return _FolderDetail(
-              folder: open,
+              folder: current,
               onBack: () => context.go(Routes.agentFolders),
-              onRename: () => _renameFolder(open),
-              onDelete: () => _deleteFolder(open),
-              onRemoveProfile: (p) => _removeProfile(open, p),
+              onRename: () => _renameFolder(current),
+              onDelete: () => _deleteFolder(current),
+              onRemoveProfile: (p) => _removeProfile(current, p),
             );
           }
           if (items.isEmpty) {
