@@ -692,6 +692,8 @@ class _CatalogResultsHeader extends StatelessWidget {
     this.onFolders,
     this.onResetFilters,
     this.resetLabel,
+    this.selectAllValue,
+    this.onSelectAll,
   });
 
   final String countLabel;
@@ -701,6 +703,10 @@ class _CatalogResultsHeader extends StatelessWidget {
   final VoidCallback? onFolders;
   final Future<void> Function()? onResetFilters;
   final String? resetLabel;
+
+  /// Agent «select all visible» control: true / null (some) / false.
+  final bool? selectAllValue;
+  final VoidCallback? onSelectAll;
 
   @override
   Widget build(BuildContext context) {
@@ -712,6 +718,10 @@ class _CatalogResultsHeader extends StatelessWidget {
           children: [
             Text(countLabel, style: AppText.h1.copyWith(fontSize: 24)),
             const Spacer(),
+            if (onSelectAll != null) ...[
+              _SelectAllPill(value: selectAllValue, onTap: onSelectAll!),
+              const SizedBox(width: 8),
+            ],
             if (onFolders != null) ...[
               _HeaderIconButton(
                 icon: Icons.folder_outlined,
@@ -2658,10 +2668,10 @@ class _SelectAllPill extends StatelessWidget {
         child: OutlinedButton(
           onPressed: onTap,
           style: OutlinedButton.styleFrom(
-            minimumSize: const Size(Tokens.inputHeight, Tokens.inputHeight),
+            minimumSize: const Size(40, 40),
             padding: EdgeInsets.zero,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(Tokens.radiusSm),
             ),
             side: const BorderSide(color: Tokens.border),
             foregroundColor: value == false ? Tokens.textSecondary : Tokens.text,

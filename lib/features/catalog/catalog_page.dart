@@ -1164,6 +1164,24 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                                 ? _clearCatalogFilters
                                 : null,
                             resetLabel: resetFiltersLabel,
+                            selectAllValue: filteredItems.isEmpty
+                                ? false
+                                : (filteredItems.every(
+                                        (m) => effectiveSelectedIds.contains(m.id),
+                                      )
+                                      ? true
+                                      : (filteredItems.any(
+                                              (m) => effectiveSelectedIds
+                                                  .contains(m.id),
+                                            )
+                                            ? null
+                                            : false)),
+                            onSelectAll: canCreateSelections
+                                ? () {
+                                    _unfocus();
+                                    _toggleSelectAllVisible(filteredItems);
+                                  }
+                                : null,
                           ),
                           onAdvancedSearch: _openAdvancedSearch,
                           advancedSearchEnabled: !c.isInitialLoading,
@@ -1179,7 +1197,8 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                             hintText: t.catalogSearchHintUpper,
                             items: filteredItems,
                             selectedIds: effectiveSelectedIds,
-                            canSelect: canCreateSelections,
+                            // «Select all» lives in the results header here.
+                            canSelect: false,
                             onSelectAllTap: (items) {
                               _unfocus();
                               _toggleSelectAllVisible(items);
