@@ -44,7 +44,7 @@ class PublicPageFrame extends ConsumerWidget {
         body: Column(
           children: [
             AppTopBar(currentIndex: currentIndex),
-            Expanded(child: child),
+            Expanded(child: SizedBox(width: double.infinity, child: child)),
           ],
         ),
       );
@@ -128,7 +128,7 @@ class PublicPageFrame extends ConsumerWidget {
                 ],
               ),
             ),
-            Expanded(child: child),
+            Expanded(child: SizedBox(width: double.infinity, child: child)),
           ],
         ),
       ),
