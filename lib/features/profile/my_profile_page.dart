@@ -1,4 +1,5 @@
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -13,6 +14,7 @@ import '../../core/roles_provider.dart';
 import '../../core/router.dart';
 import '../../core/supabase_provider.dart';
 import '../../gen_l10n/app_localizations.dart';
+import '../../core/storage_image_variant.dart';
 import '../../ui/brand/brand_pill_button.dart';
 import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
@@ -25,6 +27,25 @@ import 'profile_media_upload_queue.dart';
 import 'profile_capacity_provider.dart';
 import 'profile_model.dart';
 import 'profile_type_selection_page.dart';
+
+/// v2 (web): a "settings" page — header with the account avatar and name,
+/// a section menu on the left, profile cards on the right; no cards with
+/// shadows or pills.
+const bool _accountV2 = kIsWeb;
+const double _kAccountV2NavWidth = 280;
+
+String _sentenceCaseAccount(String value) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) return trimmed;
+  // Keep acronyms such as 2FA / JSON readable: only lowercase words that
+  // are fully uppercase and longer than three letters.
+  final words = trimmed.split(' ').map((word) {
+    final isUpper = word == word.toUpperCase() && word.length > 3;
+    return isUpper ? word.toLowerCase() : word;
+  }).toList();
+  final joined = words.join(' ');
+  return joined[0].toUpperCase() + joined.substring(1);
+}
 
 const EdgeInsets _kProfileCardPad = kLoginCardPad;
 const double _kAccountLogoutButtonWidth = 112.0;
@@ -248,7 +269,7 @@ class MyProfilePage extends ConsumerWidget {
     return [
       if (!isAdmin) ...[
         _BillingEntryCard(onTap: () => context.go(Routes.billing)),
-        const SizedBox(height: kGap14),
+        if (!_accountV2) const SizedBox(height: kGap14),
       ],
       _AccountEntryCard(
         icon: Icons.notifications_rounded,
@@ -259,14 +280,14 @@ class MyProfilePage extends ConsumerWidget {
         badge: unreadNotifications,
         onTap: () => context.go(Routes.notifications),
       ),
-      const SizedBox(height: kGap14),
+      if (!_accountV2) const SizedBox(height: kGap14),
       _AccountEntryCard(
         icon: Icons.analytics_rounded,
         title: AppLocalizations.of(context)!.analyticsUpper,
         subtitle: AppLocalizations.of(context)!.analyticsAccountEntrySubtitle,
         onTap: () => context.go(Routes.profileAnalytics),
       ),
-      const SizedBox(height: kGap14),
+      if (!_accountV2) const SizedBox(height: kGap14),
       _AccountEntryCard(
         icon: Icons.support_agent_rounded,
         title: isRu ? 'ПОМОЩЬ И ПОДДЕРЖКА' : 'HELP & SUPPORT',
@@ -276,9 +297,9 @@ class MyProfilePage extends ConsumerWidget {
         badge: unreadSupport,
         onTap: () => context.go(Routes.support),
       ),
-      const SizedBox(height: kGap14),
+      if (!_accountV2) const SizedBox(height: kGap14),
       const _OwnerProfileEntryCard(),
-      const SizedBox(height: kGap14),
+      if (!_accountV2) const SizedBox(height: kGap14),
       _AccountEntryCard(
         icon: Icons.privacy_tip_rounded,
         title: isRu ? 'ЭКСПОРТ ДАННЫХ' : 'DATA EXPORT',
@@ -287,7 +308,7 @@ class MyProfilePage extends ConsumerWidget {
             : 'Copy account data as JSON',
         onTap: () => context.go(Routes.dataPrivacy),
       ),
-      const SizedBox(height: kGap14),
+      if (!_accountV2) const SizedBox(height: kGap14),
       _AccountEntryCard(
         icon: Icons.security_rounded,
         title: isRu ? 'БЕЗОПАСНОСТЬ' : 'SECURITY',
@@ -300,9 +321,9 @@ class MyProfilePage extends ConsumerWidget {
                   : '2FA, recovery codes and sign-in history'),
         onTap: () => context.go(Routes.accountMfa),
       ),
-      const SizedBox(height: kGap14),
+      if (!_accountV2) const SizedBox(height: kGap14),
       const _AccountStatusEntryCard(),
-      const SizedBox(height: kGap14),
+      if (!_accountV2) const SizedBox(height: kGap14),
       const _DeleteAccountEntryCard(),
     ];
   }
@@ -467,6 +488,19 @@ class MyProfilePage extends ConsumerWidget {
       await sb.auth.signOut();
     }
 
+    if (_accountV2) {
+      return Scaffold(
+        backgroundColor: Tokens.bg,
+        body: async.when(
+          loading: () => const _LoadingView(),
+          error: (e, _) => _ErrorView(
+            message: t.profileLoadError(AppErrorMapper.message(e, t)),
+          ),
+          data: (profiles) => _buildV2(context, profiles, logout, t, ref),
+        ),
+      );
+    }
+
     return Scaffold(
       body: Stack(
         children: [
@@ -488,6 +522,714 @@ class MyProfilePage extends ConsumerWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildV2(
+    BuildContext context,
+    List<MyProfileState> profiles,
+    Future<void> Function() logout,
+    AppLocalizations t,
+    WidgetRef ref,
+  ) {
+    final isDesktop =
+        MediaQuery.sizeOf(context).width >= _kAccountDesktopBreakpoint;
+    final uploads = ref.watch(profileMediaUploadQueueProvider);
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+
+    ProfileMediaUploadTask? latestUpload(String profileId) {
+      for (final task in uploads.reversed) {
+        if (task.profileId == profileId) return task;
+      }
+      return null;
+    }
+
+    final profilesSection = _ProfilesSectionV2(
+      profiles: profiles,
+      isDesktop: isDesktop,
+      uploadFor: latestUpload,
+      onAdd: () => _openTypeSelector(context, ref),
+      onOpen: (p) => _openEditor(context, startBlank: false, initial: p),
+      onRetryUpload: (task) =>
+          ref.read(profileMediaUploadQueueProvider.notifier).retry(task.id),
+      onPauseUpload: (task) =>
+          ref.read(profileMediaUploadQueueProvider.notifier).pause(task.id),
+      onResumeUpload: (task) =>
+          ref.read(profileMediaUploadQueueProvider.notifier).resume(task.id),
+      onDismissUpload: (task) =>
+          ref.read(profileMediaUploadQueueProvider.notifier).dismiss(task.id),
+    );
+
+    final nav = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _NavRowV2(
+          icon: Icons.people_alt_outlined,
+          title: ru ? 'Мои анкеты' : 'My profiles',
+          selected: true,
+          onTap: null,
+        ),
+        ..._accountTools(context, ref),
+        const SizedBox(height: 8),
+        _NavRowV2(
+          icon: Icons.logout_rounded,
+          title: t.logoutUpper,
+          onTap: logout,
+        ),
+      ],
+    );
+
+    if (!isDesktop) {
+      return ListView(
+        padding: const EdgeInsets.only(bottom: 32),
+        children: [
+          const _AccountHeaderV2(compact: true),
+          const Divider(height: 1, thickness: 1, color: Tokens.border),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
+            child: profilesSection,
+          ),
+          const Divider(height: 1, thickness: 1, color: Tokens.border),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
+            child: nav,
+          ),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const _AccountHeaderV2(compact: false),
+        const Divider(height: 1, thickness: 1, color: Tokens.border),
+        Expanded(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(
+                width: _kAccountV2NavWidth,
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(12, 16, 12, 24),
+                  child: nav,
+                ),
+              ),
+              const VerticalDivider(
+                width: 1,
+                thickness: 1,
+                color: Tokens.border,
+              ),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(32, 24, 32, 40),
+                  child: profilesSection,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Account avatar, name, contacts and the "edit profile" action.
+class _AccountHeaderV2 extends ConsumerWidget {
+  const _AccountHeaderV2({required this.compact});
+
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final user = ref.watch(currentUserProvider);
+    final profile = ref.watch(accountOwnerProfileProvider).valueOrNull;
+    final status = ref.watch(accountStatusProvider).valueOrNull;
+    final name = (profile?.displayName ?? '').trim();
+    final title = name.isNotEmpty
+        ? name
+        : (ru ? 'Мой аккаунт' : 'My account');
+    final contact = [
+      if ((user?.email ?? '').trim().isNotEmpty) user!.email!.trim(),
+      if ((user?.phone ?? '').trim().isNotEmpty) user!.phone!.trim(),
+    ].join(' · ');
+    final tag = (profile?.accountTag ?? '').trim();
+    final roleLabel = status == null
+        ? ''
+        : _accountStatusTitle(status.current, ru);
+    final meta = [
+      if (tag.isNotEmpty) '@$tag',
+      if (contact.isNotEmpty) contact,
+      if (roleLabel.isNotEmpty) roleLabel,
+    ].join('  ·  ');
+    final avatar = (profile?.avatarUrl ?? '').trim();
+    final initials = title.isEmpty ? '' : title.characters.first.toUpperCase();
+    final size = compact ? 56.0 : 72.0;
+
+    final avatarWidget = ClipOval(
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: avatar.isEmpty
+            ? ColoredBox(
+                color: Tokens.surfaceAlt,
+                child: Center(
+                  child: Text(
+                    initials,
+                    style: AppText.h2.copyWith(color: Tokens.textSecondary),
+                  ),
+                ),
+              )
+            : CachedNetworkImage(
+                imageUrl: storageImageVariant(avatar, width: 200),
+                fit: BoxFit.cover,
+                placeholder: (_, _) =>
+                    const ColoredBox(color: Tokens.surfaceAlt),
+                errorWidget: (_, _, _) =>
+                    const ColoredBox(color: Tokens.surfaceAlt),
+              ),
+      ),
+    );
+
+    final editButton = OutlinedButton.icon(
+      onPressed: () => context.go(Routes.accountProfile),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: Tokens.ink,
+        side: const BorderSide(color: Tokens.borderStrong),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(Tokens.radiusMd),
+        ),
+      ),
+      icon: const Icon(Icons.edit_outlined, size: 18),
+      label: Text(
+        ru ? 'Редактировать профиль' : 'Edit profile',
+        style: AppText.button,
+      ),
+    );
+
+    return Padding(
+      padding: compact
+          ? const EdgeInsets.fromLTRB(16, 20, 16, 20)
+          : const EdgeInsets.fromLTRB(32, 28, 32, 28),
+      child: Row(
+        children: [
+          avatarWidget,
+          SizedBox(width: compact ? 14 : 20),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: compact
+                      ? AppText.h2
+                      : AppText.h1.copyWith(fontSize: 32),
+                ),
+                if (meta.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    meta,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppText.small.copyWith(color: Tokens.textSecondary),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: 16),
+          if (compact)
+            IconButton(
+              tooltip: ru ? 'Редактировать профиль' : 'Edit profile',
+              onPressed: () => context.go(Routes.accountProfile),
+              style: IconButton.styleFrom(foregroundColor: Tokens.ink),
+              icon: const Icon(Icons.edit_outlined),
+            )
+          else
+            editButton,
+        ],
+      ),
+    );
+  }
+}
+
+String _accountStatusTitle(RegistrationAccountType type, bool ru) {
+  return switch (type) {
+    RegistrationAccountType.user => ru ? 'Личный аккаунт' : 'Personal account',
+    RegistrationAccountType.castingDirector =>
+      ru ? 'Кастинг-директор' : 'Casting director',
+    RegistrationAccountType.castingAgent =>
+      ru ? 'Кастинг-агент' : 'Casting agent',
+    RegistrationAccountType.directorProducer =>
+      ru ? 'Режиссёр / продюсер' : 'Director / producer',
+    RegistrationAccountType.brandClient =>
+      ru ? 'Бренд / заказчик' : 'Brand / client',
+    RegistrationAccountType.agency => ru ? 'Агентство' : 'Agency',
+    RegistrationAccountType.productionAgency =>
+      ru ? 'Продакшн / рекламное агентство' : 'Production / ad agency',
+    RegistrationAccountType.photoVideo =>
+      ru ? 'Фотограф / видеограф' : 'Photographer / videographer',
+    RegistrationAccountType.scoutBooker => ru ? 'Скаут / буккер' : 'Scout / booker',
+  };
+}
+
+/// One row of the account section menu.
+class _NavRowV2 extends StatefulWidget {
+  const _NavRowV2({
+    required this.icon,
+    required this.title,
+    required this.onTap,
+    this.subtitle = '',
+    this.badge = 0,
+    this.selected = false,
+    this.danger = false,
+    this.avatarUrl = '',
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final int badge;
+  final bool selected;
+  final bool danger;
+  final String avatarUrl;
+  final VoidCallback? onTap;
+
+  @override
+  State<_NavRowV2> createState() => _NavRowV2State();
+}
+
+class _NavRowV2State extends State<_NavRowV2> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = widget.danger ? Tokens.danger : Tokens.ink;
+    final iconColor = widget.danger
+        ? Tokens.danger
+        : widget.selected
+        ? Tokens.ink
+        : Tokens.textSecondary;
+    final subtitle = widget.subtitle.trim();
+    final avatar = widget.avatarUrl.trim();
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: Material(
+        color: widget.selected
+            ? Tokens.surfaceAlt
+            : _hovered && widget.onTap != null
+            ? Tokens.surface
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(Tokens.radiusSm),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(Tokens.radiusSm),
+          onTap: widget.onTap,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
+            child: Row(
+              children: [
+                if (avatar.isNotEmpty)
+                  ClipOval(
+                    child: SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CachedNetworkImage(
+                        imageUrl: storageImageVariant(avatar, width: 64),
+                        fit: BoxFit.cover,
+                        errorWidget: (_, _, _) =>
+                            Icon(widget.icon, size: 20, color: iconColor),
+                      ),
+                    ),
+                  )
+                else
+                  Icon(widget.icon, size: 20, color: iconColor),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _sentenceCaseAccount(widget.title),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppText.small.copyWith(
+                          fontSize: 15,
+                          color: color,
+                          fontWeight: widget.selected
+                              ? FontWeight.w600
+                              : FontWeight.w500,
+                        ),
+                      ),
+                      if (subtitle.isNotEmpty)
+                        Text(
+                          subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppText.caption.copyWith(
+                            color: widget.danger
+                                ? Tokens.danger.withValues(alpha: 0.8)
+                                : Tokens.textTertiary,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                if (widget.badge > 0) ...[
+                  const SizedBox(width: 8),
+                  Container(
+                    constraints: const BoxConstraints(minWidth: 20),
+                    height: 20,
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    alignment: Alignment.center,
+                    decoration: const BoxDecoration(
+                      color: Tokens.accent,
+                      borderRadius: BorderRadius.all(Radius.circular(999)),
+                    ),
+                    child: Text(
+                      widget.badge > 99 ? '99+' : '${widget.badge}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        height: 1,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// "Мои анкеты": title, count, add button and the cards grid.
+class _ProfilesSectionV2 extends StatelessWidget {
+  const _ProfilesSectionV2({
+    required this.profiles,
+    required this.isDesktop,
+    required this.uploadFor,
+    required this.onAdd,
+    required this.onOpen,
+    required this.onRetryUpload,
+    required this.onPauseUpload,
+    required this.onResumeUpload,
+    required this.onDismissUpload,
+  });
+
+  final List<MyProfileState> profiles;
+  final bool isDesktop;
+  final ProfileMediaUploadTask? Function(String profileId) uploadFor;
+  final VoidCallback onAdd;
+  final ValueChanged<MyProfileState> onOpen;
+  final ValueChanged<ProfileMediaUploadTask> onRetryUpload;
+  final ValueChanged<ProfileMediaUploadTask> onPauseUpload;
+  final ValueChanged<ProfileMediaUploadTask> onResumeUpload;
+  final ValueChanged<ProfileMediaUploadTask> onDismissUpload;
+
+  @override
+  Widget build(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final count = profiles.length;
+    final countLabel = ru
+        ? _pluralRuAccount(count, '$count анкета', '$count анкеты', '$count анкет')
+        : '$count ${count == 1 ? 'profile' : 'profiles'}';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(ru ? 'Мои анкеты' : 'My profiles', style: AppText.h2),
+                  if (count > 0) ...[
+                    const SizedBox(height: 2),
+                    Text(countLabel, style: AppText.caption),
+                  ],
+                ],
+              ),
+            ),
+            FilledButton.icon(
+              onPressed: onAdd,
+              style: FilledButton.styleFrom(
+                backgroundColor: Tokens.ink,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 14,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(Tokens.radiusMd),
+                ),
+              ),
+              icon: const Icon(Icons.add_rounded, size: 18),
+              label: Text(
+                ru ? 'Добавить анкету' : 'Add profile',
+                style: AppText.button,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        if (profiles.isEmpty)
+          Container(
+            padding: const EdgeInsets.fromLTRB(24, 40, 24, 40),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(Tokens.radiusLg),
+              border: Border.all(color: Tokens.border),
+            ),
+            child: Column(
+              children: [
+                Text(
+                  ru ? 'У вас пока нет анкет' : 'No profiles yet',
+                  style: AppText.h2.copyWith(color: Tokens.textSecondary),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  ru
+                      ? 'Создайте анкету — она попадёт в каталог после проверки.'
+                      : 'Create a profile — it appears in the catalogue after review.',
+                  textAlign: TextAlign.center,
+                  style: AppText.small.copyWith(color: Tokens.textTertiary),
+                ),
+              ],
+            ),
+          )
+        else
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final columns = isDesktop
+                  ? (constraints.maxWidth / 260).floor().clamp(2, 5)
+                  : 2;
+              const gap = 20.0;
+              final width =
+                  (constraints.maxWidth - gap * (columns - 1)) / columns;
+              return Wrap(
+                spacing: gap,
+                runSpacing: gap,
+                children: [
+                  for (final p in profiles)
+                    SizedBox(
+                      width: width,
+                      child: _ProfileCardV2(
+                        profile: p,
+                        uploadTask: uploadFor(p.id),
+                        onTap: () => onOpen(p),
+                        onRetryUpload: onRetryUpload,
+                        onPauseUpload: onPauseUpload,
+                        onResumeUpload: onResumeUpload,
+                        onDismissUpload: onDismissUpload,
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
+      ],
+    );
+  }
+}
+
+String _pluralRuAccount(int n, String one, String few, String many) {
+  final mod10 = n % 10;
+  final mod100 = n % 100;
+  if (mod10 == 1 && mod100 != 11) return one;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few;
+  return many;
+}
+
+class _ProfileCardV2 extends ConsumerStatefulWidget {
+  const _ProfileCardV2({
+    required this.profile,
+    required this.uploadTask,
+    required this.onTap,
+    required this.onRetryUpload,
+    required this.onPauseUpload,
+    required this.onResumeUpload,
+    required this.onDismissUpload,
+  });
+
+  final MyProfileState profile;
+  final ProfileMediaUploadTask? uploadTask;
+  final VoidCallback onTap;
+  final ValueChanged<ProfileMediaUploadTask> onRetryUpload;
+  final ValueChanged<ProfileMediaUploadTask> onPauseUpload;
+  final ValueChanged<ProfileMediaUploadTask> onResumeUpload;
+  final ValueChanged<ProfileMediaUploadTask> onDismissUpload;
+
+  @override
+  ConsumerState<_ProfileCardV2> createState() => _ProfileCardV2State();
+}
+
+class _ProfileCardV2State extends ConsumerState<_ProfileCardV2> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = widget.profile;
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final cover = p.effectiveCoverPhotoUrl.trim();
+    final name = p.fullName.trim().isEmpty ? '—' : p.fullName.trim();
+    final (statusText, statusColor) = switch (p.status) {
+      ProfileStatus.approved => (ru ? 'Одобрена' : 'Approved', Tokens.success),
+      ProfileStatus.pending => (ru ? 'На проверке' : 'In review', Tokens.warning),
+      ProfileStatus.rejected => (ru ? 'Отклонена' : 'Rejected', Tokens.accent),
+      ProfileStatus.draft => (ru ? 'Черновик' : 'Draft', Tokens.textTertiary),
+    };
+    final placementEnd = ref
+        .watch(_accountProfilePlacementProvider(p.id))
+        .maybeWhen(data: (value) => value, orElse: () => null);
+    final placementDate = placementEnd == null
+        ? ''
+        : '${placementEnd.day.toString().padLeft(2, '0')}.${placementEnd.month.toString().padLeft(2, '0')}.${placementEnd.year}';
+    final placement = placementDate.isEmpty
+        ? ''
+        : ru
+        ? 'Размещена до $placementDate'
+        : 'Placed until $placementDate';
+    final facts = [
+      if (p.age > 0) ru ? '${p.age} лет' : '${p.age} y.o.',
+      if (p.height > 0) '${p.height} см',
+      if (p.city.trim().isNotEmpty) p.city.trim(),
+    ].join(' · ');
+    final correction = (p.moderationComment ?? '').trim();
+    final uploadTask = widget.uploadTask;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: Tokens.fast,
+          decoration: BoxDecoration(
+            color: Tokens.bg,
+            borderRadius: BorderRadius.circular(Tokens.radiusLg),
+            border: Border.all(
+              color: _hovered ? Tokens.borderStrong : Tokens.border,
+            ),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              AspectRatio(
+                aspectRatio: 3 / 4,
+                child: cover.isEmpty
+                    ? const ColoredBox(
+                        color: Tokens.surfaceAlt,
+                        child: Center(
+                          child: Icon(
+                            Icons.person_outline_rounded,
+                            size: 40,
+                            color: Tokens.textTertiary,
+                          ),
+                        ),
+                      )
+                    : CachedNetworkImage(
+                        imageUrl: storageImageVariant(cover, width: 600),
+                        fit: BoxFit.cover,
+                        alignment: Alignment(p.coverPhotoFocalX, p.coverPhotoFocalY),
+                        placeholder: (_, _) =>
+                            const ColoredBox(color: Tokens.surfaceAlt),
+                        errorWidget: (_, _, _) =>
+                            const ColoredBox(color: Tokens.surfaceAlt),
+                      ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppText.bodyStrong,
+                    ),
+                    if (facts.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        facts,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppText.caption,
+                      ),
+                    ],
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: statusColor,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            placement.isNotEmpty
+                                ? '$statusText · $placement'
+                                : statusText,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppText.caption.copyWith(
+                              color: p.status == ProfileStatus.rejected
+                                  ? Tokens.accent
+                                  : Tokens.textSecondary,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (uploadTask != null) ...[
+                      const SizedBox(height: 8),
+                      _ProfileUploadStatusLine(
+                        task: uploadTask,
+                        onRetry: () => widget.onRetryUpload(uploadTask),
+                        onPause: () => widget.onPauseUpload(uploadTask),
+                        onResume: () => widget.onResumeUpload(uploadTask),
+                        onDismiss: () => widget.onDismissUpload(uploadTask),
+                      ),
+                    ],
+                    if (p.status == ProfileStatus.rejected &&
+                        correction.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        '${ru ? 'Что исправить' : 'What to fix'}: $correction',
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppText.caption.copyWith(color: Tokens.accent),
+                      ),
+                    ],
+                    const SizedBox(height: 2),
+                    Text(
+                      ru ? 'Открыть и изменить' : 'Open and edit',
+                      style: AppText.caption.copyWith(
+                        color: _hovered ? Tokens.ink : Tokens.textTertiary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -1091,6 +1833,18 @@ class _AccountEntryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final accent = foregroundColor;
     final avatar = avatarUrl?.trim() ?? '';
+
+    if (_accountV2) {
+      return _NavRowV2(
+        icon: icon,
+        title: title,
+        subtitle: subtitle,
+        badge: badge,
+        danger: foregroundColor == kTextDanger,
+        avatarUrl: avatar,
+        onTap: onTap,
+      );
+    }
 
     return GestureDetector(
       onTap: onTap,
