@@ -166,6 +166,7 @@ class AppShell extends StatelessWidget {
     if (path.startsWith(Routes.billing)) return 3;
     if (path.startsWith(Routes.notifications)) return 3;
     if (path.startsWith(Routes.profileAnalytics)) return 3;
+    if (path.startsWith(Routes.accountProfile)) return 3;
     if (path.startsWith(Routes.accountDevices)) return 3;
     if (path.startsWith(Routes.accountMfa)) return 3;
     if (path.startsWith(Routes.dataPrivacy)) return 3;
@@ -467,10 +468,6 @@ final List<RouteBase> appRoutes = [
   ),
 
   GoRoute(
-    path: Routes.accountProfile,
-    builder: (context, state) => const AccountProfileEditPage(),
-  ),
-  GoRoute(
     path: Routes.publicAccount,
     builder: (context, state) {
       final tag = state.pathParameters[_routeParamTag] ?? '';
@@ -564,6 +561,10 @@ final List<RouteBase> appRoutes = [
       GoRoute(
         path: Routes.castings,
         builder: (context, state) => const CastingPage(),
+      ),
+      GoRoute(
+        path: Routes.accountProfile,
+        builder: (context, state) => const AccountProfileEditPage(),
       ),
       GoRoute(
         path: Routes.accountDevices,
