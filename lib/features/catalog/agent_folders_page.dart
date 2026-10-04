@@ -623,15 +623,11 @@ class _FolderCovers extends StatelessWidget {
                   color: Tokens.surfaceAlt,
                 ),
                 clipBehavior: Clip.antiAlias,
-                child: CachedNetworkImage(
-                  imageUrl: storageImageVariant(urls[i].photoUrl, width: 160),
-                  fit: BoxFit.cover,
-                  alignment: urls[i].photoAlignment,
-                  memCacheWidth: 160,
-                  placeholder: (_, _) =>
-                      const ColoredBox(color: Tokens.surfaceAlt),
-                  errorWidget: (_, _, _) =>
-                      const ColoredBox(color: Tokens.surfaceAlt),
+                child: FocalImage(
+                  url: storageImageVariant(urls[i].photoUrl, width: 240),
+                  focalX: urls[i].focalX,
+                  focalY: urls[i].focalY,
+                  memCacheWidth: 240,
                 ),
               ),
             ),

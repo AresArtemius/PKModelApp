@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -8,6 +9,7 @@ import '../../core/admin_action_log_service.dart';
 import '../../core/app_error_mapper.dart';
 import '../../core/public_links.dart';
 import '../../core/router.dart';
+import '../../core/storage_image_variant.dart';
 import '../../core/supabase_provider.dart';
 import '../../gen_l10n/app_localizations.dart';
 import '../../ui/brand/brand_admin_header.dart';
@@ -144,6 +146,8 @@ final selectionProjectProvider = FutureProvider.autoDispose
           min_hourly_rate,
           min_daily_fee,
           cover_photo_url,
+          cover_photo_focal_x,
+          cover_photo_focal_y,
           photo_urls
         )
         ''')
@@ -434,6 +438,35 @@ class SelectionProjectPage extends ConsumerWidget {
                 });
               }
 
+              if (kIsWeb && !isPublic) {
+                return _SelectionProjectV2(
+                  selectionId: selectionId,
+                  title: title,
+                  status: status,
+                  publicEnabled: publicEnabled,
+                  campaignRows: campaignRows,
+                  manager: Map<String, dynamic>.from(
+                    (data['manager'] as Map?) ?? const {},
+                  ),
+                  profiles: items
+                      .map((e) => _selectionProfileVmFromRow(context, e))
+                      .where((e) => e.profileId.isNotEmpty)
+                      .toList(growable: false),
+                  agentFeedbackByProfile: agentFeedbackByProfile,
+                  hasExportItems: exportItems.isNotEmpty,
+                  onBack: () => context.go(
+                    from == 'admin_selections_table'
+                        ? Routes.adminSelectionsTable
+                        : Routes.adminSelection,
+                  ),
+                  onRefresh: () =>
+                      ref.invalidate(selectionProjectProvider(selectionId)),
+                  onPdf: openPdf,
+                  onCopyLink: copyProtectedPublicLink,
+                  onStatus: setStatus,
+                );
+              }
+
               return Column(
                 children: [
                   BrandAdminHeader(
@@ -536,11 +569,13 @@ class _SelectionChatButton extends ConsumerStatefulWidget {
     required this.selectionId,
     required this.profileId,
     required this.modelUserId,
+    this.flat = false,
   });
 
   final String selectionId;
   final String profileId;
   final String modelUserId;
+  final bool flat;
 
   @override
   ConsumerState<_SelectionChatButton> createState() =>
@@ -576,6 +611,22 @@ class _SelectionChatButtonState extends ConsumerState<_SelectionChatButton> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.flat) {
+      final ru = Localizations.localeOf(context).languageCode == 'ru';
+      return IconButton(
+        onPressed: _busy ? null : _openChat,
+        tooltip: ru ? 'Открыть чат' : 'Open chat',
+        visualDensity: VisualDensity.compact,
+        style: IconButton.styleFrom(foregroundColor: Tokens.textSecondary),
+        icon: _busy
+            ? const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.chat_bubble_outline_rounded, size: 18),
+      );
+    }
     return IconButton(
       onPressed: _busy ? null : _openChat,
       tooltip: AppLocalizations.of(context)!.openChatUpper,
@@ -643,6 +694,8 @@ class _SelectionPresentationProfile {
     required this.photoUrls,
     required this.age,
     required this.height,
+    this.focalX = 0,
+    this.focalY = -0.72,
   });
 
   final String profileId;
@@ -654,6 +707,8 @@ class _SelectionPresentationProfile {
   final List<String> photoUrls;
   final int age;
   final int height;
+  final double focalX;
+  final double focalY;
 }
 
 _SelectionPresentationProfile _selectionProfileVmFromRow(
@@ -682,8 +737,12 @@ _SelectionPresentationProfile _selectionProfileVmFromRow(
   final coverUrl = coverPhoto.isNotEmpty
       ? coverPhoto
       : (photoUrls.isNotEmpty ? photoUrls.first : '');
+  double focal(dynamic v, double fallback) =>
+      v is num ? v.toDouble() : (double.tryParse('${v ?? ''}') ?? fallback);
 
   return _SelectionPresentationProfile(
+    focalX: focal(profile['cover_photo_focal_x'], 0),
+    focalY: focal(profile['cover_photo_focal_y'], -0.72),
     profileId: (profile['id'] ?? '').toString().trim(),
     modelUserId: (profile['user_id'] ?? '').toString().trim(),
     name: name.isNotEmpty ? name : t.profileUpper,
@@ -2199,6 +2258,532 @@ class _SelectionProfileThumb extends StatelessWidget {
                   child: const Icon(Icons.broken_image_rounded, color: _text),
                 ),
               ),
+      ),
+    );
+  }
+}
+
+
+// ---------------------------------------------------------------------------
+// v2 (web): the selection as a full-width page — profiles list on the left,
+// status, campaign and manager facts in a 360 px column on the right.
+// ---------------------------------------------------------------------------
+
+class _SelectionProjectV2 extends StatelessWidget {
+  const _SelectionProjectV2({
+    required this.selectionId,
+    required this.title,
+    required this.status,
+    required this.publicEnabled,
+    required this.campaignRows,
+    required this.manager,
+    required this.profiles,
+    required this.agentFeedbackByProfile,
+    required this.hasExportItems,
+    required this.onBack,
+    required this.onRefresh,
+    required this.onPdf,
+    required this.onCopyLink,
+    required this.onStatus,
+  });
+
+  final String selectionId;
+  final String title;
+  final SelectionStatus status;
+  final bool publicEnabled;
+  final List<MapEntry<String, String>> campaignRows;
+  final Map<String, dynamic> manager;
+  final List<_SelectionPresentationProfile> profiles;
+  final Map<String, _AgentFeedbackSummary> agentFeedbackByProfile;
+  final bool hasExportItems;
+  final VoidCallback onBack;
+  final VoidCallback onRefresh;
+  final Future<void> Function() onPdf;
+  final Future<void> Function() onCopyLink;
+  final Future<void> Function(SelectionStatus next) onStatus;
+
+  static String _pluralRu(int n, String one, String few, String many) {
+    final mod10 = n % 10;
+    final mod100 = n % 100;
+    if (mod10 == 1 && mod100 != 11) return one;
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few;
+    return many;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final width = MediaQuery.sizeOf(context).width;
+    final wide = width >= 960;
+    final gutter = wide ? 32.0 : 16.0;
+    final count = profiles.length;
+    final countText = ru
+        ? _pluralRu(count, '$count анкета', '$count анкеты', '$count анкет')
+        : '$count profiles';
+
+    final header = Padding(
+      padding: EdgeInsets.fromLTRB(gutter - 8, 16, gutter, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextButton.icon(
+            onPressed: onBack,
+            icon: const Icon(Icons.arrow_back_rounded, size: 18),
+            label: Text(ru ? 'Подборки' : 'Selections'),
+            style: TextButton.styleFrom(
+              foregroundColor: Tokens.textSecondary,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              minimumSize: const Size(0, 36),
+              textStyle: AppText.smallStrong,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.only(left: 8),
+            child: Wrap(
+              crossAxisAlignment: WrapCrossAlignment.end,
+              spacing: 16,
+              runSpacing: 12,
+              children: [
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: wide ? width - 520 : width - gutter * 2,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title.isNotEmpty
+                            ? title
+                            : (ru ? 'Подборка' : 'Selection'),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppText.h1.copyWith(fontSize: wide ? 32 : 26),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '$countText · ${selectionStatusLabel(t, status)}',
+                        style: AppText.caption.copyWith(fontSize: 13),
+                      ),
+                    ],
+                  ),
+                ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      tooltip: ru ? 'Обновить' : 'Refresh',
+                      onPressed: onRefresh,
+                      style: IconButton.styleFrom(
+                        foregroundColor: Tokens.textSecondary,
+                      ),
+                      icon: const Icon(Icons.refresh_rounded, size: 20),
+                    ),
+                    const SizedBox(width: 4),
+                    if (publicEnabled) ...[
+                      OutlinedButton.icon(
+                        onPressed: onCopyLink,
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size(0, 40),
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                        ),
+                        icon: const Icon(Icons.link_rounded, size: 18),
+                        label: Text(ru ? 'Ссылка для клиента' : 'Client link'),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    FilledButton.icon(
+                      onPressed: hasExportItems ? onPdf : null,
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size(0, 40),
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                      ),
+                      icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
+                      label: const Text('PDF'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+
+    final list = profiles.isEmpty
+        ? Padding(
+            padding: EdgeInsets.fromLTRB(gutter, 48, gutter, 48),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  ru ? 'В подборке пока нет анкет' : 'No profiles yet',
+                  style: AppText.h2.copyWith(color: Tokens.textSecondary),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  ru
+                      ? 'Добавьте анкеты из каталога — кнопка «В подборку» на карточке модели.'
+                      : 'Add profiles from the catalogue — the «Add to selection» button on a model card.',
+                  style: AppText.small.copyWith(color: Tokens.textTertiary),
+                ),
+              ],
+            ),
+          )
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: EdgeInsets.fromLTRB(gutter, 20, gutter, 6),
+                child: Text(
+                  (ru ? 'Анкеты' : 'Profiles').toUpperCase(),
+                  style: AppText.label.copyWith(color: Tokens.textTertiary),
+                ),
+              ),
+              for (final profile in profiles)
+                _SelectionProfileRowV2(
+                  selectionId: selectionId,
+                  profile: profile,
+                  feedback: agentFeedbackByProfile[profile.profileId],
+                  gutter: gutter,
+                ),
+            ],
+          );
+
+    final side = Padding(
+      padding: EdgeInsets.fromLTRB(wide ? 28 : gutter, 24, gutter, 32),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            (ru ? 'Статус подборки' : 'Selection status').toUpperCase(),
+            style: AppText.label.copyWith(color: Tokens.textTertiary),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final item in SelectionStatus.values)
+                _StatusChoiceV2(
+                  label: selectionStatusLabel(t, item),
+                  selected: item == status,
+                  onTap: item == status ? null : () => onStatus(item),
+                ),
+            ],
+          ),
+          if (campaignRows.isNotEmpty) ...[
+            const SizedBox(height: 28),
+            Text(
+              (ru ? 'Кампания' : 'Campaign').toUpperCase(),
+              style: AppText.label.copyWith(color: Tokens.textTertiary),
+            ),
+            const SizedBox(height: 4),
+            for (final row in campaignRows)
+              _FactRowV2(label: row.key, value: row.value),
+          ],
+          if (_managerName(manager).isNotEmpty) ...[
+            const SizedBox(height: 28),
+            Text(
+              (ru ? 'Менеджер' : 'Manager').toUpperCase(),
+              style: AppText.label.copyWith(color: Tokens.textTertiary),
+            ),
+            const SizedBox(height: 4),
+            _FactRowV2(
+              label: ru ? 'Имя' : 'Name',
+              value: _managerName(manager),
+            ),
+            if ((manager['email'] ?? '').toString().trim().isNotEmpty)
+              _FactRowV2(
+                label: 'Email',
+                value: (manager['email'] ?? '').toString().trim(),
+              ),
+            if ((manager['phone'] ?? '').toString().trim().isNotEmpty)
+              _FactRowV2(
+                label: ru ? 'Телефон' : 'Phone',
+                value: (manager['phone'] ?? '').toString().trim(),
+              ),
+          ],
+        ],
+      ),
+    );
+
+    if (!wide) {
+      return Scaffold(
+        backgroundColor: Tokens.bg,
+        body: ListView(
+          padding: const EdgeInsets.only(bottom: 40),
+          children: [
+            header,
+            const SizedBox(height: 16),
+            const Divider(height: 1, thickness: 1, color: Tokens.border),
+            side,
+            const Divider(height: 1, thickness: 1, color: Tokens.border),
+            list,
+          ],
+        ),
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: Tokens.bg,
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          header,
+          const SizedBox(height: 20),
+          const Divider(height: 1, thickness: 1, color: Tokens.border),
+          Expanded(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.only(bottom: 40),
+                    children: [list],
+                  ),
+                ),
+                const VerticalDivider(
+                  width: 1,
+                  thickness: 1,
+                  color: Tokens.border,
+                ),
+                SizedBox(
+                  width: 360,
+                  child: SingleChildScrollView(child: side),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static String _managerName(Map<String, dynamic> manager) {
+    final name = (manager['full_name'] ?? '').toString().trim();
+    final company = (manager['company_name'] ?? '').toString().trim();
+    if (name.isNotEmpty && company.isNotEmpty) return '$name · $company';
+    return name.isNotEmpty ? name : company;
+  }
+}
+
+class _FactRowV2 extends StatelessWidget {
+  const _FactRowV2({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 110,
+            child: Text(
+              label,
+              style: AppText.small.copyWith(color: Tokens.textTertiary),
+            ),
+          ),
+          Expanded(
+            child: SelectableText(
+              value,
+              style: AppText.small.copyWith(fontSize: 15, color: Tokens.text),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatusChoiceV2 extends StatelessWidget {
+  const _StatusChoiceV2({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(Tokens.radiusSm),
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: Tokens.fast,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: selected ? Tokens.ink : Tokens.bg,
+            borderRadius: BorderRadius.circular(Tokens.radiusSm),
+            border: Border.all(color: selected ? Tokens.ink : Tokens.border),
+          ),
+          child: Text(
+            label,
+            style: AppText.smallStrong.copyWith(
+              color: selected ? Colors.white : Tokens.text,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SelectionProfileRowV2 extends StatefulWidget {
+  const _SelectionProfileRowV2({
+    required this.selectionId,
+    required this.profile,
+    required this.feedback,
+    required this.gutter,
+  });
+
+  final String selectionId;
+  final _SelectionPresentationProfile profile;
+  final _AgentFeedbackSummary? feedback;
+  final double gutter;
+
+  @override
+  State<_SelectionProfileRowV2> createState() => _SelectionProfileRowV2State();
+}
+
+class _SelectionProfileRowV2State extends State<_SelectionProfileRowV2> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final p = widget.profile;
+    final meta = [
+      if (p.age > 0) (ru ? '${p.age} лет' : '${p.age} y.o.'),
+      if (p.height > 0) '${p.height} ${ru ? 'см' : 'cm'}',
+      if (p.city.isNotEmpty) p.city,
+    ].join(' · ');
+    final feedback = widget.feedback;
+    final hasFeedback = feedback != null && !feedback.isEmpty;
+    final feedbackLine = hasFeedback
+        ? [
+            if (feedback.selected > 0)
+              '${ru ? 'выбран' : 'selected'} ${feedback.selected}',
+            if (feedback.reserve > 0)
+              '${ru ? 'резерв' : 'reserve'} ${feedback.reserve}',
+            if (feedback.rejects > 0)
+              '${ru ? 'отказ' : 'rejected'} ${feedback.rejects}',
+            if (feedback.comments.isNotEmpty) '«${feedback.comments.first}»',
+          ].join(' · ')
+        : t.clientFeedbackEmpty;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: Material(
+        color: _hovered ? Tokens.surface : Colors.transparent,
+        child: InkWell(
+          onTap: () => context.go(
+            '${Routes.modelPrefix}${p.profileId}?from=project&selectionId=${widget.selectionId}',
+          ),
+          child: Container(
+            decoration: const BoxDecoration(
+              border: Border(bottom: BorderSide(color: Tokens.border)),
+            ),
+            padding: EdgeInsets.fromLTRB(
+              widget.gutter,
+              10,
+              widget.gutter - 8,
+              10,
+            ),
+            child: Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(Tokens.radiusSm),
+                  child: SizedBox(
+                    width: 48,
+                    height: 48,
+                    child: p.coverUrl.isEmpty
+                        ? const ColoredBox(
+                            color: Tokens.surfaceAlt,
+                            child: Icon(
+                              Icons.person_outline_rounded,
+                              color: Tokens.textTertiary,
+                              size: 20,
+                            ),
+                          )
+                        : FocalImage(
+                            url: storageImageVariant(p.coverUrl, width: 240),
+                            focalX: p.focalX,
+                            focalY: p.focalY,
+                            memCacheWidth: 240,
+                          ),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        p.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppText.small.copyWith(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: Tokens.text,
+                        ),
+                      ),
+                      if (meta.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          meta,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppText.caption.copyWith(
+                            color: Tokens.textSecondary,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 3),
+                      Text(
+                        feedbackLine,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppText.caption.copyWith(
+                          color: hasFeedback ? Tokens.text : Tokens.textTertiary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                AnimatedOpacity(
+                  duration: Tokens.fast,
+                  opacity: _hovered ? 1 : 0,
+                  child: _SelectionChatButton(
+                    selectionId: widget.selectionId,
+                    profileId: p.profileId,
+                    modelUserId: p.modelUserId,
+                    flat: true,
+                  ),
+                ),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: 20,
+                  color: _hovered ? Tokens.text : Tokens.textTertiary,
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
