@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -63,6 +64,95 @@ class ProfileAnalyticsPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final t = AppLocalizations.of(context)!;
     final async = ref.watch(profileAnalyticsProvider);
+
+    if (kIsWeb) {
+      final ru = Localizations.localeOf(context).languageCode == 'ru';
+      return SettingsPageV2(
+        title: ru ? 'Аналитика' : 'Analytics',
+        subtitle: ru
+            ? 'Просмотры анкет, попадания в подборки и приглашения'
+            : 'Profile views, selection adds and invitations',
+        backLabel: ru ? 'Аккаунт' : 'Account',
+        onBack: () => context.go(Routes.me),
+        actions: [
+          IconButton(
+            tooltip: ru ? 'Обновить' : 'Refresh',
+            onPressed: () => ref.invalidate(profileAnalyticsProvider),
+            style: IconButton.styleFrom(foregroundColor: Tokens.textSecondary),
+            icon: const Icon(Icons.refresh_rounded, size: 20),
+          ),
+        ],
+        children: [
+          async.when(
+            loading: () => const Padding(
+              padding: EdgeInsets.only(top: 24),
+              child: SkeletonList(rows: 2),
+            ),
+            error: (e, _) => Padding(
+              padding: const EdgeInsets.only(top: 24),
+              child: SettingsNote(
+                text: AppErrorMapper.message(e, t),
+                tone: SettingsNoteTone.danger,
+              ),
+            ),
+            data: (summary) => Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SettingsSection(
+                  title: ru ? 'За всё время' : 'All time',
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final columns = constraints.maxWidth >= 560 ? 4 : 2;
+                      final tileWidth =
+                          (constraints.maxWidth - 12 * (columns - 1)) / columns;
+                      final tiles = [
+                        (
+                          Icons.badge_outlined,
+                          t.analyticsProfiles,
+                          summary.profileCount,
+                        ),
+                        (
+                          Icons.visibility_outlined,
+                          t.analyticsProfileViews,
+                          summary.views,
+                        ),
+                        (
+                          Icons.playlist_add_check_rounded,
+                          t.analyticsSelectionAdds,
+                          summary.selectionAdds,
+                        ),
+                        (
+                          Icons.mail_outline_rounded,
+                          t.analyticsInvitations,
+                          summary.invitations,
+                        ),
+                      ];
+                      return Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
+                        children: [
+                          for (final tile in tiles)
+                            SizedBox(
+                              width: tileWidth,
+                              child: _StatTileV2(
+                                icon: tile.$1,
+                                label: _sentenceCaseAnalytics(tile.$2),
+                                value: tile.$3,
+                              ),
+                            ),
+                        ],
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 20),
+                SettingsNote(text: _hintFor(context, summary)),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
 
     return Scaffold(
       body: Stack(
@@ -205,6 +295,55 @@ class _MessageCard extends StatelessWidget {
           color: isError ? kTextDanger : kTextMuted,
           weight: FontWeight.w700,
         ),
+      ),
+    );
+  }
+}
+
+
+String _sentenceCaseAnalytics(String value) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) return trimmed;
+  final lower = trimmed.toLowerCase();
+  return lower[0].toUpperCase() + lower.substring(1);
+}
+
+class _StatTileV2 extends StatelessWidget {
+  const _StatTileV2({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final int value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(Tokens.radiusMd),
+        border: Border.all(color: Tokens.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 18, color: Tokens.textSecondary),
+          const SizedBox(height: 14),
+          Text(
+            '$value',
+            style: AppText.h1.copyWith(fontSize: 28, height: 1.1),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: AppText.caption.copyWith(color: Tokens.textSecondary),
+          ),
+        ],
       ),
     );
   }

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -111,6 +112,109 @@ class AccountDevicesPage extends ConsumerWidget {
     final isRussian = Localizations.localeOf(context).languageCode == 'ru';
     final user = ref.watch(currentUserProvider);
     final asyncDevices = ref.watch(accountDevicesProvider);
+
+    if (kIsWeb) {
+      final email = user?.email?.trim() ?? '';
+      Future<void> signOutHere() async {
+        await ref.read(supabaseProvider).auth.signOut();
+        if (context.mounted) context.go(Routes.login);
+      }
+
+      return SettingsPageV2(
+        title: isRussian ? 'Устройства и входы' : 'Devices & logins',
+        subtitle: isRussian
+            ? 'Текущая сессия и устройства с включёнными push-уведомлениями'
+            : 'The current session and devices with push notifications enabled',
+        backLabel: isRussian ? 'Аккаунт' : 'Account',
+        onBack: () {
+          if (context.canPop()) {
+            context.pop();
+          } else {
+            context.go(Routes.me);
+          }
+        },
+        children: [
+          SettingsSection(
+            title: isRussian ? 'Текущая сессия' : 'Current session',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SettingsListRow(
+                  icon: Icons.desktop_windows_outlined,
+                  active: true,
+                  title: isRussian ? 'Это устройство' : 'This device',
+                  subtitle: [
+                    if (email.isNotEmpty) email,
+                    isRussian ? 'Сейчас авторизовано' : 'Signed in now',
+                  ].join(' · '),
+                  trailing: OutlinedButton(
+                    onPressed: signOutHere,
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(0, 36),
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                    ),
+                    child: Text(isRussian ? 'Выйти' : 'Sign out'),
+                  ),
+                  last: true,
+                ),
+              ],
+            ),
+          ),
+          SettingsSection(
+            title: isRussian ? 'Push-устройства' : 'Push devices',
+            hint: isRussian
+                ? 'Устройства, на которых включены push-уведомления. Полный список входов и выход со всех устройств появятся позже.'
+                : 'Devices where push notifications are enabled. A full sign-in list and «sign out everywhere» come later.',
+            child: asyncDevices.when(
+              loading: () => const SkeletonList(rows: 3),
+              error: (e, _) => SettingsNote(
+                text: e.toString(),
+                tone: SettingsNoteTone.danger,
+              ),
+              data: (devices) {
+                if (devices.isEmpty) {
+                  return SettingsNote(
+                    text: isRussian
+                        ? 'Пока ни одного. Когда вы включите push-уведомления на устройстве, оно появится здесь.'
+                        : 'None yet. When push notifications are enabled on a device, it will show up here.',
+                  );
+                }
+                return Column(
+                  children: [
+                    for (var i = 0; i < devices.length; i++)
+                      SettingsListRow(
+                        icon: _platformIcon(devices[i].platform),
+                        active: devices[i].enabled,
+                        title: _platformTitle(devices[i].platform, isRussian),
+                        subtitle:
+                            '${devices[i].enabled ? (isRussian ? 'Push включены' : 'Push enabled') : (isRussian ? 'Push отключены' : 'Push disabled')} · '
+                            '${isRussian ? 'активность' : 'last seen'} ${_formatDate(devices[i].lastSeenAt, isRussian)}',
+                        trailing: devices[i].enabled
+                            ? TextButton(
+                                onPressed: () async {
+                                  await ref
+                                      .read(accountDevicesServiceProvider)
+                                      .disableDevice(devices[i].id);
+                                  ref.invalidate(accountDevicesProvider);
+                                },
+                                style: TextButton.styleFrom(
+                                  foregroundColor: Tokens.textSecondary,
+                                ),
+                                child: Text(
+                                  isRussian ? 'Отключить push' : 'Disable push',
+                                ),
+                              )
+                            : const SizedBox.shrink(),
+                        last: i == devices.length - 1,
+                      ),
+                  ],
+                );
+              },
+            ),
+          ),
+        ],
+      );
+    }
 
     return Scaffold(
       body: Stack(
@@ -359,6 +463,14 @@ class _InfoCard extends StatelessWidget {
       ),
     );
   }
+}
+
+String _platformTitle(String platform, bool isRussian) {
+  final lower = platform.toLowerCase();
+  if (lower.contains('ios')) return 'iPhone / iPad';
+  if (lower.contains('android')) return 'Android';
+  if (lower.contains('web')) return isRussian ? 'Браузер' : 'Browser';
+  return isRussian ? 'Устройство' : 'Device';
 }
 
 IconData _platformIcon(String platform) {

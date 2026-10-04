@@ -5,3 +5,4 @@ export 'feature_ui_tokens.dart';
 export 'design_tokens.dart';
 export 'skeleton.dart';
 export 'focal_image.dart';
+export 'settings_page_v2.dart';
