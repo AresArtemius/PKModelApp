@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:ui' as ui;
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -208,7 +209,12 @@ class _AccountProfileEditPageState
           .read(accountProfileServiceProvider)
           .saveOwnerProfile(user, profile);
       ref.invalidate(accountOwnerProfileProvider);
-      if (mounted) Navigator.of(context).pop(true);
+      if (!mounted) return;
+      if (context.canPop()) {
+        Navigator.of(context).pop(true);
+      } else {
+        context.go(Routes.me);
+      }
     } catch (e) {
       if (!mounted) return;
       final message = e.toString().toLowerCase();
@@ -711,6 +717,67 @@ class _AccountProfileEditPageState
   }) async {
     final controller = TextEditingController();
     var obscure = true;
+    if (kIsWeb) {
+      final flat = await showDialog<String>(
+        context: context,
+        builder: (context) => StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            title: Text(title),
+            content: SizedBox(
+              width: 400,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  TextField(
+                    controller: controller,
+                    obscureText: obscure,
+                    autofocus: true,
+                    autofillHints: const [AutofillHints.newPassword],
+                    onChanged: (_) => setDialogState(() {}),
+                    onSubmitted: (_) =>
+                        Navigator.of(context).pop(controller.text),
+                    style: AppText.body,
+                    decoration: InputDecoration(
+                      labelText: _isRussian ? 'Новый пароль' : 'New password',
+                      suffixIcon: IconButton(
+                        onPressed: () =>
+                            setDialogState(() => obscure = !obscure),
+                        icon: Icon(
+                          obscure ? Icons.visibility_off : Icons.visibility,
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (controller.text.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    PasswordStrengthMeter(
+                      password: controller.text,
+                      isRussian: _isRussian,
+                      email: email,
+                      phone: phone,
+                      compact: true,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: Text(_isRussian ? 'Отмена' : 'Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(controller.text),
+                child: Text(_sentenceCaseAccount(actionLabel)),
+              ),
+            ],
+          ),
+        ),
+      );
+      controller.dispose();
+      return flat?.trim();
+    }
     final result = await showDialog<String>(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -908,10 +975,602 @@ class _AccountProfileEditPageState
     }
   }
 
+  // ---------------------------------------------------------------------
+  // v2 (web): the settings template — sections, flat fields, one «Сохранить».
+  // ---------------------------------------------------------------------
+
+  Widget _fieldV2(
+    TextEditingController controller,
+    String label, {
+    int maxLines = 1,
+    String? prefixText,
+    String? hint,
+    List<TextInputFormatter>? inputFormatters,
+    TextInputType? keyboardType,
+    ValueChanged<String>? onChanged,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: TextField(
+        controller: controller,
+        maxLines: maxLines,
+        minLines: maxLines > 1 ? 3 : null,
+        inputFormatters: inputFormatters,
+        keyboardType: keyboardType,
+        onChanged: onChanged,
+        enabled: !_saving && !_uploadingAvatar,
+        style: AppText.body,
+        decoration: InputDecoration(
+          labelText: label,
+          hintText: hint,
+          prefixText: prefixText,
+          alignLabelWithHint: maxLines > 1,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildV2(AsyncValue<AccountOwnerProfile> profileAsync) {
+    final ru = _isRussian;
+    final user = ref.watch(currentUserProvider);
+    final busyAll =
+        _saving ||
+        _uploadingAvatar ||
+        _linkingEmail ||
+        _linkingPhone ||
+        _changingPassword ||
+        _requestingMerge;
+
+    void goBack() {
+      if (context.canPop()) {
+        context.pop(false);
+      } else {
+        context.go(Routes.me);
+      }
+    }
+
+    return SettingsPageV2(
+      title: ru ? 'Профиль аккаунта' : 'Account profile',
+      subtitle: ru
+          ? 'Имя, контакты и способы входа'
+          : 'Name, contacts and sign-in methods',
+      backLabel: ru ? 'Аккаунт' : 'Account',
+      onBack: _saving ? null : goBack,
+      actions: [
+        FilledButton(
+          onPressed: (_saving || _uploadingAvatar) ? null : _save,
+          style: FilledButton.styleFrom(
+            minimumSize: const Size(0, 40),
+            padding: const EdgeInsets.symmetric(horizontal: 18),
+          ),
+          child: Text(
+            _saving
+                ? (ru ? 'Сохраняем…' : 'Saving…')
+                : (ru ? 'Сохранить' : 'Save'),
+          ),
+        ),
+      ],
+      children: [
+        profileAsync.when(
+          loading: () => const Padding(
+            padding: EdgeInsets.only(top: 24),
+            child: SkeletonList(rows: 4),
+          ),
+          error: (e, _) => Padding(
+            padding: const EdgeInsets.only(top: 24),
+            child: SettingsNote(text: e.toString(), tone: SettingsNoteTone.danger),
+          ),
+          data: (profile) {
+            _hydrate(profile);
+            final authEmail = user?.email?.trim() ?? '';
+            final emailConfirmed =
+                user?.emailConfirmedAt?.trim().isNotEmpty ?? false;
+            final authPhone = user?.phone?.trim() ?? '';
+            final confirmedPhone = authPhone.isNotEmpty
+                ? authPhone
+                : _lastConfirmedPhone.trim();
+            final composedPhone = _composePhone();
+            final samePhone =
+                _phoneDigits(confirmedPhone) == _phoneDigits(composedPhone);
+            final hasDraftPhone = composedPhone.isNotEmpty;
+            final hasConflict = _phoneConflictPhone.trim().isNotEmpty;
+            final showPhoneButton =
+                !hasConflict &&
+                (confirmedPhone.isEmpty || (hasDraftPhone && !samePhone));
+            final targetPhone = _pendingPhone.isNotEmpty
+                ? _pendingPhone
+                : composedPhone;
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (_error != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 16),
+                    child: SettingsNote(
+                      text: _error!,
+                      tone: SettingsNoteTone.danger,
+                    ),
+                  ),
+                SettingsSection(
+                  title: ru ? 'Фото' : 'Photo',
+                  child: Row(
+                    children: [
+                      ClipOval(
+                        child: SizedBox(
+                          width: 72,
+                          height: 72,
+                          child: _avatarUrl.isEmpty
+                              ? ColoredBox(
+                                  color: Tokens.surfaceAlt,
+                                  child: Center(
+                                    child: Text(
+                                      _fullNameC.text.trim().isEmpty
+                                          ? '?'
+                                          : _fullNameC.text
+                                                .trim()
+                                                .characters
+                                                .first
+                                                .toUpperCase(),
+                                      style: AppText.h1.copyWith(
+                                        color: Tokens.textSecondary,
+                                      ),
+                                    ),
+                                  ),
+                                )
+                              : CachedNetworkImage(
+                                  imageUrl: _avatarUrl,
+                                  fit: BoxFit.cover,
+                                  placeholder: (_, _) =>
+                                      const ColoredBox(color: Tokens.surfaceAlt),
+                                  errorWidget: (_, _, _) =>
+                                      const ColoredBox(color: Tokens.surfaceAlt),
+                                ),
+                        ),
+                      ),
+                      const SizedBox(width: 20),
+                      OutlinedButton.icon(
+                        onPressed: (_uploadingAvatar || _saving)
+                            ? null
+                            : _pickAvatar,
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size(0, 40),
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                        ),
+                        icon: _uploadingAvatar
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.photo_camera_outlined, size: 18),
+                        label: Text(ru ? 'Выбрать фото' : 'Choose photo'),
+                      ),
+                    ],
+                  ),
+                ),
+                SettingsSection(
+                  title: ru ? 'Основное' : 'Basics',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _fieldV2(_fullNameC, ru ? 'Имя / ФИО' : 'Name'),
+                      _fieldV2(
+                        _companyC,
+                        ru ? 'Компания / агентство' : 'Company',
+                      ),
+                      _fieldV2(_positionC, ru ? 'Должность' : 'Position'),
+                      _fieldV2(
+                        _accountTagC,
+                        ru ? 'Тэг аккаунта' : 'Account tag',
+                        prefixText: '@',
+                        hint: 'artemkukhar',
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(
+                            RegExp(r'[a-zA-Z0-9._-]'),
+                          ),
+                          LengthLimitingTextInputFormatter(32),
+                        ],
+                      ),
+                      Text(
+                        ru ? 'Кто видит @tag' : 'Who can see the @tag',
+                        style: AppText.small.copyWith(
+                          color: Tokens.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: [
+                          for (final item in AccountTagVisibility.values)
+                            _ChoiceV2(
+                              label: _tagVisibilityLabel(item, ru),
+                              selected: item == _accountTagVisibility,
+                              onTap: () =>
+                                  setState(() => _accountTagVisibility = item),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _tagVisibilityHint(_accountTagVisibility, ru),
+                        style: AppText.caption.copyWith(
+                          color: Tokens.textTertiary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                SettingsSection(
+                  title: ru ? 'Вход' : 'Sign-in',
+                  hint: ru
+                      ? 'Email и телефон, по которым вы входите. Изменение подтверждается письмом или SMS.'
+                      : 'The email and phone you sign in with. Changes are confirmed by email or SMS.',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if ((user?.phone?.trim().isNotEmpty ?? false) &&
+                          authEmail.isEmpty) ...[
+                        SettingsNote(
+                          text: ru
+                              ? 'Добавьте email, чтобы восстановить доступ к аккаунту и входить не только по SMS.'
+                              : 'Add an email to recover access and sign in without SMS.',
+                          tone: SettingsNoteTone.info,
+                        ),
+                        const SizedBox(height: 14),
+                      ],
+                      _fieldV2(
+                        _emailC,
+                        'Email',
+                        keyboardType: TextInputType.emailAddress,
+                      ),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: SettingsStatus(
+                              text: authEmail.isEmpty
+                                  ? (ru
+                                        ? 'Email для входа не привязан'
+                                        : 'No sign-in email yet')
+                                  : emailConfirmed
+                                  ? (ru
+                                        ? 'Вход по $authEmail'
+                                        : 'Sign-in with $authEmail')
+                                  : (ru
+                                        ? '$authEmail — ожидает подтверждения'
+                                        : '$authEmail — waiting for confirmation'),
+                              color: authEmail.isNotEmpty && emailConfirmed
+                                  ? Tokens.success
+                                  : Tokens.textTertiary,
+                            ),
+                          ),
+                          if (authEmail.isEmpty || !emailConfirmed)
+                            TextButton(
+                              onPressed: busyAll ? null : _linkEmailForLogin,
+                              child: Text(
+                                _linkingEmail
+                                    ? '…'
+                                    : (ru ? 'Привязать email' : 'Link email'),
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SizedBox(
+                            width: 124,
+                            child: DropdownButtonFormField<String>(
+                              initialValue: _phoneCode,
+                              isExpanded: true,
+                              style: AppText.body,
+                              dropdownColor: Tokens.bg,
+                              borderRadius: BorderRadius.circular(
+                                Tokens.radiusMd,
+                              ),
+                              decoration: InputDecoration(
+                                labelText: ru ? 'Код' : 'Code',
+                              ),
+                              items: [
+                                for (final item in _phoneCodes)
+                                  DropdownMenuItem(
+                                    value: item.code,
+                                    child: Text(
+                                      item.label,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                              ],
+                              onChanged: _saving || _uploadingAvatar
+                                  ? null
+                                  : (value) {
+                                      if (value == null || value == _phoneCode) {
+                                        return;
+                                      }
+                                      setState(() => _phoneCode = value);
+                                      _resetPendingPhoneLink();
+                                      if (_phoneConflictPhone.isNotEmpty) {
+                                        setState(() => _phoneConflictPhone = '');
+                                      }
+                                    },
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _fieldV2(
+                              _phoneNumberC,
+                              ru ? 'Телефон' : 'Phone',
+                              keyboardType: TextInputType.phone,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                              ],
+                              onChanged: (_) {
+                                if (_phoneOtpSent &&
+                                    _composePhone() != _pendingPhone) {
+                                  _resetPendingPhoneLink();
+                                }
+                                if (_phoneConflictPhone.isNotEmpty) {
+                                  setState(() => _phoneConflictPhone = '');
+                                }
+                                setState(() {});
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: SettingsStatus(
+                              text: confirmedPhone.isEmpty
+                                  ? (_phoneOtpSent
+                                        ? (ru
+                                              ? 'Код отправлен на $targetPhone'
+                                              : 'Code sent to $targetPhone')
+                                        : (ru
+                                              ? 'Телефон для входа не привязан'
+                                              : 'No sign-in phone yet'))
+                                  : (samePhone || !hasDraftPhone)
+                                  ? (ru
+                                        ? 'Вход по $confirmedPhone'
+                                        : 'Sign-in with $confirmedPhone')
+                                  : (ru
+                                        ? '$confirmedPhone — чтобы сменить номер, подтвердите новый'
+                                        : '$confirmedPhone — confirm the new number to change it'),
+                              color: confirmedPhone.isNotEmpty
+                                  ? Tokens.success
+                                  : Tokens.textTertiary,
+                            ),
+                          ),
+                          if (showPhoneButton && !_phoneOtpSent)
+                            TextButton(
+                              onPressed: busyAll
+                                  ? null
+                                  : () => _sendPhoneLinkCode(),
+                              child: Text(
+                                _linkingPhone
+                                    ? '…'
+                                    : confirmedPhone.isNotEmpty
+                                    ? (ru ? 'Сменить телефон' : 'Change phone')
+                                    : (ru ? 'Привязать телефон' : 'Link phone'),
+                              ),
+                            ),
+                        ],
+                      ),
+                      if (showPhoneButton && _phoneOtpSent) ...[
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            SizedBox(
+                              width: 200,
+                              child: TextField(
+                                controller: _phoneOtpC,
+                                keyboardType: TextInputType.number,
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.digitsOnly,
+                                ],
+                                autofillHints: const [AutofillHints.oneTimeCode],
+                                style: AppText.body.copyWith(letterSpacing: 4),
+                                decoration: InputDecoration(
+                                  labelText: ru ? 'Код из SMS' : 'SMS code',
+                                ),
+                                onSubmitted: (_) =>
+                                    busyAll ? null : _confirmPhoneLinkCode(),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            FilledButton(
+                              onPressed: busyAll ? null : _confirmPhoneLinkCode,
+                              style: FilledButton.styleFrom(
+                                minimumSize: const Size(0, 48),
+                              ),
+                              child: Text(
+                                _linkingPhone
+                                    ? '…'
+                                    : (ru ? 'Подтвердить' : 'Confirm'),
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            TextButton(
+                              onPressed: busyAll || _phoneResendSeconds > 0
+                                  ? null
+                                  : () => _sendPhoneLinkCode(resend: true),
+                              style: TextButton.styleFrom(
+                                foregroundColor: Tokens.textSecondary,
+                              ),
+                              child: Text(
+                                _phoneResendSeconds > 0
+                                    ? (ru
+                                          ? 'Ещё раз через $_phoneResendSeconds с'
+                                          : 'Resend in $_phoneResendSeconds s')
+                                    : (ru ? 'Отправить ещё раз' : 'Send again'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                      if (hasConflict) ...[
+                        const SizedBox(height: 12),
+                        SettingsNote(
+                          text: ru
+                              ? 'Номер $_phoneConflictPhone уже привязан к другому аккаунту. Можно отправить заявку на объединение — если там другая почта, решение примет администратор.'
+                              : '$_phoneConflictPhone is already linked to another account. You can request a merge — if it has another email, an administrator will review it.',
+                          tone: SettingsNoteTone.info,
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            OutlinedButton(
+                              onPressed: busyAll ? null : _requestAccountMerge,
+                              child: Text(
+                                _requestingMerge
+                                    ? '…'
+                                    : (ru
+                                          ? 'Запросить объединение'
+                                          : 'Request merge'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                      const SizedBox(height: 20),
+                      const Divider(height: 1, thickness: 1, color: Tokens.border),
+                      SettingsListRow(
+                        icon: Icons.password_rounded,
+                        title: ru ? 'Пароль для входа' : 'Sign-in password',
+                        subtitle: ru
+                            ? 'Используется для входа по email или телефону'
+                            : 'Used for email or phone sign-in',
+                        trailing: TextButton(
+                          onPressed: busyAll ? null : _changePasswordForLogin,
+                          child: Text(
+                            _changingPassword
+                                ? '…'
+                                : (ru ? 'Сменить пароль' : 'Change password'),
+                          ),
+                        ),
+                        last: true,
+                      ),
+                    ],
+                  ),
+                ),
+                SettingsSection(
+                  title: ru ? 'Безопасность' : 'Security',
+                  child: Column(
+                    children: [
+                      SettingsListRow(
+                        icon: Icons.devices_rounded,
+                        title: ru ? 'Устройства и входы' : 'Devices & logins',
+                        subtitle: ru
+                            ? 'Текущая сессия и push-устройства'
+                            : 'Current session and push devices',
+                        onTap: () => context.go(Routes.accountDevices),
+                      ),
+                      SettingsListRow(
+                        icon: Icons.verified_user_outlined,
+                        title: ru
+                            ? 'Двухфакторная защита'
+                            : 'Two-factor authentication',
+                        subtitle: ru
+                            ? 'Коды из приложения, резервные коды, журнал'
+                            : 'Authenticator codes, recovery codes, the log',
+                        onTap: () => context.go(Routes.accountMfa),
+                        last: true,
+                      ),
+                    ],
+                  ),
+                ),
+                SettingsSection(
+                  title: ru ? 'О себе и контакты' : 'About & contacts',
+                  child: Column(
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: _fieldV2(_cityC, ru ? 'Город' : 'City'),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _fieldV2(
+                              _countryC,
+                              ru ? 'Страна' : 'Country',
+                            ),
+                          ),
+                        ],
+                      ),
+                      _fieldV2(
+                        _websiteC,
+                        ru ? 'Сайт' : 'Website',
+                        keyboardType: TextInputType.url,
+                      ),
+                      _fieldV2(_socialC, 'Instagram / Telegram / WhatsApp'),
+                      _fieldV2(_bioC, ru ? 'О себе' : 'About', maxLines: 5),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    FilledButton(
+                      onPressed: (_saving || _uploadingAvatar) ? null : _save,
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size(0, 44),
+                        padding: const EdgeInsets.symmetric(horizontal: 22),
+                      ),
+                      child: Text(
+                        _saving
+                            ? (ru ? 'Сохраняем…' : 'Saving…')
+                            : (ru ? 'Сохранить' : 'Save'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    TextButton(
+                      onPressed: _saving ? null : goBack,
+                      style: TextButton.styleFrom(
+                        foregroundColor: Tokens.textSecondary,
+                      ),
+                      child: Text(ru ? 'Отмена' : 'Cancel'),
+                    ),
+                  ],
+                ),
+              ],
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  String _tagVisibilityLabel(AccountTagVisibility v, bool ru) => switch (v) {
+    AccountTagVisibility.public => ru ? 'Всем' : 'Everyone',
+    AccountTagVisibility.conversations => ru ? 'Собеседникам' : 'Chats',
+    AccountTagVisibility.hidden => ru ? 'Никому' : 'Nobody',
+  };
+
+  String _tagVisibilityHint(AccountTagVisibility v, bool ru) => switch (v) {
+    AccountTagVisibility.public =>
+      ru
+          ? 'Тэг виден в каталоге и на публичной странице аккаунта.'
+          : 'The tag is visible in the catalogue and on the public account page.',
+    AccountTagVisibility.conversations =>
+      ru
+          ? 'Тэг видят только участники ваших диалогов.'
+          : 'Only people in your chats can see the tag.',
+    AccountTagVisibility.hidden =>
+      ru
+          ? 'Тэг сохранён, но не показывается другим.'
+          : 'The tag is saved but hidden from others.',
+  };
+
   @override
   Widget build(BuildContext context) {
     final profileAsync = ref.watch(accountOwnerProfileProvider);
     final title = _isRussian ? 'ПРОФИЛЬ АККАУНТА' : 'ACCOUNT PROFILE';
+
+    if (kIsWeb) return _buildV2(profileAsync);
 
     return Scaffold(
       body: Stack(
@@ -2043,6 +2702,53 @@ class _AvatarCropPageState extends State<_AvatarCropPage> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+
+String _sentenceCaseAccount(String value) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) return trimmed;
+  final lower = trimmed.toLowerCase();
+  return lower[0].toUpperCase() + lower.substring(1);
+}
+
+/// Flat choice button for the v2 editor (tag visibility).
+class _ChoiceV2 extends StatelessWidget {
+  const _ChoiceV2({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(Tokens.radiusSm),
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: Tokens.fast,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: selected ? Tokens.ink : Tokens.bg,
+            borderRadius: BorderRadius.circular(Tokens.radiusSm),
+            border: Border.all(color: selected ? Tokens.ink : Tokens.border),
+          ),
+          child: Text(
+            label,
+            style: AppText.smallStrong.copyWith(
+              color: selected ? Colors.white : Tokens.text,
+            ),
+          ),
         ),
       ),
     );
