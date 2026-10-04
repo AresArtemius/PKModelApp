@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -198,6 +199,89 @@ class _DataPrivacyPageState extends ConsumerState<DataPrivacyPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (kIsWeb) {
+      final ru = _isRussian;
+      final isError = _message.contains('\n');
+      return SettingsPageV2(
+        title: ru ? 'Данные и приватность' : 'Data & privacy',
+        subtitle: ru
+            ? 'Экспорт ваших данных в JSON'
+            : 'Export of your data as JSON',
+        backLabel: ru ? 'Аккаунт' : 'Account',
+        onBack: () => context.go(Routes.me),
+        children: [
+          SettingsSection(
+            title: ru ? 'Мои данные' : 'My data',
+            hint: ru
+                ? 'Экспорт собирает доступные вашему аккаунту данные: профиль аккаунта, анкеты, уведомления, push-устройства, согласия и связанные записи.'
+                : 'The export collects the data available to your account: account profile, profiles, notifications, push devices, consents and related records.',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    FilledButton.icon(
+                      onPressed: _exporting ? null : _copyExport,
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size(0, 40),
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                      ),
+                      icon: _exporting
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Colors.white,
+                                ),
+                              ),
+                            )
+                          : const Icon(Icons.content_copy_rounded, size: 18),
+                      label: Text(ru ? 'Скопировать JSON' : 'Copy JSON'),
+                    ),
+                  ],
+                ),
+                if (_message.trim().isNotEmpty) ...[
+                  const SizedBox(height: 14),
+                  SettingsNote(
+                    text: _message,
+                    tone: isError
+                        ? SettingsNoteTone.danger
+                        : SettingsNoteTone.success,
+                  ),
+                ],
+              ],
+            ),
+          ),
+          if (_exportJson.isNotEmpty)
+            SettingsSection(
+              title: ru ? 'Предпросмотр' : 'Preview',
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Tokens.surface,
+                  borderRadius: BorderRadius.circular(Tokens.radiusMd),
+                  border: Border.all(color: Tokens.border),
+                ),
+                child: SelectableText(
+                  _exportJson.length > 1600
+                      ? '${_exportJson.substring(0, 1600)}\n…'
+                      : _exportJson,
+                  style: const TextStyle(
+                    color: Tokens.text,
+                    fontFamily: 'monospace',
+                    fontSize: 12,
+                    height: 1.4,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      );
+    }
+
     return Scaffold(
       body: Stack(
         children: [

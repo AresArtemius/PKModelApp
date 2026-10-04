@@ -223,6 +223,8 @@ class _BillingPageState extends ConsumerState<BillingPage> {
         .maybeWhen(data: (value) => value, orElse: () => false);
     final ru = _isRussian;
 
+    if (kIsWeb) return _buildV2(ru, isAdmin, profilesAsync);
+
     return Scaffold(
       body: Stack(
         children: [
@@ -378,6 +380,255 @@ class _BillingPageState extends ConsumerState<BillingPage> {
         ],
       ),
     );
+  }
+
+  Widget _buildV2(
+    bool ru,
+    bool isAdmin,
+    AsyncValue<List<MyProfileState>> profilesAsync,
+  ) {
+    final children = <Widget>[];
+    if (isAdmin) {
+      children.add(
+        Padding(
+          padding: const EdgeInsets.only(top: 24),
+          child: SettingsNote(
+            text: ru
+                ? 'Анкеты администраторов размещаются в каталоге бесплатно и не требуют оплаты.'
+                : 'Administrator profiles are listed for free and do not require payment.',
+            tone: SettingsNoteTone.info,
+          ),
+        ),
+      );
+    } else {
+      children.add(
+        profilesAsync.when(
+          loading: () => const Padding(
+            padding: EdgeInsets.only(top: 24),
+            child: SkeletonList(rows: 3),
+          ),
+          error: (error, _) => Padding(
+            padding: const EdgeInsets.only(top: 24),
+            child: SettingsNote(
+              text: ru
+                  ? 'Не удалось загрузить анкеты: $error'
+                  : 'Could not load profiles: $error',
+              tone: SettingsNoteTone.danger,
+            ),
+          ),
+          data: (profiles) {
+            final saved = profiles
+                .where((profile) => profile.id.trim().isNotEmpty)
+                .toList(growable: false);
+            if (saved.isEmpty) {
+              return Padding(
+                padding: const EdgeInsets.only(top: 24),
+                child: SettingsNote(
+                  text: ru
+                      ? 'Сначала создайте и сохраните анкету. После модерации её можно будет оплатить и активировать в базе.'
+                      : 'Create and save a profile first. After moderation you can pay for placement.',
+                  tone: SettingsNoteTone.info,
+                ),
+              );
+            }
+            final selected = _selectedProfile(saved);
+            final product = _billingProducts.firstWhere(
+              (item) => item.code == _selectedProductCode,
+              orElse: () => _billingProducts.first,
+            );
+            final approved = selected.status == ProfileStatus.approved;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SettingsSection(
+                  title: ru ? 'Анкета' : 'Profile',
+                  hint: ru
+                      ? 'Оплата включает активное размещение одной анкеты в базе.'
+                      : 'Payment activates placement for one profile.',
+                  child: Column(
+                    children: [
+                      for (var i = 0; i < saved.length; i++)
+                        _ProfileRowV2(
+                          profile: saved[i],
+                          selected: saved[i].id == selected.id,
+                          last: i == saved.length - 1,
+                          onTap: () => setState(() {
+                            _selectedProfileId = saved[i].id;
+                            _errorText = '';
+                            _infoText = '';
+                          }),
+                        ),
+                    ],
+                  ),
+                ),
+                SettingsSection(
+                  title: ru ? 'Срок размещения' : 'Placement period',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _BillingStatusV2(profileId: selected.id, ru: ru),
+                      const SizedBox(height: 16),
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          final columns = constraints.maxWidth >= 560 ? 4 : 2;
+                          final w =
+                              (constraints.maxWidth - 10 * (columns - 1)) /
+                              columns;
+                          return Wrap(
+                            spacing: 10,
+                            runSpacing: 10,
+                            children: [
+                              for (final item in _billingProducts)
+                                SizedBox(
+                                  width: w,
+                                  child: _ProductTileV2(
+                                    product: item,
+                                    ru: ru,
+                                    selected: item.code == _selectedProductCode,
+                                    onTap: () => setState(
+                                      () => _selectedProductCode = item.code,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                SettingsSection(
+                  title: ru ? 'Оплата' : 'Payment',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SettingsRow(
+                        label: ru ? 'К оплате' : 'Total',
+                        selectable: false,
+                        child: Text.rich(
+                          TextSpan(
+                            children: [
+                              TextSpan(
+                                text: product.priceLabel,
+                                style: AppText.h2.copyWith(fontSize: 22),
+                              ),
+                              TextSpan(
+                                text:
+                                    '   ${product.monthlyLabel(ru)}'
+                                    '${product.discountPercent > 0 ? ' · ${ru ? 'скидка' : 'discount'} ${product.discountPercent}%' : ''}',
+                                style: AppText.small.copyWith(
+                                  color: Tokens.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      SettingsRow(
+                        label: ru ? 'Период' : 'Period',
+                        value: _periodSentence(product, ru),
+                        selectable: false,
+                      ),
+                      if (!approved) ...[
+                        const SizedBox(height: 10),
+                        SettingsNote(
+                          text: ru
+                              ? 'Сейчас оплатить нельзя: анкета должна быть утверждена модератором.'
+                              : 'Payment is disabled until the profile is approved.',
+                          tone: SettingsNoteTone.info,
+                        ),
+                      ],
+                      if (_errorText.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        SettingsNote(
+                          text: _errorText,
+                          tone: SettingsNoteTone.danger,
+                        ),
+                      ],
+                      if (_infoText.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        SettingsNote(
+                          text: _infoText,
+                          tone: SettingsNoteTone.success,
+                        ),
+                      ],
+                      const SizedBox(height: 18),
+                      Row(
+                        children: [
+                          FilledButton(
+                            onPressed: approved && !_isSubmitting
+                                ? () => _startPayment(selected)
+                                : null,
+                            style: FilledButton.styleFrom(
+                              minimumSize: const Size(0, 44),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 22,
+                              ),
+                            ),
+                            child: Text(
+                              _isSubmitting
+                                  ? (ru ? 'Создаём оплату…' : 'Creating payment…')
+                                  : (ru ? 'Перейти к оплате' : 'Go to payment'),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          TextButton(
+                            onPressed: () => context.push(
+                              legalDocumentByKind(LegalDocumentKind.terms).route,
+                            ),
+                            style: TextButton.styleFrom(
+                              foregroundColor: Tokens.textSecondary,
+                            ),
+                            child: Text(ru ? 'Условия' : 'Terms'),
+                          ),
+                          TextButton(
+                            onPressed: () => context.push(
+                              legalDocumentByKind(
+                                LegalDocumentKind.requisites,
+                              ).route,
+                            ),
+                            style: TextButton.styleFrom(
+                              foregroundColor: Tokens.textSecondary,
+                            ),
+                            child: Text(ru ? 'Реквизиты' : 'Legal details'),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      SettingsNote(
+                        text: ru
+                            ? 'Оплата через ЮKassa. После успешной оплаты размещение включится автоматически до конца периода.'
+                            : 'Paid via YooKassa. After a successful payment the placement activates automatically until the period ends.',
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      );
+    }
+
+    return SettingsPageV2(
+      title: ru ? 'Размещение в базе' : 'Profile placement',
+      subtitle: ru
+          ? 'Оплата и срок показа анкеты в каталоге'
+          : 'Payment and the period your profile is listed',
+      backLabel: ru ? 'Аккаунт' : 'Account',
+      onBack: () => context.go('/me'),
+      children: children,
+    );
+  }
+
+  String _periodSentence(_BillingProduct product, bool ru) {
+    if (!ru) return product.months == 1 ? '1 month' : '${product.months} months';
+    return switch (product.months) {
+      1 => '1 месяц',
+      3 => '3 месяца',
+      6 => '6 месяцев',
+      _ => '12 месяцев',
+    };
   }
 
   MyProfileState _selectedProfile(List<MyProfileState> profiles) {
@@ -1086,3 +1337,162 @@ String _roleLabel(ProfessionalProfileType role, bool ru) => switch (role) {
   ProfessionalProfileType.makeupArtist => ru ? 'Визажист' : 'Makeup artist',
   ProfessionalProfileType.hairStylist => ru ? 'Hair-стилист' : 'Hair stylist',
 };
+
+
+// ---------------------------------------------------------------------------
+// v2 (web)
+// ---------------------------------------------------------------------------
+
+class _ProfileRowV2 extends StatelessWidget {
+  const _ProfileRowV2({
+    required this.profile,
+    required this.selected,
+    required this.last,
+    required this.onTap,
+  });
+
+  final MyProfileState profile;
+  final bool selected;
+  final bool last;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final ru = _isRu(context);
+    final title = profile.fullName.trim().isEmpty
+        ? (ru ? 'Анкета без имени' : 'Untitled profile')
+        : profile.fullName.trim();
+    final subtitle = [
+      _roleLabel(profile.effectiveProfileRoles.first, ru),
+      if (profile.city.trim().isNotEmpty) profile.city.trim(),
+      _profileStatusLabel(profile.status, ru),
+    ].join(' · ');
+    final cover = profile.coverPhotoUrl.trim();
+    return SettingsListRow(
+      title: title,
+      subtitle: subtitle,
+      onTap: onTap,
+      last: last,
+      leading: ClipRRect(
+        borderRadius: BorderRadius.circular(Tokens.radiusSm),
+        child: SizedBox(
+          width: 40,
+          height: 40,
+          child: cover.isEmpty
+              ? const ColoredBox(
+                  color: Tokens.surfaceAlt,
+                  child: Icon(
+                    Icons.person_outline_rounded,
+                    size: 20,
+                    color: Tokens.textTertiary,
+                  ),
+                )
+              : FocalImage(
+                  url: cover,
+                  focalX: profile.coverPhotoFocalX,
+                  focalY: profile.coverPhotoFocalY,
+                  memCacheWidth: 200,
+                ),
+        ),
+      ),
+      trailing: Icon(
+        selected ? Icons.radio_button_checked : Icons.radio_button_off,
+        size: 20,
+        color: selected ? Tokens.ink : Tokens.textTertiary,
+      ),
+    );
+  }
+}
+
+class _BillingStatusV2 extends ConsumerWidget {
+  const _BillingStatusV2({required this.profileId, required this.ru});
+
+  final String profileId;
+  final bool ru;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final statusAsync = ref.watch(_profileBillingSummaryProvider(profileId));
+    return statusAsync.when(
+      loading: () => SettingsStatus(
+        text: ru ? 'Проверяем статус…' : 'Checking status…',
+        color: Tokens.textTertiary,
+      ),
+      error: (_, _) => SettingsStatus(
+        text: ru
+            ? 'Статус размещения пока недоступен'
+            : 'Placement status is unavailable',
+        color: Tokens.danger,
+      ),
+      data: (summary) => SettingsStatus(
+        text: summary.label(ru).replaceAll(' • ', ' · '),
+        color: summary.isActive ? Tokens.success : Tokens.textTertiary,
+      ),
+    );
+  }
+}
+
+class _ProductTileV2 extends StatelessWidget {
+  const _ProductTileV2({
+    required this.product,
+    required this.ru,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final _BillingProduct product;
+  final bool ru;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final period = switch (product.months) {
+      1 => ru ? '1 месяц' : '1 month',
+      3 => ru ? '3 месяца' : '3 months',
+      6 => ru ? '6 месяцев' : '6 months',
+      _ => ru ? '1 год' : '1 year',
+    };
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(Tokens.radiusMd),
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: Tokens.fast,
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+          decoration: BoxDecoration(
+            color: selected ? Tokens.surfaceAlt : Tokens.bg,
+            borderRadius: BorderRadius.circular(Tokens.radiusMd),
+            border: Border.all(
+              color: selected ? Tokens.ink : Tokens.border,
+              width: selected ? 1.5 : 1,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                period,
+                style: AppText.smallStrong.copyWith(color: Tokens.text),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                product.priceLabel,
+                style: AppText.h2.copyWith(fontSize: 20),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                product.discountPercent > 0
+                    ? '${product.monthlyLabel(ru)} · −${product.discountPercent}%'
+                    : product.monthlyLabel(ru),
+                maxLines: 2,
+                style: AppText.caption.copyWith(color: Tokens.textSecondary),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

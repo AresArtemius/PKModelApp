@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -421,6 +422,7 @@ class _AccountMfaPageState extends ConsumerState<AccountMfaPage> {
     final asyncStatus = ref.watch(accountMfaStatusProvider);
     final asyncRecovery = ref.watch(mfaRecoveryCodeStatusProvider);
     final asyncAudit = ref.watch(userSecurityAuditEntriesProvider);
+    if (kIsWeb) return _buildV2(asyncStatus, asyncRecovery, asyncAudit);
     return Scaffold(
       body: Stack(
         children: [
@@ -521,6 +523,467 @@ class _AccountMfaPageState extends ConsumerState<AccountMfaPage> {
   }
 }
 
+extension _AccountMfaV2 on _AccountMfaPageState {
+  Widget _buildV2(
+    AsyncValue<AccountMfaStatus> asyncStatus,
+    AsyncValue<MfaRecoveryCodeStatus?> asyncRecovery,
+    AsyncValue<List<UserSecurityAuditEntry>> asyncAudit,
+  ) {
+    final ru = _isRussian;
+    final isError =
+        _message.contains('Exception') ||
+        _message.contains('failed') ||
+        _message.contains('Код:') ||
+        _message.contains('Неверный') ||
+        _message.contains('Invalid') ||
+        _message.contains('не ');
+
+    Widget codeField(TextEditingController controller, String label) {
+      return SizedBox(
+        width: 220,
+        child: TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          maxLength: 6,
+          style: AppText.body.copyWith(letterSpacing: 3),
+          decoration: InputDecoration(counterText: '', labelText: label),
+        ),
+      );
+    }
+
+    final sections = <Widget>[];
+
+    sections.add(
+      asyncStatus.when(
+        loading: () => const Padding(
+          padding: EdgeInsets.only(top: 24),
+          child: SkeletonList(rows: 2),
+        ),
+        error: (error, _) => Padding(
+          padding: const EdgeInsets.only(top: 24),
+          child: SettingsNote(
+            text: _errorText(error),
+            tone: SettingsNoteTone.danger,
+          ),
+        ),
+        data: (status) {
+          final verified = status.hasVerifiedTotp;
+          final enrollment = _enrollment;
+          final verifiedFactors = status.factors
+              .where((factor) => factor.status == FactorStatus.verified)
+              .toList(growable: false);
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SettingsSection(
+                title: ru ? 'Двухфакторная защита' : 'Two-factor authentication',
+                hint: status.isAdmin && !verified
+                    ? (ru
+                          ? 'Для администратора это важный защитный слой: код из Authenticator защищает вход и чувствительные действия.'
+                          : 'For an administrator this is an important layer: an Authenticator code protects sign-in and sensitive actions.')
+                    : (ru
+                          ? 'Код из приложения-аутентификатора защищает вход и чувствительные действия аккаунта.'
+                          : 'A code from an authenticator app protects sign-in and sensitive account actions.'),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SettingsStatus(
+                      text: verified
+                          ? (ru ? 'Включена' : 'Enabled')
+                          : (ru ? 'Не включена' : 'Not enabled'),
+                      color: verified
+                          ? Tokens.success
+                          : (status.isAdmin ? Tokens.danger : Tokens.textTertiary),
+                    ),
+                    if (_message.trim().isNotEmpty) ...[
+                      const SizedBox(height: 14),
+                      SettingsNote(
+                        text: _message,
+                        tone: isError
+                            ? SettingsNoteTone.danger
+                            : SettingsNoteTone.success,
+                      ),
+                    ],
+                    if (enrollment != null) ...[
+                      const SizedBox(height: 20),
+                      Wrap(
+                        spacing: 24,
+                        runSpacing: 16,
+                        crossAxisAlignment: WrapCrossAlignment.start,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(
+                                Tokens.radiusMd,
+                              ),
+                              border: Border.all(color: Tokens.border),
+                            ),
+                            child: QrImageView(
+                              data: enrollment.uri,
+                              version: QrVersions.auto,
+                              size: 180,
+                              backgroundColor: Colors.white,
+                              eyeStyle: const QrEyeStyle(
+                                eyeShape: QrEyeShape.square,
+                                color: Tokens.ink,
+                              ),
+                              dataModuleStyle: const QrDataModuleStyle(
+                                dataModuleShape: QrDataModuleShape.square,
+                                color: Tokens.ink,
+                              ),
+                            ),
+                          ),
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 420),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  ru
+                                      ? 'Отсканируйте QR в Google Authenticator, 1Password, Authy или другом TOTP-приложении — или введите секрет вручную.'
+                                      : 'Scan the QR in Google Authenticator, 1Password, Authy or another TOTP app — or enter the secret manually.',
+                                  style: AppText.small.copyWith(
+                                    color: Tokens.textSecondary,
+                                    height: 1.45,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                SelectableText(
+                                  enrollment.secret,
+                                  style: const TextStyle(
+                                    color: Tokens.text,
+                                    fontFamily: 'monospace',
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                    letterSpacing: 1.2,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Row(
+                                  children: [
+                                    TextButton(
+                                      onPressed: () => _copy(
+                                        enrollment.secret,
+                                        ru ? 'Секрет скопирован.' : 'Secret copied.',
+                                      ),
+                                      style: TextButton.styleFrom(
+                                        foregroundColor: Tokens.textSecondary,
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 6,
+                                        ),
+                                      ),
+                                      child: Text(
+                                        ru ? 'Скопировать секрет' : 'Copy secret',
+                                      ),
+                                    ),
+                                    TextButton(
+                                      onPressed: () => _copy(
+                                        enrollment.uri,
+                                        ru
+                                            ? 'Ссылка для Authenticator скопирована.'
+                                            : 'Authenticator URI copied.',
+                                      ),
+                                      style: TextButton.styleFrom(
+                                        foregroundColor: Tokens.textSecondary,
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 6,
+                                        ),
+                                      ),
+                                      child: Text(
+                                        ru ? 'Скопировать ссылку' : 'Copy URI',
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 16),
+                                Row(
+                                  children: [
+                                    codeField(
+                                      _enrollCodeC,
+                                      ru ? 'Код из приложения' : 'Code from the app',
+                                    ),
+                                    const SizedBox(width: 10),
+                                    FilledButton(
+                                      onPressed: _busy ? null : _verifyEnrollment,
+                                      style: FilledButton.styleFrom(
+                                        minimumSize: const Size(0, 48),
+                                      ),
+                                      child: Text(
+                                        _busy
+                                            ? '…'
+                                            : (ru ? 'Подтвердить' : 'Verify'),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ] else if (!status.hasTotp) ...[
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          FilledButton.icon(
+                            onPressed: _busy ? null : _startEnrollment,
+                            style: FilledButton.styleFrom(
+                              minimumSize: const Size(0, 40),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                              ),
+                            ),
+                            icon: const Icon(Icons.qr_code_2_rounded, size: 18),
+                            label: Text(
+                              ru
+                                  ? 'Подключить Authenticator'
+                                  : 'Set up Authenticator',
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      SettingsNote(
+                        text: ru
+                            ? 'Подойдёт Google Authenticator, 1Password, Authy или любое другое TOTP-приложение.'
+                            : 'Google Authenticator, 1Password, Authy or any other TOTP app will do.',
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              if (status.factors.isNotEmpty)
+                SettingsSection(
+                  title: ru ? 'Подключённые факторы' : 'Enrolled factors',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      for (var i = 0; i < status.factors.length; i++)
+                        SettingsListRow(
+                          icon: Icons.key_rounded,
+                          active:
+                              status.factors[i].status == FactorStatus.verified,
+                          title: status.factors[i].factorType == FactorType.totp
+                              ? (ru ? 'Приложение-аутентификатор' : 'Authenticator app')
+                              : status.factors[i].factorType.name.toUpperCase(),
+                          subtitle:
+                              status.factors[i].status == FactorStatus.verified
+                              ? (ru ? 'Подтверждён' : 'Verified')
+                              : (ru ? 'Не подтверждён' : 'Not verified'),
+                          trailing: TextButton(
+                            onPressed: _busy
+                                ? null
+                                : () => _removeFactor(
+                                    status.factors[i],
+                                    status.sessionVerified,
+                                  ),
+                            style: TextButton.styleFrom(
+                              foregroundColor: Tokens.danger,
+                            ),
+                            child: Text(ru ? 'Отключить' : 'Disable'),
+                          ),
+                          last: i == status.factors.length - 1,
+                        ),
+                      if (verifiedFactors.isNotEmpty &&
+                          !status.sessionVerified) ...[
+                        const SizedBox(height: 16),
+                        Text(
+                          ru
+                              ? 'Чтобы подтвердить текущую сессию или отключить защиту, введите код из приложения.'
+                              : 'To verify this session or disable the protection, enter a code from the app.',
+                          style: AppText.small.copyWith(
+                            color: Tokens.textSecondary,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            codeField(
+                              _sessionCodeC,
+                              ru ? 'Код из приложения' : 'Code from the app',
+                            ),
+                            const SizedBox(width: 10),
+                            OutlinedButton(
+                              onPressed: _busy || status.factors.isEmpty
+                                  ? null
+                                  : () => _verifySession(status.factors.first.id),
+                              style: OutlinedButton.styleFrom(
+                                minimumSize: const Size(0, 48),
+                              ),
+                              child: Text(
+                                ru ? 'Подтвердить сессию' : 'Verify session',
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              if (verified)
+                SettingsSection(
+                  title: ru ? 'Резервные коды' : 'Recovery codes',
+                  hint: _recoveryCodes.isNotEmpty
+                      ? (ru
+                            ? 'Сохраните эти коды сейчас — после ухода со страницы мы больше не покажем их полностью.'
+                            : 'Save these codes now — after you leave the page we will not show them in full again.')
+                      : (ru
+                            ? 'Одноразовые коды помогут войти, если доступ к приложению-аутентификатору будет потерян.'
+                            : 'One-time codes let you sign in if access to the authenticator app is lost.'),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (asyncRecovery.isLoading)
+                        SettingsStatus(
+                          text: ru ? 'Загрузка…' : 'Loading…',
+                          color: Tokens.textTertiary,
+                        )
+                      else if (asyncRecovery.valueOrNull == null)
+                        SettingsStatus(
+                          text: ru
+                              ? 'Резервные коды ещё не настроены на сервере'
+                              : 'Recovery codes are not configured on the server yet',
+                          color: Tokens.danger,
+                        )
+                      else
+                        SettingsStatus(
+                          text: ru
+                              ? 'Активных кодов: ${asyncRecovery.valueOrNull!.activeCount} · использовано: ${asyncRecovery.valueOrNull!.usedCount}'
+                              : 'Active codes: ${asyncRecovery.valueOrNull!.activeCount} · used: ${asyncRecovery.valueOrNull!.usedCount}',
+                          color: asyncRecovery.valueOrNull!.activeCount > 0
+                              ? Tokens.success
+                              : Tokens.textTertiary,
+                        ),
+                      if (_recoveryCodes.isNotEmpty) ...[
+                        const SizedBox(height: 14),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: Tokens.surface,
+                            borderRadius: BorderRadius.circular(Tokens.radiusMd),
+                            border: Border.all(color: Tokens.border),
+                          ),
+                          child: Wrap(
+                            spacing: 18,
+                            runSpacing: 8,
+                            children: [
+                              for (final code in _recoveryCodes)
+                                SelectableText(
+                                  code,
+                                  style: const TextStyle(
+                                    color: Tokens.text,
+                                    fontFamily: 'monospace',
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                    letterSpacing: 1,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 14),
+                      Row(
+                        children: [
+                          if (_recoveryCodes.isNotEmpty) ...[
+                            OutlinedButton.icon(
+                              onPressed: _busy ? null : _copyRecoveryCodes,
+                              style: OutlinedButton.styleFrom(
+                                minimumSize: const Size(0, 40),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                ),
+                              ),
+                              icon: const Icon(
+                                Icons.content_copy_rounded,
+                                size: 18,
+                              ),
+                              label: Text(
+                                ru ? 'Скопировать коды' : 'Copy codes',
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                          ],
+                          TextButton(
+                            onPressed: _busy ? null : _generateRecoveryCodes,
+                            style: TextButton.styleFrom(
+                              foregroundColor: Tokens.textSecondary,
+                            ),
+                            child: Text(
+                              (asyncRecovery.valueOrNull?.hasCodes ?? false)
+                                  ? (ru ? 'Создать новые коды' : 'Generate new codes')
+                                  : (ru ? 'Создать коды' : 'Generate codes'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+
+    sections.add(
+      SettingsSection(
+        title: ru ? 'Журнал безопасности' : 'Security log',
+        trailing: IconButton(
+          tooltip: ru ? 'Обновить' : 'Refresh',
+          onPressed: () => ref.invalidate(userSecurityAuditEntriesProvider),
+          visualDensity: VisualDensity.compact,
+          style: IconButton.styleFrom(foregroundColor: Tokens.textSecondary),
+          icon: const Icon(Icons.refresh_rounded, size: 18),
+        ),
+        child: asyncAudit.when(
+          loading: () => const SkeletonList(rows: 3),
+          error: (_, _) => SettingsNote(
+            text: ru
+                ? 'Не удалось загрузить журнал.'
+                : 'Could not load the log.',
+            tone: SettingsNoteTone.danger,
+          ),
+          data: (entries) {
+            if (entries.isEmpty) {
+              return SettingsNote(
+                text: ru
+                    ? 'Пока нет событий безопасности.'
+                    : 'No security events yet.',
+              );
+            }
+            final shown = entries.take(12).toList(growable: false);
+            return Column(
+              children: [
+                for (var i = 0; i < shown.length; i++)
+                  SettingsListRow(
+                    icon: _auditIconFor(shown[i].eventType),
+                    title: _auditTitleFor(shown[i], ru),
+                    subtitle: _auditDateLabel(shown[i].createdAt),
+                    last: i == shown.length - 1,
+                  ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+
+    return SettingsPageV2(
+      title: ru ? 'Безопасность' : 'Security',
+      subtitle: ru
+          ? 'Двухфакторная защита, резервные коды и журнал событий'
+          : 'Two-factor authentication, recovery codes and the event log',
+      backLabel: ru ? 'Аккаунт' : 'Account',
+      onBack: () => context.go(Routes.me),
+      children: sections,
+    );
+  }
+}
+
 class _SecurityAuditCard extends StatelessWidget {
   const _SecurityAuditCard({
     required this.entries,
@@ -603,18 +1066,18 @@ class _SecurityAuditRow extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(_iconFor(entry.eventType), color: kTextDark, size: 20),
+          Icon(_auditIconFor(entry.eventType), color: kTextDark, size: 20),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  _titleFor(entry, isRussian),
+                  _auditTitleFor(entry, isRussian),
                   style: _bodyStyle(color: kTextDark),
                 ),
                 const SizedBox(height: 3),
-                Text(_dateLabel(entry.createdAt), style: _bodyStyle(size: 12)),
+                Text(_auditDateLabel(entry.createdAt), style: _bodyStyle(size: 12)),
               ],
             ),
           ),
@@ -622,74 +1085,74 @@ class _SecurityAuditRow extends StatelessWidget {
       ),
     );
   }
+}
 
-  IconData _iconFor(String eventType) {
-    switch (eventType) {
-      case UserSecurityAuditEvent.loginEmail:
-      case UserSecurityAuditEvent.loginPhone:
-        return Icons.login_rounded;
-      case UserSecurityAuditEvent.emailChangeRequested:
-        return Icons.alternate_email_rounded;
-      case UserSecurityAuditEvent.phoneChanged:
-        return Icons.phone_iphone_rounded;
-      case UserSecurityAuditEvent.passwordChanged:
-        return Icons.password_rounded;
-      case UserSecurityAuditEvent.mfaEnabled:
-      case UserSecurityAuditEvent.mfaSessionVerified:
-      case UserSecurityAuditEvent.mfaDisabled:
-      case UserSecurityAuditEvent.mfaRecoveryCodesGenerated:
-        return Icons.verified_user_rounded;
-      case UserSecurityAuditEvent.dataExported:
-        return Icons.download_rounded;
-      case UserSecurityAuditEvent.accountDeletionRequested:
-        return Icons.delete_outline_rounded;
-      default:
-        return Icons.security_rounded;
-    }
+IconData _auditIconFor(String eventType) {
+  switch (eventType) {
+    case UserSecurityAuditEvent.loginEmail:
+    case UserSecurityAuditEvent.loginPhone:
+      return Icons.login_rounded;
+    case UserSecurityAuditEvent.emailChangeRequested:
+      return Icons.alternate_email_rounded;
+    case UserSecurityAuditEvent.phoneChanged:
+      return Icons.phone_iphone_rounded;
+    case UserSecurityAuditEvent.passwordChanged:
+      return Icons.password_rounded;
+    case UserSecurityAuditEvent.mfaEnabled:
+    case UserSecurityAuditEvent.mfaSessionVerified:
+    case UserSecurityAuditEvent.mfaDisabled:
+    case UserSecurityAuditEvent.mfaRecoveryCodesGenerated:
+      return Icons.verified_user_rounded;
+    case UserSecurityAuditEvent.dataExported:
+      return Icons.download_rounded;
+    case UserSecurityAuditEvent.accountDeletionRequested:
+      return Icons.delete_outline_rounded;
+    default:
+      return Icons.security_rounded;
   }
+}
 
-  String _titleFor(UserSecurityAuditEntry entry, bool isRussian) {
-    if (entry.eventLabel.isNotEmpty) return entry.eventLabel;
-    switch (entry.eventType) {
-      case UserSecurityAuditEvent.loginEmail:
-        return isRussian ? 'Вход по email' : 'Email sign-in';
-      case UserSecurityAuditEvent.loginPhone:
-        return isRussian ? 'Вход по телефону' : 'Phone sign-in';
-      case UserSecurityAuditEvent.emailChangeRequested:
-        return isRussian ? 'Запрошена смена email' : 'Email change requested';
-      case UserSecurityAuditEvent.phoneChanged:
-        return isRussian ? 'Телефон изменен' : 'Phone changed';
-      case UserSecurityAuditEvent.passwordChanged:
-        return isRussian ? 'Пароль изменен' : 'Password changed';
-      case UserSecurityAuditEvent.mfaEnabled:
-        return isRussian ? '2FA включена' : '2FA enabled';
-      case UserSecurityAuditEvent.mfaSessionVerified:
-        return isRussian
-            ? 'Сессия подтверждена 2FA'
-            : 'Session verified with 2FA';
-      case UserSecurityAuditEvent.mfaDisabled:
-        return isRussian ? '2FA отключена' : '2FA disabled';
-      case UserSecurityAuditEvent.mfaRecoveryCodesGenerated:
-        return isRussian
-            ? 'Recovery codes созданы'
-            : 'Recovery codes generated';
-      case UserSecurityAuditEvent.dataExported:
-        return isRussian ? 'Данные экспортированы' : 'Data exported';
-      case UserSecurityAuditEvent.accountDeletionRequested:
-        return isRussian
-            ? 'Запрошено удаление аккаунта'
-            : 'Account deletion requested';
-      default:
-        return entry.eventType;
-    }
+String _auditTitleFor(UserSecurityAuditEntry entry, bool isRussian) {
+  if (entry.eventLabel.isNotEmpty) return entry.eventLabel;
+  switch (entry.eventType) {
+    case UserSecurityAuditEvent.loginEmail:
+      return isRussian ? 'Вход по email' : 'Email sign-in';
+    case UserSecurityAuditEvent.loginPhone:
+      return isRussian ? 'Вход по телефону' : 'Phone sign-in';
+    case UserSecurityAuditEvent.emailChangeRequested:
+      return isRussian ? 'Запрошена смена email' : 'Email change requested';
+    case UserSecurityAuditEvent.phoneChanged:
+      return isRussian ? 'Телефон изменен' : 'Phone changed';
+    case UserSecurityAuditEvent.passwordChanged:
+      return isRussian ? 'Пароль изменен' : 'Password changed';
+    case UserSecurityAuditEvent.mfaEnabled:
+      return isRussian ? '2FA включена' : '2FA enabled';
+    case UserSecurityAuditEvent.mfaSessionVerified:
+      return isRussian
+          ? 'Сессия подтверждена 2FA'
+          : 'Session verified with 2FA';
+    case UserSecurityAuditEvent.mfaDisabled:
+      return isRussian ? '2FA отключена' : '2FA disabled';
+    case UserSecurityAuditEvent.mfaRecoveryCodesGenerated:
+      return isRussian
+          ? 'Recovery codes созданы'
+          : 'Recovery codes generated';
+    case UserSecurityAuditEvent.dataExported:
+      return isRussian ? 'Данные экспортированы' : 'Data exported';
+    case UserSecurityAuditEvent.accountDeletionRequested:
+      return isRussian
+          ? 'Запрошено удаление аккаунта'
+          : 'Account deletion requested';
+    default:
+      return entry.eventType;
   }
+}
 
-  String _dateLabel(DateTime? value) {
-    if (value == null) return '';
-    final local = value.toLocal();
-    String two(int number) => number.toString().padLeft(2, '0');
-    return '${two(local.day)}.${two(local.month)}.${local.year} ${two(local.hour)}:${two(local.minute)}';
-  }
+String _auditDateLabel(DateTime? value) {
+  if (value == null) return '';
+  final local = value.toLocal();
+  String two(int number) => number.toString().padLeft(2, '0');
+  return '${two(local.day)}.${two(local.month)}.${local.year} ${two(local.hour)}:${two(local.minute)}';
 }
 
 class _MfaContent extends StatelessWidget {

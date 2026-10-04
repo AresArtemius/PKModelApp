@@ -396,6 +396,155 @@ class SupportPage extends ConsumerWidget {
         .maybeWhen(data: (value) => value, orElse: () => false);
     final compact = MediaQuery.sizeOf(context).width < 720;
 
+    if (kIsWeb) {
+      return SettingsPageV2(
+        title: ru ? 'Помощь и поддержка' : 'Help & support',
+        subtitle: ru
+            ? 'Быстрые ответы и обращения к администратору'
+            : 'Quick answers and requests to the administrator',
+        backLabel: ru ? 'Аккаунт' : 'Account',
+        onBack: () => context.go(Routes.me),
+        actions: [
+          FilledButton.icon(
+            onPressed: () => _createTicket(context, ref),
+            style: FilledButton.styleFrom(
+              minimumSize: const Size(0, 40),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+            ),
+            icon: const Icon(Icons.edit_outlined, size: 18),
+            label: Text(ru ? 'Написать' : 'Contact'),
+          ),
+        ],
+        children: [
+          SettingsSection(
+            title: 'Telegram',
+            child: SettingsListRow(
+              icon: Icons.telegram_rounded,
+              active: telegramLinked,
+              title: telegramLinked
+                  ? (ru ? 'Подключено к @pkmodelapp_bot' : 'Connected to @pkmodelapp_bot')
+                  : (ru ? 'Поддержка в Telegram' : 'Support in Telegram'),
+              subtitle: telegramLinked
+                  ? (ru
+                        ? 'Ответы администратора приходят в бота'
+                        : 'Administrator replies arrive in the bot')
+                  : (ru
+                        ? 'Быстрые ответы и связь с администратором в мессенджере'
+                        : 'Quick answers and administrator contact in the messenger'),
+              trailing: telegramLinked
+                  ? TextButton(
+                      onPressed: () => _disconnectTelegram(context, ref),
+                      style: TextButton.styleFrom(
+                        foregroundColor: Tokens.textSecondary,
+                      ),
+                      child: Text(ru ? 'Отключить' : 'Disconnect'),
+                    )
+                  : OutlinedButton(
+                      onPressed: () => _connectTelegram(context, ref),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(0, 36),
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                      ),
+                      child: Text(ru ? 'Подключить' : 'Connect'),
+                    ),
+              last: true,
+            ),
+          ),
+          SettingsSection(
+            title: ru ? 'Мои обращения' : 'My requests',
+            child: tickets.when(
+              data: (items) => items.isEmpty
+                  ? SettingsNote(
+                      text: ru
+                          ? 'Обращений пока нет. Нажмите «Написать», чтобы задать вопрос администратору.'
+                          : 'No requests yet. Press «Contact» to ask the administrator.',
+                    )
+                  : Column(
+                      children: [
+                        for (var i = 0; i < items.length; i++)
+                          SettingsListRow(
+                            icon: Icons.forum_outlined,
+                            active: (unreadByTicket[items[i].id] ?? 0) > 0,
+                            title: items[i].subject,
+                            subtitle: _statusLabel(items[i].status, ru),
+                            onTap: () => showDialog<void>(
+                              context: context,
+                              builder: (_) => _SupportTicketDialog(
+                                ticket: items[i],
+                                ru: ru,
+                              ),
+                            ),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if ((unreadByTicket[items[i].id] ?? 0) > 0)
+                                  Container(
+                                    margin: const EdgeInsets.only(right: 4),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 7,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Tokens.accent,
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Text(
+                                      '${unreadByTicket[items[i].id]}',
+                                      style: AppText.caption.copyWith(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                IconButton(
+                                  tooltip: ru ? 'Удалить' : 'Delete',
+                                  onPressed: () =>
+                                      _deleteTicket(context, ref, items[i]),
+                                  visualDensity: VisualDensity.compact,
+                                  style: IconButton.styleFrom(
+                                    foregroundColor: Tokens.textTertiary,
+                                  ),
+                                  icon: const Icon(
+                                    Icons.delete_outline_rounded,
+                                    size: 18,
+                                  ),
+                                ),
+                                const Icon(
+                                  Icons.chevron_right_rounded,
+                                  size: 20,
+                                  color: Tokens.textTertiary,
+                                ),
+                              ],
+                            ),
+                            last: i == items.length - 1,
+                          ),
+                      ],
+                    ),
+              loading: () => const SkeletonList(rows: 2),
+              error: (error, _) => SettingsNote(
+                text: error is SupportSetupRequiredException
+                    ? (ru
+                          ? 'Центр обращений ещё настраивается.'
+                          : 'The support center is still being set up.')
+                    : (ru
+                          ? 'Не удалось загрузить обращения.'
+                          : 'Could not load support requests.'),
+                tone: SettingsNoteTone.danger,
+              ),
+            ),
+          ),
+          SettingsSection(
+            title: ru ? 'Частые вопросы' : 'FAQ',
+            child: Column(
+              children: [
+                for (final item in _faq(ru)) _FaqRowV2(item: item),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+
     return Scaffold(
       body: Stack(
         children: [
@@ -1322,4 +1471,80 @@ String _statusLabel(String status, bool ru) {
     'bot_answered' => 'Ответил помощник',
     _ => 'Новое обращение',
   };
+}
+
+
+/// FAQ entry in the v2 style: a question line that unfolds the answer.
+class _FaqRowV2 extends StatefulWidget {
+  const _FaqRowV2({required this.item});
+  final ({String question, String answer}) item;
+
+  @override
+  State<_FaqRowV2> createState() => _FaqRowV2State();
+}
+
+class _FaqRowV2State extends State<_FaqRowV2> {
+  bool _open = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => setState(() => _open = !_open),
+        child: Container(
+          decoration: const BoxDecoration(
+            border: Border(bottom: BorderSide(color: Tokens.border)),
+          ),
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      widget.item.question,
+                      style: AppText.small.copyWith(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: Tokens.text,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  AnimatedRotation(
+                    duration: Tokens.fast,
+                    turns: _open ? 0.5 : 0,
+                    child: const Icon(
+                      Icons.expand_more_rounded,
+                      size: 20,
+                      color: Tokens.textTertiary,
+                    ),
+                  ),
+                ],
+              ),
+              AnimatedSize(
+                duration: Tokens.base,
+                curve: Curves.easeOut,
+                alignment: Alignment.topCenter,
+                child: !_open
+                    ? const SizedBox(width: double.infinity)
+                    : Padding(
+                        padding: const EdgeInsets.only(top: 8, right: 32),
+                        child: Text(
+                          widget.item.answer,
+                          style: AppText.small.copyWith(
+                            color: Tokens.textSecondary,
+                            height: 1.45,
+                          ),
+                        ),
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
