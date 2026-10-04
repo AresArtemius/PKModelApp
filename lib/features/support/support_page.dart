@@ -537,7 +537,8 @@ class SupportPage extends ConsumerWidget {
             title: ru ? 'Частые вопросы' : 'FAQ',
             child: Column(
               children: [
-                for (final item in _faq(ru)) _FaqRowV2(item: item),
+                for (final (i, item) in _faq(ru).indexed)
+                  _FaqRowV2(item: item, last: i == _faq(ru).length - 1),
               ],
             ),
           ),
@@ -1476,8 +1477,9 @@ String _statusLabel(String status, bool ru) {
 
 /// FAQ entry in the v2 style: a question line that unfolds the answer.
 class _FaqRowV2 extends StatefulWidget {
-  const _FaqRowV2({required this.item});
+  const _FaqRowV2({required this.item, this.last = false});
   final ({String question, String answer}) item;
+  final bool last;
 
   @override
   State<_FaqRowV2> createState() => _FaqRowV2State();
@@ -1493,8 +1495,10 @@ class _FaqRowV2State extends State<_FaqRowV2> {
       child: InkWell(
         onTap: () => setState(() => _open = !_open),
         child: Container(
-          decoration: const BoxDecoration(
-            border: Border(bottom: BorderSide(color: Tokens.border)),
+          decoration: BoxDecoration(
+            border: widget.last
+                ? null
+                : const Border(bottom: BorderSide(color: Tokens.border)),
           ),
           padding: const EdgeInsets.symmetric(vertical: 12),
           child: Column(
