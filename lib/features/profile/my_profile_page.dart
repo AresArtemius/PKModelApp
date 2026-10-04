@@ -40,7 +40,8 @@ String _sentenceCaseAccount(String value) {
   // Keep acronyms such as 2FA / JSON readable: only lowercase words that
   // are fully uppercase and longer than three letters.
   final words = trimmed.split(' ').map((word) {
-    final isUpper = word == word.toUpperCase() && word.length > 3;
+    final isUpper =
+        word == word.toUpperCase() && (word.length > 3 || word.length == 1);
     return isUpper ? word.toLowerCase() : word;
   }).toList();
   final joined = words.join(' ');
