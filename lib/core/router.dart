@@ -149,14 +149,9 @@ Page<void> _fadePage(GoRouterState state, Widget child) {
 const double _kDesktopShellBreakpoint = 900;
 
 /// Routes whose content is mostly text and reads better in a 1280 px column.
-const List<String> _kNarrowContentPrefixes = [
-  Routes.billing,
-  Routes.support,
-  Routes.dataPrivacy,
-  Routes.accountDevices,
-  Routes.accountMfa,
-  Routes.profileAnalytics,
-];
+// Service pages own their 760 px column now (SettingsPageV2), so nothing
+// is centred by the shell any more; kept for pages that may need it later.
+const List<String> _kNarrowContentPrefixes = [];
 
 class AppShell extends StatelessWidget {
   const AppShell({super.key, required this.child});
@@ -476,19 +471,6 @@ final List<RouteBase> appRoutes = [
     builder: (context, state) => const AccountProfileEditPage(),
   ),
   GoRoute(
-    path: Routes.accountDevices,
-    builder: (context, state) => const AccountDevicesPage(),
-  ),
-  GoRoute(
-    path: Routes.accountMfa,
-    builder: (context, state) => const AccountMfaPage(),
-  ),
-  GoRoute(
-    path: Routes.dataPrivacy,
-    builder: (context, state) => const DataPrivacyPage(),
-  ),
-
-  GoRoute(
     path: Routes.publicAccount,
     builder: (context, state) {
       final tag = state.pathParameters[_routeParamTag] ?? '';
@@ -582,6 +564,18 @@ final List<RouteBase> appRoutes = [
       GoRoute(
         path: Routes.castings,
         builder: (context, state) => const CastingPage(),
+      ),
+      GoRoute(
+        path: Routes.accountDevices,
+        builder: (context, state) => const AccountDevicesPage(),
+      ),
+      GoRoute(
+        path: Routes.accountMfa,
+        builder: (context, state) => const AccountMfaPage(),
+      ),
+      GoRoute(
+        path: Routes.dataPrivacy,
+        builder: (context, state) => const DataPrivacyPage(),
       ),
       GoRoute(
         path: Routes.search,
