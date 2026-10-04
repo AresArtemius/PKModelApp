@@ -1,4 +1,5 @@
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -13,6 +14,12 @@ import '../../ui/brand/ui_constants.dart';
 import 'chat_models.dart';
 import 'chat_page.dart';
 import 'chat_providers.dart';
+
+/// v2 (web): full-width page — hairline list of invitations on the left,
+/// the selected invitation on the right; chat opens on the chats page.
+const bool _invitationsV2 = kIsWeb;
+const double _invitationsV2ListWidth = 400;
+const double _invitationsV2Breakpoint = 960;
 
 const double _invitationsDesktopBreakpoint = 900;
 const double _invitationsDesktopMaxWidth = 1480;
@@ -110,10 +117,60 @@ class _InvitationsPageState extends ConsumerState<InvitationsPage> {
     });
   }
 
+  Future<void> _openChatV2(BuildContext context, CastingInvitation item) async {
+    final chatId = await _ensureChat(context, item);
+    if (!context.mounted || chatId == null) return;
+    context.push(Routes.chatLocation(chatId));
+  }
+
+  Future<void> _deleteV2(BuildContext context, CastingInvitation item) async {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(ru ? 'Удалить приглашение?' : 'Delete invitation?'),
+        content: Text(
+          ru
+              ? 'Приглашение исчезнет из списка. Чат и анкета останутся доступны, если они уже были открыты.'
+              : 'The invitation will disappear from the list. The chat and profile remain available if already opened.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(ru ? 'Отмена' : 'Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: FilledButton.styleFrom(backgroundColor: Tokens.danger),
+            child: Text(ru ? 'Удалить' : 'Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    await _hideInvitation(ref: ref, item: item);
+    if (_selectedKey == _key(item) && mounted) {
+      setState(() => _selectedKey = null);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
     final invitations = ref.watch(myInvitationsProvider);
+    if (_invitationsV2) {
+      return _InvitationsPageV2(
+        async: invitations,
+        selectedKey: _selectedKey,
+        keyOf: _key,
+        onSelect: (item) => setState(
+          () => _selectedKey = item == null ? null : _key(item),
+        ),
+        onRefresh: () => ref.invalidate(myInvitationsProvider),
+        onOpenChat: (item) => _openChatV2(context, item),
+        onDelete: (item) => _deleteV2(context, item),
+      );
+    }
     final isDesktop =
         MediaQuery.sizeOf(context).width >= _invitationsDesktopBreakpoint;
     final pagePadding = isDesktop
@@ -1299,4 +1356,649 @@ class _CenteredMessage extends StatelessWidget {
       ),
     );
   }
+}
+
+
+// ---------------------------------------------------------------------------
+// v2 (web)
+// ---------------------------------------------------------------------------
+
+class _InvitationsPageV2 extends StatelessWidget {
+  const _InvitationsPageV2({
+    required this.async,
+    required this.selectedKey,
+    required this.keyOf,
+    required this.onSelect,
+    required this.onRefresh,
+    required this.onOpenChat,
+    required this.onDelete,
+  });
+
+  final AsyncValue<List<CastingInvitation>> async;
+  final String? selectedKey;
+  final String Function(CastingInvitation item) keyOf;
+  final ValueChanged<CastingInvitation?> onSelect;
+  final VoidCallback onRefresh;
+  final Future<void> Function(CastingInvitation item) onOpenChat;
+  final Future<void> Function(CastingInvitation item) onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final wide = MediaQuery.sizeOf(context).width >= _invitationsV2Breakpoint;
+    final items = async.valueOrNull ?? const <CastingInvitation>[];
+    CastingInvitation? selected;
+    for (final item in items) {
+      if (keyOf(item) == selectedKey) {
+        selected = item;
+        break;
+      }
+    }
+    if (wide && selected == null && items.isNotEmpty) selected = items.first;
+    final current = selected;
+
+    final gutter = wide ? 24.0 : 16.0;
+
+    final header = Padding(
+      padding: EdgeInsets.fromLTRB(gutter, wide ? 28 : 20, gutter, 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  ru ? 'Приглашения' : 'Invitations',
+                  style: AppText.h1.copyWith(fontSize: wide ? 32 : 28),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  items.isEmpty
+                      ? (ru ? 'Пока ничего нет' : 'Nothing yet')
+                      : (ru
+                            ? _pluralRuInvitations(
+                                items.length,
+                                '${items.length} приглашение',
+                                '${items.length} приглашения',
+                                '${items.length} приглашений',
+                              )
+                            : '${items.length} invitations'),
+                  style: AppText.caption.copyWith(fontSize: 13),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: ru ? 'Обновить' : 'Refresh',
+            onPressed: onRefresh,
+            style: IconButton.styleFrom(foregroundColor: Tokens.textSecondary),
+            icon: const Icon(Icons.refresh_rounded, size: 20),
+          ),
+        ],
+      ),
+    );
+
+    Widget list = async.when(
+      loading: () => Padding(
+        padding: EdgeInsets.all(gutter),
+        child: const SkeletonList(rows: 6),
+      ),
+      error: (e, _) => Padding(
+        padding: EdgeInsets.all(gutter),
+        child: Text(
+          AppErrorMapper.message(e, t),
+          style: AppText.small.copyWith(color: Tokens.danger),
+        ),
+      ),
+      data: (items) {
+        if (items.isEmpty) {
+          return Padding(
+            padding: EdgeInsets.fromLTRB(gutter, 48, gutter, 48),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  ru ? 'Приглашений нет' : 'No invitations',
+                  style: AppText.h2.copyWith(color: Tokens.textSecondary),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  t.noInvitationsMessage,
+                  style: AppText.small.copyWith(color: Tokens.textTertiary),
+                ),
+              ],
+            ),
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (final item in items)
+              _InvitationRowV2(
+                item: item,
+                gutter: gutter,
+                selected: wide && current != null &&
+                    keyOf(item) == keyOf(current),
+                onTap: () => onSelect(item),
+                onDelete: () => onDelete(item),
+              ),
+          ],
+        );
+      },
+    );
+
+    if (!wide) {
+      if (current != null) {
+        return Scaffold(
+          backgroundColor: Tokens.bg,
+          body: SafeArea(
+            child: ListView(
+              padding: const EdgeInsets.only(bottom: 32),
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        onPressed: () => onSelect(null),
+                        style: IconButton.styleFrom(
+                          foregroundColor: Tokens.textSecondary,
+                        ),
+                        icon: const Icon(Icons.arrow_back_rounded),
+                      ),
+                      Text(
+                        ru ? 'Приглашения' : 'Invitations',
+                        style: AppText.smallStrong,
+                      ),
+                    ],
+                  ),
+                ),
+                _InvitationDetailsV2(
+                  item: current,
+                  gutter: 16,
+                  onOpenChat: () => onOpenChat(current),
+                  onDelete: () => onDelete(current),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+      return Scaffold(
+        backgroundColor: Tokens.bg,
+        body: SafeArea(
+          child: ListView(
+            padding: const EdgeInsets.only(bottom: 32),
+            children: [header, list],
+          ),
+        ),
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: Tokens.bg,
+      body: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            width: _invitationsV2ListWidth,
+            child: ListView(
+              padding: const EdgeInsets.only(bottom: 32),
+              children: [header, list],
+            ),
+          ),
+          const VerticalDivider(width: 1, thickness: 1, color: Tokens.border),
+          Expanded(
+            child: current == null
+                ? const SizedBox.shrink()
+                : SingleChildScrollView(
+                    child: _InvitationDetailsV2(
+                      item: current,
+                      gutter: 40,
+                      onOpenChat: () => onOpenChat(current),
+                      onDelete: () => onDelete(current),
+                    ),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _pluralRuInvitations(int n, String one, String few, String many) {
+  final mod10 = n % 10;
+  final mod100 = n % 100;
+  if (mod10 == 1 && mod100 != 11) return one;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few;
+  return many;
+}
+
+String _invitationDateV2(DateTime? at, bool ru) {
+  if (at == null) return '';
+  final local = at.toLocal();
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final day = DateTime(local.year, local.month, local.day);
+  final diff = today.difference(day).inDays;
+  final hh = local.hour.toString().padLeft(2, '0');
+  final mm = local.minute.toString().padLeft(2, '0');
+  if (diff == 0) return '$hh:$mm';
+  if (diff == 1) return ru ? 'вчера' : 'yesterday';
+  const monthsRu = [
+    'янв', 'фев', 'мар', 'апр', 'мая', 'июн',
+    'июл', 'авг', 'сен', 'окт', 'ноя', 'дек',
+  ];
+  const monthsEn = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+  final month = ru ? monthsRu[local.month - 1] : monthsEn[local.month - 1];
+  final sameYear = local.year == now.year;
+  if (ru) return sameYear ? '${local.day} $month' : '${local.day} $month ${local.year}';
+  return sameYear ? '$month ${local.day}' : '$month ${local.day}, ${local.year}';
+}
+
+String _invitationTitleV2(CastingInvitation item, bool ru) {
+  final name = item.accountName.trim();
+  if (name.isNotEmpty) return name;
+  final title = item.selectionTitle.trim();
+  if (title.isNotEmpty) return title;
+  return ru ? 'Кастинг' : 'Casting';
+}
+
+String _invitationSubtitleV2(CastingInvitation item, bool ru) {
+  final context = item.contextLabel.trim();
+  if (context.isNotEmpty) return context;
+  final title = item.selectionTitle.trim();
+  if (title.isNotEmpty) return title;
+  return ru ? 'Вас рассматривают на кастинг' : 'You are being considered';
+}
+
+class _InvitationAvatarV2 extends StatelessWidget {
+  const _InvitationAvatarV2({required this.url, required this.size});
+
+  final String url;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final clean = url.trim();
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(Tokens.radiusMd),
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: clean.isEmpty
+            ? ColoredBox(
+                color: Tokens.surfaceAlt,
+                child: Icon(
+                  Icons.movie_outlined,
+                  size: size * 0.45,
+                  color: Tokens.textTertiary,
+                ),
+              )
+            : CachedNetworkImage(
+                imageUrl: clean,
+                fit: BoxFit.cover,
+                alignment: const Alignment(0, -0.6),
+                memCacheWidth: 240,
+                maxWidthDiskCache: 480,
+                placeholder: (_, _) =>
+                    const ColoredBox(color: Tokens.surfaceAlt),
+                errorWidget: (_, _, _) =>
+                    const ColoredBox(color: Tokens.surfaceAlt),
+              ),
+      ),
+    );
+  }
+}
+
+class _InvitationRowV2 extends StatefulWidget {
+  const _InvitationRowV2({
+    required this.item,
+    required this.gutter,
+    required this.selected,
+    required this.onTap,
+    required this.onDelete,
+  });
+
+  final CastingInvitation item;
+  final double gutter;
+  final bool selected;
+  final VoidCallback onTap;
+  final VoidCallback onDelete;
+
+  @override
+  State<_InvitationRowV2> createState() => _InvitationRowV2State();
+}
+
+class _InvitationRowV2State extends State<_InvitationRowV2> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final item = widget.item;
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final selected = widget.selected;
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: Material(
+        color: selected
+            ? Tokens.surfaceAlt
+            : (_hovered ? Tokens.surface : Colors.transparent),
+        child: InkWell(
+          onTap: widget.onTap,
+          child: Stack(
+            children: [
+              if (selected)
+                const Positioned(
+                  left: 0,
+                  top: 0,
+                  bottom: 0,
+                  child: SizedBox(
+                    width: 3,
+                    child: ColoredBox(color: Tokens.accent),
+                  ),
+                ),
+              Container(
+                decoration: const BoxDecoration(
+                  border: Border(bottom: BorderSide(color: Tokens.border)),
+                ),
+                padding: EdgeInsets.fromLTRB(
+                  widget.gutter,
+                  12,
+                  widget.gutter - 8,
+                  12,
+                ),
+                child: Row(
+                  children: [
+                    _InvitationAvatarV2(url: item.accountAvatarUrl, size: 44),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _invitationTitleV2(item, ru),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppText.small.copyWith(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: Tokens.ink,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            _invitationSubtitleV2(item, ru),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppText.small.copyWith(
+                              color: Tokens.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    SizedBox(
+                      width: 64,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          if (_hovered)
+                            IconButton(
+                              tooltip: ru ? 'Удалить' : 'Delete',
+                              onPressed: widget.onDelete,
+                              visualDensity: VisualDensity.compact,
+                              style: IconButton.styleFrom(
+                                foregroundColor: Tokens.textSecondary,
+                              ),
+                              icon: const Icon(Icons.close_rounded, size: 18),
+                            )
+                          else ...[
+                            if (item.requestVideoIntro)
+                              const Padding(
+                                padding: EdgeInsets.only(right: 6),
+                                child: Icon(
+                                  Icons.videocam_outlined,
+                                  size: 16,
+                                  color: Tokens.accent,
+                                ),
+                              ),
+                            Text(
+                              _invitationDateV2(item.createdAt, ru),
+                              style: AppText.caption.copyWith(
+                                color: Tokens.textTertiary,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _InvitationDetailsV2 extends StatelessWidget {
+  const _InvitationDetailsV2({
+    required this.item,
+    required this.gutter,
+    required this.onOpenChat,
+    required this.onDelete,
+  });
+
+  final CastingInvitation item;
+  final double gutter;
+  final Future<void> Function() onOpenChat;
+  final Future<void> Function() onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final date = _invitationDateV2(item.createdAt, ru);
+    final profileName = item.profileName.trim();
+    final selectionTitle = item.selectionTitle.trim();
+    final requirements = item.videoIntroRequirements.trim();
+
+    Widget fact(String label, Widget value) => Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 140,
+            child: Text(
+              label,
+              style: AppText.small.copyWith(color: Tokens.textTertiary),
+            ),
+          ),
+          Expanded(child: value),
+        ],
+      ),
+    );
+
+    Widget textValue(String text) =>
+        Text(text, style: AppText.small.copyWith(fontSize: 15));
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(gutter, 36, gutter, 40),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _InvitationAvatarV2(url: item.accountAvatarUrl, size: 72),
+              const SizedBox(width: 20),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      ru
+                          ? 'Вас рассматривают на кастинг'
+                          : 'You are being considered for a casting',
+                      style: AppText.caption.copyWith(
+                        color: Tokens.accent,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      _invitationTitleV2(item, ru),
+                      style: AppText.h1.copyWith(fontSize: 28),
+                    ),
+                    if (item.contextLabel.trim().isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        item.contextLabel.trim(),
+                        style: AppText.small.copyWith(
+                          fontSize: 15,
+                          color: Tokens.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 28),
+          Row(
+            children: [
+              FilledButton.icon(
+                onPressed: onOpenChat,
+                style: FilledButton.styleFrom(
+                  backgroundColor: Tokens.ink,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 14,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(Tokens.radiusMd),
+                  ),
+                ),
+                icon: const Icon(Icons.chat_bubble_outline_rounded, size: 18),
+                label: Text(ru ? 'Открыть чат' : 'Open chat'),
+              ),
+              const SizedBox(width: 8),
+              TextButton(
+                onPressed: onDelete,
+                style: TextButton.styleFrom(
+                  foregroundColor: Tokens.textSecondary,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
+                ),
+                child: Text(ru ? 'Удалить' : 'Delete'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 28),
+          const Divider(height: 1, thickness: 1, color: Tokens.border),
+          const SizedBox(height: 8),
+          if (selectionTitle.isNotEmpty)
+            fact(ru ? 'Кастинг' : 'Casting', textValue(selectionTitle)),
+          if (profileName.isNotEmpty || item.photoUrl.trim().isNotEmpty)
+            fact(
+              ru ? 'Анкета' : 'Profile',
+              Row(
+                children: [
+                  if (item.photoUrl.trim().isNotEmpty) ...[
+                    _InvitationAvatarV2(url: item.photoUrl, size: 28),
+                    const SizedBox(width: 10),
+                  ],
+                  Expanded(
+                    child: textValue(profileName.isEmpty ? '—' : profileName),
+                  ),
+                ],
+              ),
+            ),
+          if (date.isNotEmpty)
+            fact(
+              ru ? 'Получено' : 'Received',
+              textValue(
+                _invitationFullDateV2(item.createdAt, ru),
+              ),
+            ),
+          fact(
+            ru ? 'Видео-визитка' : 'Video intro',
+            item.requestVideoIntro
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.videocam_outlined,
+                            size: 18,
+                            color: Tokens.accent,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            ru ? 'Требуется' : 'Required',
+                            style: AppText.small.copyWith(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: Tokens.accent,
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (requirements.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          requirements,
+                          style: AppText.small.copyWith(
+                            color: Tokens.textSecondary,
+                            height: 1.4,
+                          ),
+                        ),
+                      ],
+                    ],
+                  )
+                : Text(
+                    ru ? 'Не требуется' : 'Not required',
+                    style: AppText.small.copyWith(
+                      fontSize: 15,
+                      color: Tokens.textSecondary,
+                    ),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _invitationFullDateV2(DateTime? at, bool ru) {
+  if (at == null) return '';
+  final local = at.toLocal();
+  const monthsRu = [
+    'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
+    'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря',
+  ];
+  const monthsEn = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
+  ];
+  final month = ru ? monthsRu[local.month - 1] : monthsEn[local.month - 1];
+  final hh = local.hour.toString().padLeft(2, '0');
+  final mm = local.minute.toString().padLeft(2, '0');
+  if (ru) return '${local.day} $month ${local.year}, $hh:$mm';
+  return '$month ${local.day}, ${local.year}, $hh:$mm';
 }
