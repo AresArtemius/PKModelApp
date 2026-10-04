@@ -114,6 +114,8 @@ class AccountDevicesPage extends ConsumerWidget {
     final asyncDevices = ref.watch(accountDevicesProvider);
 
     if (kIsWeb) {
+      final fromProfile =
+          GoRouterState.of(context).uri.queryParameters['from'] == 'profile';
       final email = user?.email?.trim() ?? '';
       Future<void> signOutHere() async {
         await ref.read(supabaseProvider).auth.signOut();
@@ -125,14 +127,11 @@ class AccountDevicesPage extends ConsumerWidget {
         subtitle: isRussian
             ? 'Текущая сессия и устройства с включёнными push-уведомлениями'
             : 'The current session and devices with push notifications enabled',
-        backLabel: isRussian ? 'Аккаунт' : 'Account',
-        onBack: () {
-          if (context.canPop()) {
-            context.pop();
-          } else {
-            context.go(Routes.me);
-          }
-        },
+        backLabel: fromProfile
+            ? (isRussian ? 'Профиль аккаунта' : 'Account profile')
+            : (isRussian ? 'Аккаунт' : 'Account'),
+        onBack: () =>
+            context.go(fromProfile ? Routes.accountProfile : Routes.me),
         children: [
           SettingsSection(
             title: isRussian ? 'Текущая сессия' : 'Current session',

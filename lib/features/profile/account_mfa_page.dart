@@ -972,13 +972,17 @@ extension _AccountMfaV2 on _AccountMfaPageState {
       ),
     );
 
+    final fromProfile =
+        GoRouterState.of(context).uri.queryParameters['from'] == 'profile';
     return SettingsPageV2(
       title: ru ? 'Безопасность' : 'Security',
       subtitle: ru
           ? 'Двухфакторная защита, резервные коды и журнал событий'
           : 'Two-factor authentication, recovery codes and the event log',
-      backLabel: ru ? 'Аккаунт' : 'Account',
-      onBack: () => context.go(Routes.me),
+      backLabel: fromProfile
+          ? (ru ? 'Профиль аккаунта' : 'Account profile')
+          : (ru ? 'Аккаунт' : 'Account'),
+      onBack: () => context.go(fromProfile ? Routes.accountProfile : Routes.me),
       children: sections,
     );
   }
