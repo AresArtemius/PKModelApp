@@ -110,6 +110,10 @@ class AuthPhoneNumberField extends StatelessWidget {
     required this.enabled,
     required this.phoneLabel,
     required this.codeLabel,
+    this.flat = false,
+    this.errorText,
+    this.focusNode,
+    this.onSubmitted,
   });
 
   final TextEditingController controller;
@@ -119,12 +123,43 @@ class AuthPhoneNumberField extends StatelessWidget {
   final String phoneLabel;
   final String codeLabel;
 
+  /// v2 look: hairline border from the app theme, error line under the
+  /// field, country picker as a dialog instead of a bottom sheet.
+  final bool flat;
+  final String? errorText;
+  final FocusNode? focusNode;
+  final ValueChanged<String>? onSubmitted;
+
   PhoneCountryCode _selectedCountry() {
     return phoneCountryCodeForIso(countryIso);
   }
 
   Future<void> _showCountryPicker(BuildContext context) async {
     if (!enabled) return;
+    if (flat) {
+      final picked = await showDialog<String>(
+        context: context,
+        builder: (context) => Dialog(
+          backgroundColor: Tokens.bg,
+          surfaceTintColor: Colors.transparent,
+          insetPadding: const EdgeInsets.all(24),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(Tokens.radiusLg),
+          ),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420, maxHeight: 560),
+            child: _PhoneCountryPickerSheet(
+              selectedIso: countryIso,
+              title: codeLabel,
+              flat: true,
+            ),
+          ),
+        ),
+      );
+      if (picked == null || picked == countryIso) return;
+      onCountryIsoChanged(picked);
+      return;
+    }
     final selectedIso = await showModalBottomSheet<String>(
       context: context,
       backgroundColor: Colors.transparent,
@@ -140,6 +175,38 @@ class AuthPhoneNumberField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final selected = _selectedCountry();
+
+    if (flat) {
+      return TextField(
+        controller: controller,
+        focusNode: focusNode,
+        enabled: enabled,
+        keyboardType: TextInputType.phone,
+        textInputAction: TextInputAction.next,
+        autofillHints: const [AutofillHints.telephoneNumberNational],
+        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+        onSubmitted: onSubmitted,
+        style: AppText.body,
+        decoration: InputDecoration(
+          labelText: phoneLabel,
+          hintText: '9990000000',
+          errorText: errorText,
+          errorMaxLines: 3,
+          errorStyle: AppText.caption.copyWith(color: Tokens.danger),
+          prefixIconConstraints: const BoxConstraints(
+            minWidth: 104,
+            maxWidth: 124,
+            minHeight: 48,
+          ),
+          prefixIcon: _CountryCodePrefix(
+            label: selected.shortLabel,
+            enabled: enabled,
+            flat: true,
+            onTap: () => _showCountryPicker(context),
+          ),
+        ),
+      );
+    }
 
     return TextField(
       controller: controller,
@@ -196,24 +263,28 @@ class _CountryCodePrefix extends StatelessWidget {
     required this.label,
     required this.enabled,
     required this.onTap,
+    this.flat = false,
   });
 
   final String label;
   final bool enabled;
   final VoidCallback onTap;
+  final bool flat;
 
   @override
   Widget build(BuildContext context) {
-    final color = enabled
+    final color = flat
+        ? (enabled ? Tokens.text : Tokens.textTertiary)
+        : enabled
         ? kTextDark.withValues(alpha: 0.92)
         : kTextMuted.withValues(alpha: 0.70);
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: enabled ? onTap : null,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(flat ? 8 : 16),
         child: Padding(
-          padding: const EdgeInsets.only(left: 16, right: 10),
+          padding: EdgeInsets.only(left: flat ? 14 : 16, right: 10),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -222,24 +293,26 @@ class _CountryCodePrefix extends StatelessWidget {
                 maxLines: 1,
                 softWrap: false,
                 overflow: TextOverflow.visible,
-                style: TextStyle(
-                  color: color,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w500,
-                  letterSpacing: 0,
-                ),
+                style: flat
+                    ? AppText.body.copyWith(color: color)
+                    : TextStyle(
+                        color: color,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: 0,
+                      ),
               ),
-              const SizedBox(width: 6),
+              const SizedBox(width: 4),
               Icon(
                 Icons.keyboard_arrow_down_rounded,
-                size: 22,
-                color: color.withValues(alpha: 0.82),
+                size: flat ? 20 : 22,
+                color: flat ? Tokens.textSecondary : color.withValues(alpha: 0.82),
               ),
               const SizedBox(width: 8),
               Container(
                 width: 1,
-                height: 28,
-                color: kBorderColor.withValues(alpha: 0.72),
+                height: flat ? 22 : 28,
+                color: flat ? Tokens.border : kBorderColor.withValues(alpha: 0.72),
               ),
             ],
           ),
@@ -253,10 +326,12 @@ class _PhoneCountryPickerSheet extends StatefulWidget {
   const _PhoneCountryPickerSheet({
     required this.selectedIso,
     required this.title,
+    this.flat = false,
   });
 
   final String selectedIso;
   final String title;
+  final bool flat;
 
   @override
   State<_PhoneCountryPickerSheet> createState() =>
@@ -285,9 +360,101 @@ class _PhoneCountryPickerSheetState extends State<_PhoneCountryPickerSheet> {
         .toList(growable: false);
   }
 
+  Widget _buildFlat(BuildContext context, List<PhoneCountryCode> items) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 8, 4),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(widget.title, style: AppText.h2),
+              ),
+              IconButton(
+                onPressed: () => Navigator.of(context).pop(),
+                style: IconButton.styleFrom(
+                  foregroundColor: Tokens.textSecondary,
+                ),
+                icon: const Icon(Icons.close_rounded),
+              ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+          child: TextField(
+            controller: _searchC,
+            autofocus: true,
+            textInputAction: TextInputAction.search,
+            onChanged: (_) => setState(() {}),
+            style: AppText.body,
+            decoration: const InputDecoration(
+              hintText: 'RU, Russia, +7',
+              prefixIcon: Icon(Icons.search_rounded, size: 20),
+            ),
+          ),
+        ),
+        Flexible(
+          child: ListView.builder(
+            shrinkWrap: true,
+            padding: const EdgeInsets.only(bottom: 8),
+            itemCount: items.length,
+            itemBuilder: (context, index) {
+              final item = items[index];
+              final selected = item.iso == widget.selectedIso;
+              return InkWell(
+                onTap: () => Navigator.of(context).pop(item.iso),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 10,
+                  ),
+                  color: selected ? Tokens.surfaceAlt : Colors.transparent,
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 44,
+                        child: Text(
+                          item.iso,
+                          style: AppText.caption.copyWith(
+                            color: Tokens.textTertiary,
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: Text(
+                          item.fullLabel,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppText.small.copyWith(
+                            fontSize: 15,
+                            fontWeight: selected
+                                ? FontWeight.w600
+                                : FontWeight.w400,
+                          ),
+                        ),
+                      ),
+                      if (selected)
+                        const Icon(
+                          Icons.check_rounded,
+                          size: 18,
+                          color: Tokens.ink,
+                        ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final items = _filteredCountries();
+    if (widget.flat) return _buildFlat(context, items);
     return FractionallySizedBox(
       heightFactor: 0.62,
       alignment: Alignment.bottomCenter,
