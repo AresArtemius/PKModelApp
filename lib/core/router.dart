@@ -150,7 +150,6 @@ const double _kDesktopShellBreakpoint = 900;
 
 /// Routes whose content is mostly text and reads better in a 1280 px column.
 const List<String> _kNarrowContentPrefixes = [
-  Routes.notifications,
   Routes.billing,
   Routes.support,
   Routes.dataPrivacy,
