@@ -1466,7 +1466,8 @@ class _AccountProfileEditPageState
                         subtitle: ru
                             ? 'Текущая сессия и push-устройства'
                             : 'Current session and push devices',
-                        onTap: () => context.go(Routes.accountDevices),
+                        onTap: () =>
+                            context.go('${Routes.accountDevices}?from=profile'),
                       ),
                       SettingsListRow(
                         icon: Icons.verified_user_outlined,
@@ -1476,7 +1477,8 @@ class _AccountProfileEditPageState
                         subtitle: ru
                             ? 'Коды из приложения, резервные коды, журнал'
                             : 'Authenticator codes, recovery codes, the log',
-                        onTap: () => context.go(Routes.accountMfa),
+                        onTap: () =>
+                            context.go('${Routes.accountMfa}?from=profile'),
                         last: true,
                       ),
                     ],

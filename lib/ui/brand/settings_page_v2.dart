@@ -14,7 +14,7 @@ class SettingsPageV2 extends StatelessWidget {
     this.backLabel,
     this.onBack,
     this.actions = const [],
-    this.maxWidth = 760,
+    this.maxWidth = double.infinity,
     this.controller,
   });
 
@@ -132,8 +132,59 @@ class SettingsSection extends StatelessWidget {
   final Widget? trailing;
   final Widget child;
 
+  /// Width of the title column on wide screens; the content takes the rest.
+  static const double titleColumnWidth = 300;
+
   @override
   Widget build(BuildContext context) {
+    final wide = MediaQuery.sizeOf(context).width >= 960;
+    final heading = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          wide ? title : title.toUpperCase(),
+          style: wide
+              ? AppText.smallStrong.copyWith(fontSize: 15, color: Tokens.text)
+              : AppText.label.copyWith(color: Tokens.textTertiary),
+        ),
+        if (hint != null && hint!.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          Text(
+            hint!,
+            style: AppText.small.copyWith(
+              color: Tokens.textSecondary,
+              height: 1.45,
+            ),
+          ),
+        ],
+      ],
+    );
+
+    if (wide) {
+      // Settings pattern: the section name and its hint in a column on the
+      // left, the controls on the right — the page uses the whole width.
+      return Container(
+        padding: const EdgeInsets.only(top: 28, bottom: 28),
+        decoration: const BoxDecoration(
+          border: Border(bottom: BorderSide(color: Tokens.border)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: titleColumnWidth,
+              child: Padding(
+                padding: const EdgeInsets.only(right: 32, top: 2),
+                child: heading,
+              ),
+            ),
+            Expanded(child: child),
+            if (trailing != null) ...[const SizedBox(width: 16), trailing!],
+          ],
+        ),
+      );
+    }
+
     return Container(
       padding: const EdgeInsets.only(top: 24, bottom: 24),
       decoration: const BoxDecoration(
@@ -145,26 +196,7 @@ class SettingsSection extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title.toUpperCase(),
-                      style: AppText.label.copyWith(color: Tokens.textTertiary),
-                    ),
-                    if (hint != null && hint!.isNotEmpty) ...[
-                      const SizedBox(height: 6),
-                      Text(
-                        hint!,
-                        style: AppText.small.copyWith(
-                          color: Tokens.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
+              Expanded(child: heading),
               if (trailing != null) trailing!,
             ],
           ),
