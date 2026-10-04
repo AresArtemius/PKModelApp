@@ -123,6 +123,9 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       }
 
       if (goingToAuth) {
+        // «Войти, чтобы написать» on a public page: come back there.
+        final next = state.uri.queryParameters['next']?.trim() ?? '';
+        if (next.startsWith('/') && !next.startsWith('//')) return next;
         final isAdmin = await getIsAdmin();
         return isAdmin ? Routes.admin : Routes.search;
       }

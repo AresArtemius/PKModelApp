@@ -1,10 +1,13 @@
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/account_profile_service.dart';
+import '../../core/auth_providers.dart';
 import '../../core/router.dart';
 import '../../core/roles_provider.dart';
 import '../../core/supabase_compat.dart';
@@ -12,6 +15,7 @@ import '../../core/supabase_provider.dart';
 import '../../ui/brand/brand_admin_header.dart';
 import '../../ui/brand/brand_pill_button.dart';
 import '../../ui/brand/brand_theme.dart';
+import '../../ui/brand/public_page_frame.dart';
 import '../../ui/brand/ui_constants.dart';
 
 const double _kPublicAccountMaxWidth = 760;
@@ -198,6 +202,8 @@ class PublicAccountProfilePage extends ConsumerWidget {
     final ru = _isRussian(context);
     final profileAsync = ref.watch(publicAccountProfileProvider(tag));
 
+    if (kIsWeb) return _buildV2(context, ref, tag, ru, profileAsync);
+
     return Scaffold(
       body: Stack(
         children: [
@@ -325,6 +331,243 @@ class PublicAccountProfilePage extends ConsumerWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+extension _PublicAccountV2 on PublicAccountProfilePage {
+  Widget _buildV2(
+    BuildContext context,
+    WidgetRef ref,
+    String tag,
+    bool ru,
+    AsyncValue<PublicAccountProfile?> profileAsync,
+  ) {
+    final width = MediaQuery.sizeOf(context).width;
+    final wide = width >= 900;
+    final gutter = wide ? 32.0 : 16.0;
+
+    Widget message(String title, String text) => Padding(
+      padding: EdgeInsets.fromLTRB(gutter, 40, gutter, 40),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 560),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: AppText.h2.copyWith(color: Tokens.textSecondary)),
+            const SizedBox(height: 6),
+            Text(text, style: AppText.small.copyWith(color: Tokens.textTertiary)),
+            const SizedBox(height: 16),
+            OutlinedButton(
+              onPressed: () => context.go(Routes.search),
+              child: Text(ru ? 'В каталог' : 'Catalogue'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    return PublicPageFrame(
+      onBack: () => context.go(Routes.search),
+      backLabel: ru ? 'Каталог' : 'Catalogue',
+      child: profileAsync.when(
+        loading: () => Padding(
+          padding: EdgeInsets.all(gutter),
+          child: const SkeletonList(rows: 3),
+        ),
+        error: (error, _) => message(
+          ru ? 'Не удалось открыть' : 'Could not open',
+          error.toString(),
+        ),
+        data: (profile) {
+          if (profile == null || profile.accountTag.isEmpty) {
+            return message(
+              ru ? 'Аккаунт не найден' : 'Account not found',
+              ru
+                  ? 'Этот @tag скрыт или ещё не создан.'
+                  : 'This @tag is hidden or does not exist yet.',
+            );
+          }
+          final signedIn = ref.watch(isAuthenticatedProvider);
+          final typeLabel = _accountTypeLabel(context, profile.accountType);
+          final meta = [
+            '@${profile.accountTag}',
+            typeLabel,
+            if (profile.locationLabel.isNotEmpty) profile.locationLabel,
+          ].join(' · ');
+          final subtitle = [
+            if (profile.position.isNotEmpty) profile.position,
+            if (profile.companyName.isNotEmpty &&
+                profile.companyName != profile.displayName)
+              profile.companyName,
+          ].join(' · ');
+
+          Future<void> open(String raw) async {
+            var value = raw.trim();
+            if (value.isEmpty) return;
+            if (!value.startsWith('http://') && !value.startsWith('https://')) {
+              value = 'https://$value';
+            }
+            final uri = Uri.tryParse(value);
+            if (uri == null) return;
+            await launchUrl(uri, mode: LaunchMode.externalApplication);
+          }
+
+          return ListView(
+            padding: EdgeInsets.fromLTRB(gutter, wide ? 40 : 24, gutter, 56),
+            children: [
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 760),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ClipOval(
+                          child: SizedBox(
+                            width: wide ? 96 : 72,
+                            height: wide ? 96 : 72,
+                            child: profile.avatarUrl.isEmpty
+                                ? ColoredBox(
+                                    color: Tokens.ink,
+                                    child: Center(
+                                      child: Text(
+                                        profile.displayName.characters.first
+                                            .toUpperCase(),
+                                        style: AppText.h1.copyWith(
+                                          color: Colors.white,
+                                          fontSize: wide ? 36 : 28,
+                                        ),
+                                      ),
+                                    ),
+                                  )
+                                : CachedNetworkImage(
+                                    imageUrl: profile.avatarUrl,
+                                    fit: BoxFit.cover,
+                                    placeholder: (_, _) => const ColoredBox(
+                                      color: Tokens.surfaceAlt,
+                                    ),
+                                    errorWidget: (_, _, _) => const ColoredBox(
+                                      color: Tokens.surfaceAlt,
+                                    ),
+                                  ),
+                          ),
+                        ),
+                        const SizedBox(width: 20),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                profile.displayName,
+                                style: AppText.display.copyWith(
+                                  fontSize: wide ? 36 : 26,
+                                  height: 1.1,
+                                ),
+                              ),
+                              if (subtitle.isNotEmpty) ...[
+                                const SizedBox(height: 4),
+                                Text(
+                                  subtitle,
+                                  style: AppText.body.copyWith(
+                                    fontSize: 16,
+                                    color: Tokens.text,
+                                  ),
+                                ),
+                              ],
+                              const SizedBox(height: 6),
+                              Text(
+                                meta,
+                                style: AppText.small.copyWith(
+                                  color: Tokens.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: [
+                        FilledButton.icon(
+                          onPressed: () => context.go(
+                            signedIn
+                                ? Routes.chats
+                                : PublicPageFrame.loginWithReturn(context),
+                          ),
+                          style: FilledButton.styleFrom(
+                            minimumSize: const Size(0, Tokens.controlHeight),
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                          ),
+                          icon: const Icon(
+                            Icons.chat_bubble_outline_rounded,
+                            size: 18,
+                          ),
+                          label: Text(
+                            signedIn
+                                ? (ru ? 'Написать' : 'Message')
+                                : (ru ? 'Войти, чтобы написать' : 'Sign in to message'),
+                          ),
+                        ),
+                        if (profile.website.isNotEmpty)
+                          OutlinedButton.icon(
+                            onPressed: () => open(profile.website),
+                            icon: const Icon(Icons.language_rounded, size: 18),
+                            label: Text(ru ? 'Сайт' : 'Website'),
+                          ),
+                        if (profile.socialUrl.isNotEmpty)
+                          OutlinedButton.icon(
+                            onPressed: () => open(profile.socialUrl),
+                            icon: const Icon(
+                              Icons.alternate_email_rounded,
+                              size: 18,
+                            ),
+                            label: Text(ru ? 'Соцсети' : 'Social'),
+                          ),
+                      ],
+                    ),
+                    if (profile.bio.isNotEmpty) ...[
+                      const SizedBox(height: 32),
+                      Text(
+                        (ru ? 'Об аккаунте' : 'About').toUpperCase(),
+                        style: AppText.label.copyWith(color: Tokens.textTertiary),
+                      ),
+                      const SizedBox(height: 10),
+                      SelectableText(
+                        profile.bio,
+                        style: AppText.body.copyWith(fontSize: 17, height: 1.6),
+                      ),
+                    ],
+                    if (profile.website.isNotEmpty ||
+                        profile.socialUrl.isNotEmpty) ...[
+                      const SizedBox(height: 28),
+                      Text(
+                        (ru ? 'Ссылки' : 'Links').toUpperCase(),
+                        style: AppText.label.copyWith(color: Tokens.textTertiary),
+                      ),
+                      const SizedBox(height: 6),
+                      if (profile.website.isNotEmpty)
+                        SettingsRow(
+                          label: ru ? 'Сайт' : 'Website',
+                          value: profile.website,
+                        ),
+                      if (profile.socialUrl.isNotEmpty)
+                        SettingsRow(
+                          label: ru ? 'Соцсети' : 'Social',
+                          value: profile.socialUrl,
+                        ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
