@@ -1781,6 +1781,7 @@ class _SelectionProfileCard extends StatelessWidget {
 
 class _ClientFeedbackControls extends ConsumerStatefulWidget {
   const _ClientFeedbackControls({
+    super.key,
     required this.selectionId,
     required this.profileId,
     required this.clientKey,
