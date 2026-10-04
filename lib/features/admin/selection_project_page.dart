@@ -231,10 +231,10 @@ class SelectionProjectPage extends ConsumerWidget {
     final dataAsync = ref.watch(selectionProjectProvider(selectionId));
 
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: kIsWeb ? Tokens.bg : _bg,
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: kIsWeb ? EdgeInsets.zero : const EdgeInsets.all(16),
           child: dataAsync.when(
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (e, _) => Center(

@@ -41,6 +41,10 @@ String storageImageVariant(
   final params = <String, String>{
     ...uri.queryParameters,
     'width': '$width',
+    // Only the width is given; with the default `cover` mode Storage keeps
+    // the original height and crops a narrow centre strip out of the photo.
+    // `contain` scales the whole picture down to the width instead.
+    'resize': 'contain',
     'quality': '$quality',
   };
   return uri.replace(path: newPath, queryParameters: params).toString();
