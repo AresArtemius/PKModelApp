@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -18,12 +19,19 @@ import '../legal/legal_consent_service.dart';
 import '../legal/legal_documents.dart';
 import 'auth_rate_limiter.dart';
 import 'auth_split_layout.dart';
+import 'auth_v2_widgets.dart';
 import 'auth_controller.dart';
 import 'password_strength.dart';
 import 'phone_number_field.dart';
 
 const _legalRequiredMessage =
     'Примите документы и согласие на обработку данных, чтобы продолжить.';
+
+/// v2 (web): the sign-up form in the split layout with field-level
+/// errors, an Email / Телефон switch and the phone flow inline.
+const bool _registerV2 = kIsWeb;
+
+enum _SignUpMode { email, phone }
 
 class RegisterPage extends ConsumerStatefulWidget {
   const RegisterPage({super.key});
@@ -51,6 +59,50 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
   RegistrationAccountType _selectedClientType =
       RegistrationAccountType.castingDirector;
   String? _error;
+
+  // v2: errors under the fields instead of one line on top.
+  _SignUpMode _signUpMode = _SignUpMode.email;
+  String? _emailError;
+  String? _passError;
+  String? _pass2Error;
+  String? _legalError;
+
+  void _clearFieldErrors() {
+    _emailError = null;
+    _passError = null;
+    _pass2Error = null;
+    _legalError = null;
+  }
+
+  /// v2 validation: fills the per-field errors and returns the first one
+  /// (for focus handling), or null when the form is valid.
+  String? _validateV2(AppLocalizations t) {
+    final email = _emailC.text.trim();
+    final p1 = _passC.text;
+    final p2 = _pass2C.text;
+    _clearFieldErrors();
+    if (email.isEmpty) {
+      _emailError = t.enterEmail;
+    } else if (!_emailRegex.hasMatch(email)) {
+      _emailError = t.invalidEmail;
+    }
+    if (p1.isEmpty) {
+      _passError = t.enterPassword;
+    } else {
+      _passError = newPasswordValidationMessage(
+        p1,
+        isRussian: _isRussian,
+        email: email,
+      );
+    }
+    if (p2.isEmpty) {
+      _pass2Error = t.enterPassword;
+    } else if (p1 != p2) {
+      _pass2Error = t.passwordsDontMatch;
+    }
+    if (!_acceptedLegal) _legalError = _legalRequiredMessage;
+    return _emailError ?? _passError ?? _pass2Error ?? _legalError;
+  }
 
   void _submitIfNotLoading() {
     if (_loading) return;
@@ -102,9 +154,9 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
     setState(() => _error = null);
 
     final t = AppLocalizations.of(context)!;
-    final msg = _validate(t);
+    final msg = _registerV2 ? _validateV2(t) : _validate(t);
     if (msg != null) {
-      setState(() => _error = msg);
+      setState(() => _error = _registerV2 ? null : msg);
       if (msg == t.enterEmail || msg == t.invalidEmail) {
         _emailF.requestFocus();
       } else if (msg == t.passwordsDontMatch) {
@@ -297,9 +349,282 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
     );
   }
 
+  Widget _buildV2(AppLocalizations t) {
+    final ru = _isRussian;
+
+    Widget passwordFieldV2({
+      required TextEditingController controller,
+      required FocusNode focusNode,
+      required bool hidden,
+      required VoidCallback toggleHidden,
+      required String label,
+      required String? errorText,
+      required TextInputAction action,
+      required VoidCallback onSubmitted,
+      ValueChanged<String>? onChanged,
+    }) {
+      return TextField(
+        controller: controller,
+        focusNode: focusNode,
+        obscureText: hidden,
+        style: AppText.body,
+        textInputAction: action,
+        autofillHints: const [AutofillHints.newPassword],
+        onChanged: onChanged,
+        onSubmitted: (_) => onSubmitted(),
+        decoration: authFieldDecoration(
+          label: label,
+          errorText: errorText,
+          suffixIcon: IconButton(
+            onPressed: toggleHidden,
+            tooltip: hidden ? t.showPassword : t.hidePassword,
+            icon: Icon(hidden ? Icons.visibility_off : Icons.visibility),
+          ),
+        ),
+      );
+    }
+
+    final emailForm = Column(
+      key: const ValueKey('email-signup-v2'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AutofillGroup(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextField(
+                controller: _emailC,
+                focusNode: _emailF,
+                style: AppText.body,
+                keyboardType: TextInputType.emailAddress,
+                textInputAction: TextInputAction.next,
+                autofillHints: const [AutofillHints.email],
+                onChanged: (_) {
+                  if (_emailError != null || _error != null) {
+                    setState(() {
+                      _emailError = null;
+                      _error = null;
+                    });
+                  }
+                },
+                onSubmitted: (_) => _passF.requestFocus(),
+                decoration: authFieldDecoration(
+                  label: t.email,
+                  errorText: _emailError,
+                ),
+              ),
+              const SizedBox(height: 12),
+              passwordFieldV2(
+                controller: _passC,
+                focusNode: _passF,
+                hidden: _hide1,
+                toggleHidden: () => setState(() => _hide1 = !_hide1),
+                label: t.password,
+                errorText: _passError,
+                action: TextInputAction.next,
+                onSubmitted: () => _pass2F.requestFocus(),
+                onChanged: (_) => setState(() {
+                  _passError = null;
+                  _error = null;
+                }),
+              ),
+              if (_passC.text.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                PasswordStrengthMeter(
+                  password: _passC.text,
+                  isRussian: ru,
+                  email: _emailC.text,
+                  compact: true,
+                ),
+              ],
+              const SizedBox(height: 12),
+              passwordFieldV2(
+                controller: _pass2C,
+                focusNode: _pass2F,
+                hidden: _hide2,
+                toggleHidden: () => setState(() => _hide2 = !_hide2),
+                label: t.passwordRepeat,
+                errorText: _pass2Error,
+                action: TextInputAction.done,
+                onSubmitted: _submitIfNotLoading,
+                onChanged: (_) {
+                  if (_pass2Error != null || _error != null) {
+                    setState(() {
+                      _pass2Error = null;
+                      _error = null;
+                    });
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+        Text(
+          ru ? 'Кто вы' : 'Who you are',
+          style: AppText.label.copyWith(color: Tokens.textTertiary),
+        ),
+        const SizedBox(height: 8),
+        AuthChoiceRow<bool>(
+          options: [
+            (
+              false,
+              ru ? 'Модель / участник' : 'Talent',
+              ru ? 'Анкета, кастинги, приглашения' : 'Profile, castings, invites',
+            ),
+            (
+              true,
+              ru ? 'Заказчик' : 'Hiring',
+              ru ? 'Поиск моделей и подборки' : 'Search talent, build selections',
+            ),
+          ],
+          value: _isClient,
+          onChanged: (value) => setState(() {
+            _isClient = value;
+            _error = null;
+          }),
+        ),
+        AnimatedSize(
+          duration: Tokens.base,
+          curve: Curves.easeOut,
+          alignment: Alignment.topCenter,
+          child: !_isClient
+              ? const SizedBox(width: double.infinity)
+              : Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: DropdownButtonFormField<RegistrationAccountType>(
+                    initialValue: _selectedClientType,
+                    isExpanded: true,
+                    borderRadius: BorderRadius.circular(Tokens.radiusMd),
+                    dropdownColor: Tokens.bg,
+                    style: AppText.body,
+                    icon: const Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      color: Tokens.textSecondary,
+                    ),
+                    decoration: authFieldDecoration(label: _clientTypeLabel),
+                    items: [
+                      for (final type in _ClientRoleSelector._clientTypes)
+                        DropdownMenuItem(
+                          value: type,
+                          child: Text(
+                            _registrationTypeLabel(type),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                    ],
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setState(() {
+                        _selectedClientType = value;
+                        _error = null;
+                      });
+                    },
+                  ),
+                ),
+        ),
+        const SizedBox(height: 20),
+        AuthConsentRow(
+          accepted: _acceptedLegal,
+          errorText: _legalError,
+          onChanged: (value) => setState(() {
+            _acceptedLegal = value;
+            _legalError = null;
+          }),
+        ),
+        const SizedBox(height: 20),
+        SizedBox(
+          height: Tokens.inputHeight,
+          child: FilledButton(
+            onPressed: _submitIfNotLoading,
+            child: Text(_loading ? t.loadingDots : t.signUp),
+          ),
+        ),
+      ],
+    );
+
+    final phoneForm = _PhoneSignUpV2(
+      key: const ValueKey('phone-signup-v2'),
+      onDone: () {
+        if (!mounted) return;
+        context.go(Routes.accountProfile);
+      },
+    );
+
+    return AbsorbPointer(
+      absorbing: _loading,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(t.signUp, style: AppText.h1),
+          const SizedBox(height: 6),
+          Text(
+            ru
+                ? 'Бесплатно. Анкета модели или кабинет заказчика — на выбор.'
+                : 'Free. A talent profile or a client workspace — your choice.',
+            style: AppText.small.copyWith(color: Tokens.textSecondary),
+          ),
+          const SizedBox(height: 24),
+          if (_error != null && _signUpMode == _SignUpMode.email) ...[
+            AuthMessageBanner(message: _error!),
+            const SizedBox(height: 16),
+          ],
+          AuthModeSwitch(
+            labels: ['Email', t.phoneNumber],
+            selectedIndex: _signUpMode == _SignUpMode.email ? 0 : 1,
+            onChanged: (index) => setState(() {
+              _signUpMode = index == 0 ? _SignUpMode.email : _SignUpMode.phone;
+              _error = null;
+            }),
+          ),
+          const SizedBox(height: 16),
+          AnimatedSwitcher(
+            duration: kAnim200,
+            child: _signUpMode == _SignUpMode.email ? emailForm : phoneForm,
+          ),
+          const SizedBox(height: 18),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                t.alreadyHaveAccount,
+                style: AppText.small.copyWith(color: Tokens.textSecondary),
+              ),
+              TextButton(
+                onPressed: _goLoginOrPop,
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  minimumSize: const Size(0, 32),
+                ),
+                child: Text(t.signInTitle),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
+    if (_registerV2) {
+      return Scaffold(
+        backgroundColor: Tokens.bg,
+        body: AuthPageFrame(
+          topBar: Row(
+            children: [
+              AuthBackLink(
+                label: t.signInTitle,
+                onTap: _loading ? null : _goLoginOrPop,
+              ),
+            ],
+          ),
+          child: _buildV2(t),
+        ),
+      );
+    }
     final isDesktop =
         MediaQuery.sizeOf(context).width >= kAuthDesktopBreakpoint;
     final form = Column(
@@ -1619,4 +1944,428 @@ TextStyle _registerCommandText({
     fontSize: fontSize,
     letterSpacing: letterSpacing,
   );
+}
+
+
+/// Phone sign-up inline in the v2 form: phone + password + consent →
+/// SMS code → done. Same flow as [_PhoneOtpDialog], flat look.
+class _PhoneSignUpV2 extends ConsumerStatefulWidget {
+  const _PhoneSignUpV2({super.key, required this.onDone});
+
+  final VoidCallback onDone;
+
+  @override
+  ConsumerState<_PhoneSignUpV2> createState() => _PhoneSignUpV2State();
+}
+
+class _PhoneSignUpV2State extends ConsumerState<_PhoneSignUpV2> {
+  final _phoneC = TextEditingController();
+  final _codeC = TextEditingController();
+  final _passC = TextEditingController();
+  final _pass2C = TextEditingController();
+  final _passF = FocusNode();
+  final _pass2F = FocusNode();
+  final _codeF = FocusNode();
+  String _phoneIso = 'RU';
+  bool _codeSent = false;
+  bool _loading = false;
+  bool _hide1 = true;
+  bool _hide2 = true;
+  bool _acceptedLegal = false;
+  int _resendSeconds = 0;
+  Timer? _resendTimer;
+  String? _error;
+  String? _phoneError;
+  String? _passError;
+  String? _pass2Error;
+  String? _legalError;
+  String? _codeError;
+
+  @override
+  void dispose() {
+    _resendTimer?.cancel();
+    _phoneC.dispose();
+    _codeC.dispose();
+    _passC.dispose();
+    _pass2C.dispose();
+    _passF.dispose();
+    _pass2F.dispose();
+    _codeF.dispose();
+    super.dispose();
+  }
+
+  bool get _isRu => Localizations.localeOf(context).languageCode == 'ru';
+
+  void _startResendTimer() {
+    _resendTimer?.cancel();
+    setState(() => _resendSeconds = 60);
+    _resendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (_resendSeconds <= 1) {
+        timer.cancel();
+        setState(() => _resendSeconds = 0);
+        return;
+      }
+      setState(() => _resendSeconds -= 1);
+    });
+  }
+
+  String _normalizedPhone() => composeInternationalPhone(
+    code: phoneCountryCodeForIso(_phoneIso).code,
+    number: _phoneC.text,
+  );
+
+  bool _validate(AppLocalizations t) {
+    final phone = _normalizedPhone();
+    _phoneError = null;
+    _passError = null;
+    _pass2Error = null;
+    _legalError = null;
+    if (phone.isEmpty) _phoneError = t.phoneInternationalHint;
+    if (_passC.text.isEmpty) {
+      _passError = t.enterPassword;
+    } else {
+      _passError = newPasswordValidationMessage(
+        _passC.text,
+        isRussian: _isRu,
+        phone: phone,
+      );
+    }
+    if (_pass2C.text.isEmpty) {
+      _pass2Error = t.enterPassword;
+    } else if (_passC.text != _pass2C.text) {
+      _pass2Error = t.passwordsDontMatch;
+    }
+    if (!_acceptedLegal) _legalError = _legalRequiredMessage;
+    return _phoneError == null &&
+        _passError == null &&
+        _pass2Error == null &&
+        _legalError == null;
+  }
+
+  Future<void> _sendCode() async {
+    if (_loading) return;
+    final t = AppLocalizations.of(context)!;
+    final isRu = _isRu;
+    if (!_codeSent && !_validate(t)) {
+      setState(() {});
+      return;
+    }
+    final phone = _normalizedPhone();
+    final limiterState = await AuthRateLimiter.instance.check(
+      AuthRateLimitAction.phoneOtpSend,
+      phone,
+    );
+    if (!mounted) return;
+    if (!limiterState.allowed) {
+      setState(() => _error = limiterState.message(isRu));
+      return;
+    }
+
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      await ref.read(authControllerProvider).sendPhoneOtp(phone: phone);
+      await AuthRateLimiter.instance.recordSent(
+        AuthRateLimitAction.phoneOtpSend,
+        phone,
+      );
+      if (!mounted) return;
+      setState(() {
+        _codeSent = true;
+        _codeC.clear();
+        _codeError = null;
+      });
+      _startResendTimer();
+      _codeF.requestFocus();
+    } on AuthException catch (e) {
+      if (!mounted) return;
+      await AuthRateLimiter.instance.recordFailure(
+        AuthRateLimitAction.phoneOtpSend,
+        phone,
+      );
+      if (!mounted) return;
+      setState(
+        () => _error = AppErrorMapper.message(
+          e,
+          t,
+          context: AppErrorContext.phoneSignIn,
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      await AuthRateLimiter.instance.recordFailure(
+        AuthRateLimitAction.phoneOtpSend,
+        phone,
+      );
+      if (!mounted) return;
+      setState(() => _error = t.phoneOtpSendFailed);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _verifyCode() async {
+    if (_loading) return;
+    final t = AppLocalizations.of(context)!;
+    final isRu = _isRu;
+    final code = _codeC.text.trim();
+    if (code.isEmpty) {
+      setState(() => _codeError = t.phoneOtpEnterCode);
+      return;
+    }
+
+    final phone = _normalizedPhone();
+    final limiterState = await AuthRateLimiter.instance.check(
+      AuthRateLimitAction.phoneOtpVerify,
+      phone,
+    );
+    if (!mounted) return;
+    if (!limiterState.allowed) {
+      setState(() => _error = limiterState.message(isRu));
+      return;
+    }
+
+    setState(() {
+      _loading = true;
+      _error = null;
+      _codeError = null;
+    });
+    try {
+      await ref
+          .read(authControllerProvider)
+          .verifyPhoneOtp(phone: phone, token: code);
+      await ref
+          .read(authControllerProvider)
+          .setCurrentUserPassword(password: _passC.text);
+      await recordLegalConsentIfPossible(
+        ref.read(supabaseProvider),
+        source: 'phone_registration',
+      );
+      await AuthRateLimiter.instance.recordSuccess(
+        AuthRateLimitAction.phoneOtpVerify,
+        phone,
+      );
+      if (!mounted) return;
+      widget.onDone();
+    } on AuthException catch (e) {
+      if (!mounted) return;
+      await AuthRateLimiter.instance.recordFailure(
+        AuthRateLimitAction.phoneOtpVerify,
+        phone,
+      );
+      if (!mounted) return;
+      setState(
+        () => _codeError = AppErrorMapper.message(
+          e,
+          t,
+          context: AppErrorContext.phoneSignIn,
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      await AuthRateLimiter.instance.recordFailure(
+        AuthRateLimitAction.phoneOtpVerify,
+        phone,
+      );
+      if (!mounted) return;
+      setState(() => _codeError = t.phoneOtpVerifyFailed);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  void _changeNumber() {
+    _resendTimer?.cancel();
+    setState(() {
+      _codeSent = false;
+      _resendSeconds = 0;
+      _codeC.clear();
+      _codeError = null;
+      _error = null;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+    final isRu = _isRu;
+
+    Widget passwordField({
+      required TextEditingController controller,
+      required FocusNode focusNode,
+      required bool hidden,
+      required VoidCallback toggleHidden,
+      required String label,
+      required String? errorText,
+      required TextInputAction action,
+      required VoidCallback onSubmitted,
+      ValueChanged<String>? onChanged,
+    }) {
+      return TextField(
+        controller: controller,
+        focusNode: focusNode,
+        enabled: !_loading,
+        obscureText: hidden,
+        style: AppText.body,
+        textInputAction: action,
+        autofillHints: const [AutofillHints.newPassword],
+        onChanged: onChanged,
+        onSubmitted: (_) => onSubmitted(),
+        decoration: authFieldDecoration(
+          label: label,
+          errorText: errorText,
+          suffixIcon: IconButton(
+            onPressed: toggleHidden,
+            tooltip: hidden ? t.showPassword : t.hidePassword,
+            icon: Icon(hidden ? Icons.visibility_off : Icons.visibility),
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (_error != null) ...[
+          AuthMessageBanner(message: _error!),
+          const SizedBox(height: 16),
+        ],
+        AuthPhoneNumberField(
+          controller: _phoneC,
+          enabled: !_codeSent && !_loading,
+          flat: true,
+          errorText: _phoneError,
+          countryIso: _phoneIso,
+          codeLabel: isRu ? 'Код страны' : 'Country code',
+          phoneLabel: t.phoneNumber,
+          onCountryIsoChanged: (value) => setState(() => _phoneIso = value),
+          onSubmitted: (_) => _passF.requestFocus(),
+        ),
+        if (!_codeSent) ...[
+          const SizedBox(height: 12),
+          passwordField(
+            controller: _passC,
+            focusNode: _passF,
+            hidden: _hide1,
+            toggleHidden: () => setState(() => _hide1 = !_hide1),
+            label: t.password,
+            errorText: _passError,
+            action: TextInputAction.next,
+            onSubmitted: () => _pass2F.requestFocus(),
+            onChanged: (_) => setState(() => _passError = null),
+          ),
+          if (_passC.text.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            PasswordStrengthMeter(
+              password: _passC.text,
+              isRussian: isRu,
+              phone: _normalizedPhone(),
+              compact: true,
+            ),
+          ],
+          const SizedBox(height: 12),
+          passwordField(
+            controller: _pass2C,
+            focusNode: _pass2F,
+            hidden: _hide2,
+            toggleHidden: () => setState(() => _hide2 = !_hide2),
+            label: t.passwordRepeat,
+            errorText: _pass2Error,
+            action: TextInputAction.done,
+            onSubmitted: _sendCode,
+            onChanged: (_) {
+              if (_pass2Error != null) setState(() => _pass2Error = null);
+            },
+          ),
+          const SizedBox(height: 20),
+          AuthConsentRow(
+            accepted: _acceptedLegal,
+            errorText: _legalError,
+            enabled: !_loading,
+            onChanged: (value) => setState(() {
+              _acceptedLegal = value;
+              _legalError = null;
+            }),
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            height: Tokens.inputHeight,
+            child: FilledButton(
+              onPressed: _loading ? null : _sendCode,
+              child: Text(
+                _loading
+                    ? t.loadingDots
+                    : (isRu ? 'Отправить код' : 'Send code'),
+              ),
+            ),
+          ),
+        ] else ...[
+          const SizedBox(height: 12),
+          TextField(
+            controller: _codeC,
+            focusNode: _codeF,
+            enabled: !_loading,
+            keyboardType: TextInputType.number,
+            textInputAction: TextInputAction.done,
+            autofillHints: const [AutofillHints.oneTimeCode],
+            onChanged: (_) {
+              if (_codeError != null) setState(() => _codeError = null);
+            },
+            onSubmitted: (_) => _verifyCode(),
+            style: AppText.body.copyWith(letterSpacing: 4),
+            decoration: authFieldDecoration(
+              label: t.phoneOtpCode,
+              errorText: _codeError,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              TextButton(
+                onPressed: (_loading || _resendSeconds > 0) ? null : _sendCode,
+                style: TextButton.styleFrom(
+                  foregroundColor: Tokens.textSecondary,
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  minimumSize: const Size(0, 32),
+                ),
+                child: Text(
+                  _resendSeconds > 0
+                      ? (isRu
+                            ? 'Отправить ещё раз через $_resendSeconds с'
+                            : 'Resend in $_resendSeconds s')
+                      : (isRu ? 'Отправить ещё раз' : 'Send again'),
+                ),
+              ),
+              const Spacer(),
+              TextButton(
+                onPressed: _loading ? null : _changeNumber,
+                style: TextButton.styleFrom(
+                  foregroundColor: Tokens.textSecondary,
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  minimumSize: const Size(0, 32),
+                ),
+                child: Text(isRu ? 'Изменить номер' : 'Change number'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: Tokens.inputHeight,
+            child: FilledButton(
+              onPressed: _loading ? null : _verifyCode,
+              child: Text(
+                _loading ? t.loadingDots : (isRu ? 'Завершить' : 'Finish'),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
 }

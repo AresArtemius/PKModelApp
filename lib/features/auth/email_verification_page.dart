@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -11,6 +12,7 @@ import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
 import 'auth_rate_limiter.dart';
 import 'auth_controller.dart';
+import 'auth_v2_widgets.dart';
 
 class EmailVerificationPage extends ConsumerStatefulWidget {
   const EmailVerificationPage({super.key, this.email = ''});
@@ -149,9 +151,94 @@ class _EmailVerificationPageState extends ConsumerState<EmailVerificationPage> {
     }
   }
 
+  Widget _buildV2(AppLocalizations t) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    return AbsorbPointer(
+      absorbing: _loading,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 56,
+            height: 56,
+            decoration: const BoxDecoration(
+              color: Tokens.surfaceAlt,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.mark_email_unread_outlined,
+              color: Tokens.ink,
+              size: 26,
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text(t.emailVerificationTitle, style: AppText.h1),
+          const SizedBox(height: 8),
+          Text(
+            _email.isEmpty
+                ? t.emailVerificationSubtitleNoEmail
+                : t.emailVerificationSubtitle(_email),
+            style: AppText.small.copyWith(color: Tokens.textSecondary),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            ru
+                ? 'Если письма нет — проверьте «Спам» или отправьте его ещё раз.'
+                : 'No email? Check the spam folder or send it again.',
+            style: AppText.caption.copyWith(color: Tokens.textTertiary),
+          ),
+          if (_message != null) ...[
+            const SizedBox(height: 16),
+            AuthMessageBanner(message: _message!, isError: _isError),
+          ],
+          const SizedBox(height: 24),
+          SizedBox(
+            height: Tokens.inputHeight,
+            child: FilledButton(
+              onPressed: _goLogin,
+              child: Text(
+                _loading
+                    ? t.loadingDots
+                    : (ru ? 'Я подтвердил, войти' : 'I confirmed, sign in'),
+              ),
+            ),
+          ),
+          if (_email.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            SizedBox(
+              height: Tokens.inputHeight,
+              child: OutlinedButton(
+                onPressed: _resend,
+                child: Text(ru ? 'Отправить письмо ещё раз' : 'Send again'),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
+
+    if (kIsWeb) {
+      return Scaffold(
+        backgroundColor: Tokens.bg,
+        body: AuthPageFrame(
+          topBar: Row(
+            children: [
+              AuthBackLink(
+                label: t.signInTitle,
+                onTap: _loading ? null : () => context.go(Routes.login),
+              ),
+            ],
+          ),
+          child: _buildV2(t),
+        ),
+      );
+    }
 
     return Scaffold(
       body: Stack(

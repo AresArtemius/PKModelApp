@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -135,10 +136,107 @@ class _RoleOnboardingPageState extends ConsumerState<RoleOnboardingPage> {
     ];
   }
 
+  Widget _buildV2(AppLocalizations t, List<_RoleOption> roleOptions) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final width = MediaQuery.sizeOf(context).width;
+    final twoColumns = width >= 760;
+    final gutter = width >= 600 ? 32.0 : 20.0;
+
+    final rows = [
+      for (var i = 0; i < roleOptions.length; i++)
+        _RoleRowV2(
+          icon: roleOptions[i].icon,
+          title: roleOptions[i].title,
+          subtitle: roleOptions[i].subtitle,
+          selected: roleOptions[i].type == _selectedType,
+          busy: _saving && roleOptions[i].type == _selectedType,
+          onTap: () => _select(roleOptions[i].type),
+        ),
+    ];
+
+    return Scaffold(
+      backgroundColor: Tokens.bg,
+      body: SafeArea(
+        child: AbsorbPointer(
+          absorbing: _saving,
+          child: Center(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: twoColumns ? 880 : 520),
+              child: ListView(
+                padding: EdgeInsets.fromLTRB(gutter, 40, gutter, 40),
+                children: [
+                  const Align(
+                    alignment: Alignment.centerLeft,
+                    child: BrandLogo(height: 44),
+                  ),
+                  const SizedBox(height: 28),
+                  Text(
+                    ru
+                        ? 'Как вы будете использовать PK Management?'
+                        : 'How will you use PK Management?',
+                    style: AppText.h1.copyWith(fontSize: twoColumns ? 32 : 28),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    ru
+                        ? 'Выберите роль один раз — приложение откроет нужный сценарий. Позже её можно изменить в настройках аккаунта.'
+                        : 'Pick a role once and the app opens the right flow. You can change it later in the account settings.',
+                    style: AppText.small.copyWith(color: Tokens.textSecondary),
+                  ),
+                  if (_error != null) ...[
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Tokens.accentSoft,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        _error!,
+                        style: AppText.small.copyWith(color: Tokens.danger),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 28),
+                  if (twoColumns)
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      children: [
+                        for (final row in rows)
+                          SizedBox(
+                            width: (880 - gutter * 2 - 12) / 2,
+                            child: row,
+                          ),
+                      ],
+                    )
+                  else
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        for (var i = 0; i < rows.length; i++) ...[
+                          rows[i],
+                          if (i != rows.length - 1) const SizedBox(height: 10),
+                        ],
+                      ],
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
     final roleOptions = _roleOptions(t);
+    if (kIsWeb) return _buildV2(t, roleOptions);
 
     return Scaffold(
       body: Stack(
@@ -342,4 +440,120 @@ class _RoleOption {
   final IconData icon;
   final String title;
   final String subtitle;
+}
+
+
+/// v2 role option: hairline card with an icon circle, title and subtitle;
+/// the chosen one gets an ink border while it saves.
+class _RoleRowV2 extends StatefulWidget {
+  const _RoleRowV2({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.selected,
+    required this.busy,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool selected;
+  final bool busy;
+  final VoidCallback onTap;
+
+  @override
+  State<_RoleRowV2> createState() => _RoleRowV2State();
+}
+
+class _RoleRowV2State extends State<_RoleRowV2> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = widget.selected;
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(Tokens.radiusLg),
+          onTap: widget.onTap,
+          child: AnimatedContainer(
+            duration: Tokens.fast,
+            padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
+            decoration: BoxDecoration(
+              color: selected
+                  ? Tokens.surfaceAlt
+                  : (_hovered ? Tokens.surface : Tokens.bg),
+              borderRadius: BorderRadius.circular(Tokens.radiusLg),
+              border: Border.all(
+                color: selected ? Tokens.ink : Tokens.border,
+                width: selected ? 1.5 : 1,
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: selected ? Tokens.ink : Tokens.surfaceAlt,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    widget.icon,
+                    size: 22,
+                    color: selected ? Colors.white : Tokens.text,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.title,
+                        style: AppText.small.copyWith(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: Tokens.text,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        widget.subtitle,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppText.caption.copyWith(
+                          color: Tokens.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                if (widget.busy)
+                  const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Tokens.ink),
+                    ),
+                  )
+                else
+                  Icon(
+                    Icons.arrow_forward_rounded,
+                    size: 18,
+                    color: _hovered ? Tokens.text : Tokens.textTertiary,
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

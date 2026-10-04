@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -17,6 +18,7 @@ import '../../core/user_security_audit_service.dart';
 import '../notifications/app_notifications.dart';
 import 'auth_rate_limiter.dart';
 import 'auth_split_layout.dart';
+import 'auth_v2_widgets.dart';
 import 'auth_controller.dart';
 import 'phone_number_field.dart';
 
@@ -496,10 +498,12 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       ),
     );
 
-    if (isDesktop) {
-      // v2: brand panel on the left, a 360 px form on the right.
+    if (isDesktop || kIsWeb) {
+      // v2: brand panel on the left, a 360 px form on the right; on a
+      // narrow web window the same form fills a plain white page.
       return Scaffold(
-        body: AuthSplitLayout(
+        backgroundColor: Tokens.bg,
+        body: AuthPageFrame(
           topBar: Row(
             children: [
               _DesktopPublicLinks(
@@ -1012,10 +1016,12 @@ class _PhoneLoginFields extends StatelessWidget {
         AuthPhoneNumberField(
           controller: phoneController,
           enabled: !loading,
+          flat: kIsWeb,
           countryIso: phoneIso,
-          codeLabel: isRu ? 'Код' : 'Code',
+          codeLabel: isRu ? 'Код страны' : 'Country code',
           phoneLabel: t.phoneNumber,
           onCountryIsoChanged: onCountryIsoChanged,
+          onSubmitted: (_) => passwordFocus.requestFocus(),
         ),
         const SizedBox(height: kLoginGapFields),
         TextField(
