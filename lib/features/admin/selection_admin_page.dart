@@ -247,7 +247,9 @@ class _SelectionAdminPageState extends ConsumerState<SelectionAdminPage> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  items.isEmpty
+                  itemsAsync.isLoading
+                      ? (ru ? 'Загрузка…' : 'Loading…')
+                      : items.isEmpty
                       ? (ru ? 'Пока пусто' : 'Nothing yet')
                       : (ru
                             ? 'Подборок: $selections · кастингов: $castings'

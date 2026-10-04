@@ -233,10 +233,10 @@ class SelectionCastingPage extends ConsumerWidget {
     final res = ref.watch(castingResponsesProvider(castingId));
 
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: kIsWeb ? Tokens.bg : _bg,
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: kIsWeb ? EdgeInsets.zero : const EdgeInsets.all(16),
           child: res.when(
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (e, _) => Center(
@@ -585,6 +585,9 @@ class SelectionCastingPage extends ConsumerWidget {
                   hasExportItems: exportItems.isNotEmpty,
                   history: ref.watch(castingResponseHistoryProvider(castingId)),
                   onBack: () => context.go(backRoute),
+                  backLabel: backRoute == Routes.adminSelection
+                      ? (ru ? 'Подборки' : 'Selections')
+                      : (ru ? 'Кастинги' : 'Castings'),
                   onRefresh: () {
                     ref.invalidate(castingResponsesProvider(castingId));
                     ref.invalidate(castingResponseHistoryProvider(castingId));
@@ -2044,6 +2047,7 @@ class _CastingResponsesV2 extends StatefulWidget {
     required this.hasExportItems,
     required this.history,
     required this.onBack,
+    required this.backLabel,
     required this.onRefresh,
     required this.onPdf,
     required this.onCsv,
@@ -2059,6 +2063,7 @@ class _CastingResponsesV2 extends StatefulWidget {
   final bool hasExportItems;
   final AsyncValue<List<Map<String, dynamic>>> history;
   final VoidCallback onBack;
+  final String backLabel;
   final VoidCallback onRefresh;
   final Future<void> Function(_PdfExportScope scope) onPdf;
   final Future<void> Function(_PdfExportScope scope) onCsv;
@@ -2298,7 +2303,7 @@ class _CastingResponsesV2State extends State<_CastingResponsesV2> {
           TextButton.icon(
             onPressed: widget.onBack,
             icon: const Icon(Icons.arrow_back_rounded, size: 18),
-            label: Text(ru ? 'Кастинги' : 'Castings'),
+            label: Text(widget.backLabel),
             style: TextButton.styleFrom(
               foregroundColor: Tokens.textSecondary,
               padding: const EdgeInsets.symmetric(horizontal: 8),

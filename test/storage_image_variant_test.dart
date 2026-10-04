@@ -9,14 +9,14 @@ void main() {
     test('rewrites a public object URL into a render URL with size', () {
       expect(
         storageImageVariant(original, width: 600),
-        'https://abc.supabase.co/storage/v1/render/image/public/profile-media/u1/photo.jpg?width=600&quality=80',
+        'https://abc.supabase.co/storage/v1/render/image/public/profile-media/u1/photo.jpg?width=600&resize=contain&quality=80',
       );
     });
 
     test('keeps existing query parameters', () {
       expect(
         storageImageVariant('$original?v=3', width: 600, quality: 70),
-        'https://abc.supabase.co/storage/v1/render/image/public/profile-media/u1/photo.jpg?v=3&width=600&quality=70',
+        'https://abc.supabase.co/storage/v1/render/image/public/profile-media/u1/photo.jpg?v=3&width=600&resize=contain&quality=70',
       );
     });
 
