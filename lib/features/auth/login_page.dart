@@ -55,6 +55,15 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     return appLocale?.languageCode ?? deviceLang;
   }
 
+  /// Where to go after a successful sign-in: the `next` query parameter
+  /// (an internal path, set by public pages) or the catalogue.
+  String _afterLoginRoute() {
+    final next =
+        GoRouterState.of(context).uri.queryParameters['next']?.trim() ?? '';
+    if (next.startsWith('/') && !next.startsWith('//')) return next;
+    return Routes.search;
+  }
+
   void _submitIfNotLoading() {
     if (_loading) return;
     if (_mode == _LoginMode.email) {
@@ -147,7 +156,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             metadata: {'method': 'email'},
           );
       if (!mounted) return;
-      context.go(Routes.search);
+      context.go(_afterLoginRoute());
     } on AuthException catch (e) {
       if (!mounted) return;
       await AuthRateLimiter.instance.recordFailure(
@@ -263,7 +272,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             metadata: {'method': 'phone'},
           );
       if (!mounted) return;
-      context.go(Routes.search);
+      context.go(_afterLoginRoute());
     } on AuthException catch (e) {
       if (!mounted) return;
       await AuthRateLimiter.instance.recordFailure(

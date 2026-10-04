@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
@@ -11,7 +12,7 @@ import 'package:video_thumbnail/video_thumbnail.dart';
 
 import '../../core/app_error_mapper.dart';
 import '../../core/app_logger.dart';
-import '../../core/app_top_bar.dart';
+import '../../core/auth_providers.dart';
 import '../../core/storage_image_variant.dart';
 import '../../core/profile_action_log_service.dart';
 import '../../core/roles_provider.dart';
@@ -21,6 +22,7 @@ import '../../core/router.dart';
 import '../../gen_l10n/app_localizations.dart';
 import '../../ui/brand/appearance_lookups.dart';
 import '../../ui/brand/brand_theme.dart';
+import '../../ui/brand/public_page_frame.dart';
 import '../../ui/brand/ui_constants.dart';
 import 'agent_workspace.dart';
 import 'create_selection_dialog.dart';
@@ -896,7 +898,8 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
                 );
 
                 final gap = const SizedBox(height: _sectionGap);
-                final body = isDesktop
+                final signedIn = ref.watch(isAuthenticatedProvider);
+                final body = isDesktop || kIsWeb
                     ? _ProfileDesktopBodyV2(
                         model: m,
                         t: t,
@@ -923,6 +926,11 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
                         onMessage: () => _openProfileChat(m),
                         showProInfo: showProInfo,
                         agentCard: canUseAgentTools ? agentCard : null,
+                        signedIn: signedIn,
+                        narrow: !isDesktop,
+                        onSignIn: () => context.go(
+                          PublicPageFrame.loginWithReturn(context),
+                        ),
                       )
                     : RefreshIndicator(
                         onRefresh: _refresh,
@@ -954,6 +962,17 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
                         ),
                       );
 
+                if (isDesktop || kIsWeb) {
+                  return PageTitle(
+                    title: m.fullName,
+                    child: PublicPageFrame(
+                      wideBreakpoint: _kProfileDesktopBreakpoint,
+                      onBack: isDesktop ? null : () => _back(isAdmin: isAdmin),
+                      backLabel: t.catalogTab,
+                      child: body,
+                    ),
+                  );
+                }
                 return PageTitle(title: m.fullName, child: body);
               },
             ),
@@ -1727,6 +1746,9 @@ class _ProfileDesktopBodyV2 extends StatefulWidget {
     required this.onAddToSelection,
     required this.onMessage,
     required this.showProInfo,
+    required this.signedIn,
+    required this.onSignIn,
+    this.narrow = false,
     this.adminNotice,
     this.agentCard,
   });
@@ -1748,6 +1770,11 @@ class _ProfileDesktopBodyV2 extends StatefulWidget {
   final VoidCallback onAddToSelection;
   final VoidCallback onMessage;
   final bool showProInfo;
+  final bool signedIn;
+  final VoidCallback onSignIn;
+
+  /// Web on a phone-sized window: the same page in one column.
+  final bool narrow;
   final Widget? adminNotice;
   final Widget? agentCard;
 
@@ -1787,9 +1814,74 @@ class _ProfileDesktopBodyV2State extends State<_ProfileDesktopBodyV2> {
       (_ProfileTab.about, ru ? 'Опыт' : 'About'),
     ];
 
+    if (widget.narrow) {
+      return ListView(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 48),
+        children: [
+          if (widget.adminNotice != null) ...[
+            widget.adminNotice!,
+            const SizedBox(height: 16),
+          ],
+          _cover(context),
+          const SizedBox(height: 16),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: AppText.display.copyWith(fontSize: 28, height: 1.1),
+                ),
+              ),
+              if (m.isProActive) ...[
+                const SizedBox(width: 10),
+                const Padding(
+                  padding: EdgeInsets.only(top: 6),
+                  child: _ProBadge(),
+                ),
+              ],
+            ],
+          ),
+          if (subtitle.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              subtitle,
+              style: AppText.body.copyWith(
+                fontSize: 15,
+                color: Tokens.textSecondary,
+              ),
+            ),
+          ],
+          const SizedBox(height: 16),
+          _headerActions(context),
+          const SizedBox(height: 24),
+          _facts(context),
+          if (widget.canUseAgentActions &&
+              widget.actionHistoryFuture != null) ...[
+            const SizedBox(height: 16),
+            _PortfolioActionHistoryStrip(
+              future: widget.actionHistoryFuture,
+              isRu: ru,
+            ),
+          ],
+          if (widget.agentCard != null) ...[
+            const SizedBox(height: 16),
+            widget.agentCard!,
+          ],
+          const SizedBox(height: 28),
+          _ProfileTabBar(
+            tabs: tabs,
+            selected: _tab,
+            onChanged: (tab) => setState(() => _tab = tab),
+          ),
+          const SizedBox(height: 20),
+          _tabContent(context),
+        ],
+      );
+    }
+
     return Column(
       children: [
-        const AppTopBar(currentIndex: 1),
         Expanded(
           child: ListView(
             padding: const EdgeInsets.fromLTRB(40, 20, 40, 56),
@@ -1992,6 +2084,16 @@ class _ProfileDesktopBodyV2State extends State<_ProfileDesktopBodyV2> {
       runSpacing: 10,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
+        if (!widget.signedIn)
+          FilledButton.icon(
+            onPressed: widget.onSignIn,
+            style: FilledButton.styleFrom(
+              minimumSize: const Size(0, Tokens.controlHeight),
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+            ),
+            icon: const Icon(Icons.chat_bubble_outline_rounded, size: 18),
+            label: Text(ru ? 'Войти, чтобы написать' : 'Sign in to message'),
+          ),
         OutlinedButton.icon(
           onPressed: busy ? null : widget.onCompositePdf,
           icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
@@ -2027,15 +2129,49 @@ class _ProfileDesktopBodyV2State extends State<_ProfileDesktopBodyV2> {
     );
   }
 
-  Widget _side(BuildContext context) {
+  Widget _cover(BuildContext context) {
     final m = widget.model;
-    final t = widget.t;
-    final ru = Localizations.localeOf(context).languageCode == 'ru';
-    final locale = Localizations.localeOf(context);
     final cover = widget.displayPhotoUrls.isEmpty
         ? null
         : widget.displayPhotoUrls.first;
+    if (cover == null) return const SizedBox.shrink();
+    return Hero(
+      tag: 'model-photo-${m.id}',
+      child: Material(
+        color: Tokens.surfaceAlt,
+        borderRadius: BorderRadius.circular(Tokens.radiusLg),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => widget.onOpenPhotos(0),
+          child: AspectRatio(
+            aspectRatio: 3 / 4,
+            child: CachedNetworkImage(
+              imageUrl: storageImageVariant(cover, width: 900),
+              fit: BoxFit.cover,
+              alignment: widget.coverAlignment,
+              memCacheWidth: 1000,
+              placeholder: (_, _) => const ColoredBox(color: Tokens.surfaceAlt),
+              errorWidget: (_, _, _) => CachedNetworkImage(
+                imageUrl: cover,
+                fit: BoxFit.cover,
+                alignment: widget.coverAlignment,
+                memCacheWidth: 1000,
+                placeholder: (_, _) =>
+                    const ColoredBox(color: Tokens.surfaceAlt),
+                errorWidget: (_, _, _) =>
+                    const ColoredBox(color: Tokens.surfaceAlt),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
+  Widget _facts(BuildContext context) {
+    final m = widget.model;
+    final t = widget.t;
+    final locale = Localizations.localeOf(context);
     final facts = <MapEntry<String, String>>[
       MapEntry(
         _sentenceCaseProfile(t.profileTypeUpper),
@@ -2066,58 +2202,30 @@ class _ProfileDesktopBodyV2State extends State<_ProfileDesktopBodyV2> {
       if ((m.minDailyFee ?? 0) > 0)
         MapEntry(t.profileMinDailyFee, '${m.minDailyFee} ₽'),
     ];
+    return Container(
+      padding: EdgeInsets.all(widget.narrow ? 16 : 24),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(Tokens.radiusLg),
+        border: Border.all(color: Tokens.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final f in facts)
+            _ProfileFactRow(label: f.key, value: f.value, compact: true),
+        ],
+      ),
+    );
+  }
 
+  Widget _side(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (cover != null)
-          Hero(
-            tag: 'model-photo-${m.id}',
-            child: Material(
-              color: Tokens.surfaceAlt,
-              borderRadius: BorderRadius.circular(Tokens.radiusLg),
-              clipBehavior: Clip.antiAlias,
-              child: InkWell(
-                onTap: () => widget.onOpenPhotos(0),
-                child: AspectRatio(
-                  aspectRatio: 3 / 4,
-                  child: CachedNetworkImage(
-                    imageUrl: storageImageVariant(cover, width: 900),
-                    fit: BoxFit.cover,
-                    alignment: widget.coverAlignment,
-                    memCacheWidth: 1000,
-                    placeholder: (_, _) =>
-                        const ColoredBox(color: Tokens.surfaceAlt),
-                    errorWidget: (_, _, _) => CachedNetworkImage(
-                      imageUrl: cover,
-                      fit: BoxFit.cover,
-                      alignment: widget.coverAlignment,
-                      memCacheWidth: 1000,
-                      placeholder: (_, _) =>
-                          const ColoredBox(color: Tokens.surfaceAlt),
-                      errorWidget: (_, _, _) =>
-                          const ColoredBox(color: Tokens.surfaceAlt),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        const SizedBox(height: 20),
-        Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(Tokens.radiusLg),
-            border: Border.all(color: Tokens.border),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              for (final f in facts)
-                _ProfileFactRow(label: f.key, value: f.value, compact: true),
-            ],
-          ),
-        ),
+        _cover(context),
+        if (widget.displayPhotoUrls.isNotEmpty) const SizedBox(height: 20),
+        _facts(context),
         if (widget.canUseAgentActions &&
             widget.actionHistoryFuture != null) ...[
           const SizedBox(height: 16),

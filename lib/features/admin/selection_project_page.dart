@@ -15,6 +15,7 @@ import '../../gen_l10n/app_localizations.dart';
 import '../../ui/brand/brand_admin_header.dart';
 import '../../ui/brand/brand_logo.dart';
 import '../../ui/brand/brand_pill_button.dart';
+import '../../ui/brand/public_page_frame.dart';
 import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
 import '../chat/chat_providers.dart';
@@ -295,6 +296,22 @@ class SelectionProjectPage extends ConsumerWidget {
                 agentFeedback,
               );
 
+              if (isPublic && !publicEnabled && kIsWeb) {
+                return PublicPageFrame(
+                  child: Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          t.publicSelectionUnavailable,
+                          style: AppText.h2.copyWith(color: Tokens.textSecondary),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }
               if (isPublic && !publicEnabled) {
                 return Center(
                   child: _CardPill(
@@ -436,6 +453,24 @@ class SelectionProjectPage extends ConsumerWidget {
                     // Public status tracking is optional until SQL is applied.
                   }
                 });
+              }
+
+              if (kIsWeb && isPublic) {
+                return _PublicSelectionV2(
+                  selectionId: selectionId,
+                  title: title,
+                  manager: Map<String, dynamic>.from(
+                    (data['manager'] as Map?) ?? const {},
+                  ),
+                  campaignRows: campaignRows,
+                  profiles: items
+                      .map((e) => _selectionProfileVmFromRow(context, e))
+                      .where((e) => e.profileId.isNotEmpty)
+                      .toList(growable: false),
+                  clientKey: clientKey,
+                  accessToken: feedbackAccessToken,
+                  clientFeedback: clientFeedback,
+                );
               }
 
               if (kIsWeb && !isPublic) {
@@ -1746,11 +1781,13 @@ class _SelectionProfileCard extends StatelessWidget {
 
 class _ClientFeedbackControls extends ConsumerStatefulWidget {
   const _ClientFeedbackControls({
+    super.key,
     required this.selectionId,
     required this.profileId,
     required this.clientKey,
     required this.accessToken,
     required this.initial,
+    this.flat = false,
   });
 
   final String selectionId;
@@ -1758,6 +1795,7 @@ class _ClientFeedbackControls extends ConsumerStatefulWidget {
   final String clientKey;
   final String accessToken;
   final SelectionClientFeedback? initial;
+  final bool flat;
 
   @override
   ConsumerState<_ClientFeedbackControls> createState() =>
@@ -1848,6 +1886,60 @@ class _ClientFeedbackControlsState
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
     final isRu = Localizations.localeOf(context).languageCode == 'ru';
+
+    if (widget.flat) {
+      final options = <(SelectionClientVote, String)>[
+        (SelectionClientVote.selected, isRu ? 'Выбран' : 'Selected'),
+        (SelectionClientVote.reserve, isRu ? 'Резерв' : 'Reserve'),
+        (SelectionClientVote.rejected, t.clientFeedbackReject),
+      ];
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              for (var i = 0; i < options.length; i++) ...[
+                if (i > 0) const SizedBox(width: 6),
+                Expanded(
+                  child: _StatusChoiceV2(
+                    label: options[i].$2,
+                    selected: _vote == options[i].$1,
+                    onTap: _saving ? null : () => _save(vote: options[i].$1),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _commentC,
+            minLines: 1,
+            maxLines: 3,
+            textInputAction: TextInputAction.newline,
+            style: AppText.small.copyWith(fontSize: 14),
+            decoration: InputDecoration(
+              hintText: t.clientFeedbackCommentHint,
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 10,
+              ),
+              suffixIcon: IconButton(
+                tooltip: t.clientFeedbackSaveComment,
+                onPressed: _saving ? null : () => _save(),
+                icon: _saving
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.send_rounded, size: 18),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
@@ -2785,6 +2877,274 @@ class _SelectionProfileRowV2State extends State<_SelectionProfileRowV2> {
           ),
         ),
       ),
+    );
+  }
+}
+
+
+// ---------------------------------------------------------------------------
+// v2 (web): the client's view of a selection — a showcase grid.
+// ---------------------------------------------------------------------------
+
+class _PublicSelectionV2 extends StatelessWidget {
+  const _PublicSelectionV2({
+    required this.selectionId,
+    required this.title,
+    required this.manager,
+    required this.campaignRows,
+    required this.profiles,
+    required this.clientKey,
+    required this.accessToken,
+    required this.clientFeedback,
+  });
+
+  final String selectionId;
+  final String title;
+  final Map<String, dynamic> manager;
+  final List<MapEntry<String, String>> campaignRows;
+  final List<_SelectionPresentationProfile> profiles;
+  final String clientKey;
+  final String accessToken;
+  final Map<String, SelectionClientFeedback> clientFeedback;
+
+  @override
+  Widget build(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final width = MediaQuery.sizeOf(context).width;
+    final wide = width >= 900;
+    final gutter = wide ? 32.0 : 16.0;
+    final canVote = clientKey.isNotEmpty && accessToken.isNotEmpty;
+    final managerName = _SelectionProjectV2._managerName(manager);
+    final managerContacts = [
+      (manager['email'] ?? '').toString().trim(),
+      (manager['phone'] ?? '').toString().trim(),
+    ].where((e) => e.isNotEmpty).join(' · ');
+    final count = profiles.length;
+    final countText = ru
+        ? _SelectionProjectV2._pluralRu(
+            count,
+            '$count анкета',
+            '$count анкеты',
+            '$count анкет',
+          )
+        : '$count profiles';
+
+    return PublicPageFrame(
+      child: ListView(
+        padding: EdgeInsets.fromLTRB(gutter, wide ? 32 : 20, gutter, 56),
+        children: [
+          Text(
+            (ru ? 'Подборка' : 'Selection').toUpperCase(),
+            style: AppText.label.copyWith(color: Tokens.textTertiary),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            title.isNotEmpty ? title : (ru ? 'Подборка моделей' : 'Selection'),
+            style: AppText.display.copyWith(fontSize: wide ? 40 : 28, height: 1.1),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            [
+              countText,
+              if (managerName.isNotEmpty)
+                '${ru ? 'от' : 'from'} $managerName',
+            ].join(' · '),
+            style: AppText.body.copyWith(
+              fontSize: 16,
+              color: Tokens.textSecondary,
+            ),
+          ),
+          if (campaignRows.isNotEmpty || managerContacts.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 24,
+              runSpacing: 6,
+              children: [
+                for (final row in campaignRows)
+                  Text.rich(
+                    TextSpan(
+                      children: [
+                        TextSpan(
+                          text: '${row.key}: ',
+                          style: AppText.small.copyWith(
+                            color: Tokens.textTertiary,
+                          ),
+                        ),
+                        TextSpan(
+                          text: row.value,
+                          style: AppText.small.copyWith(color: Tokens.text),
+                        ),
+                      ],
+                    ),
+                  ),
+                if (managerContacts.isNotEmpty)
+                  Text.rich(
+                    TextSpan(
+                      children: [
+                        TextSpan(
+                          text: '${ru ? 'Контакт' : 'Contact'}: ',
+                          style: AppText.small.copyWith(
+                            color: Tokens.textTertiary,
+                          ),
+                        ),
+                        TextSpan(
+                          text: managerContacts,
+                          style: AppText.small.copyWith(color: Tokens.text),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ],
+          if (canVote) ...[
+            const SizedBox(height: 12),
+            Text(
+              ru
+                  ? 'Отметьте понравившихся и оставьте комментарий — агентство увидит ваш выбор.'
+                  : 'Mark the ones you like and leave a comment — the agency will see your choice.',
+              style: AppText.small.copyWith(color: Tokens.textSecondary),
+            ),
+          ],
+          const SizedBox(height: 28),
+          if (profiles.isEmpty)
+            Text(
+              ru ? 'В подборке пока нет анкет.' : 'No profiles in this selection yet.',
+              style: AppText.small.copyWith(color: Tokens.textSecondary),
+            )
+          else
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final columns = (constraints.maxWidth / 260).floor().clamp(2, 5);
+                const spacing = 16.0;
+                final cardWidth =
+                    (constraints.maxWidth - spacing * (columns - 1)) / columns;
+                return Wrap(
+                  spacing: spacing,
+                  runSpacing: 28,
+                  children: [
+                    for (final p in profiles)
+                      SizedBox(
+                        width: cardWidth,
+                        child: _PublicSelectionCardV2(
+                          profile: p,
+                          onOpen: () => context.push(
+                            '${Routes.publicModelPrefix}${p.profileId}',
+                          ),
+                          feedback: canVote
+                              ? _ClientFeedbackControls(
+                                  key: ValueKey('fb-${p.profileId}'),
+                                  selectionId: selectionId,
+                                  profileId: p.profileId,
+                                  clientKey: clientKey,
+                                  accessToken: accessToken,
+                                  initial: clientFeedback[p.profileId],
+                                  flat: true,
+                                )
+                              : null,
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PublicSelectionCardV2 extends StatefulWidget {
+  const _PublicSelectionCardV2({
+    required this.profile,
+    required this.onOpen,
+    this.feedback,
+  });
+
+  final _SelectionPresentationProfile profile;
+  final VoidCallback onOpen;
+  final Widget? feedback;
+
+  @override
+  State<_PublicSelectionCardV2> createState() => _PublicSelectionCardV2State();
+}
+
+class _PublicSelectionCardV2State extends State<_PublicSelectionCardV2> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = widget.profile;
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final facts = [
+      if (p.age > 0) (ru ? '${p.age} лет' : '${p.age} y.o.'),
+      if (p.height > 0) '${p.height} ${ru ? 'см' : 'cm'}',
+      if (p.city.isNotEmpty) p.city,
+    ].join(' · ');
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        MouseRegion(
+          onEnter: (_) => setState(() => _hovered = true),
+          onExit: (_) => setState(() => _hovered = false),
+          child: GestureDetector(
+            onTap: widget.onOpen,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                AspectRatio(
+                  aspectRatio: 3 / 4,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(Tokens.radiusMd),
+                    child: AnimatedScale(
+                      duration: Tokens.base,
+                      scale: _hovered ? 1.02 : 1,
+                      child: p.coverUrl.isEmpty
+                          ? const ColoredBox(
+                              color: Tokens.surfaceAlt,
+                              child: Icon(
+                                Icons.person_outline_rounded,
+                                color: Tokens.textTertiary,
+                                size: 40,
+                              ),
+                            )
+                          : FocalImage(
+                              url: storageImageVariant(
+                                p.coverUrl,
+                                width: kCatalogCardImageWidth,
+                              ),
+                              focalX: p.focalX,
+                              focalY: p.focalY,
+                              memCacheWidth: 700,
+                            ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  p.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppText.smallStrong.copyWith(fontSize: 15),
+                ),
+                if (facts.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    facts,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppText.caption.copyWith(color: Tokens.textSecondary),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+        if (widget.feedback != null) ...[
+          const SizedBox(height: 10),
+          widget.feedback!,
+        ],
+      ],
     );
   }
 }
