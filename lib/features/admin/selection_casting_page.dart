@@ -1,4 +1,5 @@
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
@@ -19,6 +20,7 @@ import '../selection/selection_pdf_options_dialog.dart';
 import '../selection/selection_pdf_service.dart';
 import '../selection/public_profile_access_link_service.dart';
 import '../catalog/model_data.dart';
+import '../../core/storage_image_variant.dart';
 import '../castings/casting_reference_media.dart';
 import '../castings/casting_response_status.dart';
 
@@ -138,6 +140,8 @@ final castingResponsesProvider = FutureProvider.autoDispose
           min_hourly_rate,
           min_daily_fee,
           cover_photo_url,
+          cover_photo_focal_x,
+          cover_photo_focal_y,
           photo_urls
         )
         ''';
@@ -152,6 +156,12 @@ final castingResponsesProvider = FutureProvider.autoDispose
           rows = await run(profileSelect.replaceFirst('admin_note,', ''));
         } else if (msg.contains('status')) {
           rows = await run(profileSelect.replaceFirst('status,', ''));
+        } else if (msg.contains('focal')) {
+          rows = await run(
+            profileSelect
+                .replaceFirst('cover_photo_focal_x,', '')
+                .replaceFirst('cover_photo_focal_y,', ''),
+          );
         } else {
           rethrow;
         }
@@ -335,19 +345,11 @@ class SelectionCastingPage extends ConsumerWidget {
                 );
               }
 
-              Future<void> choosePdfExport() async {
+              Future<void> exportPdfScope(_PdfExportScope scope) async {
                 final ru = Localizations.localeOf(context).languageCode == 'ru';
                 final basePdfTitle = castingTitle.isNotEmpty
                     ? castingTitle
                     : t.responsesUpper;
-                final scope = await showModalBottomSheet<_PdfExportScope>(
-                  context: context,
-                  backgroundColor: Colors.transparent,
-                  builder: (_) => _ExportScopeSheet(
-                    title: ru ? 'PDF-ПОДБОРКА' : 'PDF SELECTION',
-                  ),
-                );
-                if (scope == null) return;
                 switch (scope) {
                   case _PdfExportScope.all:
                     await openPdf(
@@ -375,16 +377,21 @@ class SelectionCastingPage extends ConsumerWidget {
                 }
               }
 
-              Future<void> copyCsvExport() async {
+              Future<void> choosePdfExport() async {
                 final ru = Localizations.localeOf(context).languageCode == 'ru';
                 final scope = await showModalBottomSheet<_PdfExportScope>(
                   context: context,
                   backgroundColor: Colors.transparent,
                   builder: (_) => _ExportScopeSheet(
-                    title: ru ? 'CSV-ЭКСПОРТ' : 'CSV EXPORT',
+                    title: ru ? 'PDF-ПОДБОРКА' : 'PDF SELECTION',
                   ),
                 );
                 if (scope == null) return;
+                await exportPdfScope(scope);
+              }
+
+              Future<void> exportCsvScope(_PdfExportScope scope) async {
+                final ru = Localizations.localeOf(context).languageCode == 'ru';
                 if (!context.mounted) return;
                 final scopedRows = switch (scope) {
                   _PdfExportScope.all => rowsForCsvScope(null),
@@ -421,6 +428,19 @@ class SelectionCastingPage extends ConsumerWidget {
                       ),
                     ),
                   );
+              }
+
+              Future<void> copyCsvExport() async {
+                final ru = Localizations.localeOf(context).languageCode == 'ru';
+                final scope = await showModalBottomSheet<_PdfExportScope>(
+                  context: context,
+                  backgroundColor: Colors.transparent,
+                  builder: (_) => _ExportScopeSheet(
+                    title: ru ? 'CSV-ЭКСПОРТ' : 'CSV EXPORT',
+                  ),
+                );
+                if (scope == null) return;
+                await exportCsvScope(scope);
               }
 
               Future<void> updateStatus({
@@ -549,6 +569,33 @@ class SelectionCastingPage extends ConsumerWidget {
                 }
                 ref.invalidate(castingResponsesProvider(castingId));
                 ref.invalidate(castingResponseHistoryProvider(castingId));
+              }
+
+              final backRoute = switch (from) {
+                'castings' => Routes.castings,
+                'admin_castings' => Routes.adminCastings,
+                _ => Routes.adminSelection,
+              };
+
+              if (kIsWeb) {
+                return _CastingResponsesV2(
+                  castingId: castingId,
+                  castingTitle: castingTitle,
+                  items: items,
+                  hasExportItems: exportItems.isNotEmpty,
+                  history: ref.watch(castingResponseHistoryProvider(castingId)),
+                  onBack: () => context.go(backRoute),
+                  onRefresh: () {
+                    ref.invalidate(castingResponsesProvider(castingId));
+                    ref.invalidate(castingResponseHistoryProvider(castingId));
+                  },
+                  onPdf: exportPdfScope,
+                  onCsv: exportCsvScope,
+                  onStatusChanged: updateStatus,
+                  onBulkStatusChanged: updateBulkStatus,
+                  onBulkRemove: removeBulkResponses,
+                  onNoteChanged: updateNote,
+                );
               }
 
               return Column(
@@ -1971,6 +2018,993 @@ class _SelectionProfileThumb extends StatelessWidget {
                   child: const Icon(Icons.broken_image_rounded, color: _text),
                 ),
               ),
+      ),
+    );
+  }
+}
+
+
+// ---------------------------------------------------------------------------
+// v2 (web): full-width board — three hairline columns, rows instead of
+// cards, bulk bar under the header, history as a quiet list.
+// ---------------------------------------------------------------------------
+
+String _sentenceCaseResponses(String value) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) return trimmed;
+  final lower = trimmed.toLowerCase();
+  return lower[0].toUpperCase() + lower.substring(1);
+}
+
+class _CastingResponsesV2 extends StatefulWidget {
+  const _CastingResponsesV2({
+    required this.castingId,
+    required this.castingTitle,
+    required this.items,
+    required this.hasExportItems,
+    required this.history,
+    required this.onBack,
+    required this.onRefresh,
+    required this.onPdf,
+    required this.onCsv,
+    required this.onStatusChanged,
+    required this.onBulkStatusChanged,
+    required this.onBulkRemove,
+    required this.onNoteChanged,
+  });
+
+  final String castingId;
+  final String castingTitle;
+  final List<Map<String, dynamic>> items;
+  final bool hasExportItems;
+  final AsyncValue<List<Map<String, dynamic>>> history;
+  final VoidCallback onBack;
+  final VoidCallback onRefresh;
+  final Future<void> Function(_PdfExportScope scope) onPdf;
+  final Future<void> Function(_PdfExportScope scope) onCsv;
+  final Future<void> Function({
+    required String profileId,
+    required CastingResponseStatus status,
+  })
+  onStatusChanged;
+  final Future<void> Function({
+    required List<String> profileIds,
+    required CastingResponseStatus status,
+  })
+  onBulkStatusChanged;
+  final Future<void> Function({required List<String> profileIds}) onBulkRemove;
+  final Future<void> Function({required String profileId, required String note})
+  onNoteChanged;
+
+  @override
+  State<_CastingResponsesV2> createState() => _CastingResponsesV2State();
+}
+
+class _CastingResponsesV2State extends State<_CastingResponsesV2> {
+  final Set<String> _selected = <String>{};
+  CastingResponseStatus _narrowStatus = CastingResponseStatus.submitted;
+
+  List<Map<String, dynamic>> _itemsFor(_BoardColumnSpec spec) {
+    return widget.items
+        .where((row) => spec.matches(row['status']?.toString()))
+        .toList(growable: false);
+  }
+
+  void _toggle(String profileId, bool selected) {
+    setState(() {
+      if (selected) {
+        _selected.add(profileId);
+      } else {
+        _selected.remove(profileId);
+      }
+    });
+  }
+
+  Future<void> _moveOne(String profileId, CastingResponseStatus status) async {
+    await widget.onStatusChanged(profileId: profileId, status: status);
+    if (!mounted) return;
+    setState(() => _selected.remove(profileId));
+  }
+
+  Future<void> _bulkMove(CastingResponseStatus status) async {
+    final ids = _selected.toList(growable: false);
+    if (ids.isEmpty) return;
+    await widget.onBulkStatusChanged(profileIds: ids, status: status);
+    if (!mounted) return;
+    setState(_selected.clear);
+  }
+
+  Future<void> _removeSelected() async {
+    final ids = _selected.toList(growable: false);
+    if (ids.isEmpty) return;
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(ru ? 'Убрать из откликов?' : 'Remove from responses?'),
+        content: Text(
+          ru
+              ? 'Выбранные анкеты (${ids.length}) исчезнут из откликов этого кастинга.'
+              : 'The selected profiles (${ids.length}) will be removed from this casting.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(ru ? 'Отмена' : 'Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: FilledButton.styleFrom(backgroundColor: Tokens.danger),
+            child: Text(ru ? 'Убрать' : 'Remove'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await widget.onBulkRemove(profileIds: ids);
+    if (!mounted) return;
+    setState(_selected.clear);
+  }
+
+  Future<void> _editNote(Map<String, dynamic> row) async {
+    final t = AppLocalizations.of(context)!;
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final profile = Map<String, dynamic>.from((row['profile'] as Map?) ?? {});
+    final profileId = (profile['id'] ?? '').toString();
+    if (profileId.isEmpty) return;
+    final name = (profile['full_name'] ?? '').toString().trim();
+    final initial = (row['admin_note'] ?? '').toString().trim();
+    final controller = TextEditingController(text: initial);
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(ru ? 'Заметка' : 'Note'),
+        content: SizedBox(
+          width: 420,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                name.isEmpty ? t.profileUpper : name,
+                style: AppText.small.copyWith(color: Tokens.textSecondary),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: controller,
+                autofocus: true,
+                minLines: 3,
+                maxLines: 8,
+                style: AppText.body,
+                decoration: InputDecoration(
+                  hintText: ru
+                      ? 'Например: сильная камера, уточнить доступность'
+                      : 'Example: strong camera presence, check availability',
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(ru ? 'Отмена' : 'Cancel'),
+          ),
+          if (initial.isNotEmpty)
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(''),
+              style: TextButton.styleFrom(foregroundColor: Tokens.danger),
+              child: Text(ru ? 'Удалить заметку' : 'Delete note'),
+            ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(controller.text.trim()),
+            child: Text(ru ? 'Сохранить' : 'Save'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (result == null || !mounted) return;
+    try {
+      await widget.onNoteChanged(profileId: profileId, note: result);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              ru ? 'Не удалось сохранить заметку' : 'Could not save the note',
+            ),
+          ),
+        );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final columns = _boardColumns(context);
+    final width = MediaQuery.sizeOf(context).width;
+    final wide = width >= 960;
+    final gutter = wide ? 32.0 : 16.0;
+    final counts = {
+      for (final column in columns) column.status: _itemsFor(column).length,
+    };
+    final total = widget.items.length;
+
+    final title = widget.castingTitle.isNotEmpty
+        ? widget.castingTitle
+        : (ru ? 'Отклики' : 'Responses');
+    final summary = total == 0
+        ? (ru ? 'Откликов пока нет' : 'No responses yet')
+        : [
+            ru ? 'Откликов: $total' : 'Responses: $total',
+            '${ru ? 'шортлист' : 'shortlist'} ${counts[CastingResponseStatus.shortlist] ?? 0}',
+            '${ru ? 'утверждены' : 'approved'} ${counts[CastingResponseStatus.approved] ?? 0}',
+          ].join(' · ');
+
+    Widget scopeMenu({
+      required String label,
+      required IconData icon,
+      required bool enabled,
+      required Future<void> Function(_PdfExportScope scope) onSelected,
+    }) {
+      return PopupMenuButton<_PdfExportScope>(
+        enabled: enabled,
+        tooltip: label,
+        position: PopupMenuPosition.under,
+        color: Tokens.bg,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(Tokens.radiusMd),
+          side: const BorderSide(color: Tokens.border),
+        ),
+        onSelected: onSelected,
+        itemBuilder: (context) => [
+          PopupMenuItem(
+            value: _PdfExportScope.all,
+            child: Text(ru ? 'Все отклики' : 'All responses'),
+          ),
+          PopupMenuItem(
+            value: _PdfExportScope.shortlist,
+            child: Text(ru ? 'Только шортлист' : 'Shortlist only'),
+          ),
+          PopupMenuItem(
+            value: _PdfExportScope.approved,
+            child: Text(ru ? 'Только утверждённые' : 'Approved only'),
+          ),
+        ],
+        child: IgnorePointer(
+          child: OutlinedButton.icon(
+            onPressed: enabled ? () {} : null,
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(0, 40),
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+            ),
+            icon: Icon(icon, size: 18),
+            label: Text(label),
+          ),
+        ),
+      );
+    }
+
+    final header = Padding(
+      padding: EdgeInsets.fromLTRB(gutter - 8, 16, gutter, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextButton.icon(
+            onPressed: widget.onBack,
+            icon: const Icon(Icons.arrow_back_rounded, size: 18),
+            label: Text(ru ? 'Кастинги' : 'Castings'),
+            style: TextButton.styleFrom(
+              foregroundColor: Tokens.textSecondary,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              minimumSize: const Size(0, 36),
+              textStyle: AppText.smallStrong,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.only(left: 8),
+            child: Wrap(
+              crossAxisAlignment: WrapCrossAlignment.end,
+              spacing: 16,
+              runSpacing: 12,
+              children: [
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: wide ? width - 460 : width - gutter * 2,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppText.h1.copyWith(fontSize: wide ? 32 : 26),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        summary,
+                        style: AppText.caption.copyWith(fontSize: 13),
+                      ),
+                    ],
+                  ),
+                ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      tooltip: ru ? 'Обновить' : 'Refresh',
+                      onPressed: widget.onRefresh,
+                      style: IconButton.styleFrom(
+                        foregroundColor: Tokens.textSecondary,
+                      ),
+                      icon: const Icon(Icons.refresh_rounded, size: 20),
+                    ),
+                    const SizedBox(width: 4),
+                    scopeMenu(
+                      label: 'PDF',
+                      icon: Icons.picture_as_pdf_outlined,
+                      enabled: widget.hasExportItems,
+                      onSelected: widget.onPdf,
+                    ),
+                    const SizedBox(width: 8),
+                    scopeMenu(
+                      label: ru ? 'Таблица' : 'Table',
+                      icon: Icons.table_chart_outlined,
+                      enabled: total > 0,
+                      onSelected: widget.onCsv,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+
+    final bulkBar = _selected.isEmpty
+        ? const SizedBox.shrink()
+        : Container(
+            margin: EdgeInsets.fromLTRB(gutter, 16, gutter, 0),
+            padding: const EdgeInsets.fromLTRB(16, 6, 8, 6),
+            decoration: BoxDecoration(
+              color: Tokens.ink,
+              borderRadius: BorderRadius.circular(Tokens.radiusMd),
+            ),
+            child: Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 4,
+              runSpacing: 4,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: Text(
+                    ru
+                        ? 'Выбрано: ${_selected.length}'
+                        : 'Selected: ${_selected.length}',
+                    style: AppText.smallStrong.copyWith(color: Colors.white),
+                  ),
+                ),
+                for (final column in columns)
+                  TextButton(
+                    onPressed: () => _bulkMove(column.status),
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size(0, 34),
+                    ),
+                    child: Text(
+                      '→ ${_sentenceCaseResponses(column.title)}',
+                    ),
+                  ),
+                TextButton(
+                  onPressed: _removeSelected,
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFFFF8A8A),
+                    minimumSize: const Size(0, 34),
+                  ),
+                  child: Text(ru ? 'Убрать' : 'Remove'),
+                ),
+                TextButton(
+                  onPressed: () => setState(_selected.clear),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.white70,
+                    minimumSize: const Size(0, 34),
+                  ),
+                  child: Text(ru ? 'Сбросить' : 'Clear'),
+                ),
+              ],
+            ),
+          );
+
+    Widget columnFor(_BoardColumnSpec spec, {required bool showHeader}) {
+      final rows = _itemsFor(spec);
+      return _BoardColumnV2(
+        spec: spec,
+        rows: rows,
+        castingId: widget.castingId,
+        showHeader: showHeader,
+        gutter: wide ? 24 : gutter,
+        selected: _selected,
+        onToggle: _toggle,
+        onMove: _moveOne,
+        onNote: _editNote,
+        allColumns: columns,
+        t: t,
+      );
+    }
+
+    final Widget board;
+    if (total == 0) {
+      board = Padding(
+        padding: EdgeInsets.fromLTRB(gutter, 48, gutter, 48),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              ru ? 'Откликов пока нет' : 'No responses yet',
+              style: AppText.h2.copyWith(color: Tokens.textSecondary),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              ru
+                  ? 'Когда модели откликнутся на кастинг, они появятся здесь.'
+                  : 'When models respond to the casting, they will show up here.',
+              style: AppText.small.copyWith(color: Tokens.textTertiary),
+            ),
+          ],
+        ),
+      );
+    } else if (wide) {
+      board = IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (var i = 0; i < columns.length; i++) ...[
+              if (i > 0)
+                const VerticalDivider(
+                  width: 1,
+                  thickness: 1,
+                  color: Tokens.border,
+                ),
+              Expanded(child: columnFor(columns[i], showHeader: true)),
+            ],
+          ],
+        ),
+      );
+    } else {
+      final active = columns.firstWhere(
+        (e) => e.status == _narrowStatus,
+        orElse: () => columns.first,
+      );
+      board = Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: gutter),
+            child: Row(
+              children: [
+                for (final column in columns)
+                  _StatusTabV2(
+                    label: _sentenceCaseResponses(column.title),
+                    count: counts[column.status] ?? 0,
+                    active: column.status == active.status,
+                    onTap: () => setState(() => _narrowStatus = column.status),
+                  ),
+              ],
+            ),
+          ),
+          const Divider(height: 1, thickness: 1, color: Tokens.border),
+          columnFor(active, showHeader: false),
+        ],
+      );
+    }
+
+    final history = widget.history.maybeWhen(
+      data: (rows) {
+        if (rows.isEmpty) return const SizedBox.shrink();
+        return Padding(
+          padding: EdgeInsets.fromLTRB(gutter, 32, gutter, 0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                (ru ? 'История' : 'History').toUpperCase(),
+                style: AppText.label.copyWith(color: Tokens.textTertiary),
+              ),
+              const SizedBox(height: 8),
+              for (final row in rows.take(10)) _HistoryRowV2(row: row),
+            ],
+          ),
+        );
+      },
+      orElse: () => const SizedBox.shrink(),
+    );
+
+    return Scaffold(
+      backgroundColor: Tokens.bg,
+      body: ListView(
+        padding: const EdgeInsets.only(bottom: 48),
+        children: [
+          header,
+          bulkBar,
+          const SizedBox(height: 20),
+          const Divider(height: 1, thickness: 1, color: Tokens.border),
+          board,
+          history,
+        ],
+      ),
+    );
+  }
+}
+
+class _StatusTabV2 extends StatelessWidget {
+  const _StatusTabV2({
+    required this.label,
+    required this.count,
+    required this.active,
+    required this.onTap,
+  });
+
+  final String label;
+  final int count;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(4, 14, 16, 12),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(
+              color: active ? Tokens.ink : Colors.transparent,
+              width: 2,
+            ),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: AppText.smallStrong.copyWith(
+                color: active ? Tokens.text : Tokens.textSecondary,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              '$count',
+              style: AppText.caption.copyWith(color: Tokens.textTertiary),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BoardColumnV2 extends StatelessWidget {
+  const _BoardColumnV2({
+    required this.spec,
+    required this.rows,
+    required this.castingId,
+    required this.showHeader,
+    required this.gutter,
+    required this.selected,
+    required this.onToggle,
+    required this.onMove,
+    required this.onNote,
+    required this.allColumns,
+    required this.t,
+  });
+
+  final _BoardColumnSpec spec;
+  final List<Map<String, dynamic>> rows;
+  final String castingId;
+  final bool showHeader;
+  final double gutter;
+  final Set<String> selected;
+  final void Function(String profileId, bool selected) onToggle;
+  final Future<void> Function(String profileId, CastingResponseStatus status)
+  onMove;
+  final Future<void> Function(Map<String, dynamic> row) onNote;
+  final List<_BoardColumnSpec> allColumns;
+  final AppLocalizations t;
+
+  @override
+  Widget build(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    return DragTarget<_BoardDragData>(
+      onWillAcceptWithDetails: (details) =>
+          details.data.status != spec.status &&
+          details.data.profileId.isNotEmpty,
+      onAcceptWithDetails: (details) =>
+          onMove(details.data.profileId, spec.status),
+      builder: (context, candidate, _) {
+        final highlighted = candidate.isNotEmpty;
+        return AnimatedContainer(
+          duration: Tokens.fast,
+          color: highlighted ? Tokens.surface : Colors.transparent,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (showHeader)
+                Padding(
+                  padding: EdgeInsets.fromLTRB(gutter, 20, gutter, 10),
+                  child: Row(
+                    children: [
+                      Text(
+                        _sentenceCaseResponses(spec.title),
+                        style: AppText.smallStrong.copyWith(fontSize: 15),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '${rows.length}',
+                        style: AppText.caption.copyWith(
+                          color: Tokens.textTertiary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              if (rows.isEmpty)
+                Padding(
+                  padding: EdgeInsets.fromLTRB(gutter, 24, gutter, 32),
+                  child: Text(
+                    ru ? 'Пусто' : 'Empty',
+                    style: AppText.small.copyWith(color: Tokens.textTertiary),
+                  ),
+                )
+              else
+                for (final row in rows)
+                  _ResponseRowV2(
+                    row: row,
+                    castingId: castingId,
+                    currentStatus: spec.status,
+                    allColumns: allColumns,
+                    gutter: gutter,
+                    selected: selected,
+                    onToggle: onToggle,
+                    onMove: onMove,
+                    onNote: onNote,
+                    t: t,
+                  ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ResponseRowV2 extends StatefulWidget {
+  const _ResponseRowV2({
+    required this.row,
+    required this.castingId,
+    required this.currentStatus,
+    required this.allColumns,
+    required this.gutter,
+    required this.selected,
+    required this.onToggle,
+    required this.onMove,
+    required this.onNote,
+    required this.t,
+  });
+
+  final Map<String, dynamic> row;
+  final String castingId;
+  final CastingResponseStatus currentStatus;
+  final List<_BoardColumnSpec> allColumns;
+  final double gutter;
+  final Set<String> selected;
+  final void Function(String profileId, bool selected) onToggle;
+  final Future<void> Function(String profileId, CastingResponseStatus status)
+  onMove;
+  final Future<void> Function(Map<String, dynamic> row) onNote;
+  final AppLocalizations t;
+
+  @override
+  State<_ResponseRowV2> createState() => _ResponseRowV2State();
+}
+
+class _ResponseRowV2State extends State<_ResponseRowV2> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = widget.t;
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final profile = Map<String, dynamic>.from(
+      (widget.row['profile'] as Map?) ?? {},
+    );
+    final profileId = (profile['id'] ?? '').toString();
+    final name = (profile['full_name'] ?? '').toString().trim();
+    final city = (profile['city'] ?? '').toString().trim();
+    final age = ModelVm.displayAgeFromMap(profile);
+    final height = int.tryParse((profile['height'] ?? '').toString()) ?? 0;
+    final meta = [
+      if (age > 0) (ru ? '$age лет' : '$age y.o.'),
+      if (height > 0) '$height ${ru ? 'см' : 'cm'}',
+      if (city.isNotEmpty) city,
+    ].join(' · ');
+    final photoUrlsRaw = profile['photo_urls'];
+    final photoUrls = photoUrlsRaw is List
+        ? photoUrlsRaw
+              .map((e) => e.toString().trim())
+              .where((e) => e.isNotEmpty)
+              .toList(growable: false)
+        : const <String>[];
+    final coverUrl = (profile['cover_photo_url'] ?? '').toString().trim();
+    final thumbUrl = coverUrl.isNotEmpty
+        ? coverUrl
+        : (photoUrls.isNotEmpty ? photoUrls.first : '');
+    double focal(dynamic v, double fallback) =>
+        v is num ? v.toDouble() : (double.tryParse('${v ?? ''}') ?? fallback);
+    final focalX = focal(profile['cover_photo_focal_x'], 0);
+    final focalY = focal(profile['cover_photo_focal_y'], -0.72);
+    final note = (widget.row['admin_note'] ?? '').toString().trim();
+    final isSelected = widget.selected.contains(profileId);
+
+    final rowWidget = MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: Material(
+        color: isSelected
+            ? Tokens.surfaceAlt
+            : (_hovered ? Tokens.surface : Colors.transparent),
+        child: InkWell(
+          onTap: profileId.isEmpty
+              ? null
+              : () => context.go(
+                  '${Routes.modelPrefix}$profileId?from=casting&castingId=${widget.castingId}',
+                ),
+          child: Container(
+            decoration: const BoxDecoration(
+              border: Border(bottom: BorderSide(color: Tokens.border)),
+            ),
+            padding: EdgeInsets.fromLTRB(
+              widget.gutter - 12,
+              10,
+              widget.gutter - 8,
+              10,
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                SizedBox(
+                  width: 32,
+                  child: Checkbox(
+                    value: isSelected,
+                    onChanged: profileId.isEmpty
+                        ? null
+                        : (value) => widget.onToggle(profileId, value ?? false),
+                    activeColor: Tokens.ink,
+                    checkColor: Colors.white,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(Tokens.radiusSm),
+                  child: SizedBox(
+                    width: 44,
+                    height: 44,
+                    child: thumbUrl.isEmpty
+                        ? const ColoredBox(
+                            color: Tokens.surfaceAlt,
+                            child: Icon(
+                              Icons.person_outline_rounded,
+                              color: Tokens.textTertiary,
+                              size: 20,
+                            ),
+                          )
+                        : FocalImage(
+                            url: storageImageVariant(thumbUrl, width: 240),
+                            focalX: focalX,
+                            focalY: focalY,
+                            memCacheWidth: 240,
+                          ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        name.isEmpty ? t.profileUpper : name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppText.small.copyWith(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: Tokens.text,
+                        ),
+                      ),
+                      if (meta.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          meta,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppText.caption.copyWith(
+                            color: Tokens.textSecondary,
+                          ),
+                        ),
+                      ],
+                      if (note.isNotEmpty) ...[
+                        const SizedBox(height: 3),
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.sticky_note_2_outlined,
+                              size: 13,
+                              color: Tokens.accent,
+                            ),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                note,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppText.caption.copyWith(
+                                  color: Tokens.text,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                AnimatedOpacity(
+                  duration: Tokens.fast,
+                  opacity: _hovered || isSelected ? 1 : 0,
+                  child: IconButton(
+                    tooltip: note.isEmpty
+                        ? (ru ? 'Заметка' : 'Note')
+                        : (ru ? 'Изменить заметку' : 'Edit note'),
+                    onPressed: profileId.isEmpty
+                        ? null
+                        : () => widget.onNote(widget.row),
+                    visualDensity: VisualDensity.compact,
+                    style: IconButton.styleFrom(
+                      foregroundColor: Tokens.textSecondary,
+                    ),
+                    icon: Icon(
+                      note.isEmpty
+                          ? Icons.sticky_note_2_outlined
+                          : Icons.sticky_note_2_rounded,
+                      size: 18,
+                    ),
+                  ),
+                ),
+                PopupMenuButton<CastingResponseStatus>(
+                  tooltip: ru ? 'Переместить' : 'Move',
+                  position: PopupMenuPosition.under,
+                  color: Tokens.bg,
+                  surfaceTintColor: Colors.transparent,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(Tokens.radiusMd),
+                    side: const BorderSide(color: Tokens.border),
+                  ),
+                  enabled: profileId.isNotEmpty,
+                  onSelected: (status) => widget.onMove(profileId, status),
+                  itemBuilder: (context) => [
+                    for (final column in widget.allColumns)
+                      if (column.status != widget.currentStatus)
+                        PopupMenuItem(
+                          value: column.status,
+                          child: Text(
+                            '→ ${_sentenceCaseResponses(column.title)}',
+                          ),
+                        ),
+                  ],
+                  icon: const Icon(
+                    Icons.more_horiz_rounded,
+                    size: 20,
+                    color: Tokens.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    if (profileId.isEmpty) return rowWidget;
+
+    final data = _BoardDragData(
+      profileId: profileId,
+      status: widget.currentStatus,
+    );
+    final feedback = Material(
+      color: Colors.transparent,
+      child: Container(
+        width: 280,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: Tokens.bg,
+          borderRadius: BorderRadius.circular(Tokens.radiusMd),
+          border: Border.all(color: Tokens.border),
+          boxShadow: Tokens.popoverShadow,
+        ),
+        child: Text(
+          name.isEmpty ? t.profileUpper : name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: AppText.smallStrong,
+        ),
+      ),
+    );
+    return Draggable<_BoardDragData>(
+      data: data,
+      feedback: feedback,
+      childWhenDragging: Opacity(opacity: 0.4, child: rowWidget),
+      child: rowWidget,
+    );
+  }
+}
+
+class _HistoryRowV2 extends StatelessWidget {
+  const _HistoryRowV2({required this.row});
+
+  final Map<String, dynamic> row;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+    final profile = Map<String, dynamic>.from((row['profile'] as Map?) ?? {});
+    final name = (profile['full_name'] ?? '').toString().trim();
+    final oldStatus = castingResponseStatusFromString(
+      row['old_status']?.toString(),
+    );
+    final newStatus = castingResponseStatusFromString(
+      row['new_status']?.toString(),
+    );
+    final createdAt = DateTime.tryParse((row['created_at'] ?? '').toString());
+    String when = '';
+    if (createdAt != null) {
+      final local = createdAt.toLocal();
+      String two(int v) => v.toString().padLeft(2, '0');
+      when =
+          '${two(local.day)}.${two(local.month)} ${two(local.hour)}:${two(local.minute)}';
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 92,
+            child: Text(
+              when,
+              style: AppText.caption.copyWith(color: Tokens.textTertiary),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              '${name.isEmpty ? t.profileUpper : name}: '
+              '${_sentenceCaseResponses(castingResponseStatusLabel(t, oldStatus))} → '
+              '${_sentenceCaseResponses(castingResponseStatusLabel(t, newStatus))}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppText.small.copyWith(color: Tokens.textSecondary),
+            ),
+          ),
+        ],
       ),
     );
   }

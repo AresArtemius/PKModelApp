@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -104,11 +105,12 @@ class _SelectionAdminPageState extends ConsumerState<SelectionAdminPage> {
     return result ?? false;
   }
 
-  Future<void> _deleteSelected() async {
+  Future<void> _deleteSelected({bool skipConfirm = false}) async {
     if (_selectedIds.isEmpty || _isDeleting) return;
 
     final t = AppLocalizations.of(context)!;
-    final confirmed = await _confirmDelete(count: _selectedIds.length);
+    final confirmed =
+        skipConfirm || await _confirmDelete(count: _selectedIds.length);
     if (!mounted || !confirmed) return;
 
     setState(() => _isDeleting = true);
@@ -174,10 +176,220 @@ class _SelectionAdminPageState extends ConsumerState<SelectionAdminPage> {
     }
   }
 
+  Future<void> _deleteSelectedV2() async {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final count = _selectedIds.length;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(ru ? 'Удалить выбранное?' : 'Delete selected?'),
+        content: Text(
+          ru
+              ? 'Будут удалены $count объект(ов) вместе с их анкетами и откликами. Это нельзя отменить.'
+              : '$count item(s) will be deleted with their profiles and responses. This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(ru ? 'Отмена' : 'Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: FilledButton.styleFrom(backgroundColor: Tokens.danger),
+            child: Text(ru ? 'Удалить' : 'Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    await _deleteSelected(skipConfirm: true);
+  }
+
+  String _dateV2(dynamic raw, bool ru) {
+    final at = DateTime.tryParse('${raw ?? ''}');
+    if (at == null) return '';
+    final local = at.toLocal();
+    const monthsRu = [
+      'янв', 'фев', 'мар', 'апр', 'мая', 'июн',
+      'июл', 'авг', 'сен', 'окт', 'ноя', 'дек',
+    ];
+    const monthsEn = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    final month = ru ? monthsRu[local.month - 1] : monthsEn[local.month - 1];
+    final sameYear = local.year == DateTime.now().year;
+    if (ru) return sameYear ? '${local.day} $month' : '${local.day} $month ${local.year}';
+    return sameYear ? '$month ${local.day}' : '$month ${local.day}, ${local.year}';
+  }
+
+  Widget _buildV2(AppLocalizations t, AsyncValue<List<Map<String, dynamic>>> itemsAsync) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final width = MediaQuery.sizeOf(context).width;
+    final wide = width >= 960;
+    final gutter = wide ? 32.0 : 16.0;
+    final items = itemsAsync.valueOrNull ?? const <Map<String, dynamic>>[];
+    final castings = items.where((e) => e['_kind'] == 'casting').length;
+    final selections = items.length - castings;
+
+    final header = Padding(
+      padding: EdgeInsets.fromLTRB(gutter, wide ? 28 : 20, gutter, 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  ru ? 'Подборки' : 'Selections',
+                  style: AppText.h1.copyWith(fontSize: wide ? 32 : 28),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  items.isEmpty
+                      ? (ru ? 'Пока пусто' : 'Nothing yet')
+                      : (ru
+                            ? 'Подборок: $selections · кастингов: $castings'
+                            : 'Selections: $selections · castings: $castings'),
+                  style: AppText.caption.copyWith(fontSize: 13),
+                ),
+              ],
+            ),
+          ),
+          if (_selectedIds.isNotEmpty) ...[
+            TextButton(
+              onPressed: _clearSelected,
+              style: TextButton.styleFrom(foregroundColor: Tokens.textSecondary),
+              child: Text(ru ? 'Сбросить' : 'Clear'),
+            ),
+            const SizedBox(width: 4),
+            FilledButton.icon(
+              onPressed: _isDeleting ? null : _deleteSelectedV2,
+              style: FilledButton.styleFrom(
+                backgroundColor: Tokens.danger,
+                minimumSize: const Size(0, 40),
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+              ),
+              icon: _isDeleting
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    )
+                  : const Icon(Icons.delete_outline_rounded, size: 18),
+              label: Text(
+                ru
+                    ? 'Удалить (${_selectedIds.length})'
+                    : 'Delete (${_selectedIds.length})',
+              ),
+            ),
+          ] else
+            IconButton(
+              tooltip: ru ? 'Обновить' : 'Refresh',
+              onPressed: () => ref.invalidate(adminSelectionListProvider),
+              style: IconButton.styleFrom(foregroundColor: Tokens.textSecondary),
+              icon: const Icon(Icons.refresh_rounded, size: 20),
+            ),
+        ],
+      ),
+    );
+
+    final body = itemsAsync.when(
+      loading: () => Padding(
+        padding: EdgeInsets.all(gutter),
+        child: const SkeletonList(rows: 6),
+      ),
+      error: (e, _) => Padding(
+        padding: EdgeInsets.all(gutter),
+        child: Text(
+          AppErrorMapper.message(e, t),
+          style: AppText.small.copyWith(color: Tokens.danger),
+        ),
+      ),
+      data: (items) {
+        if (items.isEmpty) {
+          return Padding(
+            padding: EdgeInsets.fromLTRB(gutter, 48, gutter, 48),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  ru ? 'Подборок пока нет' : 'No selections yet',
+                  style: AppText.h2.copyWith(color: Tokens.textSecondary),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  ru
+                      ? 'Создайте подборку из каталога или кастинг — они появятся здесь.'
+                      : 'Create a selection from the catalogue or a casting — they will show up here.',
+                  style: AppText.small.copyWith(color: Tokens.textTertiary),
+                ),
+              ],
+            ),
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (final row in items)
+              _SelectionRowV2(
+                row: row,
+                gutter: gutter,
+                selected: _selectedIds.contains((row['id'] ?? '').toString()),
+                date: _dateV2(row['created_at'], ru),
+                onToggle: () => _toggleSelected(
+                  (row['id'] ?? '').toString(),
+                  (row['_kind'] ?? '').toString(),
+                ),
+                onOpen: () {
+                  final id = (row['id'] ?? '').toString();
+                  if (id.isEmpty) return;
+                  context.go(
+                    row['_kind'] == 'casting'
+                        ? '${Routes.adminSelection}/$id'
+                        : '${Routes.adminSelectionProject}/$id',
+                  );
+                },
+              ),
+          ],
+        );
+      },
+    );
+
+    return Scaffold(
+      backgroundColor: Tokens.bg,
+      body: ListView(
+        padding: const EdgeInsets.only(bottom: 40),
+        children: [
+          header,
+          const SizedBox(height: 8),
+          const Divider(height: 1, thickness: 1, color: Tokens.border),
+          body,
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
     final itemsAsync = ref.watch(adminSelectionListProvider);
+    if (kIsWeb) {
+      final valid = itemsAsync.valueOrNull;
+      if (valid != null) {
+        final validIds = valid
+            .map((row) => (row['id'] ?? '').toString())
+            .where((id) => id.isNotEmpty)
+            .toSet();
+        _selectedIds.removeWhere((id) => !validIds.contains(id));
+        _selectedKinds.removeWhere((id, _) => !validIds.contains(id));
+      }
+      return _buildV2(t, itemsAsync);
+    }
 
     return Scaffold(
       backgroundColor: _bg,
@@ -431,6 +643,139 @@ class _ActionButton extends StatelessWidget {
             style: adminCommandStyle(
               letterSpacing: 1.0,
               color: isDark ? Colors.white : _text,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+
+class _SelectionRowV2 extends StatefulWidget {
+  const _SelectionRowV2({
+    required this.row,
+    required this.gutter,
+    required this.selected,
+    required this.date,
+    required this.onToggle,
+    required this.onOpen,
+  });
+
+  final Map<String, dynamic> row;
+  final double gutter;
+  final bool selected;
+  final String date;
+  final VoidCallback onToggle;
+  final VoidCallback onOpen;
+
+  @override
+  State<_SelectionRowV2> createState() => _SelectionRowV2State();
+}
+
+class _SelectionRowV2State extends State<_SelectionRowV2> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final row = widget.row;
+    final title = (row['title'] ?? '').toString().trim();
+    final isCasting = row['_kind'] == 'casting';
+    final status = selectionStatusFromString(row['status']);
+    final kindLabel = isCasting
+        ? (ru ? 'Кастинг · отклики' : 'Casting · responses')
+        : '${ru ? 'Подборка' : 'Selection'} · ${selectionStatusLabel(t, status)}';
+    final selected = widget.selected;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: Material(
+        color: selected
+            ? Tokens.surfaceAlt
+            : (_hovered ? Tokens.surface : Colors.transparent),
+        child: InkWell(
+          onTap: widget.onOpen,
+          child: Container(
+            decoration: const BoxDecoration(
+              border: Border(bottom: BorderSide(color: Tokens.border)),
+            ),
+            padding: EdgeInsets.fromLTRB(
+              widget.gutter - 12,
+              10,
+              widget.gutter - 8,
+              10,
+            ),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 32,
+                  child: Checkbox(
+                    value: selected,
+                    onChanged: (_) => widget.onToggle(),
+                    activeColor: Tokens.ink,
+                    checkColor: Colors.white,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: const BoxDecoration(
+                    color: Tokens.surfaceAlt,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    isCasting ? Icons.movie_outlined : Icons.folder_outlined,
+                    size: 20,
+                    color: Tokens.textSecondary,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title.isEmpty
+                            ? (ru ? 'Без названия' : 'Untitled')
+                            : title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppText.small.copyWith(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: Tokens.text,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        kindLabel,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppText.caption.copyWith(
+                          color: Tokens.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  widget.date,
+                  style: AppText.caption.copyWith(color: Tokens.textTertiary),
+                ),
+                const SizedBox(width: 8),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: 20,
+                  color: _hovered ? Tokens.text : Tokens.textTertiary,
+                ),
+              ],
             ),
           ),
         ),
