@@ -66,15 +66,10 @@ class SettingsPageV2 extends StatelessWidget {
                         ),
                       ),
                     if (onBack != null) const SizedBox(height: 8),
-                    Wrap(
-                      crossAxisAlignment: WrapCrossAlignment.end,
-                      spacing: 16,
-                      runSpacing: 12,
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        ConstrainedBox(
-                          constraints: BoxConstraints(
-                            maxWidth: actions.isEmpty ? maxWidth : maxWidth - 200,
-                          ),
+                        Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -94,7 +89,8 @@ class SettingsPageV2 extends StatelessWidget {
                             ],
                           ),
                         ),
-                        if (actions.isNotEmpty)
+                        if (actions.isNotEmpty) ...[
+                          const SizedBox(width: 16),
                           Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
@@ -104,6 +100,7 @@ class SettingsPageV2 extends StatelessWidget {
                               ],
                             ],
                           ),
+                        ],
                       ],
                     ),
                     const SizedBox(height: 8),
