@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -42,6 +43,12 @@ TextStyle _notificationBodyStyle({
   );
 }
 
+/// v2 (web): full-width page — the feed grouped by day on the left, push
+/// status and preferences on the right; no cards, pills or caps.
+const bool _notificationsV2 = kIsWeb;
+const double _notificationsV2SideWidth = 380;
+const double _notificationsV2Breakpoint = 960;
+
 class NotificationsPage extends ConsumerWidget {
   const NotificationsPage({super.key});
 
@@ -50,6 +57,10 @@ class NotificationsPage extends ConsumerWidget {
     final t = AppLocalizations.of(context)!;
     final async = ref.watch(appNotificationsProvider);
     final compact = MediaQuery.sizeOf(context).width < 560;
+    if (_notificationsV2) {
+      ref.watch(appNotificationsRealtimeProvider);
+      return _NotificationsPageV2(async: async);
+    }
 
     Future<void> markAllRead() async {
       await ref.read(appNotificationsServiceProvider).markAllRead();
@@ -228,6 +239,641 @@ class NotificationsPage extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _NotificationsPageV2 extends ConsumerWidget {
+  const _NotificationsPageV2({required this.async});
+
+  final AsyncValue<List<AppNotification>> async;
+
+  Future<void> _markAllRead(WidgetRef ref) async {
+    await ref.read(appNotificationsServiceProvider).markAllRead();
+    ref.invalidate(appNotificationsProvider);
+    ref.invalidate(unreadNotificationsCountProvider);
+  }
+
+  Future<void> _deleteAll(BuildContext context, WidgetRef ref) async {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(ru ? 'Очистить уведомления?' : 'Clear notifications?'),
+        content: Text(
+          ru
+              ? 'Все уведомления будут скрыты из списка.'
+              : 'All notifications will be hidden from the list.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(ru ? 'Отмена' : 'Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: FilledButton.styleFrom(backgroundColor: Tokens.danger),
+            child: Text(ru ? 'Очистить' : 'Clear'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await ref.read(appNotificationsServiceProvider).deleteAll();
+    ref.invalidate(appNotificationsProvider);
+    ref.invalidate(unreadNotificationsCountProvider);
+  }
+
+  Future<void> _deleteOne(WidgetRef ref, AppNotification item) async {
+    await ref.read(appNotificationsServiceProvider).deleteOne(item.id);
+    ref.invalidate(appNotificationsProvider);
+    ref.invalidate(unreadNotificationsCountProvider);
+  }
+
+  Future<void> _open(
+    BuildContext context,
+    WidgetRef ref,
+    AppNotification item,
+  ) async {
+    if (!item.isRead) {
+      await ref.read(appNotificationsServiceProvider).markRead(item.id);
+      ref.invalidate(appNotificationsProvider);
+      ref.invalidate(unreadNotificationsCountProvider);
+    }
+    if (!context.mounted) return;
+    final route = item.route.trim();
+    if (route.isNotEmpty) context.go(route);
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final t = AppLocalizations.of(context)!;
+    final wide = MediaQuery.sizeOf(context).width >= _notificationsV2Breakpoint;
+    final items = async.valueOrNull ?? const <AppNotification>[];
+    final unread = items.where((e) => !e.isRead).length;
+
+    final header = Padding(
+      padding: EdgeInsets.fromLTRB(wide ? 32 : 16, wide ? 28 : 20, wide ? 32 : 16, 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  ru ? 'Уведомления' : 'Notifications',
+                  style: AppText.h1.copyWith(fontSize: wide ? 32 : 28),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  unread == 0
+                      ? (ru ? 'Всё прочитано' : 'All caught up')
+                      : (ru
+                            ? _pluralRuNotifications(
+                                unread,
+                                '$unread непрочитанное',
+                                '$unread непрочитанных',
+                                '$unread непрочитанных',
+                              )
+                            : '$unread unread'),
+                  style: AppText.caption.copyWith(fontSize: 13),
+                ),
+              ],
+            ),
+          ),
+          if (items.isNotEmpty) ...[
+            TextButton.icon(
+              onPressed: unread == 0 ? null : () => _markAllRead(ref),
+              style: TextButton.styleFrom(foregroundColor: Tokens.ink),
+              icon: const Icon(Icons.done_all_rounded, size: 18),
+              label: Text(ru ? 'Прочитать все' : 'Mark all read'),
+            ),
+            TextButton.icon(
+              onPressed: () => _deleteAll(context, ref),
+              style: TextButton.styleFrom(foregroundColor: Tokens.danger),
+              icon: const Icon(Icons.delete_sweep_outlined, size: 18),
+              label: Text(ru ? 'Очистить' : 'Clear'),
+            ),
+          ],
+        ],
+      ),
+    );
+
+    final feed = async.when(
+      loading: () => const Padding(
+        padding: EdgeInsets.all(32),
+        child: SkeletonList(rows: 6),
+      ),
+      error: (e, _) => Padding(
+        padding: const EdgeInsets.all(32),
+        child: Text(
+          AppErrorMapper.message(e, t),
+          style: AppText.small.copyWith(color: Tokens.danger),
+        ),
+      ),
+      data: (items) {
+        if (items.isEmpty) {
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(32, 48, 32, 48),
+            child: Column(
+              children: [
+                Text(
+                  ru ? 'Уведомлений нет' : 'No notifications',
+                  style: AppText.h2.copyWith(color: Tokens.textSecondary),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  ru
+                      ? 'Здесь появятся сообщения, приглашения и решения по анкетам.'
+                      : 'Messages, invitations and profile decisions will appear here.',
+                  textAlign: TextAlign.center,
+                  style: AppText.small.copyWith(color: Tokens.textTertiary),
+                ),
+              ],
+            ),
+          );
+        }
+        final groups = _groupByDay(items, ru);
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (final group in groups) ...[
+              Padding(
+                padding: EdgeInsets.fromLTRB(wide ? 32 : 16, 20, wide ? 32 : 16, 6),
+                child: Text(
+                  group.label.toUpperCase(),
+                  style: AppText.label.copyWith(color: Tokens.textTertiary),
+                ),
+              ),
+              for (final item in group.items)
+                _NotificationRowV2(
+                  item: item,
+                  gutter: wide ? 32 : 16,
+                  onTap: () => _open(context, ref, item),
+                  onDelete: () => _deleteOne(ref, item),
+                ),
+            ],
+          ],
+        );
+      },
+    );
+
+    final settings = Padding(
+      padding: EdgeInsets.fromLTRB(wide ? 28 : 16, wide ? 28 : 8, wide ? 32 : 16, 32),
+      child: const _NotificationSettingsV2(),
+    );
+
+    if (!wide) {
+      return Scaffold(
+        backgroundColor: Tokens.bg,
+        body: ListView(
+          padding: const EdgeInsets.only(bottom: 24),
+          children: [
+            header,
+            feed,
+            const SizedBox(height: 16),
+            const Divider(height: 1, thickness: 1, color: Tokens.border),
+            settings,
+          ],
+        ),
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: Tokens.bg,
+      body: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.only(bottom: 40),
+              children: [header, feed],
+            ),
+          ),
+          const VerticalDivider(width: 1, thickness: 1, color: Tokens.border),
+          SizedBox(
+            width: _notificationsV2SideWidth,
+            child: SingleChildScrollView(child: settings),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NotificationGroup {
+  const _NotificationGroup(this.label, this.items);
+  final String label;
+  final List<AppNotification> items;
+}
+
+List<_NotificationGroup> _groupByDay(List<AppNotification> items, bool ru) {
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  const monthsRu = [
+    'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
+    'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря',
+  ];
+  const monthsEn = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
+  ];
+  String labelFor(DateTime? at) {
+    if (at == null) return ru ? 'Ранее' : 'Earlier';
+    final local = at.toLocal();
+    final day = DateTime(local.year, local.month, local.day);
+    final diff = today.difference(day).inDays;
+    if (diff == 0) return ru ? 'Сегодня' : 'Today';
+    if (diff == 1) return ru ? 'Вчера' : 'Yesterday';
+    final month = ru ? monthsRu[local.month - 1] : monthsEn[local.month - 1];
+    final sameYear = local.year == now.year;
+    if (ru) return sameYear ? '${local.day} $month' : '${local.day} $month ${local.year}';
+    return sameYear ? '$month ${local.day}' : '$month ${local.day}, ${local.year}';
+  }
+
+  final groups = <_NotificationGroup>[];
+  for (final item in items) {
+    final label = labelFor(item.createdAt);
+    if (groups.isNotEmpty && groups.last.label == label) {
+      groups.last.items.add(item);
+    } else {
+      groups.add(_NotificationGroup(label, [item]));
+    }
+  }
+  return groups;
+}
+
+String _pluralRuNotifications(int n, String one, String few, String many) {
+  final mod10 = n % 10;
+  final mod100 = n % 100;
+  if (mod10 == 1 && mod100 != 11) return one;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few;
+  return many;
+}
+
+/// Type of a notification inferred from where it leads.
+IconData _notificationIcon(AppNotification item) {
+  final route = item.route.trim();
+  final title = item.title.toLowerCase();
+  if (route.startsWith('/chat') || title.contains('сообщен')) {
+    return Icons.chat_bubble_outline_rounded;
+  }
+  if (route.startsWith('/casting') ||
+      route.startsWith('/s/') ||
+      route.startsWith('/invitations') ||
+      title.contains('кастинг') ||
+      title.contains('приглаш')) {
+    return Icons.movie_outlined;
+  }
+  if (route.startsWith('/model') ||
+      route.startsWith('/me') ||
+      title.contains('анкет')) {
+    return Icons.badge_outlined;
+  }
+  if (route.startsWith('/billing') || title.contains('тариф')) {
+    return Icons.workspace_premium_outlined;
+  }
+  return Icons.notifications_none_rounded;
+}
+
+String _timeOnly(DateTime? at) {
+  if (at == null) return '';
+  final local = at.toLocal();
+  return '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
+}
+
+class _NotificationRowV2 extends StatefulWidget {
+  const _NotificationRowV2({
+    required this.item,
+    required this.gutter,
+    required this.onTap,
+    required this.onDelete,
+  });
+
+  final AppNotification item;
+  final double gutter;
+  final VoidCallback onTap;
+  final VoidCallback onDelete;
+
+  @override
+  State<_NotificationRowV2> createState() => _NotificationRowV2State();
+}
+
+class _NotificationRowV2State extends State<_NotificationRowV2> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final item = widget.item;
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final unread = !item.isRead;
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: Material(
+        color: _hovered ? Tokens.surface : Colors.transparent,
+        child: InkWell(
+          onTap: widget.onTap,
+          child: Container(
+            decoration: const BoxDecoration(
+              border: Border(bottom: BorderSide(color: Tokens.border)),
+            ),
+            padding: EdgeInsets.fromLTRB(widget.gutter, 14, widget.gutter - 8, 14),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 10,
+                  child: unread
+                      ? Padding(
+                          padding: const EdgeInsets.only(top: 14),
+                          child: Container(
+                            width: 8,
+                            height: 8,
+                            decoration: const BoxDecoration(
+                              color: Tokens.accent,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        )
+                      : null,
+                ),
+                const SizedBox(width: 10),
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: unread ? Tokens.ink : Tokens.surfaceAlt,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    _notificationIcon(item),
+                    size: 20,
+                    color: unread ? Colors.white : Tokens.textSecondary,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.title.isEmpty ? 'PK Management' : item.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppText.small.copyWith(
+                          fontSize: 15,
+                          fontWeight: unread ? FontWeight.w600 : FontWeight.w500,
+                          color: unread ? Tokens.ink : Tokens.text,
+                        ),
+                      ),
+                      if (item.body.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          item.body,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppText.small.copyWith(
+                            color: Tokens.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                SizedBox(
+                  width: 72,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      if (_hovered)
+                        IconButton(
+                          tooltip: ru ? 'Удалить' : 'Delete',
+                          onPressed: widget.onDelete,
+                          visualDensity: VisualDensity.compact,
+                          style: IconButton.styleFrom(
+                            foregroundColor: Tokens.textSecondary,
+                          ),
+                          icon: const Icon(Icons.close_rounded, size: 18),
+                        )
+                      else
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            _timeOnly(item.createdAt),
+                            style: AppText.caption.copyWith(
+                              color: Tokens.textTertiary,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Push status for this device + what to receive, as flat settings rows.
+class _NotificationSettingsV2 extends ConsumerWidget {
+  const _NotificationSettingsV2();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final push = ref.watch(pushDeviceStatusProvider);
+    final prefs = ref.watch(notificationPreferencesProvider);
+
+    Future<void> enable() async {
+      await ref.read(pushNotificationsServiceProvider).enableForCurrentUser();
+      ref.invalidate(pushDeviceStatusProvider);
+    }
+
+    Future<void> disable() async {
+      await ref.read(pushNotificationsServiceProvider).disableForCurrentDevice();
+      ref.invalidate(pushDeviceStatusProvider);
+    }
+
+    Future<void> save(NotificationPreferences next) async {
+      await ref.read(notificationPreferencesServiceProvider).save(next);
+      ref.invalidate(notificationPreferencesProvider);
+    }
+
+    Widget sectionLabel(String text) => Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Text(
+        text.toUpperCase(),
+        style: AppText.label.copyWith(color: Tokens.textTertiary),
+      ),
+    );
+
+    final pushBlock = push.when(
+      loading: () => Text(
+        ru ? 'Проверяем статус устройства…' : 'Checking device status…',
+        style: AppText.small.copyWith(color: Tokens.textSecondary),
+      ),
+      error: (e, _) => Text(
+        AppErrorMapper.message(e, AppLocalizations.of(context)!),
+        style: AppText.small.copyWith(color: Tokens.danger),
+      ),
+      data: (status) {
+        final (text, color) = switch (status.state) {
+          PushPermissionState.enabled => (
+            ru ? 'Включены на этом устройстве' : 'Enabled on this device',
+            Tokens.success,
+          ),
+          PushPermissionState.denied => (
+            ru
+                ? 'Запрещены — разрешите уведомления в настройках браузера'
+                : 'Blocked — allow notifications in the browser settings',
+            Tokens.danger,
+          ),
+          PushPermissionState.notDetermined => (
+            ru ? 'Не включены' : 'Not enabled',
+            Tokens.textSecondary,
+          ),
+          PushPermissionState.unsupported => (
+            ru
+                ? 'Этот браузер не поддерживает push'
+                : 'This browser does not support push',
+            Tokens.textSecondary,
+          ),
+          PushPermissionState.notConfigured => (
+            ru ? 'Ещё настраиваются' : 'Being set up',
+            Tokens.textSecondary,
+          ),
+        };
+        return Row(
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                text,
+                style: AppText.small.copyWith(color: Tokens.text),
+              ),
+            ),
+            if (status.canRequestPermission)
+              TextButton(
+                onPressed: enable,
+                style: TextButton.styleFrom(foregroundColor: Tokens.ink),
+                child: Text(ru ? 'Включить' : 'Enable'),
+              )
+            else if (status.canDisable)
+              TextButton(
+                onPressed: disable,
+                style: TextButton.styleFrom(foregroundColor: Tokens.textSecondary),
+                child: Text(ru ? 'Выключить' : 'Disable'),
+              ),
+          ],
+        );
+      },
+    );
+
+    Widget toggle(
+      String label,
+      String hint,
+      bool value,
+      ValueChanged<bool>? onChanged,
+    ) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: AppText.small.copyWith(fontSize: 15)),
+                  if (hint.isNotEmpty)
+                    Text(hint, style: AppText.caption),
+                ],
+              ),
+            ),
+            Switch(
+              value: value,
+              onChanged: onChanged,
+              activeTrackColor: Tokens.ink,
+              inactiveTrackColor: Tokens.border,
+              thumbColor: const WidgetStatePropertyAll(Colors.white),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        sectionLabel(ru ? 'Push на этом устройстве' : 'Push on this device'),
+        pushBlock,
+        const SizedBox(height: 24),
+        const Divider(height: 1, thickness: 1, color: Tokens.border),
+        const SizedBox(height: 20),
+        sectionLabel(ru ? 'Что получать' : 'What to receive'),
+        prefs.when(
+          loading: () => const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: LinearProgressIndicator(minHeight: 2),
+          ),
+          error: (e, _) => Text(
+            AppErrorMapper.message(e, AppLocalizations.of(context)!),
+            style: AppText.small.copyWith(color: Tokens.danger),
+          ),
+          data: (p) => Column(
+            children: [
+              toggle(
+                'Push',
+                ru ? 'Всплывающие на устройстве' : 'On this device',
+                p.pushEnabled,
+                (v) => save(p.copyWith(pushEnabled: v)),
+              ),
+              toggle(
+                'Email',
+                ru ? 'Письма на почту' : 'By email',
+                p.emailEnabled,
+                (v) => save(p.copyWith(emailEnabled: v)),
+              ),
+              const Divider(height: 20, thickness: 1, color: Tokens.border),
+              toggle(
+                ru ? 'Чаты' : 'Chats',
+                ru ? 'Новые сообщения' : 'New messages',
+                p.chatEnabled,
+                (v) => save(p.copyWith(chatEnabled: v)),
+              ),
+              toggle(
+                ru ? 'Кастинги' : 'Castings',
+                ru ? 'Приглашения и отклики' : 'Invitations and responses',
+                p.castingEnabled,
+                (v) => save(p.copyWith(castingEnabled: v)),
+              ),
+              toggle(
+                ru ? 'Анкеты' : 'Profiles',
+                ru ? 'Решения модерации' : 'Moderation decisions',
+                p.profileEnabled,
+                (v) => save(p.copyWith(profileEnabled: v)),
+              ),
+              toggle(
+                ru ? 'Системные' : 'System',
+                ru ? 'Безопасность и аккаунт' : 'Security and account',
+                p.systemEnabled,
+                (v) => save(p.copyWith(systemEnabled: v)),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
