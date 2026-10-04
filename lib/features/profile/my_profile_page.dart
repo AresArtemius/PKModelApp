@@ -1091,10 +1091,14 @@ class _ProfileCardV2State extends ConsumerState<_ProfileCardV2> {
     final placementEnd = ref
         .watch(_accountProfilePlacementProvider(p.id))
         .maybeWhen(data: (value) => value, orElse: () => null);
-    final placement = placementEnd == null
+    final placementDate = placementEnd == null
         ? ''
-        : (ru ? 'Размещена до ' : 'Placed until ') +
-              '${placementEnd.day.toString().padLeft(2, '0')}.${placementEnd.month.toString().padLeft(2, '0')}.${placementEnd.year}';
+        : '${placementEnd.day.toString().padLeft(2, '0')}.${placementEnd.month.toString().padLeft(2, '0')}.${placementEnd.year}';
+    final placement = placementDate.isEmpty
+        ? ''
+        : ru
+        ? 'Размещена до $placementDate'
+        : 'Placed until $placementDate';
     final facts = [
       if (p.age > 0) ru ? '${p.age} лет' : '${p.age} y.o.',
       if (p.height > 0) '${p.height} см',
