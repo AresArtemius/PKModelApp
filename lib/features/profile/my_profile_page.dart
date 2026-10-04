@@ -683,7 +683,9 @@ class _AccountHeaderV2 extends ConsumerWidget {
                 ),
               )
             : CachedNetworkImage(
-                imageUrl: storageImageVariant(avatar, width: 200),
+                // The original, as in the top bar: the render variant crops
+                // avatars unpredictably.
+                imageUrl: avatar,
                 fit: BoxFit.cover,
                 placeholder: (_, _) =>
                     const ColoredBox(color: Tokens.surfaceAlt),
@@ -841,7 +843,7 @@ class _NavRowV2State extends State<_NavRowV2> {
                       width: 22,
                       height: 22,
                       child: CachedNetworkImage(
-                        imageUrl: storageImageVariant(avatar, width: 64),
+                        imageUrl: avatar,
                         fit: BoxFit.cover,
                         errorWidget: (_, _, _) =>
                             Icon(widget.icon, size: 20, color: iconColor),
