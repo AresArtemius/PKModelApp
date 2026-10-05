@@ -894,7 +894,7 @@ class _CardPill extends StatelessWidget {
       width: double.infinity,
       constraints: const BoxConstraints(maxWidth: 560),
       padding: const EdgeInsets.all(14),
-      decoration: catalogCardDecoration(),
+      decoration: adminCardDecoration(),
       child: child,
     );
   }

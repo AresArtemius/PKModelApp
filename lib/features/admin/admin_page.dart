@@ -15,6 +15,7 @@ import '../../ui/brand/brand_pill_button.dart';
 import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
 import 'account_merge_requests_page.dart';
+import 'admin_shell_v2.dart';
 import 'admin_style.dart';
 import 'selection_providers.dart';
 import 'casting_agent_applications_page.dart';
@@ -135,6 +136,45 @@ class AdminPage extends ConsumerWidget {
             ..showSnackBar(const SnackBar(content: Text('Sign out failed')));
         }
       }
+    }
+
+    if (adminV2) {
+      return isAdminAsync.when(
+        loading: () => const Scaffold(
+          backgroundColor: Tokens.bg,
+          body: Center(child: CircularProgressIndicator()),
+        ),
+        error: (_, _) => Scaffold(
+          backgroundColor: Tokens.bg,
+          body: _ForbiddenView(
+            message: t.adminOnlyUpper,
+            exitLabel: t.adminExitUpper,
+            onExit: signOutAndGoLogin,
+          ),
+        ),
+        data: (isAdmin) {
+          if (!isAdmin) {
+            return Scaffold(
+              backgroundColor: Tokens.bg,
+              body: _ForbiddenView(
+                message: t.adminOnlyUpper,
+                exitLabel: t.adminExitUpper,
+                onExit: signOutAndGoLogin,
+              ),
+            );
+          }
+          final countsAsync = ref.watch(adminDashboardCountsProvider);
+          return _AdminHomeV2(
+            counts: countsAsync.maybeWhen(
+              data: (value) => value,
+              orElse: () => const AdminDashboardCounts(),
+            ),
+            onCreateCasting: () =>
+                context.go('${Routes.createCastingAdmin}?from=admin'),
+            onExit: signOutAndGoLogin,
+          );
+        },
+      );
     }
 
     return Scaffold(
@@ -463,6 +503,86 @@ class _AdminHome extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Web dashboard: counters under the title, then the live workspace table.
+/// Sections live in the shell's side menu, so the tile grid is gone.
+class _AdminHomeV2 extends StatelessWidget {
+  const _AdminHomeV2({
+    required this.counts,
+    required this.onCreateCasting,
+    required this.onExit,
+  });
+
+  final AdminDashboardCounts counts;
+  final VoidCallback onCreateCasting;
+  final VoidCallback onExit;
+
+  @override
+  Widget build(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    return AdminShellV2(
+      title: ru ? 'Админ-панель' : 'Back office',
+      subtitle: ru
+          ? 'Очереди, безопасность, подборки, кастинги и журнал действий'
+          : 'Queues, safety, selections, castings and the action log',
+      actions: [
+        OutlinedButton.icon(
+          onPressed: onExit,
+          icon: const Icon(Icons.logout_rounded, size: 18),
+          label: Text(ru ? 'Выйти' : 'Sign out'),
+        ),
+        FilledButton.icon(
+          onPressed: onCreateCasting,
+          icon: const Icon(Icons.add_rounded, size: 18),
+          label: Text(ru ? 'Создать кастинг' : 'Create casting'),
+        ),
+      ],
+      headerBottom: AdminStatsRow(
+        items: [
+          (
+            label: ru ? 'Модерация' : 'Moderation',
+            value: counts.moderation,
+            alert: true,
+          ),
+          (
+            label: ru ? 'Заявки' : 'Requests',
+            value: counts.agentApplications,
+            alert: true,
+          ),
+          (
+            label: ru ? 'Объединения' : 'Merges',
+            value: counts.accountMerges,
+            alert: true,
+          ),
+          (
+            label: ru ? 'Безопасность' : 'Safety',
+            value: counts.safety,
+            alert: true,
+          ),
+          (
+            label: ru ? 'Просрочено' : 'Overdue',
+            value: counts.overdueTasks,
+            alert: true,
+          ),
+          (
+            label: ru ? 'Критично' : 'Critical',
+            value: counts.criticalTasks,
+            alert: true,
+          ),
+          (
+            label: ru ? 'Мои просроченные' : 'My overdue',
+            value: counts.myOverdueTasks,
+            alert: true,
+          ),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.only(bottom: 32),
+        children: const [_AdminWorkspaceTable()],
+      ),
     );
   }
 }
@@ -814,8 +934,12 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    ru ? 'ОПЕРАТОРСКИЙ СТОЛ' : 'WORKSPACE',
-                    style: adminCommandStyle(size: 15, letterSpacing: 1.2),
+                    adminV2
+                        ? (ru ? 'Операторский стол' : 'Workspace')
+                        : (ru ? 'ОПЕРАТОРСКИЙ СТОЛ' : 'WORKSPACE'),
+                    style: adminV2
+                        ? AppText.h2
+                        : adminCommandStyle(size: 15, letterSpacing: 1.2),
                   ),
                   const SizedBox(height: 4),
                   Text(
@@ -832,7 +956,25 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
               );
               final search = SizedBox(
                 width: compact ? double.infinity : 360,
-                child: TextField(
+                child: adminV2
+                    ? TextField(
+                        controller: _searchC,
+                        onChanged: (_) => setState(() {}),
+                        style: AppText.body,
+                        decoration: InputDecoration(
+                          hintText: ru ? 'Поиск по таблице' : 'Search table',
+                          prefixIcon: const Icon(
+                            Icons.search_rounded,
+                            size: 20,
+                          ),
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
+                          ),
+                        ),
+                      )
+                    : TextField(
                   controller: _searchC,
                   onChanged: (_) => setState(() {}),
                   decoration: InputDecoration(
@@ -957,7 +1099,9 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 18),
               child: Text(
-                ru ? 'СТРОК НЕТ' : 'NO ROWS',
+                adminV2
+                    ? (ru ? 'Строк нет' : 'No rows')
+                    : (ru ? 'СТРОК НЕТ' : 'NO ROWS'),
                 textAlign: TextAlign.center,
                 style: adminCommandStyle(
                   size: 13,
@@ -965,6 +1109,17 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
                   letterSpacing: 1.0,
                 ),
               ),
+            )
+          else if (adminV2)
+            _AdminRowsTableV2(
+              rows: filtered,
+              selected: _selected,
+              onToggle: (id) {
+                setState(() {
+                  if (!_selected.add(id)) _selected.remove(id);
+                });
+              },
+              onOpen: (row) => context.go(row.route),
             )
           else
             _AdminRowsTable(
@@ -1872,6 +2027,17 @@ class _AdminWorkspaceFilters extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final compact = constraints.maxWidth < 620;
+        if (adminV2) {
+          return Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final item in items) filterChip(item),
+              const SizedBox(width: 8),
+              mineChip(),
+            ],
+          );
+        }
         if (!compact) {
           return Row(
             children: [
@@ -1919,6 +2085,9 @@ class _AdminWorkspaceChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (adminV2) {
+      return AdminChipV2(label: label, selected: selected, onTap: onTap);
+    }
     return ChoiceChip(
       selected: selected,
       showCheckmark: false,
@@ -1995,7 +2164,7 @@ class _AdminBulkBar extends StatelessWidget {
     final ru = Localizations.localeOf(context).languageCode == 'ru';
     return Container(
       padding: const EdgeInsets.all(12),
-      decoration: catalogSearchDecoration(
+      decoration: adminSearchDecoration(
         radius: 18,
         borderColor: BrandTheme.redTop.withValues(alpha: 0.42),
       ),
@@ -2006,7 +2175,9 @@ class _AdminBulkBar extends StatelessWidget {
             busy
                 ? (ru ? 'Выполняю действие...' : 'Running action...')
                 : (ru ? 'Выбрано: $count' : 'Selected: $count'),
-            style: adminCommandStyle(size: 12, letterSpacing: 0.8),
+            style: adminV2
+                ? AppText.smallStrong
+                : adminCommandStyle(size: 12, letterSpacing: 0.8),
           );
           final actions = Wrap(
             spacing: 8,
@@ -2127,6 +2298,32 @@ class _AdminBulkButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (adminV2) {
+      final text = Text(adminSentenceCase(label));
+      final iconW = Icon(icon, size: 16);
+      if (dark) {
+        return FilledButton.icon(
+          onPressed: onTap,
+          icon: iconW,
+          label: text,
+          style: FilledButton.styleFrom(
+            minimumSize: const Size(0, 36),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            textStyle: AppText.smallStrong,
+          ),
+        );
+      }
+      return OutlinedButton.icon(
+        onPressed: onTap,
+        icon: iconW,
+        label: text,
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size(0, 36),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          textStyle: AppText.smallStrong,
+        ),
+      );
+    }
     return ElevatedButton.icon(
       onPressed: onTap,
       icon: Icon(icon, size: 17),
@@ -2169,7 +2366,7 @@ class _AdminBulkResultPanel extends StatelessWidget {
     final failedRows = result.failedRows.toList(growable: false);
     return Container(
       padding: const EdgeInsets.all(12),
-      decoration: catalogSearchDecoration(
+      decoration: adminSearchDecoration(
         radius: 18,
         borderColor: result.failedCount == 0
             ? Colors.green.withValues(alpha: 0.35)
@@ -2424,6 +2621,205 @@ class _AdminRowsTable extends StatelessWidget {
   }
 }
 
+/// Web: flat table — hairlines, checkbox, status dot; a click opens the
+/// section the row belongs to.
+class _AdminRowsTableV2 extends StatelessWidget {
+  const _AdminRowsTableV2({
+    required this.rows,
+    required this.selected,
+    required this.onToggle,
+    required this.onOpen,
+  });
+
+  final List<_AdminWorkspaceRow> rows;
+  final Set<String> selected;
+  final ValueChanged<String> onToggle;
+  final ValueChanged<_AdminWorkspaceRow> onOpen;
+
+  static const _check = 36.0;
+  static const _kind = 120.0;
+  static const _sla = 140.0;
+  static const _assignee = 140.0;
+  static const _status = 130.0;
+  static const _date = 64.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final narrow = MediaQuery.sizeOf(context).width < 900;
+    if (narrow) {
+      return Column(
+        children: [
+          for (var i = 0; i < rows.length; i++)
+            AdminTableRowV2(
+              last: i == rows.length - 1,
+              selected: selected.contains(rows[i].id),
+              onTap: () => onOpen(rows[i]),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: _check,
+                    child: Checkbox(
+                      value: selected.contains(rows[i].id),
+                      onChanged: (_) => onToggle(rows[i].id),
+                    ),
+                  ),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          rows[i].title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppText.smallStrong,
+                        ),
+                        Text(
+                          [
+                            rows[i].kind,
+                            rows[i].subtitle,
+                          ].where((e) => e.isNotEmpty).join(' · '),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppText.caption,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  AdminStatusV2(
+                    text: rows[i].status,
+                    color: rows[i].isOverdue ? Tokens.danger : Tokens.warning,
+                  ),
+                ],
+              ),
+            ),
+        ],
+      );
+    }
+
+    return Column(
+      children: [
+        AdminTableHeaderV2(
+          cells: [
+            const AdminTableCellSpec('', width: _check),
+            AdminTableCellSpec(ru ? 'Тип' : 'Type', width: _kind),
+            AdminTableCellSpec(ru ? 'Название' : 'Title', flex: 5),
+            AdminTableCellSpec(ru ? 'Детали' : 'Details', flex: 4),
+            const AdminTableCellSpec('SLA', width: _sla),
+            AdminTableCellSpec(
+              ru ? 'Ответственный' : 'Assignee',
+              width: _assignee,
+            ),
+            AdminTableCellSpec(ru ? 'Статус' : 'Status', width: _status),
+            AdminTableCellSpec(ru ? 'Дата' : 'Date', width: _date),
+          ],
+        ),
+        for (var i = 0; i < rows.length; i++)
+          AdminTableRowV2(
+            last: i == rows.length - 1,
+            selected: selected.contains(rows[i].id),
+            onTap: () => onOpen(rows[i]),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: _check,
+                  child: Checkbox(
+                    value: selected.contains(rows[i].id),
+                    onChanged: (_) => onToggle(rows[i].id),
+                  ),
+                ),
+                _cell(
+                  Text(
+                    rows[i].kind,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppText.small.copyWith(color: Tokens.textSecondary),
+                  ),
+                  width: _kind,
+                ),
+                _cell(
+                  Text(
+                    rows[i].title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppText.smallStrong,
+                  ),
+                  flex: 5,
+                ),
+                _cell(
+                  Text(
+                    rows[i].subtitle.isEmpty ? '—' : rows[i].subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppText.small.copyWith(color: Tokens.textSecondary),
+                  ),
+                  flex: 4,
+                ),
+                _cell(
+                  Text(
+                    rows[i].slaLabel(ru),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppText.small.copyWith(
+                      color: rows[i].isOverdue || rows[i].priorityRank > 1
+                          ? Tokens.danger
+                          : Tokens.text,
+                      fontWeight:
+                          rows[i].isOverdue || rows[i].priority == 'critical'
+                          ? FontWeight.w600
+                          : FontWeight.w400,
+                    ),
+                  ),
+                  width: _sla,
+                ),
+                _cell(
+                  Text(
+                    rows[i].assignmentLabel.isEmpty
+                        ? '—'
+                        : rows[i].assignmentLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppText.small.copyWith(
+                      color: rows[i].assignedToUserId.isEmpty
+                          ? Tokens.textTertiary
+                          : Tokens.text,
+                    ),
+                  ),
+                  width: _assignee,
+                ),
+                _cell(
+                  AdminStatusV2(
+                    text: rows[i].status,
+                    color: rows[i].isOverdue ? Tokens.danger : Tokens.warning,
+                  ),
+                  width: _status,
+                ),
+                _cell(
+                  Text(
+                    rows[i].dateText.isEmpty ? '—' : rows[i].dateText,
+                    style: AppText.small.copyWith(color: Tokens.textSecondary),
+                  ),
+                  width: _date,
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _cell(Widget child, {double? width, int? flex}) {
+    final padded = Padding(
+      padding: const EdgeInsets.only(right: 12),
+      child: child,
+    );
+    if (width != null) return SizedBox(width: width, child: padded);
+    return Expanded(flex: flex ?? 1, child: padded);
+  }
+}
+
 class _TableCellBox extends StatelessWidget {
   const _TableCellBox({
     this.text = '',
@@ -2482,7 +2878,7 @@ class _AdminMobileRowCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(12),
-      decoration: catalogSearchDecoration(
+      decoration: adminSearchDecoration(
         radius: 18,
         borderColor: selected ? BrandTheme.redTop : kBorderColor,
       ),
@@ -2749,7 +3145,7 @@ class _AdminActionTile extends StatelessWidget {
             horizontal: dense ? 12 : 14,
             vertical: dense ? 12 : 14,
           ),
-          decoration: catalogSearchDecoration(
+          decoration: adminSearchDecoration(
             radius: 22,
             borderColor: action.badge > 0
                 ? BrandTheme.redTop.withValues(alpha: 0.48)
@@ -2849,10 +3245,11 @@ class _AdminPanelSurface extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (adminV2) return SizedBox(width: double.infinity, child: child);
     return Container(
       width: double.infinity,
       padding: padding,
-      decoration: catalogCardDecoration(),
+      decoration: adminCardDecoration(),
       child: child,
     );
   }
@@ -2893,7 +3290,7 @@ class _AdminSurface extends StatelessWidget {
           ? null
           : const BoxConstraints(maxWidth: _kAdminMaxCardWidth),
       padding: const EdgeInsets.all(_kAdminPad),
-      decoration: catalogCardDecoration(),
+      decoration: adminCardDecoration(),
       child: child,
     );
 

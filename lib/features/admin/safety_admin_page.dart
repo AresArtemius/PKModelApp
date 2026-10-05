@@ -10,9 +10,9 @@ import '../../core/router.dart';
 import '../../core/supabase_compat.dart';
 import '../../core/supabase_provider.dart';
 import '../../gen_l10n/app_localizations.dart';
-import '../../ui/brand/brand_admin_header.dart';
 import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
+import 'admin_shell_v2.dart';
 import 'admin_style.dart';
 
 final safetyReportsProvider =
@@ -100,20 +100,14 @@ class SafetyAdminPage extends ConsumerWidget {
     final t = AppLocalizations.of(context)!;
     final async = ref.watch(safetyReportsProvider);
 
-    return Scaffold(
-      body: Stack(
-        children: [
-          const BrandBackground(),
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.all(kPagePadH),
-              child: Column(
-                children: [
-                  BrandAdminHeader(
-                    title: t.safetyAdminUpper,
-                    onBack: () => context.go(Routes.admin),
-                  ),
-                  const SizedBox(height: kGap16),
+    return AdminPageScaffold(
+      title: t.safetyAdminUpper,
+      subtitle: Localizations.localeOf(context).languageCode == 'ru' ? 'Жалобы и проверки' : 'Reports and safety',
+      onBack: () => context.go(Routes.admin),
+      brandBackground: true,
+      padding: const EdgeInsets.all(kPagePadH),
+      headerGap: kGap16,
+      children: [
                   Expanded(
                     child: async.when(
                       loading: () =>
@@ -146,12 +140,7 @@ class SafetyAdminPage extends ConsumerWidget {
                       },
                     ),
                   ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
+      ],
     );
   }
 }
@@ -173,7 +162,7 @@ class _ReportCard extends StatelessWidget {
 
     return Container(
       padding: kLoginCardPad,
-      decoration: catalogCardDecoration(),
+      decoration: adminCardDecoration(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

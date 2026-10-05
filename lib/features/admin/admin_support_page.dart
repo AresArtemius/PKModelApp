@@ -6,10 +6,11 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/router.dart';
 import '../../core/supabase_provider.dart';
-import '../../ui/brand/brand_admin_header.dart';
 import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
 import '../support/support_unread_provider.dart';
+import 'admin_shell_v2.dart';
+import 'admin_style.dart';
 
 final adminSupportAccessProvider = FutureProvider.autoDispose<bool>((
   ref,
@@ -265,20 +266,16 @@ class _AdminSupportPageState extends ConsumerState<AdminSupportPage> {
     final width = MediaQuery.sizeOf(context).width;
     final split = width >= 900;
 
-    return Scaffold(
-      body: Stack(
-        children: [
-          const BrandBackground(),
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.all(kPagePadH),
-              child: Column(
-                children: [
-                  BrandAdminHeader(
-                    title: ru ? 'ОБРАЩЕНИЯ В ПОДДЕРЖКУ' : 'SUPPORT INBOX',
-                    onBack: () => context.go(Routes.admin),
-                  ),
-                  const SizedBox(height: 14),
+    return AdminPageScaffold(
+      title: ru ? 'ОБРАЩЕНИЯ В ПОДДЕРЖКУ' : 'SUPPORT INBOX',
+      subtitle: ru
+          ? 'Обращения и ответы пользователям'
+          : 'Requests and user replies',
+      onBack: () => context.go(Routes.admin),
+      brandBackground: true,
+      padding: const EdgeInsets.all(kPagePadH),
+      headerGap: 14,
+      children: [
                   Row(
                     children: [
                       Expanded(
@@ -377,12 +374,7 @@ class _AdminSupportPageState extends ConsumerState<AdminSupportPage> {
                       ),
                     ),
                   ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
+      ],
     );
   }
 }
@@ -400,7 +392,7 @@ class _FilterBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-    decoration: catalogCardDecoration(),
+    decoration: adminCardDecoration(),
     child: DropdownButtonHideUnderline(
       child: DropdownButton<String>(
         value: value,
@@ -455,7 +447,7 @@ class _TicketList extends StatelessWidget {
             onTap: () => onSelect(ticket),
             child: Container(
               padding: const EdgeInsets.all(15),
-              decoration: catalogCardDecoration().copyWith(
+              decoration: adminCardDecoration().copyWith(
                 border: Border.all(
                   color: selected ? BrandTheme.redTop : kBorderColor,
                   width: selected ? 1.5 : 1,
@@ -794,7 +786,7 @@ class _TicketDetail extends ConsumerWidget {
         ticket.assignedTo != null && ticket.assignedTo != currentAdminId;
     return Container(
       padding: const EdgeInsets.all(18),
-      decoration: catalogCardDecoration(),
+      decoration: adminCardDecoration(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -1055,7 +1047,7 @@ class _EmptyDetail extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     alignment: Alignment.center,
-    decoration: catalogCardDecoration(),
+    decoration: adminCardDecoration(),
     child: Text(
       text,
       textAlign: TextAlign.center,

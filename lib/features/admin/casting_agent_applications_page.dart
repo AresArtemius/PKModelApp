@@ -9,9 +9,8 @@ import '../../core/admin_dashboard_counts_provider.dart';
 import '../../core/roles_provider.dart';
 import '../../core/router.dart';
 import '../../gen_l10n/app_localizations.dart';
-import '../../ui/brand/brand_admin_header.dart';
-import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
+import 'admin_shell_v2.dart';
 import 'admin_style.dart';
 
 final castingAgentApplicationsProvider =
@@ -236,25 +235,19 @@ class CastingAgentApplicationsPage extends ConsumerWidget {
     final t = AppLocalizations.of(context)!;
     final itemsAsync = ref.watch(castingAgentApplicationsProvider);
 
-    return Scaffold(
-      body: Stack(
-        children: [
-          const BrandBackground(),
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(
-                kPagePadH,
-                kPagePadTop,
-                kPagePadH,
-                kPagePadBottom,
-              ),
-              child: Column(
-                children: [
-                  BrandAdminHeader(
-                    title: t.adminAgentApplicationsUpper,
-                    onBack: () => context.go(Routes.admin),
-                  ),
-                  const SizedBox(height: kGap16),
+    return AdminPageScaffold(
+      title: t.adminAgentApplicationsUpper,
+      subtitle: Localizations.localeOf(context).languageCode == 'ru' ? 'Статусы заказчиков' : 'Client role requests',
+      onBack: () => context.go(Routes.admin),
+      brandBackground: true,
+      padding: const EdgeInsets.fromLTRB(
+        kPagePadH,
+        kPagePadTop,
+        kPagePadH,
+        kPagePadBottom,
+      ),
+      headerGap: kGap16,
+      children: [
                   Expanded(
                     child: itemsAsync.when(
                       loading: () =>
@@ -299,12 +292,7 @@ class CastingAgentApplicationsPage extends ConsumerWidget {
                       },
                     ),
                   ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
+      ],
     );
   }
 }
@@ -384,7 +372,7 @@ class _ApplicationCard extends StatelessWidget {
 
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: catalogCardDecoration(),
+      decoration: adminCardDecoration(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

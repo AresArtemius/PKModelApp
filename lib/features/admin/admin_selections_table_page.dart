@@ -7,9 +7,9 @@ import '../../core/router.dart';
 import '../../core/roles_provider.dart';
 import '../../core/supabase_compat.dart';
 import '../../core/supabase_provider.dart';
-import '../../ui/brand/brand_admin_header.dart';
 import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
+import 'admin_shell_v2.dart';
 import 'admin_style.dart';
 import 'selection_status.dart';
 
@@ -367,18 +367,13 @@ class _AdminSelectionsTablePageState
       _adminSelectionsProvider(selectionsQuery),
     );
 
-    return Scaffold(
+    return AdminPageScaffold(
+      title: ru ? 'ВСЕ ПОДБОРКИ' : 'ALL SELECTIONS',
+      subtitle: ru ? 'Статусы, клиенты, PDF' : 'Statuses, clients, PDF',
+      onBack: () => context.go(Routes.admin),
       backgroundColor: _kSelectionsBg,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(_kSelectionsPad),
-          child: Column(
-            children: [
-              BrandAdminHeader(
-                title: ru ? 'ВСЕ ПОДБОРКИ' : 'ALL SELECTIONS',
-                onBack: () => context.go(Routes.admin),
-              ),
-              const SizedBox(height: 12),
+      padding: const EdgeInsets.all(_kSelectionsPad),
+      children: [
               Expanded(
                 child: isAdminAsync.when(
                   loading: () =>
@@ -430,10 +425,7 @@ class _AdminSelectionsTablePageState
                   },
                 ),
               ),
-            ],
-          ),
-        ),
-      ),
+      ],
     );
   }
 }
@@ -612,7 +604,7 @@ class _SelectionsTable extends StatelessWidget {
   Widget build(BuildContext context) {
     final ru = Localizations.localeOf(context).languageCode == 'ru';
     return DecoratedBox(
-      decoration: catalogCardDecoration().copyWith(
+      decoration: adminCardDecoration().copyWith(
         border: Border.all(color: kBorderColor),
       ),
       child: Scrollbar(
@@ -1043,7 +1035,7 @@ class _EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
-      decoration: catalogCardDecoration().copyWith(
+      decoration: adminCardDecoration().copyWith(
         border: Border.all(color: kBorderColor),
       ),
       child: Center(

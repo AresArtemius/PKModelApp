@@ -1,7 +1,13 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
+import 'admin_shell_v2.dart';
+
+/// Web admin pages use the flat v2 look (see admin_shell_v2.dart); the
+/// helpers below switch on this so every section changes at once.
+const bool adminV2 = kIsWeb;
 
 TextStyle adminCommandStyle({
   double size = 16,
@@ -10,6 +16,26 @@ TextStyle adminCommandStyle({
   Color color = kTextDark,
   double? height,
 }) {
+  if (adminV2) {
+    // Same sizes, but no tracking and a calmer weight; capitals in the
+    // source strings stay capitals (small labels), the shell lowercases
+    // the page titles.
+    return AppText.body.copyWith(
+      fontSize: size,
+      fontWeight: weight.index >= FontWeight.w800.index
+          ? FontWeight.w600
+          : weight.index >= FontWeight.w700.index
+          ? FontWeight.w600
+          : weight,
+      color: color == kTextDark
+          ? Tokens.text
+          : color == kTextMuted
+          ? Tokens.textSecondary
+          : color,
+      letterSpacing: letterSpacing > 0.6 ? 0.2 : 0,
+      height: height ?? 1.3,
+    );
+  }
   return BrandTheme.pillText.copyWith(
     fontSize: size,
     fontWeight: weight,
@@ -25,6 +51,23 @@ TextStyle adminBodyStyle({
   Color color = kTextMuted,
   double height = 1.25,
 }) {
+  if (adminV2) {
+    return AppText.body.copyWith(
+      fontSize: size,
+      fontWeight: weight.index >= FontWeight.w700.index
+          ? FontWeight.w600
+          : weight.index >= FontWeight.w600.index
+          ? FontWeight.w500
+          : weight,
+      color: color == kTextDark
+          ? Tokens.text
+          : color == kTextMuted
+          ? Tokens.textSecondary
+          : color,
+      letterSpacing: 0,
+      height: height < 1.3 ? 1.35 : height,
+    );
+  }
   return BrandTheme.pillText.copyWith(
     fontSize: size,
     fontWeight: weight,
@@ -32,6 +75,51 @@ TextStyle adminBodyStyle({
     letterSpacing: 0,
     height: height,
   );
+}
+
+/// Card surface: the glossy catalog card on native, a hairline box on web.
+BoxDecoration adminCardDecoration() {
+  if (adminV2) {
+    return BoxDecoration(
+      color: Tokens.surface,
+      borderRadius: BorderRadius.circular(Tokens.radiusMd),
+      border: Border.all(color: Tokens.border),
+    );
+  }
+  return catalogCardDecoration();
+}
+
+/// Search / pill surface: flat on web.
+BoxDecoration adminSearchDecoration({
+  Color? borderColor,
+  double borderWidth = 1,
+  double? radius,
+}) {
+  if (adminV2) {
+    final accent = borderColor != null && borderColor != kBorderColor;
+    return BoxDecoration(
+      color: accent ? Tokens.surfaceAlt : Tokens.surface,
+      borderRadius: BorderRadius.circular(Tokens.radiusMd),
+      border: Border.all(color: Tokens.border),
+    );
+  }
+  return catalogSearchDecoration(
+    borderColor: borderColor,
+    borderWidth: borderWidth,
+    radius: radius,
+  );
+}
+
+/// Dialog surface: flat white on web.
+BoxDecoration adminDialogDecoration() {
+  if (adminV2) {
+    return BoxDecoration(
+      color: Tokens.surface,
+      borderRadius: BorderRadius.circular(Tokens.radiusLg),
+      boxShadow: Tokens.popoverShadow,
+    );
+  }
+  return catalogDialogDecoration();
 }
 
 class AdminMessageCard extends StatelessWidget {
@@ -48,6 +136,12 @@ class AdminMessageCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (adminV2) {
+      return Align(
+        alignment: Alignment.topLeft,
+        child: AdminEmptyV2(text: text, error: isError),
+      );
+    }
     return Center(
       child: Container(
         width: double.infinity,
@@ -82,6 +176,32 @@ Future<bool> showAdminConfirmDialog({
   String confirmLabel = 'Да',
   bool destructive = false,
 }) async {
+  if (adminV2) {
+    final flat = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(adminSentenceCase(title)),
+        content: SizedBox(
+          width: 420,
+          child: Text(message, style: AppText.body),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(adminSentenceCase(cancelLabel)),
+          ),
+          FilledButton(
+            style: destructive
+                ? FilledButton.styleFrom(backgroundColor: Tokens.danger)
+                : null,
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(adminSentenceCase(confirmLabel)),
+          ),
+        ],
+      ),
+    );
+    return flat ?? false;
+  }
   final result = await showDialog<bool>(
     context: context,
     barrierColor: kTextDark.withValues(alpha: 0.34),
@@ -226,6 +346,17 @@ class AdminLoadMoreFooter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (adminV2) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          child: OutlinedButton(
+            onPressed: onPressed,
+            child: Text(adminSentenceCase(label)),
+          ),
+        ),
+      );
+    }
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 12),
@@ -339,18 +470,24 @@ class AdminMobileCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final content = DecoratedBox(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: kBorderColor),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
+      decoration: adminV2
+          ? BoxDecoration(
+              color: Tokens.surface,
+              borderRadius: BorderRadius.circular(Tokens.radiusMd),
+              border: Border.all(color: Tokens.border),
+            )
+          : BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: kBorderColor),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.08),
+                  blurRadius: 18,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
         child: Row(
@@ -445,6 +582,32 @@ class _AdminSearchField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (adminV2) {
+      return TextField(
+        controller: controller,
+        onChanged: (_) => onSearchChanged(),
+        style: AppText.body,
+        decoration: InputDecoration(
+          hintText: hintText,
+          prefixIcon: const Icon(Icons.search_rounded, size: 20),
+          isDense: true,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 12,
+          ),
+          suffixIcon: controller.text.trim().isEmpty
+              ? null
+              : IconButton(
+                  onPressed: () {
+                    controller.clear();
+                    onSearchChanged();
+                  },
+                  icon: const Icon(Icons.close_rounded, size: 18),
+                  tooltip: clearTooltip,
+                ),
+        ),
+      );
+    }
     return TextField(
       controller: controller,
       onChanged: (_) => onSearchChanged(),
@@ -539,14 +702,14 @@ class AdminPopupMenuButton<T> extends StatelessWidget {
       onSelected: onSelected,
       color: Colors.white,
       surfaceTintColor: Colors.transparent,
-      elevation: 16,
-      shadowColor: const Color(0x33000000),
+      elevation: adminV2 ? 6 : 16,
+      shadowColor: adminV2 ? const Color(0x1F000000) : const Color(0x33000000),
       offset: const Offset(0, 8),
       constraints: const BoxConstraints(minWidth: 190, maxWidth: 300),
       menuPadding: const EdgeInsets.symmetric(vertical: 8),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-        side: const BorderSide(color: kBorderColor),
+        borderRadius: BorderRadius.circular(adminV2 ? Tokens.radiusMd : 18),
+        side: BorderSide(color: adminV2 ? Tokens.border : kBorderColor),
       ),
       itemBuilder: (context) => [
         for (final option in options)
@@ -672,6 +835,34 @@ class _AdminCompactPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (adminV2) {
+      return Container(
+        height: 40,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: Tokens.surface,
+          borderRadius: BorderRadius.circular(Tokens.radiusSm),
+          border: Border.all(color: Tokens.border),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: Tokens.textSecondary),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppText.smallStrong,
+              ),
+            ),
+            const SizedBox(width: 4),
+            Icon(trailing, size: 18, color: Tokens.textTertiary),
+          ],
+        ),
+      );
+    }
     return DecoratedBox(
       decoration: BoxDecoration(
         color: Colors.white,
