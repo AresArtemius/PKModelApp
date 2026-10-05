@@ -275,7 +275,35 @@ class _AdminSupportPageState extends ConsumerState<AdminSupportPage> {
       brandBackground: true,
       padding: const EdgeInsets.all(kPagePadH),
       headerGap: 14,
+      actions: [
+        if (adminV2)
+          OutlinedButton.icon(
+            onPressed: () => showDialog<void>(
+              context: context,
+              builder: (_) => const _FaqAdminDialog(),
+            ),
+            icon: const Icon(Icons.quiz_outlined, size: 18),
+            label: const Text('FAQ'),
+          ),
+      ],
       children: [
+                  if (adminV2)
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (final status in _filterStatuses)
+                          AdminChipV2(
+                            label: _supportStatus(status, ru),
+                            selected: status == _filter,
+                            onTap: () => setState(() {
+                              _filter = status;
+                              _selectedId = null;
+                            }),
+                          ),
+                      ],
+                    )
+                  else
                   Row(
                     children: [
                       Expanded(
@@ -334,7 +362,7 @@ class _AdminSupportPageState extends ConsumerState<AdminSupportPage> {
                         return Row(
                           children: [
                             SizedBox(
-                              width: 390,
+                              width: adminV2 ? 400 : 390,
                               child: _TicketList(
                                 tickets: tickets,
                                 selectedId: _selectedId,
@@ -345,7 +373,7 @@ class _AdminSupportPageState extends ConsumerState<AdminSupportPage> {
                                 },
                               ),
                             ),
-                            const SizedBox(width: 14),
+                            SizedBox(width: adminV2 ? 28 : 14),
                             Expanded(
                               child: selected == null
                                   ? const _EmptyDetail()
@@ -435,11 +463,58 @@ class _TicketList extends StatelessWidget {
     }
     return ListView.separated(
       itemCount: tickets.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 10),
+      separatorBuilder: (_, _) =>
+          adminV2 ? const SizedBox.shrink() : const SizedBox(height: 10),
       itemBuilder: (context, index) {
         final ticket = tickets[index];
         final selected = ticket.id == selectedId;
         final unreadCount = unreadByTicket[ticket.id] ?? 0;
+        if (adminV2) {
+          return AdminTableRowV2(
+            selected: selected,
+            last: index == tickets.length - 1,
+            onTap: () => onSelect(ticket),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    _PriorityDot(priority: ticket.priority),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        ticket.subject,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppText.smallStrong.copyWith(
+                          fontSize: 15,
+                          fontWeight: unreadCount > 0
+                              ? FontWeight.w700
+                              : FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    if (unreadCount > 0) ...[
+                      const SizedBox(width: 8),
+                      AdminCountBadge(count: unreadCount),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Padding(
+                  padding: const EdgeInsets.only(left: 17),
+                  child: Text(
+                    '${_channelLabel(ticket.channel, ru)} · ${_categoryLabel(ticket.category, ru)} · ${_supportStatus(ticket.status, ru)}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppText.caption,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
         return Material(
           color: Colors.transparent,
           child: InkWell(
@@ -746,9 +821,9 @@ class _FaqEditDialogState extends State<_FaqEditDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: Text(ru ? 'ОТМЕНА' : 'CANCEL'),
+          child: Text(ru ? 'Отмена' : 'Cancel'),
         ),
-        FilledButton(onPressed: _save, child: Text(ru ? 'СОХРАНИТЬ' : 'SAVE')),
+        FilledButton(onPressed: _save, child: Text(ru ? 'Сохранить' : 'Save')),
       ],
     );
   }
@@ -785,8 +860,8 @@ class _TicketDetail extends ConsumerWidget {
     final assignedElsewhere =
         ticket.assignedTo != null && ticket.assignedTo != currentAdminId;
     return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: adminCardDecoration(),
+      padding: adminV2 ? EdgeInsets.zero : const EdgeInsets.all(18),
+      decoration: adminV2 ? null : adminCardDecoration(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -803,14 +878,18 @@ class _TicketDetail extends ConsumerWidget {
                   children: [
                     Text(
                       ticket.subject,
-                      style: const TextStyle(
-                        fontSize: 19,
-                        fontWeight: FontWeight.w900,
-                      ),
+                      style: adminV2
+                          ? AppText.h2
+                          : const TextStyle(
+                              fontSize: 19,
+                              fontWeight: FontWeight.w900,
+                            ),
                     ),
                     Text(
                       '${_channelLabel(ticket.channel, ru)} • ${_categoryLabel(ticket.category, ru)} • ${ticket.userId}',
-                      style: const TextStyle(color: kTextMuted, fontSize: 12),
+                      style: adminV2
+                          ? AppText.caption
+                          : const TextStyle(color: kTextMuted, fontSize: 12),
                     ),
                   ],
                 ),
@@ -844,11 +923,13 @@ class _TicketDetail extends ConsumerWidget {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: assignedElsewhere
+                color: adminV2
+                    ? Tokens.surfaceAlt
+                    : assignedElsewhere
                     ? const Color(0xFFF3F3F3)
                     : BrandTheme.redTop.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: kBorderColor),
+                borderRadius: BorderRadius.circular(adminV2 ? 10 : 12),
+                border: adminV2 ? null : Border.all(color: kBorderColor),
               ),
               child: Row(
                 children: [
@@ -867,13 +948,23 @@ class _TicketDetail extends ConsumerWidget {
                   if (!assignedElsewhere)
                     FilledButton(
                       onPressed: onClaim,
-                      child: Text(ru ? 'ВЗЯТЬ В РАБОТУ' : 'CLAIM'),
+                      child: Text(
+                        adminV2
+                            ? (ru ? 'Взять в работу' : 'Claim')
+                            : (ru ? 'ВЗЯТЬ В РАБОТУ' : 'CLAIM'),
+                      ),
                     ),
                 ],
               ),
             ),
             const SizedBox(height: 12),
           ] else ...[
+            if (adminV2)
+              AdminStatusV2(
+                text: ru ? 'Назначено вам' : 'Assigned to you',
+                color: Tokens.success,
+              )
+            else
             Text(
               ru ? 'НАЗНАЧЕНО ВАМ' : 'ASSIGNED TO YOU',
               style: TextStyle(
@@ -1015,24 +1106,43 @@ class _MessageBubble extends StatelessWidget {
       child: Container(
         constraints: const BoxConstraints(maxWidth: 620),
         padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: admin ? const Color(0xFFEDEDED) : Colors.white,
-          border: Border.all(color: kBorderColor),
-          borderRadius: BorderRadius.circular(14),
-        ),
+        decoration: adminV2
+            ? BoxDecoration(
+                color: admin ? Tokens.ink : Tokens.surfaceAlt,
+                borderRadius: BorderRadius.circular(Tokens.radiusMd),
+              )
+            : BoxDecoration(
+                color: admin ? const Color(0xFFEDEDED) : Colors.white,
+                border: Border.all(color: kBorderColor),
+                borderRadius: BorderRadius.circular(14),
+              ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               admin ? 'Администратор' : 'Пользователь',
-              style: TextStyle(
-                color: admin ? BrandTheme.redTop : kTextMuted,
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
-              ),
+              style: adminV2
+                  ? AppText.caption.copyWith(
+                      color: admin
+                          ? Colors.white.withValues(alpha: 0.7)
+                          : Tokens.textSecondary,
+                    )
+                  : TextStyle(
+                      color: admin ? BrandTheme.redTop : kTextMuted,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                    ),
             ),
             const SizedBox(height: 4),
-            Text(message.body),
+            Text(
+              message.body,
+              style: adminV2
+                  ? AppText.body.copyWith(
+                      fontSize: 15,
+                      color: admin ? Colors.white : Tokens.text,
+                    )
+                  : null,
+            ),
           ],
         ),
       ),
@@ -1046,12 +1156,15 @@ class _EmptyDetail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    alignment: Alignment.center,
-    decoration: adminCardDecoration(),
+    alignment: adminV2 ? Alignment.topLeft : Alignment.center,
+    padding: adminV2 ? const EdgeInsets.fromLTRB(8, 24, 8, 8) : null,
+    decoration: adminV2 ? null : adminCardDecoration(),
     child: Text(
       text,
-      textAlign: TextAlign.center,
-      style: const TextStyle(color: kTextMuted, fontWeight: FontWeight.w600),
+      textAlign: adminV2 ? TextAlign.left : TextAlign.center,
+      style: adminV2
+          ? AppText.small.copyWith(color: Tokens.textSecondary)
+          : const TextStyle(color: kTextMuted, fontWeight: FontWeight.w600),
     ),
   );
 }
@@ -1067,9 +1180,9 @@ class _PriorityDot extends StatelessWidget {
     decoration: BoxDecoration(
       shape: BoxShape.circle,
       color: switch (priority) {
-        'urgent' => BrandTheme.redTop,
-        'high' => Colors.orange,
-        _ => Colors.grey,
+        'urgent' => Tokens.danger,
+        'high' => Tokens.warning,
+        _ => Tokens.borderStrong,
       },
     ),
   );
