@@ -1445,6 +1445,30 @@ class _CoverMediaBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final isRussian =
         Localizations.localeOf(context).languageCode.toLowerCase() == 'ru';
+    if (_editV2) {
+      // Web: a quiet dark label instead of the red capitals pill.
+      return Positioned(
+        left: 6,
+        bottom: 6,
+        child: IgnorePointer(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: Tokens.ink.withValues(alpha: 0.82),
+              borderRadius: BorderRadius.circular(Tokens.radiusSm),
+            ),
+            child: Text(
+              isRussian ? 'Обложка' : 'Cover',
+              style: AppText.caption.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+                height: 1,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
     return Positioned(
       left: 6,
       right: 6,
