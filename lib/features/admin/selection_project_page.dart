@@ -18,6 +18,7 @@ import '../../ui/brand/brand_pill_button.dart';
 import '../../ui/brand/public_page_frame.dart';
 import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
+import 'admin_shell_v2.dart';
 import '../chat/chat_providers.dart';
 import '../catalog/model_data.dart';
 import '../selection/selection_export_item.dart';
@@ -2406,102 +2407,43 @@ class _SelectionProjectV2 extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
     final ru = Localizations.localeOf(context).languageCode == 'ru';
-    final width = MediaQuery.sizeOf(context).width;
-    final wide = width >= 960;
+    final wide = MediaQuery.sizeOf(context).width >= 960;
     final gutter = wide ? 32.0 : 16.0;
     final count = profiles.length;
     final countText = ru
         ? _pluralRu(count, '$count анкета', '$count анкеты', '$count анкет')
         : '$count profiles';
 
-    final header = Padding(
-      padding: EdgeInsets.fromLTRB(gutter - 8, 16, gutter, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          TextButton.icon(
-            onPressed: onBack,
-            icon: const Icon(Icons.arrow_back_rounded, size: 18),
-            label: Text(ru ? 'Подборки' : 'Selections'),
-            style: TextButton.styleFrom(
-              foregroundColor: Tokens.textSecondary,
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              minimumSize: const Size(0, 36),
-              textStyle: AppText.smallStrong,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Padding(
-            padding: const EdgeInsets.only(left: 8),
-            child: Wrap(
-              crossAxisAlignment: WrapCrossAlignment.end,
-              spacing: 16,
-              runSpacing: 12,
-              children: [
-                ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxWidth: wide ? width - 520 : width - gutter * 2,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title.isNotEmpty
-                            ? title
-                            : (ru ? 'Подборка' : 'Selection'),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppText.h1.copyWith(fontSize: wide ? 32 : 26),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '$countText · ${selectionStatusLabel(t, status)}',
-                        style: AppText.caption.copyWith(fontSize: 13),
-                      ),
-                    ],
-                  ),
-                ),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      tooltip: ru ? 'Обновить' : 'Refresh',
-                      onPressed: onRefresh,
-                      style: IconButton.styleFrom(
-                        foregroundColor: Tokens.textSecondary,
-                      ),
-                      icon: const Icon(Icons.refresh_rounded, size: 20),
-                    ),
-                    const SizedBox(width: 4),
-                    if (publicEnabled) ...[
-                      OutlinedButton.icon(
-                        onPressed: onCopyLink,
-                        style: OutlinedButton.styleFrom(
-                          minimumSize: const Size(0, 40),
-                          padding: const EdgeInsets.symmetric(horizontal: 14),
-                        ),
-                        icon: const Icon(Icons.link_rounded, size: 18),
-                        label: Text(ru ? 'Ссылка для клиента' : 'Client link'),
-                      ),
-                      const SizedBox(width: 8),
-                    ],
-                    FilledButton.icon(
-                      onPressed: hasExportItems ? onPdf : null,
-                      style: FilledButton.styleFrom(
-                        minimumSize: const Size(0, 40),
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                      ),
-                      icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
-                      label: const Text('PDF'),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
+    // Title row is drawn by the admin shell; these are its actions.
+    final headerActions = <Widget>[
+      IconButton(
+        tooltip: ru ? 'Обновить' : 'Refresh',
+        onPressed: onRefresh,
+        style: IconButton.styleFrom(foregroundColor: Tokens.textSecondary),
+        icon: const Icon(Icons.refresh_rounded, size: 20),
       ),
-    );
+      if (publicEnabled)
+        OutlinedButton.icon(
+          onPressed: onCopyLink,
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size(0, 40),
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+          ),
+          icon: const Icon(Icons.link_rounded, size: 18),
+          label: Text(ru ? 'Ссылка для клиента' : 'Client link'),
+        ),
+      FilledButton.icon(
+        onPressed: hasExportItems ? onPdf : null,
+        style: FilledButton.styleFrom(
+          minimumSize: const Size(0, 40),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+        ),
+        icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
+        label: const Text('PDF'),
+      ),
+    ];
+    final shellTitle = title.isNotEmpty ? title : (ru ? 'Подборка' : 'Selection');
+    final shellSubtitle = '$countText · ${selectionStatusLabel(t, status)}';
 
     final list = profiles.isEmpty
         ? Padding(
@@ -2602,13 +2544,15 @@ class _SelectionProjectV2 extends StatelessWidget {
     );
 
     if (!wide) {
-      return Scaffold(
-        backgroundColor: Tokens.bg,
+      return AdminShellV2(
+        title: shellTitle,
+        subtitle: shellSubtitle,
+        onBack: onBack,
+        actions: headerActions,
+        bodyPadding: EdgeInsets.zero,
         body: ListView(
           padding: const EdgeInsets.only(bottom: 40),
           children: [
-            header,
-            const SizedBox(height: 16),
             const Divider(height: 1, thickness: 1, color: Tokens.border),
             side,
             const Divider(height: 1, thickness: 1, color: Tokens.border),
@@ -2618,13 +2562,15 @@ class _SelectionProjectV2 extends StatelessWidget {
       );
     }
 
-    return Scaffold(
-      backgroundColor: Tokens.bg,
+    return AdminShellV2(
+      title: shellTitle,
+      subtitle: shellSubtitle,
+      onBack: onBack,
+      actions: headerActions,
+      bodyPadding: EdgeInsets.zero,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          header,
-          const SizedBox(height: 20),
           const Divider(height: 1, thickness: 1, color: Tokens.border),
           Expanded(
             child: Row(
