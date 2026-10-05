@@ -122,12 +122,14 @@ class SafetyAdminPage extends ConsumerWidget {
                         }
                         return ListView.separated(
                           itemCount: items.length,
-                          separatorBuilder: (_, _) =>
-                              const SizedBox(height: kGap12),
+                          separatorBuilder: (_, _) => adminV2
+                              ? const SizedBox.shrink()
+                              : const SizedBox(height: kGap12),
                           itemBuilder: (context, index) {
                             final row = items[index];
                             return _ReportCard(
                               row: row,
+                              last: index == items.length - 1,
                               onStatusChanged: (status) => _setReportStatus(
                                 context: context,
                                 ref: ref,
@@ -146,10 +148,15 @@ class SafetyAdminPage extends ConsumerWidget {
 }
 
 class _ReportCard extends StatelessWidget {
-  const _ReportCard({required this.row, required this.onStatusChanged});
+  const _ReportCard({
+    required this.row,
+    required this.onStatusChanged,
+    this.last = false,
+  });
 
   final Map<String, dynamic> row;
   final ValueChanged<String> onStatusChanged;
+  final bool last;
 
   @override
   Widget build(BuildContext context) {
@@ -159,6 +166,41 @@ class _ReportCard extends StatelessWidget {
     final comment = text('comment');
     final status = text('status').isEmpty ? 'open' : text('status');
     final isClosed = status == 'closed' || status == 'resolved';
+
+    if (adminV2) {
+      return AdminQueueRowV2(
+        title: text('reason').isEmpty ? (ru ? 'Жалоба' : 'Report') : text('reason'),
+        note: comment,
+        details: profileId.isEmpty ? null : 'ID: $profileId',
+        date: adminDateV2(DateTime.tryParse(text('created_at'))),
+        last: last,
+        status: AdminStatusV2(
+          text: switch (status) {
+            'closed' => ru ? 'Закрыта' : 'Closed',
+            'resolved' => ru ? 'Решена' : 'Resolved',
+            'in_review' => ru ? 'В работе' : 'In review',
+            _ => ru ? 'Открыта' : 'Open',
+          },
+          color: isClosed ? Tokens.textTertiary : Tokens.danger,
+        ),
+        actions: [
+          if (profileId.isNotEmpty)
+            AdminRowButton(
+              label: ru ? 'Открыть анкету' : 'Open profile',
+              onPressed: () =>
+                  context.go('${Routes.modelPrefix}$profileId'),
+            ),
+          AdminRowButton(
+            label: isClosed
+                ? (ru ? 'В работу' : 'Reopen')
+                : (ru ? 'Закрыть' : 'Close'),
+            primary: !isClosed,
+            onPressed: () =>
+                onStatusChanged(isClosed ? 'in_review' : 'closed'),
+          ),
+        ],
+      );
+    }
 
     return Container(
       padding: kLoginCardPad,

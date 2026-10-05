@@ -721,6 +721,7 @@ class _AuditPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (adminV2) return SizedBox(width: double.infinity, child: child);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
@@ -1071,6 +1072,19 @@ class _AuditMiniButton extends StatelessWidget {
         : isDanger
         ? BrandTheme.redTop
         : kTextDark;
+    if (adminV2) {
+      return OutlinedButton.icon(
+        onPressed: onTap,
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size(0, 36),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          textStyle: AppText.smallStrong,
+          foregroundColor: isDanger ? Tokens.danger : null,
+        ),
+        icon: Icon(icon, size: 16),
+        label: Text(adminSentenceCase(label)),
+      );
+    }
     return InkWell(
       borderRadius: BorderRadius.circular(999),
       onTap: onTap,
@@ -1180,6 +1194,21 @@ class _AuditIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (adminV2) {
+      return IconButton(
+        tooltip: tooltip,
+        onPressed: onTap,
+        style: IconButton.styleFrom(
+          foregroundColor: isDanger ? Tokens.danger : Tokens.textSecondary,
+          side: const BorderSide(color: Tokens.border),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(Tokens.radiusSm),
+          ),
+          minimumSize: const Size(40, 40),
+        ),
+        icon: Icon(icon, size: 20),
+      );
+    }
     return Tooltip(
       message: tooltip,
       child: InkWell(
@@ -1222,6 +1251,9 @@ class _AuditFilterChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (adminV2) {
+      return AdminChipV2(label: label, selected: selected, onTap: onTap);
+    }
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
@@ -1266,11 +1298,62 @@ class _AuditList extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListView.separated(
       itemCount: logs.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 10),
+      separatorBuilder: (_, _) =>
+          adminV2 ? const SizedBox.shrink() : const SizedBox(height: 10),
       itemBuilder: (context, index) {
         final log = logs[index];
         final selected = log.id == selectedId;
         final checked = selectedIds.contains(log.id);
+        if (adminV2) {
+          return AdminTableRowV2(
+            selected: selected,
+            last: index == logs.length - 1,
+            onTap: () => onSelect(log),
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+            child: Row(
+              children: [
+                Checkbox(value: checked, onChanged: (_) => onToggle(log)),
+                const SizedBox(width: 4),
+                Icon(
+                  log.isAdminAction
+                      ? Icons.admin_panel_settings_outlined
+                      : _icon(log.actionType),
+                  color: Tokens.textSecondary,
+                  size: 20,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        log.title.isEmpty ? _kind(log.actionType) : log.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppText.smallStrong,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        [
+                          log.isAdminAction
+                              ? (isRu ? 'Админка' : 'Back office')
+                              : '',
+                          log.actorLabel,
+                          _status(log.status),
+                        ].where((e) => e.trim().isNotEmpty).join(' · '),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppText.caption,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(_date(log.createdAt), style: AppText.caption),
+              ],
+            ),
+          );
+        }
         return InkWell(
           borderRadius: BorderRadius.circular(16),
           onTap: () => onSelect(log),
@@ -1408,8 +1491,12 @@ class _AuditDetails extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          isRu ? 'ДЕТАЛИ ДЕЙСТВИЯ' : 'ACTION DETAILS',
-          style: adminCommandStyle(size: 18, letterSpacing: 2.2),
+          adminV2
+              ? (isRu ? 'Детали действия' : 'Action details')
+              : (isRu ? 'ДЕТАЛИ ДЕЙСТВИЯ' : 'ACTION DETAILS'),
+          style: adminV2
+              ? AppText.h2
+              : adminCommandStyle(size: 18, letterSpacing: 2.2),
         ),
         const SizedBox(height: 14),
         _DetailLine(label: isRu ? 'Автор' : 'Actor', value: log.actorLabel),
@@ -1524,15 +1611,25 @@ class _TextBox extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.86),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: kBorderColor),
-      ),
+      decoration: adminV2
+          ? BoxDecoration(
+              color: Tokens.surfaceAlt,
+              borderRadius: BorderRadius.circular(Tokens.radiusSm),
+            )
+          : BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.86),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: kBorderColor),
+            ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: adminCommandStyle(size: 12, letterSpacing: 1)),
+          Text(
+            adminV2 ? adminSentenceCase(title) : title,
+            style: adminV2
+                ? AppText.caption.copyWith(fontWeight: FontWeight.w600)
+                : adminCommandStyle(size: 12, letterSpacing: 1),
+          ),
           const SizedBox(height: 8),
           SelectableText(
             text,

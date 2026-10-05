@@ -7,6 +7,7 @@ import '../../core/router.dart';
 import '../../core/supabase_provider.dart';
 import '../../ui/brand/ui_constants.dart';
 import 'admin_shell_v2.dart';
+import 'admin_style.dart';
 
 class ProfileSlotRequest {
   const ProfileSlotRequest({
@@ -121,9 +122,42 @@ class ProfileSlotRequestsPage extends ConsumerWidget {
                     textAlign: TextAlign.center,
                   ),
                   data: (items) => items.isEmpty
-                      ? Text(
-                          ru ? 'НОВЫХ ЗАПРОСОВ НЕТ' : 'NO NEW REQUESTS',
-                          textAlign: TextAlign.center,
+                      ? (adminV2
+                            ? AdminEmptyV2(
+                                text: ru
+                                    ? 'Новых запросов нет'
+                                    : 'No new requests',
+                              )
+                            : Text(
+                                ru ? 'НОВЫХ ЗАПРОСОВ НЕТ' : 'NO NEW REQUESTS',
+                                textAlign: TextAlign.center,
+                              ))
+                      : adminV2
+                      ? Column(
+                          children: [
+                            for (var i = 0; i < items.length; i++)
+                              AdminQueueRowV2(
+                                title: items[i].owner,
+                                subtitle: ru
+                                    ? 'Запрос ещё на 1 анкету'
+                                    : 'Request for 1 more profile',
+                                date: adminDateV2(items[i].createdAt),
+                                last: i == items.length - 1,
+                                actions: [
+                                  AdminRowButton(
+                                    label: ru ? 'Отклонить' : 'Reject',
+                                    onPressed: () =>
+                                        _decide(context, ref, items[i], false),
+                                  ),
+                                  AdminRowButton(
+                                    label: ru ? 'Разрешить' : 'Approve',
+                                    primary: true,
+                                    onPressed: () =>
+                                        _decide(context, ref, items[i], true),
+                                  ),
+                                ],
+                              ),
+                          ],
                         )
                       : Column(
                           children: [

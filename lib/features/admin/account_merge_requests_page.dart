@@ -201,12 +201,14 @@ class AccountMergeRequestsPage extends ConsumerWidget {
 
                         return ListView.separated(
                           itemCount: items.length,
-                          separatorBuilder: (_, _) =>
-                              const SizedBox(height: kGap12),
+                          separatorBuilder: (_, _) => adminV2
+                              ? const SizedBox.shrink()
+                              : const SizedBox(height: kGap12),
                           itemBuilder: (context, index) {
                             final item = items[index];
                             return _AccountMergeCard(
                               request: item,
+                              last: index == items.length - 1,
                               onApprove: () => _decide(
                                 context: context,
                                 ref: ref,
@@ -235,11 +237,13 @@ class _AccountMergeCard extends StatelessWidget {
     required this.request,
     required this.onApprove,
     required this.onReject,
+    this.last = false,
   });
 
   final AccountMergeRequest request;
   final VoidCallback onApprove;
   final VoidCallback onReject;
+  final bool last;
 
   @override
   Widget build(BuildContext context) {
@@ -251,6 +255,29 @@ class _AccountMergeCard extends StatelessWidget {
       if (request.requesterCompanyName.isNotEmpty) request.requesterCompanyName,
     ];
 
+    if (adminV2) {
+      return AdminQueueRowV2(
+        title: request.title,
+        subtitle: ru
+            ? 'Объединение аккаунта с номером ${request.requestedPhone}'
+            : 'Merge account with ${request.requestedPhone}',
+        details: contacts.join(' · '),
+        note: request.requesterNote,
+        date: adminDateV2(created),
+        last: last,
+        actions: [
+          AdminRowButton(
+            label: ru ? 'Отклонить' : 'Reject',
+            onPressed: onReject,
+          ),
+          AdminRowButton(
+            label: ru ? 'Записать номер' : 'Save phone',
+            onPressed: onApprove,
+            primary: true,
+          ),
+        ],
+      );
+    }
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: adminCardDecoration(),

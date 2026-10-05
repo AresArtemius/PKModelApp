@@ -916,6 +916,16 @@ class _RoleBadge extends StatelessWidget {
         ? kTextDark
         : const Color(0xFFF3F3F3);
     final color = admin || agent ? Colors.white : kTextDark;
+    if (adminV2) {
+      return AdminStatusV2(
+        text: text,
+        color: admin
+            ? Tokens.accent
+            : agent
+            ? Tokens.ink
+            : Tokens.textTertiary,
+      );
+    }
     return Align(
       alignment: Alignment.centerLeft,
       child: DecoratedBox(

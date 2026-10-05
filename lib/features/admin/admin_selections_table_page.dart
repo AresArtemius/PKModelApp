@@ -1001,6 +1001,7 @@ class _SoftBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (adminV2) return AdminStatusV2(text: label, color: color);
     return Align(
       alignment: Alignment.centerLeft,
       child: DecoratedBox(
