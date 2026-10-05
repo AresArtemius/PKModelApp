@@ -18,6 +18,7 @@ class BrandCalendar extends StatefulWidget {
     this.allowPreviousMonths = false,
     this.initialMonth,
     this.titleBuilder,
+    this.flat = false,
   });
 
   final BrandCalendarSelectionMode selectionMode;
@@ -33,6 +34,10 @@ class BrandCalendar extends StatefulWidget {
   final DateTime? initialMonth;
 
   final String Function(DateTime month, AppLocalizations t)? titleBuilder;
+
+  /// v2 look: sentence-case month, quiet weekday labels, borderless day
+  /// cells, ink for the selected days and a thin ring around today.
+  final bool flat;
 
   @override
   State<BrandCalendar> createState() => _BrandCalendarState();
@@ -50,8 +55,13 @@ class _BrandCalendarState extends State<BrandCalendar> {
         ? _dateOnly(widget.selectedDate!)
         : null;
 
-    final selectedMulti = widget.selectedDates.isNotEmpty
-        ? _dateOnly(widget.selectedDates.first)
+    // Open on the first selected day that can still be changed; a month
+    // full of past dates would show only disabled cells.
+    final upcoming = widget.selectedDates.map(_dateOnly).where(
+      (d) => widget.allowPastDates || !d.isBefore(now),
+    );
+    final selectedMulti = upcoming.isNotEmpty
+        ? upcoming.reduce((a, b) => a.isBefore(b) ? a : b)
         : null;
 
     final base = widget.initialMonth != null
@@ -107,13 +117,15 @@ class _BrandCalendarState extends State<BrandCalendar> {
       cells.add(
         Center(
           child: Text(
-            w,
-            style: const TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 0.8,
-              color: kTextMid,
-            ),
+            widget.flat ? _sentenceCase(w) : w,
+            style: widget.flat
+                ? AppText.caption.copyWith(color: Tokens.textTertiary)
+                : const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.8,
+                    color: kTextMid,
+                  ),
           ),
         ),
       );
@@ -133,6 +145,8 @@ class _BrandCalendarState extends State<BrandCalendar> {
           day: day,
           disabled: disabled,
           selected: selected,
+          today: d == now,
+          flat: widget.flat,
           onTap: disabled
               ? null
               : () {
@@ -149,8 +163,59 @@ class _BrandCalendarState extends State<BrandCalendar> {
       );
     }
 
-    final title =
+    final rawTitle =
         widget.titleBuilder?.call(_month, t) ?? _defaultMonthTitle(_month, t);
+    final title = widget.flat ? _sentenceCase(rawTitle) : rawTitle;
+
+    if (widget.flat) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: AppText.bodyStrong,
+                ),
+              ),
+              IconButton(
+                onPressed: canGoPrev
+                    ? () => setState(() {
+                        _month = DateTime(_month.year, _month.month - 1, 1);
+                      })
+                    : null,
+                visualDensity: VisualDensity.compact,
+                style: IconButton.styleFrom(
+                  foregroundColor: Tokens.textSecondary,
+                ),
+                icon: const Icon(Icons.chevron_left_rounded, size: 22),
+              ),
+              IconButton(
+                onPressed: () => setState(() {
+                  _month = DateTime(_month.year, _month.month + 1, 1);
+                }),
+                visualDensity: VisualDensity.compact,
+                style: IconButton.styleFrom(
+                  foregroundColor: Tokens.textSecondary,
+                ),
+                icon: const Icon(Icons.chevron_right_rounded, size: 22),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          GridView.count(
+            crossAxisCount: kCalendarCols,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            childAspectRatio: 1.3,
+            mainAxisSpacing: 4,
+            crossAxisSpacing: 4,
+            children: cells,
+          ),
+        ],
+      );
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -240,16 +305,55 @@ class _BrandCalendarCell extends StatelessWidget {
     required this.day,
     required this.disabled,
     required this.selected,
+    this.today = false,
+    this.flat = false,
     this.onTap,
   });
 
   final int day;
   final bool disabled;
   final bool selected;
+  final bool today;
+  final bool flat;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
+    if (flat) {
+      final fg = selected
+          ? Colors.white
+          : disabled
+          ? Tokens.textTertiary
+          : Tokens.text;
+      return Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(Tokens.radiusSm),
+          onTap: onTap,
+          child: AnimatedContainer(
+            duration: Tokens.fast,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: selected ? Tokens.ink : Colors.transparent,
+              borderRadius: BorderRadius.circular(Tokens.radiusSm),
+              border: today && !selected
+                  ? Border.all(color: Tokens.borderStrong)
+                  : null,
+            ),
+            child: Text(
+              '$day',
+              style: AppText.small.copyWith(
+                color: fg,
+                fontWeight: selected || today
+                    ? FontWeight.w600
+                    : FontWeight.w500,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     final bg = selected
         ? BrandTheme.redTop
         : Colors.white.withValues(alpha: kWhiteOpacity92);
@@ -278,6 +382,12 @@ class _BrandCalendarCell extends StatelessWidget {
 }
 
 DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
+
+String _sentenceCase(String value) {
+  final lower = value.toLowerCase();
+  if (lower.isEmpty) return lower;
+  return lower[0].toUpperCase() + lower.substring(1);
+}
 
 bool _sameMonth(DateTime a, DateTime b) {
   return a.year == b.year && a.month == b.month;
