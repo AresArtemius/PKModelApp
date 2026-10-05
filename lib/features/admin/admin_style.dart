@@ -22,9 +22,9 @@ TextStyle adminCommandStyle({
     // the page titles.
     return AppText.body.copyWith(
       fontSize: size,
-      fontWeight: weight.index >= FontWeight.w800.index
+      fontWeight: weight.value >= FontWeight.w800.value
           ? FontWeight.w600
-          : weight.index >= FontWeight.w700.index
+          : weight.value >= FontWeight.w700.value
           ? FontWeight.w600
           : weight,
       color: color == kTextDark
@@ -54,9 +54,9 @@ TextStyle adminBodyStyle({
   if (adminV2) {
     return AppText.body.copyWith(
       fontSize: size,
-      fontWeight: weight.index >= FontWeight.w700.index
+      fontWeight: weight.value >= FontWeight.w700.value
           ? FontWeight.w600
-          : weight.index >= FontWeight.w600.index
+          : weight.value >= FontWeight.w600.value
           ? FontWeight.w500
           : weight,
       color: color == kTextDark
