@@ -14,8 +14,8 @@ import '../../core/router.dart';
 import '../../core/supabase_compat.dart';
 import '../../core/supabase_provider.dart';
 import '../../core/roles_provider.dart';
-import '../../ui/brand/brand_admin_header.dart';
 import '../../ui/brand/brand_pill_button.dart';
+import 'admin_shell_v2.dart';
 import 'admin_style.dart';
 import 'package:video_player/video_player.dart';
 import '../auth/auth_controller.dart';
@@ -391,27 +391,21 @@ class _ModerationAdminPageState extends ConsumerState<ModerationAdminPage> {
     final isDesktop =
         MediaQuery.sizeOf(context).width >= _moderationDesktopBreakpoint;
 
-    return Scaffold(
-      bottomNavigationBar: null,
-      body: Stack(
-        children: [
-          const BrandBackground(),
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(
-                kPagePadH,
-                kPagePadTop,
-                kPagePadH,
-                kPagePadBottom,
-              ),
-              child: Column(
-                children: [
-                  BrandAdminHeader(
-                    title: t.adminModerationUpper,
-                    onBack: () => context.go('/admin'),
-                  ),
-                  const SizedBox(height: kGap16),
-
+    return AdminPageScaffold(
+      title: t.adminModerationUpper,
+      subtitle: Localizations.localeOf(context).languageCode == 'ru'
+          ? 'Анкеты на проверке'
+          : 'Pending profiles',
+      onBack: () => context.go(Routes.admin),
+      brandBackground: true,
+      padding: const EdgeInsets.fromLTRB(
+        kPagePadH,
+        kPagePadTop,
+        kPagePadH,
+        kPagePadBottom,
+      ),
+      headerGap: kGap16,
+      children: [
                   Expanded(
                     child: isAdminAsync.when(
                       loading: () =>
@@ -524,12 +518,7 @@ class _ModerationAdminPageState extends ConsumerState<ModerationAdminPage> {
                       },
                     ),
                   ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
+      ],
     );
   }
 }
@@ -799,7 +788,7 @@ class _ModerationDesktopQueuePanel extends StatelessWidget {
     final ru = Localizations.localeOf(context).languageCode == 'ru';
 
     return Container(
-      decoration: catalogCardDecoration(),
+      decoration: adminCardDecoration(),
       clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
@@ -959,7 +948,7 @@ class _ModerationRequestCard extends StatelessWidget {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 160),
         padding: const EdgeInsets.all(14),
-        decoration: catalogCardDecoration().copyWith(
+        decoration: adminCardDecoration().copyWith(
           border: Border.all(
             color: selected
                 ? BrandTheme.redTop.withValues(alpha: 0.58)
@@ -1046,7 +1035,7 @@ class _ModerationProfileDetailsPanel extends StatelessWidget {
     final media = _moderationMedia(profile);
 
     return Container(
-      decoration: catalogCardDecoration(),
+      decoration: adminCardDecoration(),
       clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
@@ -1352,7 +1341,7 @@ class _ModerationMetricChip extends StatelessWidget {
     return Container(
       constraints: const BoxConstraints(minWidth: 126),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: catalogSearchDecoration(radius: 18),
+      decoration: adminSearchDecoration(radius: 18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1684,7 +1673,7 @@ class _RejectReasonDialogState extends State<_RejectReasonDialog> {
         width: double.infinity,
         constraints: const BoxConstraints(maxWidth: 560),
         padding: const EdgeInsets.fromLTRB(22, 24, 22, 18),
-        decoration: catalogDialogDecoration(),
+        decoration: adminDialogDecoration(),
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,

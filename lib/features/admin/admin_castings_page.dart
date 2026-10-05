@@ -7,11 +7,11 @@ import '../../core/router.dart';
 import '../../core/roles_provider.dart';
 import '../../core/supabase_compat.dart';
 import '../../core/supabase_provider.dart';
-import '../../ui/brand/brand_admin_header.dart';
 import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
 import '../castings/casting_project_stage.dart';
 import '../castings/castings_provider.dart';
+import 'admin_shell_v2.dart';
 import 'admin_style.dart';
 
 const _kCastingsBg = BrandTheme.greyMid;
@@ -342,18 +342,13 @@ class _AdminCastingsPageState extends ConsumerState<AdminCastingsPage> {
     );
     final castingsAsync = ref.watch(_adminCastingsProvider(castingsQuery));
 
-    return Scaffold(
+    return AdminPageScaffold(
+      title: ru ? 'ВСЕ КАСТИНГИ' : 'ALL CASTINGS',
+      subtitle: ru ? 'Этапы, отклики, референсы' : 'Stages, responses, references',
+      onBack: () => context.go(Routes.admin),
       backgroundColor: _kCastingsBg,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(_kCastingsPad),
-          child: Column(
-            children: [
-              BrandAdminHeader(
-                title: ru ? 'ВСЕ КАСТИНГИ' : 'ALL CASTINGS',
-                onBack: () => context.go(Routes.admin),
-              ),
-              const SizedBox(height: 12),
+      padding: const EdgeInsets.all(_kCastingsPad),
+      children: [
               Expanded(
                 child: isAdminAsync.when(
                   loading: () =>
@@ -400,10 +395,7 @@ class _AdminCastingsPageState extends ConsumerState<AdminCastingsPage> {
                   },
                 ),
               ),
-            ],
-          ),
-        ),
-      ),
+      ],
     );
   }
 }
@@ -549,7 +541,7 @@ class _CastingsTable extends StatelessWidget {
   Widget build(BuildContext context) {
     final ru = Localizations.localeOf(context).languageCode == 'ru';
     return DecoratedBox(
-      decoration: catalogCardDecoration().copyWith(
+      decoration: adminCardDecoration().copyWith(
         border: Border.all(color: kBorderColor),
       ),
       child: Scrollbar(
@@ -962,7 +954,7 @@ class _EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
-      decoration: catalogCardDecoration().copyWith(
+      decoration: adminCardDecoration().copyWith(
         border: Border.all(color: kBorderColor),
       ),
       child: Center(

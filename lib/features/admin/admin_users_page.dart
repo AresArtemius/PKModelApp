@@ -7,9 +7,9 @@ import '../../core/router.dart';
 import '../../core/roles_provider.dart';
 import '../../core/supabase_compat.dart';
 import '../../core/supabase_provider.dart';
-import '../../ui/brand/brand_admin_header.dart';
 import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
+import 'admin_shell_v2.dart';
 import 'admin_style.dart';
 
 const _kUsersPageBg = BrandTheme.greyMid;
@@ -340,18 +340,13 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
     );
     final usersAsync = ref.watch(_adminUsersProvider(usersQuery));
 
-    return Scaffold(
+    return AdminPageScaffold(
+      title: ru ? 'ПОЛЬЗОВАТЕЛИ' : 'USERS',
+      subtitle: ru ? 'Аккаунты, роли, контакты' : 'Accounts, roles, contacts',
+      onBack: () => context.go(Routes.admin),
       backgroundColor: _kUsersPageBg,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(_kUsersPad),
-          child: Column(
-            children: [
-              BrandAdminHeader(
-                title: ru ? 'ПОЛЬЗОВАТЕЛИ' : 'USERS',
-                onBack: () => context.go(Routes.admin),
-              ),
-              const SizedBox(height: 12),
+      padding: const EdgeInsets.all(_kUsersPad),
+      children: [
               Expanded(
                 child: isAdminAsync.when(
                   loading: () =>
@@ -396,10 +391,7 @@ class _AdminUsersPageState extends ConsumerState<AdminUsersPage> {
                   },
                 ),
               ),
-            ],
-          ),
-        ),
-      ),
+      ],
     );
   }
 }
@@ -469,7 +461,7 @@ class _UsersTablePanel extends StatelessWidget {
                 )
               : isDesktop
               ? DecoratedBox(
-                  decoration: catalogCardDecoration().copyWith(
+                  decoration: adminCardDecoration().copyWith(
                     border: Border.all(color: kBorderColor),
                   ),
                   child: Scrollbar(
@@ -527,7 +519,7 @@ class _UsersEmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
-      decoration: catalogCardDecoration().copyWith(
+      decoration: adminCardDecoration().copyWith(
         border: Border.all(color: kBorderColor),
       ),
       child: Center(

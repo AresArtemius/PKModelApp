@@ -8,9 +8,9 @@ import '../../core/admin_action_log_service.dart';
 import '../../core/admin_dashboard_counts_provider.dart';
 import '../../core/router.dart';
 import '../../gen_l10n/app_localizations.dart';
-import '../../ui/brand/brand_admin_header.dart';
 import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
+import 'admin_shell_v2.dart';
 import 'admin_style.dart';
 
 final accountMergeRequestsProvider =
@@ -170,25 +170,19 @@ class AccountMergeRequestsPage extends ConsumerWidget {
     final ru = Localizations.localeOf(context).languageCode == 'ru';
     final itemsAsync = ref.watch(accountMergeRequestsProvider);
 
-    return Scaffold(
-      body: Stack(
-        children: [
-          const BrandBackground(),
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(
-                kPagePadH,
-                kPagePadTop,
-                kPagePadH,
-                kPagePadBottom,
-              ),
-              child: Column(
-                children: [
-                  BrandAdminHeader(
-                    title: ru ? 'ОБЪЕДИНЕНИЕ АККАУНТОВ' : 'ACCOUNT MERGES',
-                    onBack: () => context.go(Routes.admin),
-                  ),
-                  const SizedBox(height: kGap16),
+    return AdminPageScaffold(
+      title: ru ? 'ОБЪЕДИНЕНИЕ АККАУНТОВ' : 'ACCOUNT MERGES',
+      subtitle: ru ? 'Заявки на перенос телефона' : 'Phone merge requests',
+      onBack: () => context.go(Routes.admin),
+      brandBackground: true,
+      padding: const EdgeInsets.fromLTRB(
+        kPagePadH,
+        kPagePadTop,
+        kPagePadH,
+        kPagePadBottom,
+      ),
+      headerGap: kGap16,
+      children: [
                   Expanded(
                     child: itemsAsync.when(
                       loading: () =>
@@ -231,12 +225,7 @@ class AccountMergeRequestsPage extends ConsumerWidget {
                       },
                     ),
                   ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
+      ],
     );
   }
 }
@@ -264,7 +253,7 @@ class _AccountMergeCard extends StatelessWidget {
 
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: catalogCardDecoration(),
+      decoration: adminCardDecoration(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

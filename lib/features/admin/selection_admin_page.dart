@@ -11,6 +11,7 @@ import '../../gen_l10n/app_localizations.dart';
 import '../../ui/brand/brand_admin_header.dart';
 import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
+import 'admin_shell_v2.dart';
 import 'admin_style.dart';
 import 'selection_providers.dart';
 import 'selection_status.dart';
@@ -61,7 +62,7 @@ class _SelectionAdminPageState extends ConsumerState<SelectionAdminPage> {
         insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 24),
         child: Container(
           padding: const EdgeInsets.all(16),
-          decoration: catalogDialogDecoration(),
+          decoration: adminDialogDecoration(),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -225,40 +226,18 @@ class _SelectionAdminPageState extends ConsumerState<SelectionAdminPage> {
 
   Widget _buildV2(AppLocalizations t, AsyncValue<List<Map<String, dynamic>>> itemsAsync) {
     final ru = Localizations.localeOf(context).languageCode == 'ru';
-    final width = MediaQuery.sizeOf(context).width;
-    final wide = width >= 960;
-    final gutter = wide ? 32.0 : 16.0;
     final items = itemsAsync.valueOrNull ?? const <Map<String, dynamic>>[];
     final castings = items.where((e) => e['_kind'] == 'casting').length;
     final selections = items.length - castings;
 
-    final header = Padding(
-      padding: EdgeInsets.fromLTRB(gutter, wide ? 28 : 20, gutter, 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  ru ? 'Подборки' : 'Selections',
-                  style: AppText.h1.copyWith(fontSize: wide ? 32 : 28),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  itemsAsync.isLoading
-                      ? (ru ? 'Загрузка…' : 'Loading…')
-                      : items.isEmpty
-                      ? (ru ? 'Пока пусто' : 'Nothing yet')
-                      : (ru
-                            ? 'Подборок: $selections · кастингов: $castings'
-                            : 'Selections: $selections · castings: $castings'),
-                  style: AppText.caption.copyWith(fontSize: 13),
-                ),
-              ],
-            ),
-          ),
+    final subtitle = itemsAsync.isLoading
+        ? (ru ? 'Загрузка…' : 'Loading…')
+        : items.isEmpty
+        ? (ru ? 'Пока пусто' : 'Nothing yet')
+        : (ru
+              ? 'Подборок: $selections · кастингов: $castings'
+              : 'Selections: $selections · castings: $castings');
+    final actions = <Widget>[
           if (_selectedIds.isNotEmpty) ...[
             TextButton(
               onPressed: _clearSelected,
@@ -296,17 +275,15 @@ class _SelectionAdminPageState extends ConsumerState<SelectionAdminPage> {
               style: IconButton.styleFrom(foregroundColor: Tokens.textSecondary),
               icon: const Icon(Icons.refresh_rounded, size: 20),
             ),
-        ],
-      ),
-    );
+    ];
 
     final body = itemsAsync.when(
-      loading: () => Padding(
-        padding: EdgeInsets.all(gutter),
-        child: const SkeletonList(rows: 6),
+      loading: () => const Padding(
+        padding: EdgeInsets.symmetric(vertical: 16),
+        child: SkeletonList(rows: 6),
       ),
       error: (e, _) => Padding(
-        padding: EdgeInsets.all(gutter),
+        padding: const EdgeInsets.symmetric(vertical: 16),
         child: Text(
           AppErrorMapper.message(e, t),
           style: AppText.small.copyWith(color: Tokens.danger),
@@ -315,7 +292,7 @@ class _SelectionAdminPageState extends ConsumerState<SelectionAdminPage> {
       data: (items) {
         if (items.isEmpty) {
           return Padding(
-            padding: EdgeInsets.fromLTRB(gutter, 48, gutter, 48),
+            padding: const EdgeInsets.symmetric(vertical: 48),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -340,7 +317,7 @@ class _SelectionAdminPageState extends ConsumerState<SelectionAdminPage> {
             for (final row in items)
               _SelectionRowV2(
                 row: row,
-                gutter: gutter,
+                gutter: 0,
                 selected: _selectedIds.contains((row['id'] ?? '').toString()),
                 date: _dateV2(row['created_at'], ru),
                 onToggle: () => _toggleSelected(
@@ -362,13 +339,13 @@ class _SelectionAdminPageState extends ConsumerState<SelectionAdminPage> {
       },
     );
 
-    return Scaffold(
-      backgroundColor: Tokens.bg,
+    return AdminShellV2(
+      title: ru ? 'Подборки' : 'Selections',
+      subtitle: subtitle,
+      actions: actions,
       body: ListView(
         padding: const EdgeInsets.only(bottom: 40),
         children: [
-          header,
-          const SizedBox(height: 8),
           const Divider(height: 1, thickness: 1, color: Tokens.border),
           body,
         ],
@@ -491,7 +468,7 @@ class _SelectionAdminPageState extends ConsumerState<SelectionAdminPage> {
                           );
 
                           return Container(
-                            decoration: catalogSearchDecoration(
+                            decoration: adminSearchDecoration(
                               radius: kCardRadius,
                               borderColor: kBorderColor,
                             ),
@@ -564,7 +541,7 @@ class _CardPill extends StatelessWidget {
       width: double.infinity,
       constraints: const BoxConstraints(maxWidth: 460),
       padding: const EdgeInsets.all(14),
-      decoration: catalogCardDecoration(),
+      decoration: adminCardDecoration(),
       child: child,
     );
   }
@@ -705,9 +682,9 @@ class _SelectionRowV2State extends State<_SelectionRowV2> {
               border: Border(bottom: BorderSide(color: Tokens.border)),
             ),
             padding: EdgeInsets.fromLTRB(
-              widget.gutter - 12,
+              widget.gutter > 12 ? widget.gutter - 12 : 0,
               10,
-              widget.gutter - 8,
+              widget.gutter > 8 ? widget.gutter - 8 : 4,
               10,
             ),
             child: Row(

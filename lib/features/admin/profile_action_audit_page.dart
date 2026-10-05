@@ -11,9 +11,9 @@ import '../../core/profile_action_log_service.dart';
 import '../../core/roles_provider.dart';
 import '../../core/router.dart';
 import '../../gen_l10n/app_localizations.dart';
-import '../../ui/brand/brand_admin_header.dart';
 import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
+import 'admin_shell_v2.dart';
 import 'admin_style.dart';
 
 final _profileActionAuditProvider = FutureProvider.autoDispose<AuditLogData>((
@@ -183,18 +183,12 @@ class _ProfileActionAuditPageState
     final width = MediaQuery.sizeOf(context).width;
     final isWide = width >= 980;
 
-    return Scaffold(
-      backgroundColor: BrandTheme.greyMid,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            children: [
-              BrandAdminHeader(
-                title: isRu ? 'ЖУРНАЛ ДЕЙСТВИЙ' : 'ACTION AUDIT LOG',
-                onBack: () => context.go(Routes.admin),
-              ),
-              const SizedBox(height: 14),
+    return AdminPageScaffold(
+      title: isRu ? 'ЖУРНАЛ ДЕЙСТВИЙ' : 'ACTION AUDIT LOG',
+      subtitle: isRu ? 'История действий администраторов' : 'Admin history',
+      onBack: () => context.go(Routes.admin),
+      headerGap: 14,
+      children: [
               Expanded(
                 child: isAdminAsync.when(
                   loading: () =>
@@ -429,10 +423,7 @@ class _ProfileActionAuditPageState
                   },
                 ),
               ),
-            ],
-          ),
-        ),
-      ),
+      ],
     );
   }
 
@@ -733,7 +724,7 @@ class _AuditPanel extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
-      decoration: catalogCardDecoration(),
+      decoration: adminCardDecoration(),
       child: child,
     );
   }

@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/admin_dashboard_counts_provider.dart';
+import '../../core/router.dart';
 import '../../core/supabase_provider.dart';
-import '../../ui/brand/brand_admin_header.dart';
-import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
+import 'admin_shell_v2.dart';
 
 class ProfileSlotRequest {
   const ProfileSlotRequest({
@@ -100,19 +101,16 @@ class ProfileSlotRequestsPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final ru = Localizations.localeOf(context).languageCode == 'ru';
     final requests = ref.watch(profileSlotRequestsProvider);
-    return Scaffold(
-      body: Stack(
-        children: [
-          const BrandBackground(),
-          SafeArea(
-            child: ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                BrandAdminHeader(
-                  title: ru ? 'ДОПОЛНИТЕЛЬНЫЕ АНКЕТЫ' : 'EXTRA PROFILES',
-                  onBack: () => Navigator.of(context).maybePop(),
-                ),
-                const SizedBox(height: kGap14),
+    return AdminPageScaffold(
+      title: ru ? 'ДОПОЛНИТЕЛЬНЫЕ АНКЕТЫ' : 'EXTRA PROFILES',
+      subtitle: ru
+          ? 'Запросы на увеличение лимита анкет'
+          : 'Profile limit requests',
+      onBack: () => context.go(Routes.admin),
+      brandBackground: true,
+      scrollable: true,
+      headerGap: kGap14,
+      children: [
                 requests.when(
                   loading: () =>
                       const Center(child: CircularProgressIndicator()),
@@ -162,11 +160,7 @@ class ProfileSlotRequestsPage extends ConsumerWidget {
                           ],
                         ),
                 ),
-              ],
-            ),
-          ),
-        ],
-      ),
+      ],
     );
   }
 }
