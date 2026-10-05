@@ -2147,6 +2147,7 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
                 allowPastDates: false,
                 allowPreviousMonths: false,
                 onDateToggled: _toggleUnavailableDay,
+                flat: true,
               ),
             ),
           ),
