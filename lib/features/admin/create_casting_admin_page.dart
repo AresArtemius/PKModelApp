@@ -16,6 +16,7 @@ import '../castings/castings_provider.dart';
 import '../castings/casting_project_stage.dart';
 import '../castings/casting_reference_media.dart';
 import 'selection_providers.dart';
+import 'admin_shell_v2.dart';
 import 'admin_style.dart';
 
 const double _createCastingDesktopBreakpoint = 900;
@@ -340,8 +341,7 @@ class _CreateCastingAdminPageState
       body = Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          header,
-          const SizedBox(height: 32),
+          if (!kIsWeb) ...[header, const SizedBox(height: 32)],
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -356,12 +356,34 @@ class _CreateCastingAdminPageState
       body = Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          header,
-          const SizedBox(height: 32),
+          if (!kIsWeb) ...[header, const SizedBox(height: 32)],
           mainFields,
           const SizedBox(height: 28),
           sidePanel,
         ],
+      );
+    }
+
+    if (kIsWeb) {
+      // Admin shell: side menu + title; the form keeps its own widths.
+      return AdminShellV2(
+        title: t.newCastingTitle,
+        subtitle: t.newCastingHint,
+        onBack: () => context.go(_returnRoute(context)),
+        body: SingleChildScrollView(
+          padding: const EdgeInsets.only(bottom: 48),
+          child: Align(
+            alignment: Alignment.topLeft,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: twoColumns
+                    ? _createCastingMaxWidth
+                    : _createCastingFormWidth,
+              ),
+              child: body,
+            ),
+          ),
+        ),
       );
     }
 

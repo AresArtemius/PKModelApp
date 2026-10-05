@@ -19,16 +19,17 @@ const _kProfilesPad = 16.0;
 const _kProfilesDesktopBreakpoint = 920.0;
 const _kProfilesListCacheExtent = 900.0;
 const _kProfilesPageSize = 80;
-const _kProfileColProfile = 280.0;
-const _kProfileColStatus = 112.0;
-const _kProfileColBilling = 126.0;
-const _kProfileColRoles = 96.0;
-const _kProfileColOwner = 152.0;
-const _kProfileColCity = 126.0;
-const _kProfileColBasics = 78.0;
-const _kProfileColMedia = 70.0;
-const _kProfileColActions = 42.0;
-const _kProfilesTableWidth =
+// Web (v2) gets roomier columns: the table spans the whole content area.
+final _kProfileColProfile = adminV2 ? 300.0 : 280.0;
+final _kProfileColStatus = adminV2 ? 140.0 : 112.0;
+final _kProfileColBilling = adminV2 ? 170.0 : 126.0;
+final _kProfileColRoles = adminV2 ? 120.0 : 96.0;
+final _kProfileColOwner = adminV2 ? 220.0 : 152.0;
+final _kProfileColCity = adminV2 ? 160.0 : 126.0;
+final _kProfileColBasics = adminV2 ? 130.0 : 78.0;
+final _kProfileColMedia = adminV2 ? 90.0 : 70.0;
+final _kProfileColActions = adminV2 ? 48.0 : 42.0;
+final _kProfilesTableWidth =
     _kProfileColProfile +
     _kProfileColStatus +
     _kProfileColBilling +
@@ -897,7 +898,7 @@ class _ProfilesTableHeader extends StatelessWidget {
             text: ru ? 'Парам.' : 'Basics',
           ),
           _HeaderCell(width: _kProfileColMedia, text: ru ? 'Медиа' : 'Media'),
-          const SizedBox(width: _kProfileColActions),
+          SizedBox(width: _kProfileColActions),
         ],
       ),
     );

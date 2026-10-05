@@ -14,6 +14,7 @@ import '../../gen_l10n/app_localizations.dart';
 import '../../ui/brand/brand_admin_header.dart';
 import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
+import 'admin_shell_v2.dart';
 import '../selection/selection_export_item.dart';
 import '../selection/selection_pdf_options.dart';
 import '../selection/selection_pdf_options_dialog.dart';
@@ -2231,8 +2232,7 @@ class _CastingResponsesV2State extends State<_CastingResponsesV2> {
     final t = AppLocalizations.of(context)!;
     final ru = Localizations.localeOf(context).languageCode == 'ru';
     final columns = _boardColumns(context);
-    final width = MediaQuery.sizeOf(context).width;
-    final wide = width >= 960;
+    final wide = MediaQuery.sizeOf(context).width >= 960;
     final gutter = wide ? 32.0 : 16.0;
     final counts = {
       for (final column in columns) column.status: _itemsFor(column).length,
@@ -2295,89 +2295,32 @@ class _CastingResponsesV2State extends State<_CastingResponsesV2> {
       );
     }
 
-    final header = Padding(
-      padding: EdgeInsets.fromLTRB(gutter - 8, 16, gutter, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          TextButton.icon(
-            onPressed: widget.onBack,
-            icon: const Icon(Icons.arrow_back_rounded, size: 18),
-            label: Text(widget.backLabel),
-            style: TextButton.styleFrom(
-              foregroundColor: Tokens.textSecondary,
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              minimumSize: const Size(0, 36),
-              textStyle: AppText.smallStrong,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Padding(
-            padding: const EdgeInsets.only(left: 8),
-            child: Wrap(
-              crossAxisAlignment: WrapCrossAlignment.end,
-              spacing: 16,
-              runSpacing: 12,
-              children: [
-                ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxWidth: wide ? width - 460 : width - gutter * 2,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppText.h1.copyWith(fontSize: wide ? 32 : 26),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        summary,
-                        style: AppText.caption.copyWith(fontSize: 13),
-                      ),
-                    ],
-                  ),
-                ),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      tooltip: ru ? 'Обновить' : 'Refresh',
-                      onPressed: widget.onRefresh,
-                      style: IconButton.styleFrom(
-                        foregroundColor: Tokens.textSecondary,
-                      ),
-                      icon: const Icon(Icons.refresh_rounded, size: 20),
-                    ),
-                    const SizedBox(width: 4),
-                    scopeMenu(
-                      label: 'PDF',
-                      icon: Icons.picture_as_pdf_outlined,
-                      enabled: widget.hasExportItems,
-                      onSelected: widget.onPdf,
-                    ),
-                    const SizedBox(width: 8),
-                    scopeMenu(
-                      label: ru ? 'Таблица' : 'Table',
-                      icon: Icons.table_chart_outlined,
-                      enabled: total > 0,
-                      onSelected: widget.onCsv,
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
+    // The admin shell draws the title row; these are its actions.
+    final headerActions = <Widget>[
+      IconButton(
+        tooltip: ru ? 'Обновить' : 'Refresh',
+        onPressed: widget.onRefresh,
+        style: IconButton.styleFrom(foregroundColor: Tokens.textSecondary),
+        icon: const Icon(Icons.refresh_rounded, size: 20),
       ),
-    );
+      scopeMenu(
+        label: 'PDF',
+        icon: Icons.picture_as_pdf_outlined,
+        enabled: widget.hasExportItems,
+        onSelected: widget.onPdf,
+      ),
+      scopeMenu(
+        label: ru ? 'Таблица' : 'Table',
+        icon: Icons.table_chart_outlined,
+        enabled: total > 0,
+        onSelected: widget.onCsv,
+      ),
+    ];
 
     final bulkBar = _selected.isEmpty
         ? const SizedBox.shrink()
         : Container(
-            margin: EdgeInsets.fromLTRB(gutter, 16, gutter, 0),
+            margin: EdgeInsets.fromLTRB(gutter, 0, gutter, 0),
             padding: const EdgeInsets.fromLTRB(16, 6, 8, 6),
             decoration: BoxDecoration(
               color: Tokens.ink,
@@ -2532,14 +2475,16 @@ class _CastingResponsesV2State extends State<_CastingResponsesV2> {
       orElse: () => const SizedBox.shrink(),
     );
 
-    return Scaffold(
-      backgroundColor: Tokens.bg,
+    return AdminShellV2(
+      title: title,
+      subtitle: summary,
+      onBack: widget.onBack,
+      actions: headerActions,
+      bodyPadding: EdgeInsets.zero,
       body: ListView(
         padding: const EdgeInsets.only(bottom: 48),
         children: [
-          header,
-          bulkBar,
-          const SizedBox(height: 20),
+          if (_selected.isNotEmpty) ...[bulkBar, const SizedBox(height: 20)],
           const Divider(height: 1, thickness: 1, color: Tokens.border),
           board,
           history,
