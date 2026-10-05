@@ -914,12 +914,17 @@ class _AccountProfileEditPageState
     final originalBytes = await image.readAsBytes();
     if (!mounted) return;
 
-    final croppedBytes = await Navigator.of(context).push<Uint8List>(
-      MaterialPageRoute(
-        fullscreenDialog: true,
-        builder: (_) => _AvatarCropPage(bytes: originalBytes),
-      ),
-    );
+    final croppedBytes = kIsWeb
+        ? await showDialog<Uint8List>(
+            context: context,
+            builder: (_) => _AvatarCropPage(bytes: originalBytes),
+          )
+        : await Navigator.of(context).push<Uint8List>(
+            MaterialPageRoute(
+              fullscreenDialog: true,
+              builder: (_) => _AvatarCropPage(bytes: originalBytes),
+            ),
+          );
     if (croppedBytes == null || croppedBytes.isEmpty || !mounted) return;
 
     setState(() {
@@ -2609,10 +2614,95 @@ class _AvatarCropPageState extends State<_AvatarCropPage> {
     }
   }
 
+  /// Web: the same crop square inside a flat dialog instead of a black
+  /// full-screen page.
+  Widget _buildV2(BuildContext context, bool isRussian) {
+    final side = (MediaQuery.sizeOf(context).shortestSide - 96).clamp(
+      240.0,
+      360.0,
+    );
+    return Dialog(
+      backgroundColor: Tokens.surface,
+      surfaceTintColor: Colors.transparent,
+      insetPadding: const EdgeInsets.all(24),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(Tokens.radiusLg),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 22, 24, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              isRussian ? 'Фото профиля' : 'Profile photo',
+              style: AppText.h2,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              isRussian
+                  ? 'Приблизьте и сдвиньте фото, чтобы лицо было в кадре.'
+                  : 'Zoom and move the photo to frame the face.',
+              style: AppText.small.copyWith(color: Tokens.textSecondary),
+            ),
+            const SizedBox(height: 18),
+            Center(
+              child: SizedBox(
+                width: side,
+                height: side,
+                child: RepaintBoundary(
+                  key: _boundaryKey,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(side / 2),
+                    child: Container(
+                      color: Tokens.surfaceAlt,
+                      child: InteractiveViewer(
+                        transformationController: _controller,
+                        minScale: 1,
+                        maxScale: 5,
+                        boundaryMargin: const EdgeInsets.all(80),
+                        child: Image.memory(
+                          widget.bytes,
+                          fit: BoxFit.cover,
+                          width: double.infinity,
+                          height: double.infinity,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: _saving ? null : () => Navigator.of(context).pop(),
+                  child: Text(isRussian ? 'Отмена' : 'Cancel'),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed: _saving ? null : _confirm,
+                  child: Text(
+                    _saving
+                        ? '…'
+                        : (isRussian ? 'Сохранить кадр' : 'Save frame'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isRussian =
         Localizations.localeOf(context).languageCode.toLowerCase() == 'ru';
+    if (kIsWeb) return _buildV2(context, isRussian);
     return Scaffold(
       backgroundColor: Colors.black,
       body: SafeArea(

@@ -149,6 +149,19 @@ class MyProfilePage extends ConsumerWidget {
     MyProfileState? initial,
     ProfessionalProfileType? initialProfileType,
   }) {
+    if (kIsWeb) {
+      // Web: the editor is a page of its own, so the URL and the browser's
+      // Back button work; the profile travels as `extra`.
+      if (startBlank) {
+        final type = initialProfileType?.storageValue ?? '';
+        context.push(
+          type.isEmpty ? Routes.myProfileNew : '${Routes.myProfileNew}?type=$type',
+        );
+      } else {
+        context.push(Routes.myProfileEdit, extra: initial);
+      }
+      return;
+    }
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => MyProfileEditPage(
@@ -164,10 +177,7 @@ class MyProfilePage extends ConsumerWidget {
     final isAdmin = await ref.read(isAdminProvider.future);
     if (!context.mounted) return;
     if (isAdmin) {
-      final selected = await Navigator.of(context)
-          .push<ProfessionalProfileType>(
-            MaterialPageRoute(builder: (_) => const ProfileTypeSelectionPage()),
-          );
+      final selected = await ProfileTypeSelectionPage.pick(context);
       if (!context.mounted || selected == null) return;
       _openEditor(
         context,
@@ -183,9 +193,7 @@ class MyProfilePage extends ConsumerWidget {
       await _showProfileLimitDialog(context, ref, capacity);
       return;
     }
-    final selected = await Navigator.of(context).push<ProfessionalProfileType>(
-      MaterialPageRoute(builder: (_) => const ProfileTypeSelectionPage()),
-    );
+    final selected = await ProfileTypeSelectionPage.pick(context);
     if (!context.mounted || selected == null) return;
     _openEditor(
       context,
@@ -1357,7 +1365,9 @@ class _AccountStatusEntryCardState
   Future<void> _changeStatus(AccountStatusSnapshot status) async {
     if (_saving) return;
 
-    final selected = await showDialog<RegistrationAccountType>(
+    final selected = _accountV2
+        ? await _pickStatusV2(status)
+        : await showDialog<RegistrationAccountType>(
       context: context,
       barrierDismissible: true,
       builder: (context) => Dialog(
@@ -1440,6 +1450,70 @@ class _AccountStatusEntryCardState
     }
   }
 
+  /// Web: a flat list of statuses in a themed dialog; the current one is
+  /// marked with a check, the pending request with a caption.
+  Future<RegistrationAccountType?> _pickStatusV2(
+    AccountStatusSnapshot status,
+  ) {
+    return showDialog<RegistrationAccountType>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(_dialogTitle()),
+        contentPadding: const EdgeInsets.fromLTRB(8, 12, 8, 8),
+        content: SizedBox(
+          width: 420,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final type in publicRegistrationAccountTypes)
+                ListTile(
+                  dense: true,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(Tokens.radiusSm),
+                  ),
+                  title: Text(
+                    _statusLabel(type),
+                    style: AppText.body.copyWith(
+                      fontWeight: type == status.current
+                          ? FontWeight.w600
+                          : FontWeight.w500,
+                    ),
+                  ),
+                  subtitle: type == status.pending
+                      ? Text(
+                          _isRussian ? 'Заявка на проверке' : 'Request pending',
+                          style: AppText.caption,
+                        )
+                      : null,
+                  trailing: type == status.current
+                      ? const Icon(
+                          Icons.check_rounded,
+                          size: 20,
+                          color: Tokens.ink,
+                        )
+                      : type == status.pending
+                      ? const Icon(
+                          Icons.schedule_rounded,
+                          size: 18,
+                          color: Tokens.textTertiary,
+                        )
+                      : null,
+                  enabled: type != status.pending,
+                  onTap: () => Navigator.of(context).pop(type),
+                ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(AppLocalizations.of(context)!.cancel),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<bool> _ensureOwnerProfileForRequest() async {
     final profile = await ref.read(accountOwnerProfileProvider.future);
     if (profile.hasMinimumForRequest) return true;
@@ -1478,6 +1552,48 @@ class _AccountStatusEntryCardState
       if (prefs.getBool(key) == true) return;
       await prefs.setBool(key, true);
       if (!mounted) return;
+      final rejectedText = _isRussian
+          ? 'Заявку на статус «${_statusLabel(rejected)}» отклонили. Сейчас у вас личный аккаунт. Вы можете отправить новую заявку позже.'
+          : 'Your request for “${_statusLabel(rejected)}” was rejected. Your account is personal now. You can send a new request later.';
+      if (_accountV2) {
+        await showDialog<void>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text(_isRussian ? 'Заявка отклонена' : 'Request rejected'),
+            content: SizedBox(
+              width: 420,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(rejectedText, style: AppText.body),
+                  if (rejectionComment.isNotEmpty) ...[
+                    const SizedBox(height: 14),
+                    Text(
+                      _isRussian ? 'Что исправить' : 'What to fix',
+                      style: AppText.smallStrong,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      rejectionComment,
+                      style: AppText.small.copyWith(
+                        color: Tokens.textSecondary,
+                        height: 1.45,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            actions: [
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: Text(_isRussian ? 'Понятно' : 'OK'),
+              ),
+            ],
+          ),
+        );
+      } else {
       await showDialog<void>(
         context: context,
         builder: (context) => Dialog(
@@ -1501,9 +1617,7 @@ class _AccountStatusEntryCardState
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  _isRussian
-                      ? 'Заявку на статус “${_statusLabel(rejected)}” отклонили. Сейчас у вас личный аккаунт. Вы можете отправить новую заявку позже.'
-                      : 'Your request for “${_statusLabel(rejected)}” was rejected. Your account is personal now. You can send a new request later.',
+                  rejectedText,
                   textAlign: TextAlign.center,
                   style: _accountBodyStyle(
                     color: kTextMuted,
@@ -1529,6 +1643,7 @@ class _AccountStatusEntryCardState
           ),
         ),
       );
+      }
       if (applicationId.isNotEmpty) {
         await ref
             .read(accountStatusServiceProvider)
@@ -1586,7 +1701,33 @@ class _DeleteAccountEntryCardState
     if (_isDeleting) return;
 
     final t = AppLocalizations.of(context)!;
-    final confirmed = await showDialog<bool>(
+    final confirmed = _accountV2
+        ? await showDialog<bool>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: Text(_sentenceCaseAccount(t.deleteAccountConfirmTitleUpper)),
+              content: SizedBox(
+                width: 420,
+                child: Text(t.deleteAccountConfirmMessage, style: AppText.body),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: Text(t.cancel),
+                ),
+                FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Tokens.danger,
+                  ),
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: Text(
+                    _sentenceCaseAccount(t.deleteAccountConfirmActionUpper),
+                  ),
+                ),
+              ],
+            ),
+          )
+        : await showDialog<bool>(
       context: context,
       barrierDismissible: true,
       builder: (context) => Dialog(

@@ -149,6 +149,86 @@ class _ProfileRolesSelector extends StatelessWidget {
       onChanged({...selectedRoles, picked});
     }
 
+    if (_editV2) {
+      return Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          for (final role in selectedRoles)
+            Container(
+              padding: const EdgeInsets.fromLTRB(12, 0, 4, 0),
+              height: 36,
+              decoration: BoxDecoration(
+                color: Tokens.ink,
+                borderRadius: BorderRadius.circular(Tokens.radiusSm),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    _sentenceCaseEdit(_profileTypeLabel(t, role)),
+                    style: AppText.smallStrong.copyWith(color: Colors.white),
+                  ),
+                  if (selectedRoles.length > 1)
+                    IconButton(
+                      onPressed: () {
+                        final next = Set<ProfessionalProfileType>.from(
+                          selectedRoles,
+                        )..remove(role);
+                        onChanged(next);
+                      },
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                        minWidth: 28,
+                        minHeight: 28,
+                      ),
+                      icon: const Icon(
+                        Icons.close_rounded,
+                        size: 16,
+                        color: Colors.white70,
+                      ),
+                    )
+                  else
+                    const SizedBox(width: 8),
+                ],
+              ),
+            ),
+          if (availableRoles.isNotEmpty)
+            PopupMenuButton<ProfessionalProfileType>(
+              tooltip: isRussian ? 'Добавить роль' : 'Add role',
+              position: PopupMenuPosition.under,
+              color: Tokens.bg,
+              surfaceTintColor: Colors.transparent,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(Tokens.radiusMd),
+                side: const BorderSide(color: Tokens.border),
+              ),
+              onSelected: (role) => onChanged({...selectedRoles, role}),
+              itemBuilder: (context) => [
+                for (final role in availableRoles)
+                  PopupMenuItem(
+                    value: role,
+                    child: Text(_sentenceCaseEdit(_profileTypeLabel(t, role))),
+                  ),
+              ],
+              child: IgnorePointer(
+                child: OutlinedButton.icon(
+                  onPressed: () {},
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(0, 36),
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                  ),
+                  icon: const Icon(Icons.add_rounded, size: 18),
+                  label: Text(isRussian ? 'Добавить роль' : 'Add role'),
+                ),
+              ),
+            ),
+        ],
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -297,6 +377,54 @@ class _ProfileQualityCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
     final progress = quality.percent / 100;
+
+    if (_editV2) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(999),
+                  child: LinearProgressIndicator(
+                    value: progress,
+                    minHeight: 6,
+                    backgroundColor: Tokens.surfaceAlt,
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      quality.isStrong ? Tokens.success : Tokens.ink,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                '${quality.percent}%',
+                style: AppText.smallStrong.copyWith(color: Tokens.text),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (quality.isStrong)
+            Text(
+              t.profileQualityReady,
+              style: AppText.small.copyWith(color: Tokens.success),
+            )
+          else
+            Wrap(
+              spacing: 16,
+              runSpacing: 4,
+              children: [
+                for (final item in quality.missing)
+                  Text(
+                    '+ $item',
+                    style: AppText.small.copyWith(color: Tokens.textSecondary),
+                  ),
+              ],
+            ),
+        ],
+      );
+    }
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -498,31 +626,62 @@ class _MediaBlock extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: BrandPillButton(
-                label: t.profileAddPhotoUpper,
-                style: BrandPillStyle.light,
-                onTap: onAddPhoto,
+        if (_editV2)
+          Row(
+            children: [
+              OutlinedButton.icon(
+                onPressed: uploading ? null : onAddPhoto,
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(0, 40),
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                ),
+                icon: const Icon(Icons.add_photo_alternate_outlined, size: 18),
+                label: Text(_sentenceCaseEdit(t.profileAddPhotoUpper)),
               ),
-            ),
-            const SizedBox(width: kGap10),
-            Expanded(
-              child: BrandPillButton(
-                label: t.profileAddVideoUpper,
-                style: BrandPillStyle.light,
-                onTap: onAddVideo,
+              const SizedBox(width: 8),
+              OutlinedButton.icon(
+                onPressed: uploading ? null : onAddVideo,
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(0, 40),
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                ),
+                icon: const Icon(Icons.video_call_outlined, size: 18),
+                label: Text(_sentenceCaseEdit(t.profileAddVideoUpper)),
               ),
-            ),
-          ],
-        ),
+            ],
+          )
+        else
+          Row(
+            children: [
+              Expanded(
+                child: BrandPillButton(
+                  label: t.profileAddPhotoUpper,
+                  style: BrandPillStyle.light,
+                  onTap: onAddPhoto,
+                ),
+              ),
+              const SizedBox(width: kGap10),
+              Expanded(
+                child: BrandPillButton(
+                  label: t.profileAddVideoUpper,
+                  style: BrandPillStyle.light,
+                  onTap: onAddVideo,
+                ),
+              ),
+            ],
+          ),
         const SizedBox(height: kGap12),
         Container(
           constraints: BoxConstraints(
             minHeight: desktop ? 250 : kProfileMediaPreviewMinHeight,
           ),
-          decoration: profileMediaBoxDecoration(),
+          decoration: _editV2
+              ? BoxDecoration(
+                  color: Tokens.surface,
+                  borderRadius: BorderRadius.circular(Tokens.radiusLg),
+                  border: Border.all(color: Tokens.border),
+                )
+              : profileMediaBoxDecoration(),
           alignment: Alignment.center,
           padding: kProfileMediaInnerPad,
           child: Stack(
@@ -533,7 +692,12 @@ class _MediaBlock extends StatelessWidget {
                       ? const CircularProgressIndicator()
                       : Text(
                           t.profileMediaPreviewPlaceholder,
-                          style: const TextStyle(color: kTextMuted),
+                          textAlign: TextAlign.center,
+                          style: _editV2
+                              ? AppText.small.copyWith(
+                                  color: Tokens.textTertiary,
+                                )
+                              : const TextStyle(color: kTextMuted),
                         ),
                 )
               else
@@ -1166,10 +1330,16 @@ class _MediaCategoryChip extends StatelessWidget {
       width: double.infinity,
       height: 28,
       padding: const EdgeInsets.symmetric(horizontal: 8),
-      decoration: pillDecoration(
-        isDark: false,
-        radius: 999,
-      ).copyWith(border: Border.all(color: kBorderColor)),
+      decoration: _editV2
+          ? BoxDecoration(
+              color: Tokens.bg,
+              borderRadius: BorderRadius.circular(Tokens.radiusSm),
+              border: Border.all(color: Tokens.border),
+            )
+          : pillDecoration(
+              isDark: false,
+              radius: 999,
+            ).copyWith(border: Border.all(color: kBorderColor)),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -1178,12 +1348,14 @@ class _MediaCategoryChip extends StatelessWidget {
               label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: kTextMuted,
-                fontSize: 10,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 0.6,
-              ),
+              style: _editV2
+                  ? AppText.caption.copyWith(color: Tokens.textSecondary)
+                  : const TextStyle(
+                      color: kTextMuted,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.6,
+                    ),
             ),
           ),
           if (enabled) ...[
@@ -1842,6 +2014,31 @@ class _Header extends StatelessWidget {
         break;
     }
 
+    if (_editV2) {
+      final dot = switch (status) {
+        ProfileStatus.approved => Tokens.success,
+        ProfileStatus.pending => Tokens.warning,
+        ProfileStatus.rejected => Tokens.danger,
+        ProfileStatus.draft => Tokens.textTertiary,
+      };
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SettingsStatus(text: _sentenceCaseEdit(title), color: dot),
+          const SizedBox(height: 6),
+          Text(
+            subtitle,
+            style: AppText.small.copyWith(
+              color: status == ProfileStatus.rejected
+                  ? Tokens.text
+                  : Tokens.textSecondary,
+              height: 1.45,
+            ),
+          ),
+        ],
+      );
+    }
+
     return _Card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1867,12 +2064,25 @@ class _Header extends StatelessWidget {
   }
 }
 
+String _sentenceCaseEdit(String value) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) return trimmed;
+  final lower = trimmed.toLowerCase();
+  return lower[0].toUpperCase() + lower.substring(1);
+}
+
 class _SectionTitle extends StatelessWidget {
   const _SectionTitle(this.text);
   final String text;
 
   @override
   Widget build(BuildContext context) {
+    if (_editV2) {
+      return Text(
+        text.toUpperCase(),
+        style: AppText.label.copyWith(color: Tokens.textTertiary),
+      );
+    }
     return Text(text, style: kProfileSectionTitleStyle);
   }
 }
@@ -1915,6 +2125,25 @@ class _Field extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (_editV2) {
+      return TextField(
+        controller: controller,
+        keyboardType: keyboardType,
+        inputFormatters: inputFormatters,
+        maxLines: maxLines,
+        minLines: maxLines > 1 ? 3 : null,
+        readOnly: readOnly,
+        onTap: onTap,
+        style: AppText.body,
+        decoration: InputDecoration(
+          labelText: label,
+          alignLabelWithHint: maxLines > 1,
+          suffixIcon: readOnly && onTap != null
+              ? const Icon(Icons.calendar_today_outlined, size: 18)
+              : null,
+        ),
+      );
+    }
     return TextField(
       controller: controller,
       keyboardType: keyboardType,
@@ -1935,6 +2164,20 @@ class _BrandedDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (_editV2) {
+      return Dialog(
+        backgroundColor: Tokens.bg,
+        surfaceTintColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(24),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(Tokens.radiusLg),
+        ),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 440),
+          child: Padding(padding: const EdgeInsets.all(24), child: child),
+        ),
+      );
+    }
     return Dialog(
       backgroundColor: Colors.transparent,
       insetPadding: kProfileDialogInsetPad,
@@ -1994,6 +2237,7 @@ class _Card extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (_editV2) return child;
     return Container(
       padding: kLoginCardPad,
       decoration: profileCardDecoration(),

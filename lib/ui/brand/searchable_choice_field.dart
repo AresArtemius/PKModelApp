@@ -12,6 +12,7 @@ class SearchableChoiceField extends StatelessWidget {
     this.enabled = true,
     this.hint = '',
     this.label,
+    this.flat = false,
   });
 
   final TextEditingController controller;
@@ -20,6 +21,9 @@ class SearchableChoiceField extends StatelessWidget {
   final bool enabled;
   final String hint;
   final String? label;
+
+  /// v2 look: the app theme's hairline field and a plain options list.
+  final bool flat;
 
   @override
   Widget build(BuildContext context) {
@@ -56,7 +60,12 @@ class SearchableChoiceField extends StatelessWidget {
               builder: (context, value, _) {
                 controller.value = value;
 
-                final baseDecoration = label != null
+                final baseDecoration = flat
+                    ? InputDecoration(
+                        labelText: label,
+                        hintText: hint.isEmpty ? null : hint,
+                      )
+                    : label != null
                     ? InputDecoration(
                         labelText: label,
                         filled: true,
@@ -95,12 +104,14 @@ class SearchableChoiceField extends StatelessWidget {
                     controller.text = value;
                     onChanged?.call(value);
                   },
-                  style: const TextStyle(
-                    color: kTextDark,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                    letterSpacing: 0,
-                  ),
+                  style: flat
+                      ? AppText.body
+                      : const TextStyle(
+                          color: kTextDark,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                          letterSpacing: 0,
+                        ),
                   decoration: baseDecoration.copyWith(
                     suffixIcon: !enabled
                         ? const Icon(
@@ -138,7 +149,14 @@ class SearchableChoiceField extends StatelessWidget {
             color: Colors.transparent,
             child: Container(
               margin: const EdgeInsets.only(top: 6),
-              decoration: catalogDialogDecoration(),
+              decoration: flat
+                  ? BoxDecoration(
+                      color: Tokens.bg,
+                      borderRadius: BorderRadius.circular(Tokens.radiusMd),
+                      border: Border.all(color: Tokens.border),
+                      boxShadow: Tokens.popoverShadow,
+                    )
+                  : catalogDialogDecoration(),
               constraints: const BoxConstraints(maxHeight: 220),
               child: items.isEmpty
                   ? const SizedBox.shrink()
@@ -146,8 +164,10 @@ class SearchableChoiceField extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(vertical: 6),
                       shrinkWrap: true,
                       itemCount: items.length,
-                      separatorBuilder: (_, _) =>
-                          const Divider(height: 1, color: kBorderColor),
+                      separatorBuilder: (_, _) => Divider(
+                        height: 1,
+                        color: flat ? Tokens.border : kBorderColor,
+                      ),
                       itemBuilder: (context, index) {
                         final option = items[index];
                         return InkWell(
@@ -159,13 +179,15 @@ class SearchableChoiceField extends StatelessWidget {
                             ),
                             child: Text(
                               option,
-                              style: const TextStyle(
-                                color: kTextDark,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w500,
-                                letterSpacing: 0,
-                                height: 1.12,
-                              ),
+                              style: flat
+                                  ? AppText.small.copyWith(fontSize: 15)
+                                  : const TextStyle(
+                                      color: kTextDark,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w500,
+                                      letterSpacing: 0,
+                                      height: 1.12,
+                                    ),
                             ),
                           ),
                         );

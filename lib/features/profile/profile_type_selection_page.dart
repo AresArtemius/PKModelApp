@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../../gen_l10n/app_localizations.dart';
@@ -54,6 +55,82 @@ class ProfileTypeSelectionPage extends StatelessWidget {
         subtitle: t.onboardingHairStylistSubtitle,
       ),
     ];
+  }
+
+  /// Asks for a profile type: a themed dialog on the web, the full-screen
+  /// page elsewhere. Returns null when dismissed.
+  static Future<ProfessionalProfileType?> pick(BuildContext context) {
+    if (!kIsWeb) {
+      return Navigator.of(context).push<ProfessionalProfileType>(
+        MaterialPageRoute(builder: (_) => const ProfileTypeSelectionPage()),
+      );
+    }
+    final t = AppLocalizations.of(context)!;
+    final options = const ProfileTypeSelectionPage()._options(t);
+    return showDialog<ProfessionalProfileType>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(t.profileTypeSelectTitle),
+        contentPadding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
+        content: SizedBox(
+          width: 460,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                child: Text(
+                  t.profileTypeSelectSubtitle,
+                  style: AppText.small.copyWith(color: Tokens.textSecondary),
+                ),
+              ),
+              for (final option in options)
+                ListTile(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(Tokens.radiusSm),
+                  ),
+                  leading: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: const BoxDecoration(
+                      color: Tokens.surfaceAlt,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      option.icon,
+                      size: 20,
+                      color: Tokens.textSecondary,
+                    ),
+                  ),
+                  title: Text(
+                    option.title,
+                    style: AppText.body.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                  subtitle: Text(
+                    option.subtitle,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppText.caption,
+                  ),
+                  trailing: const Icon(
+                    Icons.chevron_right_rounded,
+                    size: 20,
+                    color: Tokens.textTertiary,
+                  ),
+                  onTap: () => Navigator.of(context).pop(option.type),
+                ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(t.cancel),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
