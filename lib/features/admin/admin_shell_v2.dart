@@ -45,9 +45,13 @@ class _AdminShellGroup {
 String adminSentenceCase(String value) {
   final trimmed = value.trim();
   if (trimmed.isEmpty) return trimmed;
+  final cyrillic = RegExp(r'[А-ЯЁ]');
   final words = trimmed.split(' ').map((word) {
-    final isUpper = word == word.toUpperCase() && word.length > 3;
-    return isUpper ? word.toLowerCase() : word;
+    if (word != word.toUpperCase() || word == word.toLowerCase()) return word;
+    // Cyrillic capitals are never acronyms here («ВСЕ», «НЕТ»); Latin
+    // ones up to three letters usually are (PDF, CSV, SLA, 2FA).
+    final isAcronym = !cyrillic.hasMatch(word) && word.length <= 3;
+    return isAcronym ? word : word.toLowerCase();
   }).toList();
   final joined = words.join(' ');
   return joined[0].toUpperCase() + joined.substring(1);
@@ -322,6 +326,9 @@ class AdminShellV2 extends ConsumerWidget {
     final ru = Localizations.localeOf(context).languageCode == 'ru';
 
     final gutter = wide ? 32.0 : 16.0;
+    // With the side menu on screen a «Назад» link is noise; it stays for
+    // the narrow layout where the menu is a strip.
+    final onBack = wide ? null : this.onBack;
     final header = Padding(
       padding: EdgeInsets.fromLTRB(gutter, onBack == null ? 28 : 16, gutter, 0),
       child: Column(
@@ -854,4 +861,177 @@ class AdminEmptyV2 extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Queue row (web): title, a line of details, a note, the date on the
+/// right and the decision buttons. Replaces the per-page cards.
+class AdminQueueRowV2 extends StatelessWidget {
+  const AdminQueueRowV2({
+    super.key,
+    required this.title,
+    this.subtitle,
+    this.details,
+    this.note,
+    this.date,
+    this.status,
+    this.actions = const [],
+    this.last = false,
+    this.onTap,
+  });
+
+  final String title;
+  final String? subtitle;
+  final String? details;
+  final String? note;
+  final String? date;
+  final Widget? status;
+  final List<Widget> actions;
+  final bool last;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final narrow = MediaQuery.sizeOf(context).width < 760;
+    final text = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Flexible(
+              child: Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppText.bodyStrong,
+              ),
+            ),
+            if (status != null) ...[const SizedBox(width: 12), status!],
+          ],
+        ),
+        if (subtitle != null && subtitle!.trim().isNotEmpty) ...[
+          const SizedBox(height: 2),
+          Text(
+            subtitle!,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppText.small.copyWith(color: Tokens.text),
+          ),
+        ],
+        if (details != null && details!.trim().isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text(
+            details!,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: AppText.small.copyWith(color: Tokens.textSecondary),
+          ),
+        ],
+        if (note != null && note!.trim().isNotEmpty) ...[
+          const SizedBox(height: 6),
+          Text(
+            note!,
+            maxLines: 4,
+            overflow: TextOverflow.ellipsis,
+            style: AppText.small.copyWith(
+              color: Tokens.textSecondary,
+              height: 1.45,
+            ),
+          ),
+        ],
+        if (narrow && date != null && date!.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          Text(date!, style: AppText.caption),
+        ],
+      ],
+    );
+    final buttons = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var i = 0; i < actions.length; i++) ...[
+          if (i > 0) const SizedBox(width: 8),
+          actions[i],
+        ],
+      ],
+    );
+
+    return AdminTableRowV2(
+      last: last,
+      onTap: onTap,
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 14),
+      child: narrow
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                text,
+                if (actions.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  buttons,
+                ],
+              ],
+            )
+          : Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: text),
+                if (date != null && date!.isNotEmpty) ...[
+                  const SizedBox(width: 16),
+                  Text(date!, style: AppText.caption),
+                ],
+                if (actions.isNotEmpty) ...[
+                  const SizedBox(width: 20),
+                  buttons,
+                ],
+              ],
+            ),
+    );
+  }
+}
+
+/// Small decision buttons for queue rows.
+class AdminRowButton extends StatelessWidget {
+  const AdminRowButton({
+    super.key,
+    required this.label,
+    required this.onPressed,
+    this.primary = false,
+    this.destructive = false,
+  });
+
+  final String label;
+  final VoidCallback? onPressed;
+  final bool primary;
+  final bool destructive;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Text(adminSentenceCase(label));
+    if (primary) {
+      return FilledButton(
+        onPressed: onPressed,
+        style: FilledButton.styleFrom(
+          minimumSize: const Size(0, 36),
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          textStyle: AppText.smallStrong,
+          backgroundColor: destructive ? Tokens.danger : null,
+        ),
+        child: text,
+      );
+    }
+    return OutlinedButton(
+      onPressed: onPressed,
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size(0, 36),
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        textStyle: AppText.smallStrong,
+        foregroundColor: destructive ? Tokens.danger : null,
+      ),
+      child: text,
+    );
+  }
+}
+
+String adminDateV2(DateTime? date) {
+  if (date == null) return '';
+  final d = date.toLocal();
+  return '${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}.${d.year}';
 }

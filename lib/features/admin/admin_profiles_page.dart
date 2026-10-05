@@ -1132,6 +1132,12 @@ class _BillingBadge extends StatelessWidget {
     final ru = Localizations.localeOf(context).languageCode == 'ru';
     final active = billing.isActive;
     final text = billing.badgeLabel(ru);
+    if (adminV2) {
+      return AdminStatusV2(
+        text: text,
+        color: active ? Tokens.success : Tokens.textTertiary,
+      );
+    }
     return Align(
       alignment: Alignment.centerLeft,
       child: DecoratedBox(
@@ -1242,6 +1248,17 @@ class _StatusBadge extends StatelessWidget {
         status == ProfileStatus.approved || status == ProfileStatus.pending
         ? Colors.white
         : kTextDark;
+    if (adminV2) {
+      return AdminStatusV2(
+        text: text,
+        color: switch (status) {
+          ProfileStatus.approved => Tokens.success,
+          ProfileStatus.pending => Tokens.warning,
+          ProfileStatus.rejected => Tokens.danger,
+          ProfileStatus.draft => Tokens.textTertiary,
+        },
+      );
+    }
     return Align(
       alignment: Alignment.centerLeft,
       child: DecoratedBox(

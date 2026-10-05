@@ -739,12 +739,14 @@ class _ModerationDesktopLayout extends StatelessWidget {
     return Align(
       alignment: Alignment.topCenter,
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: _moderationDesktopMaxWidth),
+        constraints: BoxConstraints(
+          maxWidth: adminV2 ? double.infinity : _moderationDesktopMaxWidth,
+        ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             SizedBox(
-              width: _moderationDesktopListWidth,
+              width: adminV2 ? 400 : _moderationDesktopListWidth,
               child: _ModerationDesktopQueuePanel(
                 items: items,
                 selectedId: selected.id,
@@ -753,7 +755,7 @@ class _ModerationDesktopLayout extends StatelessWidget {
                 onReject: onReject,
               ),
             ),
-            const SizedBox(width: 18),
+            SizedBox(width: adminV2 ? 28 : 18),
             Expanded(
               child: _ModerationProfileDetailsPanel(
                 profile: selected,
@@ -787,6 +789,39 @@ class _ModerationDesktopQueuePanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final ru = Localizations.localeOf(context).languageCode == 'ru';
 
+    if (adminV2) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(ru ? 'Очередь' : 'Queue', style: AppText.h2),
+              ),
+              AdminCountBadge(count: items.length),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            ru
+                ? 'Выберите заявку, чтобы проверить анкету и медиа.'
+                : 'Select a request to review profile data and media.',
+            style: AppText.small.copyWith(color: Tokens.textSecondary),
+          ),
+          const SizedBox(height: 12),
+          Expanded(
+            child: _ModerationRequestList(
+              items: items,
+              selectedId: selectedId,
+              onTap: onTap,
+              onApprove: onApprove,
+              onReject: onReject,
+              showInlineActions: false,
+            ),
+          ),
+        ],
+      );
+    }
     return Container(
       decoration: adminCardDecoration(),
       clipBehavior: Clip.antiAlias,
@@ -883,10 +918,12 @@ class _ModerationRequestList extends StatelessWidget {
     return ListView.separated(
       padding: padding,
       itemCount: items.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 12),
+      separatorBuilder: (_, _) =>
+          adminV2 ? const SizedBox.shrink() : const SizedBox(height: 12),
       itemBuilder: (context, i) {
         final p = items[i];
         return _ModerationRequestCard(
+          last: i == items.length - 1,
           profile: p,
           selected: selectedId == p.id,
           showInlineActions: showInlineActions,
@@ -911,11 +948,13 @@ class _ModerationRequestCard extends StatelessWidget {
     required this.onReject,
     required this.approveTooltip,
     required this.rejectTooltip,
+    this.last = false,
   });
 
   final MyProfileState profile;
   final bool selected;
   final bool showInlineActions;
+  final bool last;
   final VoidCallback onTap;
   final VoidCallback onApprove;
   final VoidCallback onReject;
@@ -941,6 +980,66 @@ class _ModerationRequestCard extends StatelessWidget {
     final name = profile.fullName.trim().isEmpty
         ? profile.id
         : profile.fullName.trim();
+
+    if (adminV2) {
+      final ru = Localizations.localeOf(context).languageCode == 'ru';
+      return AdminTableRowV2(
+        onTap: onTap,
+        selected: selected,
+        last: last,
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+        child: Row(
+          children: [
+            _ModerationMediaStrip(
+              photoUrls: previewPhotos,
+              videoUrls: previewVideos,
+              videoPreviewUrls: previewVideoThumbs,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppText.smallStrong.copyWith(fontSize: 15),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${profile.displayAge} · ${profile.height} см',
+                    style: AppText.caption,
+                  ),
+                  if (profile.hasPendingMedia) ...[
+                    const SizedBox(height: 6),
+                    AdminStatusV2(
+                      text: ru ? 'Новые медиа' : 'New media',
+                      color: Tokens.warning,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            if (showInlineActions && profile.status == ProfileStatus.pending)
+              Row(
+                children: [
+                  IconButton(
+                    tooltip: rejectTooltip,
+                    icon: const Icon(Icons.close_rounded, size: 20),
+                    onPressed: onReject,
+                  ),
+                  IconButton(
+                    tooltip: approveTooltip,
+                    icon: const Icon(Icons.check_rounded, size: 20),
+                    onPressed: onApprove,
+                  ),
+                ],
+              ),
+          ],
+        ),
+      );
+    }
 
     return InkWell(
       borderRadius: BorderRadius.circular(kCardRadius),
@@ -1033,6 +1132,71 @@ class _ModerationProfileDetailsPanel extends StatelessWidget {
     final t = AppLocalizations.of(context)!;
     final ru = Localizations.localeOf(context).languageCode == 'ru';
     final media = _moderationMedia(profile);
+
+    if (adminV2) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  ru ? 'Анкета на модерации' : 'Profile review',
+                  style: AppText.h2,
+                ),
+              ),
+              if (profile.hasPendingMedia)
+                AdminStatusV2(
+                  text: ru ? 'Новые медиа' : 'New media',
+                  color: Tokens.warning,
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Expanded(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return _ModerationDesktopReviewBody(
+                  profile: profile,
+                  media: media,
+                  twoColumn:
+                      constraints.maxWidth >=
+                      _moderationDesktopDetailBreakpoint,
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              OutlinedButton.icon(
+                onPressed: () => context.go(
+                  '${Routes.modelPrefix}${profile.id}'
+                  '?from=moderation&preview=1',
+                ),
+                icon: const Icon(Icons.visibility_outlined, size: 18),
+                label: Text(
+                  ru ? 'Предпросмотр в каталоге' : 'Preview in catalogue',
+                ),
+              ),
+              const Spacer(),
+              OutlinedButton.icon(
+                onPressed: onReject,
+                style: OutlinedButton.styleFrom(foregroundColor: Tokens.danger),
+                icon: const Icon(Icons.close_rounded, size: 18),
+                label: Text(adminSentenceCase(t.moderationRejectActionUpper)),
+              ),
+              const SizedBox(width: 8),
+              FilledButton.icon(
+                onPressed: onApprove,
+                icon: const Icon(Icons.check_rounded, size: 18),
+                label: Text(adminSentenceCase(t.profileStatusApprovedUpper)),
+              ),
+            ],
+          ),
+        ],
+      );
+    }
 
     return Container(
       decoration: adminCardDecoration(),
@@ -1155,7 +1319,9 @@ class _ModerationDesktopReviewBody extends StatelessWidget {
   Widget build(BuildContext context) {
     if (!twoColumn) {
       return ListView(
-        padding: const EdgeInsets.fromLTRB(22, 0, 22, 18),
+        padding: adminV2
+            ? EdgeInsets.zero
+            : const EdgeInsets.fromLTRB(22, 0, 22, 18),
         children: [
           _ModerationReviewMediaGallery(media: media, compact: true),
           const SizedBox(height: 22),
@@ -1165,7 +1331,9 @@ class _ModerationDesktopReviewBody extends StatelessWidget {
     }
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(22, 0, 22, 18),
+      padding: adminV2
+          ? EdgeInsets.zero
+          : const EdgeInsets.fromLTRB(22, 0, 22, 18),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

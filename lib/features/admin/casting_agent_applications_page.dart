@@ -266,12 +266,14 @@ class CastingAgentApplicationsPage extends ConsumerWidget {
 
                         return ListView.separated(
                           itemCount: items.length,
-                          separatorBuilder: (_, _) =>
-                              const SizedBox(height: kGap12),
+                          separatorBuilder: (_, _) => adminV2
+                              ? const SizedBox.shrink()
+                              : const SizedBox(height: kGap12),
                           itemBuilder: (context, index) {
                             final item = items[index];
                             return _ApplicationCard(
                               application: item,
+                              last: index == items.length - 1,
                               approveLabel: t.agentApplicationApproveUpper,
                               rejectLabel: t.agentApplicationRejectUpper,
                               onApprove: () => _decide(
@@ -342,6 +344,7 @@ class _ApplicationCard extends StatelessWidget {
     required this.rejectLabel,
     required this.onApprove,
     required this.onReject,
+    this.last = false,
   });
 
   final CastingAgentApplication application;
@@ -349,6 +352,7 @@ class _ApplicationCard extends StatelessWidget {
   final String rejectLabel;
   final VoidCallback onApprove;
   final VoidCallback onReject;
+  final bool last;
 
   @override
   Widget build(BuildContext context) {
@@ -370,6 +374,19 @@ class _ApplicationCard extends StatelessWidget {
       if (owner.phone.isNotEmpty) owner.phone,
     ];
 
+    if (adminV2) {
+      return AdminQueueRowV2(
+        title: ownerTitle,
+        subtitle: typeLabel,
+        details: details.join(' · '),
+        date: adminDateV2(created),
+        last: last,
+        actions: [
+          AdminRowButton(label: rejectLabel, onPressed: onReject),
+          AdminRowButton(label: approveLabel, onPressed: onApprove, primary: true),
+        ],
+      );
+    }
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: adminCardDecoration(),
