@@ -41,7 +41,9 @@ import '../features/catalog/model_profile_page.dart';
 import '../features/onboarding/role_onboarding_page.dart';
 import '../features/notifications/app_notifications.dart';
 import '../features/notifications/notifications_page.dart';
+import '../features/profile/my_profile_edit_page.dart';
 import '../features/profile/my_profile_page.dart';
+import '../features/profile/profile_model.dart';
 import '../features/profile/account_profile_edit_page.dart';
 import '../features/profile/account_devices_page.dart';
 import '../features/profile/account_mfa_page.dart';
@@ -78,6 +80,8 @@ abstract class Routes {
   static const chats = '/chats';
   static const invitations = '/invitations';
   static const me = '/me';
+  static const myProfileEdit = '/me/edit';
+  static const myProfileNew = '/me/new';
   static const billing = '/billing';
   static const notifications = '/notifications';
   static const profileAnalytics = '/profile_analytics';
@@ -597,6 +601,26 @@ final List<RouteBase> appRoutes = [
       GoRoute(
         path: Routes.me,
         builder: (context, state) => const MyProfilePage(),
+      ),
+      GoRoute(
+        path: Routes.myProfileEdit,
+        // The profile to edit travels as `extra`; a direct link has none.
+        redirect: (context, state) =>
+            state.extra is MyProfileState ? null : Routes.me,
+        builder: (context, state) => MyProfileEditPage(
+          startBlank: false,
+          initial: state.extra as MyProfileState,
+        ),
+      ),
+      GoRoute(
+        path: Routes.myProfileNew,
+        builder: (context, state) => MyProfileEditPage(
+          startBlank: true,
+          initial: null,
+          initialProfileType: profileTypeFromString(
+            state.uri.queryParameters['type'],
+          ),
+        ),
       ),
       GoRoute(
         path: Routes.billing,

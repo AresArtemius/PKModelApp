@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -15,6 +16,7 @@ import '../../core/app_logger.dart';
 import '../../core/content_safety_filter.dart';
 import '../../core/resume_text_formatter.dart';
 import '../../core/roles_provider.dart';
+import '../../core/router.dart';
 import '../../core/supabase_provider.dart';
 import '../../gen_l10n/app_localizations.dart';
 import '../../ui/brand/appearance_lookups.dart';
@@ -37,6 +39,10 @@ typedef _NameParts = ({String surname, String name});
 
 const String _kSkipMediaDeleteConfirmKey = 'skip_media_delete_confirm';
 const double _kMediaRemoveInset = 4;
+/// v2 (web): the editor on the settings template — sections with a title
+/// column on the left, flat fields, one «Сохранить» in the header.
+const bool _editV2 = kIsWeb;
+
 const double _kProfileEditDesktopBreakpoint = 900.0;
 const double _kProfileEditDesktopMaxWidth = 1360.0;
 const double _kProfileEditDesktopSideWidth = 380.0;
@@ -1854,6 +1860,358 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
     );
   }
 
+  Widget _buildV2(
+    AppLocalizations t,
+    MyProfileState base, {
+    required bool isAdmin,
+    required bool showDelete,
+  }) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final isNew = widget.startBlank;
+    final primaryLabel = isAdmin
+        ? _sentenceCaseEdit(t.profileSaveUpper)
+        : isNew
+        ? _sentenceCaseEdit(t.profileSubmitUpper)
+        : _sentenceCaseEdit(t.profileSaveUpper);
+    final VoidCallback? primary = _isBusy
+        ? null
+        : isAdmin
+        ? () => _saveAdminProfile(base)
+        : isNew
+        ? () => _submitNew(base)
+        : () => _saveExistingProfile(base);
+    final fullName = [
+      _surnameC.text.trim(),
+      _nameC.text.trim(),
+    ].where((e) => e.isNotEmpty).join(' ');
+
+    void goBack() {
+      if (context.canPop()) {
+        Navigator.of(context).pop();
+      } else {
+        context.go(Routes.me);
+      }
+    }
+
+    final quality = _profileQuality();
+    final professionalType = _professionalFieldsType;
+    final locale = Localizations.localeOf(context);
+
+    return SettingsPageV2(
+      title: isNew
+          ? (ru ? 'Новая анкета' : 'New profile')
+          : (fullName.isEmpty ? (ru ? 'Анкета' : 'Profile') : fullName),
+      subtitle: isNew
+          ? (ru
+                ? 'Заполните анкету и отправьте на модерацию'
+                : 'Fill in the profile and submit for moderation')
+          : (ru
+                ? 'Заполнено на ${quality.percent}%'
+                : '${quality.percent}% complete'),
+      backLabel: ru ? 'Аккаунт' : 'Account',
+      onBack: _isBusy ? null : goBack,
+      actions: [
+        FilledButton(
+          onPressed: primary,
+          style: FilledButton.styleFrom(
+            minimumSize: const Size(0, 40),
+            padding: const EdgeInsets.symmetric(horizontal: 18),
+          ),
+          child: Text(_isBusy ? (ru ? 'Сохраняем…' : 'Saving…') : primaryLabel),
+        ),
+      ],
+      children: [
+        if (_error != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 16),
+            child: SettingsNote(text: _error!, tone: SettingsNoteTone.danger),
+          ),
+        if (!isNew)
+          SettingsSection(
+            title: ru ? 'Статус' : 'Status',
+            child: _Header(
+              status: base.status,
+              comment: base.moderationComment,
+            ),
+          ),
+        SettingsSection(
+          title: ru ? 'Готовность' : 'Completeness',
+          hint: ru
+              ? 'Чем полнее анкета, тем чаще её открывают в каталоге.'
+              : 'The more complete the profile, the more often it is opened.',
+          child: _ProfileQualityCard(quality: quality),
+        ),
+        SettingsSection(
+          title: ru ? 'Роли' : 'Roles',
+          hint: ru
+              ? 'Кем вы выступаете: модель, актёр, фотограф… Можно выбрать несколько.'
+              : 'What you do: model, actor, photographer… Several can be chosen.',
+          child: _ProfileRolesSelector(
+            selected: _profileRoles,
+            onChanged: _setProfileRoles,
+          ),
+        ),
+        SettingsSection(
+          title: ru ? 'Основное' : 'Basics',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _Row2(
+                left: _Field(label: t.profileSurname, controller: _surnameC),
+                right: _Field(label: t.profileName, controller: _nameC),
+              ),
+              if (_usesPhysicalBasics) ...[
+                const SizedBox(height: 12),
+                _Row2(
+                  left: _Field(
+                    label: _birthDateFieldLabel(context),
+                    controller: _birthDateC,
+                    readOnly: true,
+                    onTap: _pickBirthDate,
+                  ),
+                  right: _Field(
+                    label: t.profileHeightCm,
+                    controller: _heightC,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  ),
+                ),
+              ],
+              const SizedBox(height: 12),
+              _Row2(
+                left: SearchableChoiceField(
+                  label: t.profileCountry,
+                  controller: _countryC,
+                  options: _countryOptions,
+                  onChanged: _onCountryChanged,
+                  flat: true,
+                ),
+                right: SearchableChoiceField(
+                  label: t.profileCity,
+                  controller: _cityC,
+                  options: _cityOptions,
+                  enabled: _countryC.text.trim().isNotEmpty,
+                  flat: true,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (_usesModelMeasurements)
+          SettingsSection(
+            title: ru ? 'Параметры' : 'Measurements',
+            hint: ru
+                ? 'Объёмы в сантиметрах, размер обуви, цвет глаз и волос.'
+                : 'Measurements in centimetres, shoe size, eye and hair colour.',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _Row2(
+                  left: _Field(
+                    label: t.profileBustCm,
+                    controller: _bustC,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  ),
+                  right: _Field(
+                    label: t.profileWaistCm,
+                    controller: _waistC,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _Row2(
+                  left: _Field(
+                    label: t.profileHipsCm,
+                    controller: _hipsC,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  ),
+                  right: _Field(
+                    label: t.profileShoeSize,
+                    controller: _shoeSizeC,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _Row2(
+                  left: SearchableChoiceField(
+                    label: t.profileEyeColor,
+                    controller: _eyeColorC,
+                    options: eyeColorOptions(locale),
+                    flat: true,
+                  ),
+                  right: SearchableChoiceField(
+                    label: t.profileHairColor,
+                    controller: _hairColorC,
+                    options: hairColorOptions(locale),
+                    flat: true,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        if (_hasProfessionalInfoRole)
+          SettingsSection(
+            title: ru ? 'Опыт и услуги' : 'Experience & services',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _Field(
+                  label: _professionalExperienceLabel(t, professionalType),
+                  controller: _experienceC,
+                  maxLines: 4,
+                ),
+                const SizedBox(height: 12),
+                _Row2(
+                  left: _Field(
+                    label: _professionalSkillsLabel(t, professionalType),
+                    controller: _skillsC,
+                    maxLines: 3,
+                  ),
+                  right: _Field(
+                    label: _professionalServicesLabel(t, professionalType),
+                    controller: _servicesC,
+                    maxLines: 3,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _Row2(
+                  left: _Field(
+                    label: _professionalGenresLabel(t, professionalType),
+                    controller: _genresC,
+                    maxLines: 3,
+                  ),
+                  right:
+                      _hasProfileRole(ProfessionalProfileType.photographer) ||
+                          _hasProfileRole(ProfessionalProfileType.videographer)
+                      ? _Field(
+                          label: t.profileEquipment,
+                          controller: _equipmentC,
+                          maxLines: 3,
+                        )
+                      : const SizedBox.shrink(),
+                ),
+              ],
+            ),
+          ),
+        SettingsSection(
+          title: ru ? 'Ставки' : 'Rates',
+          hint: ru
+              ? 'Минимальные ставки в рублях. Поле можно оставить пустым.'
+              : 'Minimum rates in roubles. Can be left empty.',
+          child: _Row2(
+            left: _Field(
+              label: t.profileMinHourlyRate,
+              controller: _minHourlyRateC,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            ),
+            right: _Field(
+              label: t.profileMinDailyFee,
+              controller: _minDailyFeeC,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            ),
+          ),
+        ),
+        SettingsSection(
+          title: ru ? 'О себе' : 'About',
+          child: _Field(
+            label: t.profileAboutHint,
+            controller: _resumeC,
+            maxLines: 7,
+          ),
+        ),
+        SettingsSection(
+          title: ru ? 'Фото и видео' : 'Photos & videos',
+          hint: ru
+              ? 'Первое фото — обложка в каталоге. Звёздочкой можно выбрать другую.'
+              : 'The first photo is the catalogue cover; pick another with the star.',
+          child: _buildMediaBlock(t, desktop: true),
+        ),
+        SettingsSection(
+          title: ru ? 'Занятость' : 'Availability',
+          hint: ru
+              ? 'Отметьте дни, когда вы недоступны для съёмок.'
+              : 'Mark the days you are not available.',
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: BrandCalendar(
+                selectionMode: BrandCalendarSelectionMode.multiple,
+                selectedDates: _unavailableDays,
+                allowPastDates: false,
+                allowPreviousMonths: false,
+                onDateToggled: _toggleUnavailableDay,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 24),
+        Row(
+          children: [
+            FilledButton(
+              onPressed: primary,
+              style: FilledButton.styleFrom(
+                minimumSize: const Size(0, 44),
+                padding: const EdgeInsets.symmetric(horizontal: 22),
+              ),
+              child: Text(
+                _isBusy ? (ru ? 'Сохраняем…' : 'Saving…') : primaryLabel,
+              ),
+            ),
+            const SizedBox(width: 8),
+            TextButton(
+              onPressed: _isBusy ? null : goBack,
+              style: TextButton.styleFrom(foregroundColor: Tokens.textSecondary),
+              child: Text(ru ? 'Отмена' : 'Cancel'),
+            ),
+            const Spacer(),
+            if (showDelete)
+              TextButton.icon(
+                onPressed: _isBusy ? null : () => _confirmDeleteV2(base),
+                style: TextButton.styleFrom(foregroundColor: Tokens.danger),
+                icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                label: Text(_sentenceCaseEdit(t.profileDeleteUpper)),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Future<void> _confirmDeleteV2(MyProfileState base) async {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(ru ? 'Удалить анкету?' : 'Delete profile?'),
+        content: Text(
+          ru
+              ? 'Анкета, фото и видео будут удалены без возможности восстановления.'
+              : 'The profile with its photos and videos will be deleted permanently.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(ru ? 'Отмена' : 'Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: FilledButton.styleFrom(backgroundColor: Tokens.danger),
+            child: Text(ru ? 'Удалить' : 'Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    await _delete(base);
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
@@ -1864,6 +2222,10 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
     final isAdmin = ref
         .watch(isAdminProvider)
         .maybeWhen(data: (value) => value, orElse: () => false);
+
+    if (_editV2) {
+      return _buildV2(t, base, isAdmin: isAdmin, showDelete: showDelete);
+    }
 
     return Scaffold(
       body: Stack(
