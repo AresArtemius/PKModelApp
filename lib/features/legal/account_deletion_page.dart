@@ -1,9 +1,11 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/router.dart';
 import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
+import 'legal_page_v2.dart';
 
 class AccountDeletionPage extends StatelessWidget {
   const AccountDeletionPage({super.key});
@@ -12,6 +14,19 @@ class AccountDeletionPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final isRu = Localizations.localeOf(context).languageCode == 'ru';
     final sections = isRu ? _sectionsRu : _sectionsEn;
+    if (kIsWeb) {
+      return LegalPageV2(
+        title: isRu ? 'Удаление аккаунта' : 'Account deletion',
+        lead: isRu
+            ? 'PK Management · ООО «Модельное агентство “Биг Вест”»'
+            : 'PK Management · Model Agency Big West LLC',
+        currentRoute: Routes.accountDeletion,
+        sections: [
+          for (final section in sections)
+            LegalSectionV2(title: section.title, body: section.body),
+        ],
+      );
+    }
 
     return Scaffold(
       body: Stack(

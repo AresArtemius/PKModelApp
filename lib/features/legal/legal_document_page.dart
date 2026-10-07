@@ -1,9 +1,11 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
 import 'legal_documents.dart';
+import 'legal_page_v2.dart';
 
 class LegalDocumentPage extends StatelessWidget {
   const LegalDocumentPage({super.key, required this.kind});
@@ -15,6 +17,17 @@ class LegalDocumentPage extends StatelessWidget {
     final isRu = Localizations.localeOf(context).languageCode == 'ru';
     final document = legalDocumentByKind(kind);
     final sections = document.sections(isRu);
+    if (kIsWeb) {
+      return LegalPageV2(
+        title: document.title(isRu),
+        updated: document.version,
+        currentRoute: document.route,
+        sections: [
+          for (final section in sections)
+            LegalSectionV2(title: section.title, body: section.body),
+        ],
+      );
+    }
     final compactHeader = MediaQuery.sizeOf(context).width < 520;
 
     return Scaffold(
