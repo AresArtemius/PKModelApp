@@ -175,27 +175,49 @@ class _LegalPageV2State extends State<LegalPageV2> {
       ],
     );
 
-    final content = Padding(
+    final scrollable = SingleChildScrollView(
+      controller: _scroll,
       padding: EdgeInsets.fromLTRB(gutter, wide ? 36 : 20, gutter, 64),
-      child: showToc
-          ? Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SizedBox(width: LegalPageV2.textWidth, child: article),
-                const SizedBox(width: 64),
-                SizedBox(
-                  width: LegalPageV2.tocWidth,
-                  child: _TocList(sections: widget.sections, onTap: _jumpTo),
-                ),
-              ],
-            )
-          : ConstrainedBox(
-              constraints: const BoxConstraints(
-                maxWidth: LegalPageV2.textWidth,
-              ),
-              child: article,
-            ),
+      child: Align(
+        alignment: Alignment.topLeft,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: LegalPageV2.textWidth),
+          child: article,
+        ),
+      ),
     );
+
+    // The table of contents stays put while the text scrolls.
+    final content = showToc
+        ? Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: gutter + LegalPageV2.textWidth + 64,
+                child: scrollable,
+              ),
+              Expanded(
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(0, wide ? 40 : 20, gutter, 0),
+                  child: Align(
+                    alignment: Alignment.topLeft,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(
+                        maxWidth: LegalPageV2.tocWidth,
+                      ),
+                      child: SingleChildScrollView(
+                        child: _TocList(
+                          sections: widget.sections,
+                          onTap: _jumpTo,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          )
+        : scrollable;
 
     return PublicPageFrame(
       currentIndex: 3,
@@ -208,10 +230,7 @@ class _LegalPageV2State extends State<LegalPageV2> {
                 context.go(Routes.login);
               }
             },
-      child: SingleChildScrollView(
-        controller: _scroll,
-        child: Align(alignment: Alignment.topLeft, child: content),
-      ),
+      child: content,
     );
   }
 }
