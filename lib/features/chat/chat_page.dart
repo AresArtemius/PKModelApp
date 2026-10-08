@@ -1492,6 +1492,28 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     });
   }
 
+  /// ↑ in an empty composer: edit the latest own text message, like in
+  /// Telegram / Slack.
+  Future<void> _editLastOwnMessage() async {
+    if (_editingMessage != null || _messageController.text.isNotEmpty) return;
+    final userId = ref.read(currentUserIdProvider) ?? '';
+    if (userId.isEmpty) return;
+    final live =
+        ref.read(chatMessagesProvider(widget.chatId)).valueOrNull ??
+        const <ChatMessage>[];
+    final merged = _mergedMessages(live);
+    ChatMessage? last;
+    for (final message in merged.reversed) {
+      if (message.senderId != userId) continue;
+      if (message.mediaType != 'text' || message.isDeleted) continue;
+      if (_ParsedMessageBody.from(message.body).body.trim().isEmpty) continue;
+      last = message;
+      break;
+    }
+    if (last == null) return;
+    await _editMessage(last);
+  }
+
   Future<void> _saveEdit() async {
     final message = _editingMessage;
     if (message == null) return;
@@ -2051,6 +2073,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                         : _ParsedMessageBody.from(_editingMessage!.body).body,
                     onCancelEdit: _cancelEdit,
                     onInsertEmoji: v2 ? _insertAtCursor : null,
+                    onEditLast: v2 ? _editLastOwnMessage : null,
                     attachment: _pendingAttachment,
                     onCancelReply: () => setState(() => _replyingTo = null),
                     onRemoveAttachment: () =>
@@ -7484,11 +7507,15 @@ class _Composer extends StatelessWidget {
     this.focusNode,
     this.recorder,
     this.onInsertEmoji,
+    this.onEditLast,
     this.flat = false,
   });
 
   final TextEditingController controller;
   final FocusNode? focusNode;
+
+  /// ↑ in an empty field (web): edit the latest own message.
+  final VoidCallback? onEditLast;
 
   /// Shows the emoji button when set (web).
   final ValueChanged<String>? onInsertEmoji;
@@ -7690,12 +7717,34 @@ class _Composer extends StatelessWidget {
                               event.logicalKey == LogicalKeyboardKey.enter ||
                               event.logicalKey ==
                                   LogicalKeyboardKey.numpadEnter;
-                          if (event.logicalKey == LogicalKeyboardKey.escape &&
-                              editingText != null) {
-                            onCancelEdit?.call();
+                          if (event.logicalKey == LogicalKeyboardKey.escape) {
+                            if (editingText != null) {
+                              onCancelEdit?.call();
+                              return KeyEventResult.handled;
+                            }
+                            if (replyingToText != null) {
+                              onCancelReply();
+                              return KeyEventResult.handled;
+                            }
+                            if (attachment != null) {
+                              onRemoveAttachment();
+                              return KeyEventResult.handled;
+                            }
+                            return KeyEventResult.ignored;
+                          }
+                          if (event.logicalKey == LogicalKeyboardKey.arrowUp &&
+                              editingText == null &&
+                              controller.text.isEmpty &&
+                              onEditLast != null) {
+                            onEditLast!();
                             return KeyEventResult.handled;
                           }
                           if (!isEnter) return KeyEventResult.ignored;
+                          // Phone-width web: the soft keyboard's Enter adds
+                          // a line, sending is the button.
+                          if (MediaQuery.sizeOf(context).width < 600) {
+                            return KeyEventResult.ignored;
+                          }
                           final shift =
                               HardwareKeyboard.instance.isShiftPressed;
                           if (shift) return KeyEventResult.ignored;
