@@ -106,14 +106,19 @@ class ChatWebInput {
       final clipboard = (event as web.ClipboardEvent).clipboardData;
       if (clipboard == null) return;
       final items = clipboard.items;
+      // Every file on the clipboard (a screenshot is one; a copy from the
+      // file manager can be several).
+      var handled = false;
       for (var i = 0; i < items.length; i++) {
         final item = items[i];
         if (item.kind != 'file') continue;
         final file = item.getAsFile();
         if (file == null) continue;
-        event.preventDefault();
+        if (!handled) {
+          event.preventDefault();
+          handled = true;
+        }
         unawaited(deliver(file));
-        return;
       }
     }).toJS;
 
@@ -147,8 +152,16 @@ class ChatWebInput {
       event.preventDefault();
       final files = transfer!.files;
       if (files.length == 0) return;
-      final file = files.item(0);
-      if (file != null) unawaited(deliver(file));
+      // All dropped files, in order: the first becomes the attachment, the
+      // rest wait in the composer's queue.
+      Future<void> deliverAll() async {
+        for (var i = 0; i < files.length; i++) {
+          final file = files.item(i);
+          if (file != null) await deliver(file);
+        }
+      }
+
+      unawaited(deliverAll());
     }).toJS;
 
     document.addEventListener('paste', onPaste);

@@ -37,6 +37,10 @@ const _legacyChatMediaBucket = 'profile-media';
 const _chatRealtimeMessageLimit = 120;
 const _replyPrefix = '↩ ';
 const _replySeparator = '\n\n';
+/// Step 34: files above this size are refused before the upload starts
+/// (the chat-media bucket does not take larger ones).
+const int _maxChatFileBytes = 50 * 1024 * 1024;
+
 const _replyToIdKey = 'reply_to_id';
 const _replyToSenderKey = 'reply_to_sender';
 
@@ -45,6 +49,17 @@ Uint8List? _buildChatImageThumbnail(Uint8List bytes) {
   if (decoded == null) return null;
   final thumb = image_lib.copyResize(decoded, width: 640);
   return Uint8List.fromList(image_lib.encodeJpg(thumb, quality: 72));
+}
+
+String _pluralFilesRu(int n) {
+  final mod10 = n % 10;
+  final mod100 = n % 100;
+  final word = mod10 == 1 && mod100 != 11
+      ? 'файл'
+      : mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)
+      ? 'файла'
+      : 'файлов';
+  return '$n $word';
 }
 
 String _formatFileSize(int? bytes) {
@@ -117,6 +132,11 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   int _searchHitCursor = 0;
   String? _activeSearchMessageId;
   _PendingChatAttachment? _pendingAttachment;
+
+  /// Step 34: further files dropped or pasted together with the pending
+  /// one; sent one after another right after it.
+  final List<_PendingChatAttachment> _queuedAttachments =
+      <_PendingChatAttachment>[];
   DateTime? _lastTypingSentAt;
   Timer? _typingStopTimer;
   Timer? _searchDebounceTimer;
@@ -155,6 +175,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     _mentionQuery = null;
     _searchController.clear();
     _pendingAttachment = null;
+    _queuedAttachments.clear();
     _lastTypingSentAt = null;
   }
 
@@ -368,15 +389,54 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     setState(() => _sending = true);
     try {
       await _sendAttachment(attachment: attachment, body: body);
+      if (!mounted) return;
       _messageController.clear();
       setState(() {
         _replyingTo = null;
         _pendingAttachment = null;
         _mentionQuery = null;
       });
+      // The rest of a multi-file drop goes out as separate messages.
+      while (_queuedAttachments.isNotEmpty) {
+        final next = _queuedAttachments.first;
+        setState(() {
+          _queuedAttachments.removeAt(0);
+          _pendingAttachment = next;
+        });
+        await _sendAttachment(attachment: next, body: '');
+        if (!mounted) return;
+        setState(() => _pendingAttachment = null);
+      }
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            AppErrorMapper.message(error, AppLocalizations.of(context)!),
+          ),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _sending = false);
     }
+  }
+
+  /// Step 34: refuses a file above the upload limit with a visible reason.
+  bool _rejectIfTooLarge(int? size, {String name = ''}) {
+    if (size == null || size <= _maxChatFileBytes) return false;
+    if (!mounted) return true;
+    final limit = _formatFileSize(_maxChatFileBytes);
+    final label = name.trim().isEmpty ? '' : '«${name.trim()}» ';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          _isRussian
+              ? 'Файл ${label}больше $limit — отправить не получится.'
+              : 'File ${label}is larger than $limit and cannot be sent.',
+        ),
+      ),
+    );
+    return true;
   }
 
   /// Telegram-style send: the composer clears at once, the message shows
@@ -1081,6 +1141,9 @@ class _ChatPageState extends ConsumerState<ChatPage> {
 
     final bytes = video ? null : await selected.readAsBytes();
     if (!mounted) return;
+    final pickedSize = bytes?.length ?? await selected.length();
+    if (!mounted) return;
+    if (_rejectIfTooLarge(pickedSize, name: selected.name)) return;
     setState(() {
       _pendingAttachment = _PendingChatAttachment(
         file: selected,
@@ -1139,6 +1202,12 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     }
 
     if (!mounted) return;
+    if (_rejectIfTooLarge(
+      picked.size > 0 ? picked.size : bytes.length,
+      name: picked.name,
+    )) {
+      return;
+    }
     setState(() {
       _pendingAttachment = _PendingChatAttachment(
         file: picked.path == null ? null : XFile(picked.path!),
@@ -1157,6 +1226,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     if (!mounted || _sending || _uploadingMedia || _editingMessage != null) {
       return;
     }
+    if (_rejectIfTooLarge(file.bytes.length, name: file.name)) return;
     final mime = file.mimeType.toLowerCase();
     final isImage = mime.startsWith('image/');
     final isVideo = mime.startsWith('video/');
@@ -1169,19 +1239,25 @@ class _ChatPageState extends ConsumerState<ChatPage> {
         : isVideo
         ? 'video_$stamp.${mime.split('/').last}'
         : 'file_$stamp.bin';
+    final attachment = _PendingChatAttachment(
+      kind: isImage
+          ? _PendingAttachmentKind.image
+          : isVideo
+          ? _PendingAttachmentKind.video
+          : _PendingAttachmentKind.file,
+      fileName: name,
+      fileSize: file.bytes.length,
+      mimeType: file.mimeType,
+      bytes: file.bytes,
+      previewBytes: isImage ? file.bytes : null,
+    );
     setState(() {
-      _pendingAttachment = _PendingChatAttachment(
-        kind: isImage
-            ? _PendingAttachmentKind.image
-            : isVideo
-            ? _PendingAttachmentKind.video
-            : _PendingAttachmentKind.file,
-        fileName: name,
-        fileSize: file.bytes.length,
-        mimeType: file.mimeType,
-        bytes: file.bytes,
-        previewBytes: isImage ? file.bytes : null,
-      );
+      // Several files at once: the first is previewed, the rest queue up.
+      if (_pendingAttachment == null) {
+        _pendingAttachment = attachment;
+      } else {
+        _queuedAttachments.add(attachment);
+      }
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _composerFocus.requestFocus();
@@ -2164,9 +2240,12 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                     onInsertEmoji: v2 ? _insertAtCursor : null,
                     onEditLast: v2 ? _editLastOwnMessage : null,
                     attachment: _pendingAttachment,
+                    queuedAttachments: _queuedAttachments.length,
                     onCancelReply: () => setState(() => _replyingTo = null),
-                    onRemoveAttachment: () =>
-                        setState(() => _pendingAttachment = null),
+                    onRemoveAttachment: () => setState(() {
+                      _pendingAttachment = null;
+                      _queuedAttachments.clear();
+                    }),
                     onSend: _send,
                     onAttach: _showAttachMenu,
                     onRecordVoice: _recordVoiceMessage,
@@ -7649,6 +7728,7 @@ class _Composer extends StatelessWidget {
     required this.attachment,
     required this.onCancelReply,
     required this.onRemoveAttachment,
+    this.queuedAttachments = 0,
     required this.onSend,
     required this.onAttach,
     required this.onRecordVoice,
@@ -7683,6 +7763,9 @@ class _Composer extends StatelessWidget {
   final _PendingChatAttachment? attachment;
   final VoidCallback onCancelReply;
   final VoidCallback onRemoveAttachment;
+
+  /// Step 34: how many more files wait behind [attachment].
+  final int queuedAttachments;
   final VoidCallback onSend;
   final VoidCallback onAttach;
   final VoidCallback onRecordVoice;
@@ -7832,6 +7915,7 @@ class _Composer extends StatelessWidget {
               attachment: attachment!,
               onRemove: onRemoveAttachment,
               flat: flat,
+              queued: queuedAttachments,
             ),
             const SizedBox(height: 8),
           ],
@@ -8102,11 +8186,15 @@ class _PendingAttachmentPreview extends StatelessWidget {
     required this.attachment,
     required this.onRemove,
     this.flat = false,
+    this.queued = 0,
   });
 
   final _PendingChatAttachment attachment;
   final VoidCallback onRemove;
   final bool flat;
+
+  /// Step 34: more files behind this one, sent right after it.
+  final int queued;
 
   @override
   Widget build(BuildContext context) {
@@ -8168,6 +8256,10 @@ class _PendingAttachmentPreview extends StatelessWidget {
                   Text(
                     [
                       if (size.isNotEmpty) size,
+                      if (queued > 0)
+                        isRussian
+                            ? 'ещё ${_pluralFilesRu(queued)} следом'
+                            : '$queued more ${queued == 1 ? 'file' : 'files'} after it',
                       isRussian
                           ? 'Подпись — по желанию, Enter отправит'
                           : 'Caption is optional, Enter sends',
