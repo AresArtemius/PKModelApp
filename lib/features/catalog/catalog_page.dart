@@ -985,9 +985,10 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
         : null;
 
     return Scaffold(
+      backgroundColor: kIsWeb ? Tokens.bg : null,
       body: Stack(
         children: [
-          const BrandBackground(),
+          if (!kIsWeb) const BrandBackground(),
           SafeArea(
             child: Align(
               alignment: Alignment.topCenter,
@@ -998,7 +999,9 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                       : double.infinity,
                 ),
                 child: Padding(
-                  padding: pagePadding,
+                  padding: kIsWeb && !isDesktop
+                      ? const EdgeInsets.fromLTRB(16, 12, 16, 0)
+                      : pagePadding,
                   child: Stack(
                     children: [
                       if (isDesktop)
@@ -1143,6 +1146,117 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                                 : () => _openQuickAdd(previewModel),
                             canUseAgentTools: canCreateSelections,
                           ),
+                        )
+                      else if (kIsWeb)
+                        // Narrow web: v2 header, flat search, role chips.
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(
+                              children: [
+                                if (widget.leading != null) ...[
+                                  widget.leading!,
+                                  const SizedBox(width: 8),
+                                ],
+                                Expanded(
+                                  child: Text(
+                                    t.catalogTab,
+                                    style: AppText.h1.copyWith(fontSize: 26),
+                                  ),
+                                ),
+                                if (canUseAgentFolders)
+                                  IconButton(
+                                    tooltip: Localizations.localeOf(context)
+                                                .languageCode ==
+                                            'ru'
+                                        ? 'Папки'
+                                        : 'Folders',
+                                    onPressed: () =>
+                                        context.go(Routes.agentFolders),
+                                    icon: const Icon(
+                                      Icons.folder_outlined,
+                                      size: 22,
+                                    ),
+                                  ),
+                                IconButton(
+                                  tooltip: Localizations.localeOf(context)
+                                              .languageCode ==
+                                          'ru'
+                                      ? 'Фильтры'
+                                      : 'Filters',
+                                  onPressed: c.isInitialLoading
+                                      ? null
+                                      : _openAdvancedSearch,
+                                  icon: Icon(
+                                    Icons.tune_rounded,
+                                    size: 22,
+                                    color: c.hasActiveFilters
+                                        ? Tokens.accent
+                                        : Tokens.text,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            TextField(
+                              controller: _searchC,
+                              onChanged: _onSearchChanged,
+                              style: AppText.body,
+                              decoration: InputDecoration(
+                                hintText: _sentenceCaseCatalog(
+                                  t.catalogSearchHintUpper,
+                                ),
+                                prefixIcon: const Icon(
+                                  Icons.search_rounded,
+                                  size: 20,
+                                ),
+                                isDense: true,
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 12,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            _CatalogRoleChipsV2(
+                              selectedRole: c.profileRole,
+                              onChanged: _onRoleChanged,
+                              onReset: c.hasActiveFilters
+                                  ? _clearCatalogFilters
+                                  : null,
+                            ),
+                            const SizedBox(height: 8),
+                            Expanded(
+                              child: _CatalogResultsBody(
+                                controller: c,
+                                filteredItems: filteredItems,
+                                selectedIds: effectiveSelectedIds,
+                                gridController: _gridC,
+                                onRefresh: _refresh,
+                                onOpenModel: (modelId) async {
+                                  _unfocus();
+                                  await context.push('/model/$modelId');
+                                },
+                                onToggleSelected: _toggleSelected,
+                                onQuickAdd: _openQuickAdd,
+                                onPreviewPhoto: (heroTag, photoUrl) {
+                                  _unfocus();
+                                  _showOverlayPhoto(heroTag, photoUrl);
+                                },
+                                onHidePreviewPhoto: _hideOverlayPhoto,
+                                isSelectionMode: _isSelectionMode(
+                                  effectiveSelectedIds,
+                                ),
+                                canSelect: canCreateSelections,
+                                cmLabel: t.cm,
+                                bottomInset: 84,
+                                onAutoLoadMore: () {
+                                  if (!mounted) return;
+                                  c.loadMore();
+                                },
+                              ),
+                            ),
+                          ],
                         )
                       else
                         Column(
