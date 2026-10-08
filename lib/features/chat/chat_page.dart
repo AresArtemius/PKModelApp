@@ -37,6 +37,8 @@ const _legacyChatMediaBucket = 'profile-media';
 const _chatRealtimeMessageLimit = 120;
 const _replyPrefix = '↩ ';
 const _replySeparator = '\n\n';
+const _replyToIdKey = 'reply_to_id';
+const _replyToSenderKey = 'reply_to_sender';
 
 Uint8List? _buildChatImageThumbnail(Uint8List bytes) {
   final decoded = image_lib.decodeImage(bytes);
@@ -119,6 +121,9 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   Timer? _typingStopTimer;
   Timer? _searchDebounceTimer;
   final List<ChatMessage> _olderMessages = [];
+
+  /// Step 31: bubble keys so a reply quote can scroll to its original.
+  final Map<String, GlobalKey> _bubbleKeys = <String, GlobalKey>{};
   List<ChatMessage> _serverSearchResults = const <ChatMessage>[];
   String? _mentionQuery;
   final _picker = ImagePicker();
@@ -134,6 +139,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     if (oldWidget.chatId == widget.chatId) return;
     unawaited(_setTyping(false));
     _olderMessages.clear();
+    _bubbleKeys.clear();
     _hasOlderMessages = true;
     _loadingOlderMessages = false;
     _replyingTo = null;
@@ -402,6 +408,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       createdAt: DateTime.now().toUtc(),
     );
     final restoreReply = _replyingTo;
+    final replyMetadata = _replyMetadata(restoreReply);
     setState(() {
       _pendingMessages.add(pending);
       _replyingTo = null;
@@ -412,7 +419,11 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     try {
       final storedId = await ref
           .read(chatServiceProvider)
-          .sendMessage(chatId: widget.chatId, body: body);
+          .sendMessage(
+            chatId: widget.chatId,
+            body: body,
+            metadata: replyMetadata,
+          );
       if (!mounted) return;
       if (storedId == null || storedId.isEmpty) {
         setState(() => _pendingMessages.remove(pending));
@@ -465,6 +476,18 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     final quote = _replyPreviewText(reply);
     if (quote.isEmpty) return text;
     return '$_replyPrefix$quote$_replySeparator$text';
+  }
+
+  /// Step 31: the reply link travels in `metadata` (`reply_to_id`), so a
+  /// click on the quote can jump to the original; the text prefix stays
+  /// for older clients.
+  Map<String, dynamic>? _replyMetadata(ChatMessage? reply) {
+    if (reply == null) return null;
+    if (reply.id.startsWith('pending-')) return null;
+    return <String, dynamic>{
+      _replyToIdKey: reply.id,
+      _replyToSenderKey: reply.senderId,
+    };
   }
 
   String _replyPreviewText(ChatMessage message) {
@@ -686,6 +709,72 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       duration: const Duration(milliseconds: 260),
       curve: Curves.easeOutCubic,
     );
+    // The estimate above lands near the bubble; once it is built, settle
+    // on it exactly.
+    await WidgetsBinding.instance.endOfFrame;
+    final bubbleContext = _bubbleKeys[messageId]?.currentContext;
+    if (bubbleContext != null && bubbleContext.mounted) {
+      await Scrollable.ensureVisible(
+        bubbleContext,
+        alignment: 0.4,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+      );
+    }
+  }
+
+  /// Step 31: a click on a reply quote scrolls to the original message,
+  /// loading older history when it is outside the loaded window.
+  Future<void> _jumpToReply(String messageId) async {
+    List<ChatMessage> visible() => _mergedMessages(
+      ref.read(chatMessagesProvider(widget.chatId)).valueOrNull ??
+          const <ChatMessage>[],
+    );
+    bool found(List<ChatMessage> items) =>
+        items.any((item) => item.id == messageId);
+
+    var items = visible();
+    var pages = 0;
+    while (!found(items) && _hasOlderMessages && pages < 4) {
+      await _loadOlderMessages(items);
+      if (!mounted) return;
+      pages++;
+      items = visible();
+    }
+    if (!found(items)) {
+      ChatMessage? original;
+      try {
+        original = await ref
+            .read(chatServiceProvider)
+            .fetchMessageById(chatId: widget.chatId, messageId: messageId);
+      } catch (_) {
+        original = null;
+      }
+      if (!mounted) return;
+      if (original == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              _isRussian
+                  ? 'Исходное сообщение удалено или недоступно.'
+                  : 'The original message was deleted or is unavailable.',
+            ),
+          ),
+        );
+        return;
+      }
+      items = _ensureMessageVisible(original, items);
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) return;
+    }
+    await _jumpToMessage(messageId, items);
+    // The highlight is a pointer, not a state: let it fade.
+    Future<void>.delayed(const Duration(milliseconds: 1800), () {
+      if (!mounted || _searchOpen) return;
+      if (_activeSearchMessageId == messageId) {
+        setState(() => _activeSearchMessageId = null);
+      }
+    });
   }
 
   List<ChatMessage> _pinnedMessagesForPanel(
@@ -1235,11 +1324,11 @@ class _ChatPageState extends ConsumerState<ChatPage> {
             fileMime: attachment.isFile || attachment.isAudio
                 ? contentType
                 : '',
-            metadata: attachment.isAudio && attachment.duration != null
-                ? <String, dynamic>{
-                    'duration_ms': attachment.duration!.inMilliseconds,
-                  }
-                : null,
+            metadata: <String, dynamic>{
+              if (attachment.isAudio && attachment.duration != null)
+                'duration_ms': attachment.duration!.inMilliseconds,
+              ...?(body.isEmpty ? null : _replyMetadata(_replyingTo)),
+            },
           );
     } finally {
       if (mounted) setState(() => _uploadingMedia = false);
@@ -2176,6 +2265,11 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     final avatarMap =
         ref.watch(chatParticipantAvatarsProvider(widget.chatId)).valueOrNull ??
         const <String, String>{};
+    final otherPartyName =
+        (ref.watch(chatSummaryProvider(widget.chatId)).valueOrNull?.accountTitle ??
+                '')
+            .trim();
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
     // Messages present at the first frame do not animate in; later ones do.
     final firstFrame = !_feedSeeded;
     if (firstFrame) {
@@ -2212,11 +2306,23 @@ class _ChatPageState extends ConsumerState<ChatPage> {
             final mine = item.senderId == userId;
             final animateIn = !_seenMessageIds.contains(item.id);
             _seenMessageIds.add(item.id);
+            final replyToId = (item.metadata[_replyToIdKey] ?? '').toString();
+            final replyToSender =
+                (item.metadata[_replyToSenderKey] ?? '').toString();
+            final quoteAuthor = replyToSender.isEmpty
+                ? ''
+                : replyToSender == userId
+                ? (ru ? 'Вы' : 'You')
+                : otherPartyName;
             return RepaintBoundary(
               child: _AppearV2(
                 animate: animateIn,
                 child: _BubbleV2(
-              key: ValueKey('v2-${item.id}'),
+              key: _bubbleKeys.putIfAbsent(item.id, GlobalKey.new),
+              quoteAuthor: quoteAuthor,
+              onQuoteTap: replyToId.isEmpty || _selectionMode
+                  ? null
+                  : () => _jumpToReply(replyToId),
               message: item,
               mine: mine,
               avatarUrl: mine ? '' : (avatarMap[item.senderId] ?? ''),
@@ -2595,6 +2701,8 @@ class _BubbleV2 extends StatefulWidget {
     required this.onContextMenu,
     required this.onReact,
     required this.onReply,
+    this.quoteAuthor = '',
+    this.onQuoteTap,
   });
 
   final ChatMessage message;
@@ -2616,6 +2724,11 @@ class _BubbleV2 extends StatefulWidget {
   final ValueChanged<Offset> onContextMenu;
   final ValueChanged<String> onReact;
   final VoidCallback onReply;
+
+  /// Step 31: who wrote the quoted message («Вы» / the other party) and
+  /// the jump to it.
+  final String quoteAuthor;
+  final VoidCallback? onQuoteTap;
 
   @override
   State<_BubbleV2> createState() => _BubbleV2State();
@@ -2801,6 +2914,8 @@ class _BubbleV2State extends State<_BubbleV2> {
                           text: parsedBody.replyQuote,
                           mine: mine,
                           flat: true,
+                          author: widget.quoteAuthor,
+                          onTap: widget.onQuoteTap,
                         ),
                     ],
                   ),
@@ -2841,6 +2956,8 @@ class _BubbleV2State extends State<_BubbleV2> {
                   text: parsedBody.replyQuote,
                   mine: mine,
                   flat: true,
+                  author: widget.quoteAuthor,
+                  onTap: widget.onQuoteTap,
                 ),
                 const SizedBox(height: 6),
               ],
@@ -5399,6 +5516,8 @@ class _ReplyPreview extends StatelessWidget {
     required this.text,
     required this.mine,
     this.flat = false,
+    this.author = '',
+    this.onTap,
   });
 
   final String text;
@@ -5408,10 +5527,15 @@ class _ReplyPreview extends StatelessWidget {
   /// bubble to its maximum width.
   final bool flat;
 
+  /// Step 31: the quoted message's author, shown above the text, and the
+  /// click that scrolls to the original.
+  final String author;
+  final VoidCallback? onTap;
+
   @override
   Widget build(BuildContext context) {
     if (flat) {
-      return Container(
+      final quote = Container(
         padding: const EdgeInsets.fromLTRB(10, 5, 10, 5),
         decoration: BoxDecoration(
           color: mine
@@ -5425,16 +5549,42 @@ class _ReplyPreview extends StatelessWidget {
             ),
           ),
         ),
-        child: Text(
-          text,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: AppText.caption.copyWith(
-            fontSize: 13,
-            color: mine
-                ? Colors.white.withValues(alpha: 0.8)
-                : Tokens.textSecondary,
-          ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (author.isNotEmpty)
+              Text(
+                author,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppText.caption.copyWith(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: mine ? Colors.white : Tokens.accent,
+                ),
+              ),
+            Text(
+              text,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: AppText.caption.copyWith(
+                fontSize: 13,
+                color: mine
+                    ? Colors.white.withValues(alpha: 0.8)
+                    : Tokens.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      );
+      if (onTap == null) return quote;
+      return MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: quote,
         ),
       );
     }
