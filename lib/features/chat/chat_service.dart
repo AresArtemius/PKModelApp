@@ -1410,6 +1410,68 @@ class ChatService {
         .toList(growable: false);
   }
 
+  /// One message by id (step 31: the original of a reply quote that is no
+  /// longer in the loaded window). Null when missing or deleted.
+  Future<ChatMessage?> fetchMessageById({
+    required String chatId,
+    required String messageId,
+  }) async {
+    if (chatId.trim().isEmpty || messageId.trim().isEmpty) return null;
+
+    Future<Map<String, dynamic>?> run({
+      required bool includeReadFields,
+      required bool includeFileFields,
+      required bool includeMetadata,
+    }) async {
+      return await _sb
+          .from('selection_chat_messages')
+          .select(
+            _messageSelect(
+              includeReadFields: includeReadFields,
+              includeFileFields: includeFileFields,
+              includeMetadata: includeMetadata,
+            ),
+          )
+          .eq('chat_id', chatId)
+          .eq('id', messageId)
+          .maybeSingle();
+    }
+
+    Map<String, dynamic>? row;
+    try {
+      row = await run(
+        includeReadFields: true,
+        includeFileFields: true,
+        includeMetadata: true,
+      );
+    } on PostgrestException catch (e) {
+      if (_isMissingChatFileColumn(e)) {
+        row = await run(
+          includeReadFields: true,
+          includeFileFields: false,
+          includeMetadata: true,
+        );
+      } else if (_isMissingChatMetadataColumn(e)) {
+        row = await run(
+          includeReadFields: true,
+          includeFileFields: true,
+          includeMetadata: false,
+        );
+      } else if (_isMissingChatReadField(e)) {
+        row = await run(
+          includeReadFields: false,
+          includeFileFields: true,
+          includeMetadata: true,
+        );
+      } else {
+        rethrow;
+      }
+    }
+    if (row == null) return null;
+    final message = ChatMessage.fromMap(Map<String, dynamic>.from(row));
+    return message.isDeleted ? null : message;
+  }
+
   Future<List<ChatMessage>> fetchMessagesBefore({
     required String chatId,
     required DateTime before,
