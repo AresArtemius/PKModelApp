@@ -362,7 +362,7 @@ class AdminShellV2 extends ConsumerWidget {
                   children: [
                     Text(
                       adminSentenceCase(title),
-                      maxLines: 1,
+                      maxLines: wide ? 1 : 2,
                       overflow: TextOverflow.ellipsis,
                       style: AppText.h1.copyWith(fontSize: wide ? 28 : 24),
                     ),
@@ -516,15 +516,48 @@ class _AdminShellNavItem extends StatelessWidget {
 }
 
 /// Narrow screens: the sections as a horizontal strip under the top bar.
-class _AdminShellStrip extends StatelessWidget {
+class _AdminShellStrip extends StatefulWidget {
   const _AdminShellStrip({required this.groups, required this.active});
 
   final List<_AdminShellGroup> groups;
   final String active;
 
   @override
+  State<_AdminShellStrip> createState() => _AdminShellStripState();
+}
+
+class _AdminShellStripState extends State<_AdminShellStrip> {
+  final _activeKey = GlobalKey();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _revealActive());
+  }
+
+  @override
+  void didUpdateWidget(covariant _AdminShellStrip oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.active != widget.active) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _revealActive());
+    }
+  }
+
+  // Scrolls the strip so the current section is on screen.
+  void _revealActive() {
+    final context = _activeKey.currentContext;
+    if (context == null || !mounted) return;
+    Scrollable.ensureVisible(
+      context,
+      alignment: 0.3,
+      duration: const Duration(milliseconds: 200),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final items = [for (final g in groups) ...g.items];
+    final items = [for (final g in widget.groups) ...g.items];
+    final active = widget.active;
     return Container(
       height: 48,
       decoration: const BoxDecoration(
@@ -539,6 +572,7 @@ class _AdminShellStrip extends StatelessWidget {
           final item = items[index];
           final isActive = item.route == active;
           return Material(
+            key: isActive ? _activeKey : null,
             color: isActive ? Tokens.ink : Colors.transparent,
             borderRadius: BorderRadius.circular(Tokens.radiusSm),
             child: InkWell(
