@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'app_top_bar.dart';
 import 'admin_dashboard_counts_provider.dart';
 import 'roles_provider.dart';
+import 'tab_alerts.dart';
 import 'deferred_page.dart';
 import '../features/admin/account_merge_requests_page.dart' deferred as account_merge_requests_page;
 import '../features/admin/admin_castings_page.dart' deferred as admin_castings_page;
@@ -251,6 +252,7 @@ class AppBottomNav extends ConsumerWidget {
     ref.watch(appNotificationsRealtimeProvider);
     ref.watch(presenceHeartbeatProvider);
     ref.watch(chatListRealtimeProvider);
+    ref.watch(tabAlertsSyncProvider);
     final t = AppLocalizations.of(context)!;
     final isAdmin = ref
         .watch(isAdminProvider)

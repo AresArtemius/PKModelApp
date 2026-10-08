@@ -11,6 +11,7 @@ import 'account_profile_service.dart';
 import 'admin_dashboard_counts_provider.dart';
 import 'auth_providers.dart';
 import 'roles_provider.dart';
+import 'tab_alerts.dart';
 import 'router.dart';
 import 'supabase_provider.dart';
 
@@ -29,6 +30,7 @@ class AppTopBar extends ConsumerWidget {
     ref.watch(appNotificationsRealtimeProvider);
     ref.watch(presenceHeartbeatProvider);
     ref.watch(chatListRealtimeProvider);
+    ref.watch(tabAlertsSyncProvider);
     final t = AppLocalizations.of(context)!;
     final signedIn = ref.watch(isAuthenticatedProvider);
     final isAdmin = ref
