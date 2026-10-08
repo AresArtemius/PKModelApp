@@ -431,8 +431,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       SnackBar(
         content: Text(
           _isRussian
-              ? 'Файл ${label}больше $limit — отправить не получится.'
-              : 'File ${label}is larger than $limit and cannot be sent.',
+              ? 'Файл $label' 'больше $limit — отправить не получится.'
+              : 'File $label' 'is larger than $limit and cannot be sent.',
         ),
       ),
     );
