@@ -4161,3 +4161,111 @@ String _sentenceCase(String value) {
   if (trimmed.isEmpty) return trimmed;
   return trimmed[0].toUpperCase() + trimmed.substring(1).toLowerCase();
 }
+
+
+String _sentenceCaseCatalog(String value) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) return trimmed;
+  final lower = trimmed.toLowerCase();
+  return lower[0].toUpperCase() + lower.substring(1);
+}
+
+/// Narrow web: role filter as a horizontal row of flat chips, with a
+/// «reset» chip at the end when filters are active.
+class _CatalogRoleChipsV2 extends StatelessWidget {
+  const _CatalogRoleChipsV2({
+    required this.selectedRole,
+    required this.onChanged,
+    this.onReset,
+  });
+
+  final ProfessionalProfileType? selectedRole;
+  final ValueChanged<ProfessionalProfileType?> onChanged;
+  final VoidCallback? onReset;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final items = <({ProfessionalProfileType? role, String label})>[
+      (role: null, label: ru ? 'Все' : 'All'),
+      for (final role in _CatalogRoleTabs._roles)
+        (role: role, label: _catalogProfileTypeLabel(t, role)),
+    ];
+    return SizedBox(
+      height: 36,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        children: [
+          for (var i = 0; i < items.length; i++) ...[
+            if (i > 0) const SizedBox(width: 6),
+            _CatalogChipV2(
+              label: items[i].label,
+              selected: items[i].role == selectedRole,
+              onTap: () => onChanged(items[i].role),
+            ),
+          ],
+          if (onReset != null) ...[
+            const SizedBox(width: 6),
+            _CatalogChipV2(
+              label: ru ? 'Сбросить фильтры' : 'Reset filters',
+              selected: false,
+              accent: true,
+              onTap: onReset!,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _CatalogChipV2 extends StatelessWidget {
+  const _CatalogChipV2({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    this.accent = false,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final bool accent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(Tokens.radiusSm),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: selected ? Tokens.ink : Tokens.bg,
+            borderRadius: BorderRadius.circular(Tokens.radiusSm),
+            border: Border.all(
+              color: selected
+                  ? Tokens.ink
+                  : accent
+                  ? Tokens.accent
+                  : Tokens.border,
+            ),
+          ),
+          child: Text(
+            label,
+            style: AppText.smallStrong.copyWith(
+              color: selected
+                  ? Colors.white
+                  : accent
+                  ? Tokens.accent
+                  : Tokens.text,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
