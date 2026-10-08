@@ -101,7 +101,7 @@ class TabAlerts {
   // -------------------------------------------------------- notifications
 
   bool get _hasNotificationApi =>
-      web.window.hasProperty('Notification'.toJS).toDart;
+      (web.window as JSObject).hasProperty('Notification'.toJS).toDart;
 
   bool get notificationsGranted =>
       _hasNotificationApi && web.Notification.permission == 'granted';
