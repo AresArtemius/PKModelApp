@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/app_error_mapper.dart';
 import '../../core/router.dart';
+import '../../core/tab_alerts.dart';
 import '../../gen_l10n/app_localizations.dart';
 import '../../ui/brand/brand_pill_button.dart';
 import '../../ui/brand/brand_theme.dart';
@@ -442,8 +443,14 @@ class _ChatsPageState extends ConsumerState<ChatsPage> {
                             selected: isDesktop && item.id == selectedId,
                             archived: _archived,
                             onTap: isDesktop
-                                ? () =>
-                                      setState(() => _selectedChatId = item.id)
+                                ? () {
+                                    unawaited(
+                                      ref
+                                          .read(tabAlertsProvider)
+                                          .requestNotificationPermission(),
+                                    );
+                                    setState(() => _selectedChatId = item.id);
+                                  }
                                 : () => context.push(
                                     '${Routes.chatPrefix}${item.id}',
                                   ),
@@ -581,8 +588,16 @@ class _ChatsPageState extends ConsumerState<ChatsPage> {
                             items: visible,
                             selectedChatId: active.id,
                             archived: _archived,
-                            onSelect: (item) =>
-                                setState(() => _selectedChatId = item.id),
+                            onSelect: (item) {
+                              // A click is the user gesture the browser
+                              // wants before asking about notifications.
+                              unawaited(
+                                ref
+                                    .read(tabAlertsProvider)
+                                    .requestNotificationPermission(),
+                              );
+                              setState(() => _selectedChatId = item.id);
+                            },
                             onPin: _setPinned,
                             onArchive: _setArchived,
                           );
