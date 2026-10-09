@@ -4208,7 +4208,10 @@ class _ChatHeaderV2 extends ConsumerWidget {
     final presence = otherUserId.isEmpty
         ? null
         : ref.watch(userPresenceProvider(otherUserId)).valueOrNull;
-    final online = presence?.isOnlineNow ?? false;
+    // Step 36: Realtime Presence decides «в сети»; the heartbeat table
+    // supplies «был(а) …».
+    final online =
+        otherUserId.isNotEmpty && ref.watch(userIsOnlineProvider(otherUserId));
     final narrow = MediaQuery.sizeOf(context).width < 600;
     return Container(
       height: narrow ? 64 : 72,
@@ -4289,6 +4292,7 @@ class _ChatHeaderV2 extends ConsumerWidget {
                 const SizedBox(height: 2),
                 _PresenceLine(
                   presence: presence,
+                  online: online,
                   context: subtitle
                       .replaceAll('Анкета: ', '')
                       .replaceAll('Кастинг: ', '')
@@ -4369,9 +4373,14 @@ class _ChatHeaderV2 extends ConsumerWidget {
 /// "в сети" / "был(а) в 15:40" followed by the chat context; re-renders
 /// every 30 s so a stale heartbeat turns into "был(а) …" on its own.
 class _PresenceLine extends StatefulWidget {
-  const _PresenceLine({required this.presence, required this.context});
+  const _PresenceLine({
+    required this.presence,
+    required this.online,
+    required this.context,
+  });
 
   final UserPresence? presence;
+  final bool online;
   final String context;
 
   @override
@@ -4399,7 +4408,7 @@ class _PresenceLineState extends State<_PresenceLine> {
   Widget build(BuildContext context) {
     final ru = Localizations.localeOf(context).languageCode == 'ru';
     final presence = widget.presence;
-    final online = presence?.isOnlineNow ?? false;
+    final online = widget.online;
     final seen = presence?.lastSeenAt;
     final status = online
         ? (ru ? 'в сети' : 'online')
