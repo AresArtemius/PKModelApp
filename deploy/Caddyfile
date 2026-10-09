@@ -53,10 +53,13 @@ app.pk.management {
 		}
 	}
 
-	try_files {path} /index.html
-
-	file_server {
-		precompressed br gzip
+	# The app itself: SPA fallback. Inside `handle` so that it runs after
+	# the /landing/ handler above (bare try_files would be ordered first).
+	handle {
+		try_files {path} /index.html
+		file_server {
+			precompressed br gzip
+		}
 	}
 
 	# Access log goes to journald (journalctl -u caddy); a file log under
