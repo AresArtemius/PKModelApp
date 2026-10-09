@@ -598,6 +598,10 @@ class CastingPage extends ConsumerStatefulWidget {
 class _CastingPageState extends ConsumerState<CastingPage> {
   String? _selectedCastingId;
 
+  /// Step 39: `/castings?casting=<id>` (from the command palette) opens
+  /// that casting.
+  String? _lastQueryCasting;
+
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
@@ -755,6 +759,17 @@ class _CastingPageState extends ConsumerState<CastingPage> {
           );
         }
 
+        final queryCasting = GoRouterState.of(
+          context,
+        ).uri.queryParameters['casting']?.trim();
+        if (queryCasting != null &&
+            queryCasting.isNotEmpty &&
+            queryCasting != _lastQueryCasting) {
+          _lastQueryCasting = queryCasting;
+          if (items.any((item) => item.id == queryCasting)) {
+            _selectedCastingId = queryCasting;
+          }
+        }
         final selected = items.firstWhere(
           (item) => item.id == _selectedCastingId,
           orElse: () => items.first,

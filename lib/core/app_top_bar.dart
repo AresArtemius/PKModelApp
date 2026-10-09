@@ -6,6 +6,7 @@ import '../features/castings/castings_provider.dart';
 import '../features/chat/chat_providers.dart';
 import '../features/notifications/app_notifications.dart';
 import '../gen_l10n/app_localizations.dart';
+import '../ui/brand/command_palette.dart';
 import '../ui/brand/ui_constants.dart';
 import 'account_profile_service.dart';
 import 'admin_dashboard_counts_provider.dart';
@@ -66,6 +67,14 @@ class AppTopBar extends ConsumerWidget {
           child: Text(t.signInTitle),
         )
       else ...[
+        // Step 39: the command palette (⌘K / Ctrl+K, or «/»).
+        _IconAction(
+          icon: Icons.search_rounded,
+          tooltip: 'Поиск · ⌘K',
+          badge: 0,
+          selected: false,
+          onTap: () => showCommandPalette(context),
+        ),
         if (isAdmin)
           _IconAction(
             icon: Icons.admin_panel_settings_outlined,

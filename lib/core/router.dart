@@ -57,6 +57,7 @@ import '../features/legal/account_deletion_page.dart';
 import '../features/landing/landing_preview_page.dart';
 import '../gen_l10n/app_localizations.dart';
 import '../ui/brand/brand_theme.dart';
+import '../ui/brand/command_palette.dart';
 import '../ui/brand/design_tokens.dart';
 import '../features/admin/selection_project_page.dart' deferred as selection_project_page;
 
@@ -218,7 +219,10 @@ class AppShell extends StatelessWidget {
     final isDesktop = width >= _kDesktopShellBreakpoint;
     // On web, text behaves like on any site: names and parameters can be
     // selected with the mouse and copied. Mobile apps keep native behaviour.
-    final content = kIsWeb ? SelectionArea(child: child) : child;
+    // Step 39: ⌘K / Ctrl+K and «/» open the command palette on web.
+    final content = kIsWeb
+        ? CommandPaletteHost(child: SelectionArea(child: child))
+        : child;
 
     if (isDesktop) {
       // v2 shell: white top bar; catalogue/castings/chats use the full
