@@ -17,6 +17,7 @@ import '../../ui/brand/brand_pill_button.dart';
 import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/public_page_frame.dart';
 import '../../ui/brand/ui_constants.dart';
+import '../chat/chat_providers.dart';
 
 const double _kPublicAccountMaxWidth = 760;
 const double _kPublicAccountAvatarSize = 104;
@@ -143,6 +144,70 @@ class PublicAccountProfilePage extends ConsumerWidget {
 
   bool _isRussian(BuildContext context) {
     return Localizations.localeOf(context).languageCode.toLowerCase() == 'ru';
+  }
+
+  /// Step 35: «Написать» opens the one conversation with this account —
+  /// an existing casting chat for the pair or a new direct one.
+  Future<void> _startDirectChat(
+    BuildContext context,
+    WidgetRef ref,
+    PublicAccountProfile profile,
+  ) async {
+    final ru = _isRussian(context);
+    final myId = ref.read(supabaseProvider).auth.currentUser?.id ?? '';
+    if (myId.isEmpty) {
+      context.go(Routes.authRequired);
+      return;
+    }
+    if (profile.userId.trim().isEmpty) {
+      context.go(Routes.chats);
+      return;
+    }
+    if (profile.userId.trim() == myId) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(ru ? 'Это ваш аккаунт' : 'This is your own account'),
+        ),
+      );
+      return;
+    }
+    try {
+      final chatId = await ref
+          .read(chatServiceProvider)
+          .ensureDirectChat(profile.userId);
+      if (!context.mounted) return;
+      if (chatId.isEmpty) {
+        context.go(Routes.chats);
+        return;
+      }
+      ref.invalidate(myChatsProvider(false));
+      context.push(Routes.chatLocation(chatId));
+    } on PostgrestException catch (e) {
+      if (!context.mounted) return;
+      final blocked = e.code == '42501' || e.message.contains('blocked');
+      final missing = SupabaseCompat.isMissingRpc(e, 'ensure_direct_chat');
+      if (missing) {
+        // Backend not updated yet: the chat list is the best we can do.
+        context.go(Routes.chats);
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            blocked
+                ? (ru
+                      ? 'Этому аккаунту нельзя написать.'
+                      : 'You cannot message this account.')
+                : e.message,
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString())),
+      );
+    }
   }
 
   String _accountTypeLabel(BuildContext context, RegistrationAccountType type) {
@@ -305,20 +370,8 @@ class PublicAccountProfilePage extends ConsumerWidget {
                               BrandPillButton(
                                 label: ru ? 'НАПИСАТЬ' : 'MESSAGE',
                                 style: BrandPillStyle.dark,
-                                onTap: () {
-                                  final loggedIn =
-                                      Supabase
-                                          .instance
-                                          .client
-                                          .auth
-                                          .currentSession !=
-                                      null;
-                                  context.go(
-                                    loggedIn
-                                        ? Routes.chats
-                                        : Routes.authRequired,
-                                  );
-                                },
+                                onTap: () =>
+                                    _startDirectChat(context, ref, profile),
                               ),
                             ],
                           ),
@@ -495,11 +548,11 @@ extension _PublicAccountV2 on PublicAccountProfilePage {
                       runSpacing: 10,
                       children: [
                         FilledButton.icon(
-                          onPressed: () => context.go(
-                            signedIn
-                                ? Routes.chats
-                                : PublicPageFrame.loginWithReturn(context),
-                          ),
+                          onPressed: () => signedIn
+                              ? _startDirectChat(context, ref, profile)
+                              : context.go(
+                                  PublicPageFrame.loginWithReturn(context),
+                                ),
                           style: FilledButton.styleFrom(
                             minimumSize: const Size(0, Tokens.controlHeight),
                             padding: const EdgeInsets.symmetric(horizontal: 20),

@@ -616,10 +616,13 @@ class ChatService {
           : (otherIsModel
                 ? _chatCoverPhoto(profile['cover_photo_url'], photoUrls)
                 : ''),
-      contextLabel: _chatContextLabel(
-        profileName: modelProfileName,
-        selectionTitle: selectionTitle,
-      ),
+      contextLabel: modelProfileName.isEmpty && selectionTitle.isEmpty
+          // Step 35: no casting and no profile behind it — a direct chat.
+          ? 'Личный диалог'
+          : _chatContextLabel(
+              profileName: modelProfileName,
+              selectionTitle: selectionTitle,
+            ),
     );
   }
 
@@ -636,7 +639,10 @@ class ChatService {
         'selection_chat_list',
         params: {'p_archived': archived},
       );
-      final items = _chatListFromRpc(rows as List<dynamic>, userId);
+      final items = await _applyDirectStates(
+        _chatListFromRpc(rows as List<dynamic>, userId),
+        userId,
+      );
       // Receiving the list means the unread messages reached this device.
       markChatsDelivered(
         items.where((e) => e.unreadCount > 0).map((e) => e.id),
@@ -645,7 +651,68 @@ class ChatService {
     } on PostgrestException catch (e) {
       if (!SupabaseCompat.isMissingRpc(e, 'selection_chat_list')) rethrow;
     }
-    return _fetchMyChatsLegacy(userId: userId, archived: archived);
+    return _applyDirectStates(
+      await _fetchMyChatsLegacy(userId: userId, archived: archived),
+      userId,
+    );
+  }
+
+  /// Step 35: marks direct chats and the ones that are still requests
+  /// (started by the other side, no answer from me). A no-op until
+  /// direct_chats.sql is applied.
+  Future<List<ChatListItem>> _applyDirectStates(
+    List<ChatListItem> items,
+    String userId,
+  ) async {
+    if (items.isEmpty) return items;
+    List<dynamic> rows;
+    try {
+      rows = await _sb.rpc('direct_chat_states') as List<dynamic>;
+    } on PostgrestException catch (e) {
+      if (SupabaseCompat.isMissingRpc(e, 'direct_chat_states')) return items;
+      rethrow;
+    }
+    if (rows.isEmpty) return items;
+    final states = <String, ({String createdBy, bool replied})>{};
+    for (final raw in rows) {
+      final map = Map<String, dynamic>.from(raw as Map);
+      final id = (map['chat_id'] ?? '').toString();
+      if (id.isEmpty) continue;
+      states[id] = (
+        createdBy: (map['created_by'] ?? '').toString(),
+        replied: map['i_replied'] == true,
+      );
+    }
+    if (states.isEmpty) return items;
+    return items
+        .map((item) {
+          final state = states[item.id];
+          if (state == null) return item;
+          final request =
+              state.createdBy.isNotEmpty &&
+              state.createdBy != userId &&
+              !state.replied;
+          return item.copyWith(
+            isDirect: true,
+            isRequest: request,
+            contextLabel: item.contextLabel.trim().isEmpty
+                ? 'Личный диалог'
+                : item.contextLabel,
+          );
+        })
+        .toList(growable: false);
+  }
+
+  /// Step 35: the one conversation with [otherUserId] — an existing casting
+  /// chat for the pair or a new direct one. Throws when blocked.
+  Future<String> ensureDirectChat(String otherUserId) async {
+    final id = otherUserId.trim();
+    if (id.isEmpty || _sb.auth.currentUser == null) return '';
+    final result = await _sb.rpc(
+      'ensure_direct_chat',
+      params: {'p_other_user_id': id},
+    );
+    return (result ?? '').toString();
   }
 
   List<ChatListItem> _chatListFromRpc(List<dynamic> rows, String userId) {
