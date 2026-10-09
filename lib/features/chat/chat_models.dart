@@ -174,7 +174,11 @@ class ChatListItem {
     this.lastMessageMine = false,
     this.lastMessageDelivered = false,
     this.lastMessageRead = false,
+    this.otherUserId = '',
   });
+
+  /// Step 36: the counterpart's user id, for the online dot in the list.
+  final String otherUserId;
 
   /// Status of my own last message, for the ✓ / ✓✓ before the preview.
   final bool lastMessageMine;
@@ -228,8 +232,10 @@ class ChatListItem {
     bool? lastMessageMine,
     bool? lastMessageDelivered,
     bool? lastMessageRead,
+    String? otherUserId,
   }) {
     return ChatListItem(
+      otherUserId: otherUserId ?? this.otherUserId,
       lastMessageMine: lastMessageMine ?? this.lastMessageMine,
       lastMessageDelivered: lastMessageDelivered ?? this.lastMessageDelivered,
       lastMessageRead: lastMessageRead ?? this.lastMessageRead,

@@ -251,6 +251,7 @@ class AppBottomNav extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     ref.watch(appNotificationsRealtimeProvider);
     ref.watch(presenceHeartbeatProvider);
+    ref.watch(onlineUsersProvider);
     ref.watch(chatListRealtimeProvider);
     ref.watch(tabAlertsSyncProvider);
     final t = AppLocalizations.of(context)!;

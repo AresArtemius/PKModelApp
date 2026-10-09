@@ -735,6 +735,7 @@ class ChatService {
         lastMessageMine: latest != null && latest.senderId == userId,
         lastMessageDelivered: latest?.isDelivered ?? false,
         lastMessageRead: latest?.isRead ?? false,
+        otherUserId: otherUserId,
       );
 
       unreadByParticipant[participantKey] =
@@ -892,6 +893,7 @@ class ChatService {
         lastMessageMine: latest != null && latest.senderId == userId,
         lastMessageDelivered: latest?.isDelivered ?? false,
         lastMessageRead: latest?.isRead ?? false,
+        otherUserId: otherUserId,
       );
 
       unreadByParticipant[participantKey] =

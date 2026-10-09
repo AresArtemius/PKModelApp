@@ -850,6 +850,43 @@ class _V2RoleTabs extends StatelessWidget {
   }
 }
 
+/// Step 36: a green dot on the avatar while the counterpart is online
+/// (Realtime Presence, see [onlineUsersProvider]).
+class _OnlineBadge extends ConsumerWidget {
+  const _OnlineBadge({required this.userId, required this.child});
+
+  final String userId;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final online =
+        userId.isNotEmpty &&
+        (ref.watch(onlineUsersProvider).valueOrNull?.contains(userId) ??
+            false);
+    if (!online) return child;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        child,
+        Positioned(
+          right: -1,
+          bottom: -1,
+          child: Container(
+            width: 14,
+            height: 14,
+            decoration: BoxDecoration(
+              color: Tokens.success,
+              shape: BoxShape.circle,
+              border: Border.all(color: Tokens.bg, width: 2.5),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _ChatRowV2 extends StatefulWidget {
   const _ChatRowV2({
     required this.item,
@@ -918,7 +955,10 @@ class _ChatRowV2State extends State<_ChatRowV2> {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _V2Avatar(url: item.photoUrl, size: 52),
+                    _OnlineBadge(
+                      userId: item.otherUserId,
+                      child: _V2Avatar(url: item.photoUrl, size: 52),
+                    ),
                     const SizedBox(width: 14),
                     Expanded(
                       child: Column(

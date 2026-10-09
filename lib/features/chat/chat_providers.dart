@@ -139,6 +139,116 @@ final userPresenceProvider = StreamProvider.autoDispose
       return ref.watch(chatServiceProvider).watchPresence(userId);
     });
 
+/// Step 36: Supabase Realtime Presence — the set of user ids connected
+/// right now. One shared channel; every client tracks itself while its
+/// tab is visible, and the server drops it the moment the socket closes,
+/// so the status flips within seconds instead of waiting out a heartbeat.
+/// Watched by the app shell so the channel stays alive on every page.
+final onlineUsersProvider = StreamProvider<Set<String>>((ref) {
+  final userId = ref.watch(currentUserIdProvider);
+  final controller = StreamController<Set<String>>();
+  if (userId == null || userId.isEmpty) {
+    controller.add(const <String>{});
+    ref.onDispose(controller.close);
+    return controller.stream;
+  }
+
+  final sb = ref.read(supabaseProvider);
+  final channel = sb.channel(
+    'presence:online',
+    opts: RealtimeChannelConfig(key: userId, enabled: true),
+  );
+
+  void sync() {
+    final ids = <String>{};
+    for (final state in channel.presenceState()) {
+      for (final presence in state.presences) {
+        final id = (presence.payload['user_id'] ?? state.key).toString();
+        if (id.isNotEmpty) ids.add(id);
+      }
+    }
+    if (!controller.isClosed) controller.add(ids);
+  }
+
+  var visible = true;
+  var subscribed = false;
+  Future<void> track() async {
+    if (!subscribed || !visible) return;
+    try {
+      await channel.track(<String, dynamic>{
+        'user_id': userId,
+        'online_at': DateTime.now().toUtc().toIso8601String(),
+      });
+    } catch (_) {
+      // Presence is a soft signal.
+    }
+  }
+
+  Future<void> untrack() async {
+    if (!subscribed) return;
+    try {
+      await channel.untrack();
+    } catch (_) {
+      // Presence is a soft signal.
+    }
+  }
+
+  channel
+      .onPresenceSync((_) => sync())
+      .onPresenceJoin((_) => sync())
+      .onPresenceLeave((_) => sync())
+      .subscribe((status, error) {
+        if (status == RealtimeSubscribeStatus.subscribed) {
+          subscribed = true;
+          unawaited(track());
+        } else if (status == RealtimeSubscribeStatus.closed) {
+          subscribed = false;
+        }
+      });
+
+  // A hidden tab is not «в сети»: the same rule the heartbeat follows.
+  final lifecycle = AppLifecycleListener(
+    onShow: () {
+      visible = true;
+      unawaited(track());
+    },
+    onResume: () {
+      visible = true;
+      unawaited(track());
+    },
+    onHide: () {
+      visible = false;
+      unawaited(untrack());
+    },
+    onPause: () {
+      visible = false;
+      unawaited(untrack());
+    },
+  );
+
+  ref.onDispose(() {
+    lifecycle.dispose();
+    unawaited(sb.removeChannel(channel));
+    controller.close();
+  });
+  return controller.stream;
+});
+
+/// Step 36: whether [userId] is online — connected over Realtime Presence,
+/// or (while the presence channel is still connecting) fresh by the
+/// heartbeat table.
+final userIsOnlineProvider = Provider.autoDispose.family<bool, String>((
+  ref,
+  userId,
+) {
+  final id = userId.trim();
+  if (id.isEmpty) return false;
+  final live = ref.watch(onlineUsersProvider).valueOrNull;
+  if (live != null) return live.contains(id);
+  return ref.watch(userPresenceProvider(id)).valueOrNull?.isOnlineNow ??
+      false;
+});
+
 /// Б4: the chat list and the unread badge follow realtime changes to
 /// messages and chats instead of waiting for a manual refresh.
 final chatListRealtimeProvider = Provider.autoDispose<void>((ref) {
