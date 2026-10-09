@@ -653,12 +653,16 @@ class _ProfilesTablePanel extends StatelessWidget {
                   decoration: adminCardDecoration().copyWith(
                     border: Border.all(color: kBorderColor),
                   ),
-                  child: Scrollbar(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) => Scrollbar(
                     thumbVisibility: isDesktop,
                     child: SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       child: SizedBox(
-                        width: _kProfilesTableWidth,
+                        width: adminTableWidth(
+                          constraints,
+                          minWidth: _kProfilesTableWidth,
+                        ),
                         child: ListView.separated(
                           // ignore: deprecated_member_use
                           cacheExtent: _kProfilesListCacheExtent,
@@ -685,6 +689,7 @@ class _ProfilesTablePanel extends StatelessWidget {
                           },
                         ),
                       ),
+                    ),
                     ),
                   ),
                 )
@@ -875,9 +880,11 @@ class _ProfilesTableHeader extends StatelessWidget {
       height: 42,
       child: Row(
         children: [
-          _HeaderCell(
-            width: _kProfileColProfile,
-            text: ru ? 'Анкета' : 'Profile',
+          Expanded(
+            child: _HeaderCell(
+              width: double.infinity,
+              text: ru ? 'Анкета' : 'Profile',
+            ),
           ),
           _HeaderCell(
             width: _kProfileColStatus,
@@ -947,8 +954,7 @@ class _ProfileTableRow extends StatelessWidget {
       height: 82,
       child: Row(
         children: [
-          SizedBox(
-            width: _kProfileColProfile,
+          Expanded(
             child: Row(
               children: [
                 _ProfileCover(profile: profile),

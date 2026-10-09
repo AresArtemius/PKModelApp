@@ -607,12 +607,13 @@ class _SelectionsTable extends StatelessWidget {
       decoration: adminCardDecoration().copyWith(
         border: Border.all(color: kBorderColor),
       ),
-      child: Scrollbar(
+      child: LayoutBuilder(
+        builder: (context, constraints) => Scrollbar(
         thumbVisibility: true,
         child: SingleChildScrollView(
           scrollDirection: Axis.horizontal,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minWidth: 1080),
+          child: SizedBox(
+            width: adminTableWidth(constraints, minWidth: 1080),
             child: ListView.separated(
               // ignore: deprecated_member_use
               cacheExtent: _kSelectionsListCacheExtent,
@@ -624,7 +625,7 @@ class _SelectionsTable extends StatelessWidget {
                 if (index == 0) {
                   return _HeaderRow(
                     cells: [
-                      (ru ? 'Подборка' : 'Selection', 300.0),
+                      (ru ? 'Подборка' : 'Selection', double.infinity),
                       (ru ? 'Статус' : 'Status', 170.0),
                       (ru ? 'Владелец' : 'Owner', 180.0),
                       (ru ? 'Клиент/бренд' : 'Client/brand', 180.0),
@@ -649,6 +650,7 @@ class _SelectionsTable extends StatelessWidget {
           ),
         ),
       ),
+      ),
     );
   }
 }
@@ -668,7 +670,13 @@ class _SelectionTableRow extends StatelessWidget {
       height: 76,
       child: Row(
         children: [
-          _TextCell(width: 300, text: selection.title, subtitle: selection.id),
+          Expanded(
+            child: _TextCell(
+              width: double.infinity,
+              text: selection.title,
+              subtitle: selection.id,
+            ),
+          ),
           SizedBox(
             width: 170,
             child: _SelectionStatusBadge(status: selection.status),
@@ -935,17 +943,29 @@ class _HeaderRow extends StatelessWidget {
       child: Row(
         children: [
           for (final cell in cells)
-            SizedBox(
-              width: cell.$2,
-              child: Text(
-                cell.$1,
-                style: adminCommandStyle(
-                  size: 11,
-                  letterSpacing: 0.8,
-                  color: kTextMuted,
+            if (cell.$2 == double.infinity)
+              Expanded(
+                child: Text(
+                  cell.$1,
+                  style: adminCommandStyle(
+                    size: 11,
+                    letterSpacing: 0.8,
+                    color: kTextMuted,
+                  ),
+                ),
+              )
+            else
+              SizedBox(
+                width: cell.$2,
+                child: Text(
+                  cell.$1,
+                  style: adminCommandStyle(
+                    size: 11,
+                    letterSpacing: 0.8,
+                    color: kTextMuted,
+                  ),
                 ),
               ),
-            ),
         ],
       ),
     );
