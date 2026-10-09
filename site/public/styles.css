@@ -808,3 +808,40 @@ section + section {
     grid-template-columns: repeat(4, 1fr);
   }
 }
+
+/* ---------------------------------------------------------------- castings list */
+.casting-list {
+  display: grid;
+  gap: 12px;
+}
+.casting {
+  display: grid;
+  gap: 6px;
+  padding: 18px 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  transition: border-color 0.15s, background-color 0.15s;
+}
+.casting:hover {
+  border-color: var(--border-strong);
+  background: var(--surface);
+}
+.casting-stage {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--success);
+}
+.casting b {
+  font-size: 18px;
+  font-weight: 600;
+}
+.casting p {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 15px;
+}
+@media (min-width: 720px) {
+  .casting-list {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

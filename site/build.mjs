@@ -326,6 +326,97 @@ function selectionPage(s, profiles) {
   });
 }
 
+function modelCard(p, rel) {
+  const photos = photosOf(p);
+  const name = trim(p.full_name) || 'Анкета';
+  return `<a class="model-card" href="${rel}p/${p.id}/">
+    <span class="model-photo">${
+      photos[0]
+        ? `<img src="${esc(imageVariant(photos[0], 600))}" alt="${esc(name)}" loading="lazy" width="600" height="800">`
+        : ''
+    }</span>
+    <b>${esc(name)}</b>
+    <span class="muted">${esc(metaLine(p))}</span>
+  </a>`;
+}
+
+function modelsPage(profiles) {
+  const canonical = `${siteUrl}/models/`;
+  const cities = [...new Set(profiles.map((p) => trim(p.city)).filter(Boolean))].slice(0, 12);
+  const body = `
+    <section class="profile">
+      <div class="wrap">
+        <div class="section-head">
+          <p class="eyebrow">Витрина</p>
+          <h1>Модели и таланты</h1>
+          <p>${profiles.length} ${profiles.length === 1 ? 'анкета' : profiles.length < 5 ? 'анкеты' : 'анкет'} прошли модерацию PK Management${cities.length ? ` · ${esc(cities.join(', '))}` : ''}. Параметры, фильтры по росту и возрасту, подборки и приглашения — в приложении.</p>
+          <div class="profile-actions"><a class="btn btn-primary" href="${appUrl}/search">Открыть каталог с фильтрами</a></div>
+        </div>
+        <div class="model-grid">${profiles.map((p) => modelCard(p, '../')).join('')}</div>
+      </div>
+    </section>`;
+  return layout({
+    title: 'Модели и таланты — каталог PK Management',
+    description: `Каталог проверенных анкет детских и взрослых моделей, актёров и специалистов: ${profiles.length} анкет с фото и параметрами. Подборки и приглашения на кастинг — в приложении.`,
+    canonical,
+    ogImage: `${siteUrl}/assets/og.jpg`,
+    body,
+    rel: '../',
+    jsonLd: {
+      '@context': 'https://schema.org',
+      '@type': 'CollectionPage',
+      name: 'Модели и таланты — PK Management',
+      url: canonical,
+    },
+  });
+}
+
+const stageLabel = {
+  intake: 'Набор',
+  accepting_applications: 'Открыт приём откликов',
+  shortlist: 'Шорт-лист',
+  callback: 'Колбэк',
+  approval: 'Утверждение',
+  shoot: 'Съёмка',
+  completed: 'Завершён',
+};
+
+function castingsPage(castings) {
+  const canonical = `${siteUrl}/castings/`;
+  const body = `
+    <section class="profile">
+      <div class="wrap">
+        <div class="section-head">
+          <p class="eyebrow">Кастинги</p>
+          <h1>Открытые кастинги</h1>
+          <p>Отклик отправляется из приложения с выбранной анкетой; статус отклика виден в аккаунте.</p>
+        </div>
+        ${
+          castings.length
+            ? `<div class="casting-list">${castings
+                .map(
+                  (c) => `<a class="casting" href="${appUrl}/castings?casting=${c.id}">
+                    <span class="casting-stage">${esc(stageLabel[trim(c.project_stage)] || 'Открыт')}</span>
+                    <b>${esc(trim(c.title) || 'Кастинг')}</b>
+                    ${trim(c.description) ? `<p>${esc(trim(c.description).slice(0, 220))}${trim(c.description).length > 220 ? '…' : ''}</p>` : ''}
+                    <span class="muted">${[trim(c.dates), trim(c.fee)].filter(Boolean).map(esc).join(' · ')}</span>
+                  </a>`,
+                )
+                .join('')}</div>`
+            : '<p class="muted">Сейчас открытых кастингов нет — новые появляются в приложении.</p>'
+        }
+      </div>
+    </section>`;
+  return layout({
+    title: 'Открытые кастинги — PK Management',
+    description: 'Актуальные кастинги для моделей и актёров: даты, гонорар, условия. Откликнуться можно из приложения PK Management.',
+    canonical,
+    ogImage: `${siteUrl}/assets/og.jpg`,
+    body,
+    rel: '../',
+  });
+}
+
 // ------------------------------------------------------------------ data
 
 async function rest(path) {
@@ -362,6 +453,23 @@ async function generate() {
     pages.push({ loc: `/p/${p.id}/`, priority: '0.7', changefreq: 'weekly', lastmod: p.updated_at });
   }
   console.log(`profiles: ${profiles.length}`);
+  mkdirSync(join(dist, 'models'), { recursive: true });
+  writeFileSync(join(dist, 'models', 'index.html'), modelsPage(profiles));
+  pages.push({ loc: '/models/', priority: '0.9', changefreq: 'daily' });
+
+  // Castings: readable by anon only if the table's RLS allows it; otherwise
+  // the page says there are none right now.
+  let castings = [];
+  try {
+    castings = await rest('castings?select=id,title,description,fee,dates,project_stage,created_at&order=created_at.desc&limit=100');
+    castings = castings.filter((c) => ['intake', 'accepting_applications', ''].includes(trim(c.project_stage)));
+  } catch (e) {
+    console.warn(`castings not readable: ${e.message.slice(0, 120)}`);
+  }
+  mkdirSync(join(dist, 'castings'), { recursive: true });
+  writeFileSync(join(dist, 'castings', 'index.html'), castingsPage(castings));
+  pages.push({ loc: '/castings/', priority: '0.8', changefreq: 'daily' });
+  console.log(`castings: ${castings.length}`);
 
   const byId = new Map(profiles.map((p) => [p.id, p]));
   let selections = [];
