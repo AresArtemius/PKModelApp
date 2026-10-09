@@ -27,6 +27,7 @@ import '../../core/supabase_provider.dart';
 import '../../gen_l10n/app_localizations.dart';
 import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
+import 'chat_context_panel.dart';
 import 'chat_models.dart';
 import 'chat_providers.dart';
 import 'chat_web_input_stub.dart'
@@ -120,6 +121,11 @@ class _ChatPageState extends ConsumerState<ChatPage> {
   bool _feedSeeded = false;
   final Set<String> _seenMessageIds = <String>{};
   bool _showScrollDown = false;
+
+  /// Step 29: the context panel on wide screens; the choice survives
+  /// switching between conversations within the session.
+  static bool _contextPanelPreferred = true;
+  bool _contextPanelOpen = _contextPanelPreferred;
   int _newWhileScrolled = 0;
 
   /// Optimistic outgoing messages shown until the realtime stream carries
@@ -517,6 +523,13 @@ class _ChatPageState extends ConsumerState<ChatPage> {
         ),
       );
     }
+  }
+
+  void _toggleContextPanel() {
+    setState(() {
+      _contextPanelOpen = !_contextPanelOpen;
+      _contextPanelPreferred = _contextPanelOpen;
+    });
   }
 
   void _scrollFeedToBottom() {
@@ -1406,6 +1419,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
               ...?(body.isEmpty ? null : _replyMetadata(_replyingTo)),
             },
           );
+      ref.invalidate(chatMediaProvider(widget.chatId));
     } finally {
       if (mounted) setState(() => _uploadingMedia = false);
     }
@@ -1930,6 +1944,13 @@ class _ChatPageState extends ConsumerState<ChatPage> {
         : (chatContext.modelUserId == userId
               ? chatContext.agentUserId
               : chatContext.modelUserId);
+    // Step 29: the context column fits next to the list and the feed only
+    // on a wide window.
+    final canShowContextPanel =
+        v2 &&
+        widget.embedded &&
+        MediaQuery.sizeOf(context).width >= chatContextPanelBreakpoint;
+    final showContextPanel = canShowContextPanel && _contextPanelOpen;
     final header = v2
         ? _ChatHeaderV2(
             title: headerData.title,
@@ -1940,6 +1961,8 @@ class _ChatPageState extends ConsumerState<ChatPage> {
             onSearch: _toggleSearch,
             searchActive: _searchOpen,
             onDeleteChat: _deleteChat,
+            onToggleInfo: canShowContextPanel ? _toggleContextPanel : null,
+            infoActive: showContextPanel,
             onOpenProfile: profileId.isEmpty
                 ? null
                 : () => context.push('${Routes.modelPrefix}$profileId'),
@@ -2259,9 +2282,43 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       ],
     );
 
+    final body = showContextPanel
+        ? Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(child: content),
+              ChatContextPanel(
+                chatId: widget.chatId,
+                title: headerData.title,
+                avatarUrl: headerData.avatarUrl,
+                otherUserId: otherUserId,
+                summary: chatContext,
+                contexts: contexts.valueOrNull ?? const <ChatContextEntry>[],
+                pinned: pinnedPanelMessages,
+                localMedia: searchVisibleMessages,
+                previewBuilder: _replyPreviewText,
+                onJumpToMessage: (message) =>
+                    _jumpToMessage(message.id, searchVisibleMessages),
+                onUnpin: (message) => _setMessagePinned(message, false),
+                onOpenMedia: (message) => _openMediaViewer(context, message),
+                onClose: _toggleContextPanel,
+                onOpenProfile: profileId.isEmpty
+                    ? null
+                    : () => context.push('${Routes.modelPrefix}$profileId'),
+                onOpenCasting:
+                    selectionId.isEmpty || chatContext?.selectionIsPublic != true
+                    ? null
+                    : () => context.push(
+                        '${Routes.publicSelectionPrefix}$selectionId',
+                      ),
+              ),
+            ],
+          )
+        : content;
+
     final withDropOverlay = Stack(
       children: [
-        content,
+        body,
         if (_dragging)
           Positioned.fill(
             child: IgnorePointer(
@@ -4187,6 +4244,8 @@ class _ChatHeaderV2 extends ConsumerWidget {
     this.onOpenProfile,
     this.onOpenCasting,
     this.onBack,
+    this.onToggleInfo,
+    this.infoActive = false,
   });
 
   /// Set on the standalone (phone-width) page; the two-column layout has
@@ -4201,6 +4260,10 @@ class _ChatHeaderV2 extends ConsumerWidget {
   final VoidCallback onDeleteChat;
   final VoidCallback? onOpenProfile;
   final VoidCallback? onOpenCasting;
+
+  /// Step 29: shows / hides the context panel; null when it does not fit.
+  final VoidCallback? onToggleInfo;
+  final bool infoActive;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -4364,6 +4427,21 @@ class _ChatHeaderV2 extends ConsumerWidget {
             style: _headerIconStyle,
             icon: const Icon(Icons.delete_outline_rounded, size: 22),
           ),
+          if (onToggleInfo != null)
+            IconButton(
+              tooltip: infoActive
+                  ? (ru ? 'Скрыть панель' : 'Hide panel')
+                  : (ru ? 'О диалоге' : 'About'),
+              onPressed: onToggleInfo,
+              style: infoActive
+                  ? IconButton.styleFrom(
+                      foregroundColor: Tokens.ink,
+                      backgroundColor: Tokens.surfaceAlt,
+                      shape: const CircleBorder(),
+                    )
+                  : _headerIconStyle,
+              icon: const Icon(Icons.info_outline_rounded, size: 22),
+            ),
         ],
       ),
     );

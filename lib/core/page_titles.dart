@@ -45,7 +45,9 @@ String? titleForPath(String path, {required bool russian}) {
   String pick(String ru, String en) => russian ? ru : en;
   if (path == Routes.search) return pick('Каталог', 'Catalog');
   if (path == Routes.castings) return pick('Кастинги', 'Castings');
-  if (path == Routes.chats) return pick('Чаты', 'Chats');
+  if (path == Routes.chats || path.startsWith(Routes.chatsChatPrefix)) {
+    return pick('Чаты', 'Chats');
+  }
   if (path.startsWith(Routes.chatPrefix)) return pick('Чат', 'Chat');
   if (path == Routes.invitations) return pick('Приглашения', 'Invitations');
   if (path == Routes.me) return pick('Мой аккаунт', 'My account');

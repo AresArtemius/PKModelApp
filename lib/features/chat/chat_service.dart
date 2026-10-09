@@ -1534,6 +1534,71 @@ class ChatService {
         .toList(growable: false);
   }
 
+  /// Step 29: photos, videos and files of a conversation for the context
+  /// panel, newest first.
+  Future<List<ChatMessage>> fetchChatMedia(
+    String chatId, {
+    int limit = 90,
+  }) async {
+    if (chatId.trim().isEmpty) return const <ChatMessage>[];
+
+    Future<List<dynamic>> run({
+      required bool includeReadFields,
+      required bool includeFileFields,
+      required bool includeMetadata,
+    }) async {
+      return await _sb
+          .from('selection_chat_messages')
+          .select(
+            _messageSelect(
+              includeReadFields: includeReadFields,
+              includeFileFields: includeFileFields,
+              includeMetadata: includeMetadata,
+            ),
+          )
+          .eq('chat_id', chatId)
+          .inFilter('media_type', const ['image', 'video', 'file'])
+          .filter('deleted_at', 'is', null)
+          .order('created_at', ascending: false)
+          .limit(limit);
+    }
+
+    List<dynamic> rows;
+    try {
+      rows = await run(
+        includeReadFields: true,
+        includeFileFields: true,
+        includeMetadata: true,
+      );
+    } on PostgrestException catch (e) {
+      if (_isMissingChatFileColumn(e)) {
+        rows = await run(
+          includeReadFields: true,
+          includeFileFields: false,
+          includeMetadata: true,
+        );
+      } else if (_isMissingChatMetadataColumn(e)) {
+        rows = await run(
+          includeReadFields: true,
+          includeFileFields: true,
+          includeMetadata: false,
+        );
+      } else if (_isMissingChatReadField(e)) {
+        rows = await run(
+          includeReadFields: false,
+          includeFileFields: true,
+          includeMetadata: true,
+        );
+      } else {
+        rethrow;
+      }
+    }
+    return rows
+        .map((e) => ChatMessage.fromMap(Map<String, dynamic>.from(e as Map)))
+        .where((e) => !e.isDeleted && e.hasMedia)
+        .toList(growable: false);
+  }
+
   Future<List<ChatMessage>> fetchPinnedMessages(String chatId) async {
     if (chatId.trim().isEmpty) return const <ChatMessage>[];
 
