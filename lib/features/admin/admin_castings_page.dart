@@ -544,12 +544,14 @@ class _CastingsTable extends StatelessWidget {
       decoration: adminCardDecoration().copyWith(
         border: Border.all(color: kBorderColor),
       ),
-      child: Scrollbar(
+      child: LayoutBuilder(
+        builder: (context, constraints) => Scrollbar(
         thumbVisibility: true,
         child: SingleChildScrollView(
           scrollDirection: Axis.horizontal,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minWidth: 1040),
+          child: SizedBox(
+            // The table fills the page; the first column takes the extra.
+            width: adminTableWidth(constraints, minWidth: 1040),
             child: ListView.separated(
               // ignore: deprecated_member_use
               cacheExtent: _kCastingsListCacheExtent,
@@ -561,7 +563,7 @@ class _CastingsTable extends StatelessWidget {
                 if (index == 0) {
                   return _HeaderRow(
                     cells: [
-                      (ru ? 'Кастинг' : 'Casting', 320.0),
+                      (ru ? 'Кастинг' : 'Casting', double.infinity),
                       (ru ? 'Этап' : 'Stage', 170.0),
                       (ru ? 'Владелец' : 'Owner', 180.0),
                       (ru ? 'Даты' : 'Dates', 160.0),
@@ -585,6 +587,7 @@ class _CastingsTable extends StatelessWidget {
           ),
         ),
       ),
+      ),
     );
   }
 }
@@ -604,7 +607,13 @@ class _CastingTableRow extends StatelessWidget {
       height: 76,
       child: Row(
         children: [
-          _TextCell(width: 320, text: casting.title, subtitle: casting.id),
+          Expanded(
+            child: _TextCell(
+              width: double.infinity,
+              text: casting.title,
+              subtitle: casting.id,
+            ),
+          ),
           SizedBox(width: 170, child: _StageBadge(stage: casting.stage)),
           _TextCell(width: 180, text: casting.ownerLabel),
           _TextCell(width: 160, text: casting.datesText),
@@ -854,17 +863,29 @@ class _HeaderRow extends StatelessWidget {
       child: Row(
         children: [
           for (final cell in cells)
-            SizedBox(
-              width: cell.$2,
-              child: Text(
-                cell.$1,
-                style: adminCommandStyle(
-                  size: 11,
-                  letterSpacing: 0.8,
-                  color: kTextMuted,
+            if (cell.$2 == double.infinity)
+              Expanded(
+                child: Text(
+                  cell.$1,
+                  style: adminCommandStyle(
+                    size: 11,
+                    letterSpacing: 0.8,
+                    color: kTextMuted,
+                  ),
+                ),
+              )
+            else
+              SizedBox(
+                width: cell.$2,
+                child: Text(
+                  cell.$1,
+                  style: adminCommandStyle(
+                    size: 11,
+                    letterSpacing: 0.8,
+                    color: kTextMuted,
+                  ),
                 ),
               ),
-            ),
         ],
       ),
     );

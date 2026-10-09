@@ -464,12 +464,14 @@ class _UsersTablePanel extends StatelessWidget {
                   decoration: adminCardDecoration().copyWith(
                     border: Border.all(color: kBorderColor),
                   ),
-                  child: Scrollbar(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) => Scrollbar(
                     thumbVisibility: isDesktop,
                     child: SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(
+                      child: SizedBox(
+                        width: adminTableWidth(
+                          constraints,
                           minWidth: isDesktop ? 980 : 860,
                         ),
                         child: ListView.separated(
@@ -495,6 +497,7 @@ class _UsersTablePanel extends StatelessWidget {
                           },
                         ),
                       ),
+                    ),
                     ),
                   ),
                 )
@@ -657,7 +660,12 @@ class _UsersTableHeader extends StatelessWidget {
       height: 42,
       child: Row(
         children: [
-          _HeaderCell(width: 300, text: ru ? 'Аккаунт' : 'Account'),
+          Expanded(
+            child: _HeaderCell(
+              width: double.infinity,
+              text: ru ? 'Аккаунт' : 'Account',
+            ),
+          ),
           _HeaderCell(width: 150, text: ru ? 'Роль' : 'Role'),
           _HeaderCell(width: 230, text: ru ? 'Контакт' : 'Contact'),
           _HeaderCell(width: 170, text: ru ? 'Город' : 'City'),
@@ -709,8 +717,7 @@ class _UserTableRow extends StatelessWidget {
       height: 76,
       child: Row(
         children: [
-          SizedBox(
-            width: 300,
+          Expanded(
             child: Row(
               children: [
                 _UserAvatar(user: user),

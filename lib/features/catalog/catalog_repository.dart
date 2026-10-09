@@ -8,7 +8,17 @@ import 'catalog_filter_bounds.dart';
 import 'model_data.dart';
 
 /// Result ordering offered in the catalogue header.
-enum CatalogSort { recommended, newest, ageAsc, ageDesc, heightAsc, heightDesc }
+enum CatalogSort {
+  recommended,
+  newest,
+
+  /// Views and selection adds over the last 30 days (catalog_popularity_sort.sql).
+  popular,
+  ageAsc,
+  ageDesc,
+  heightAsc,
+  heightDesc,
+}
 
 /// Distinct values of the text facets among published profiles, with the
 /// number of profiles per value (eye colour, hair colour, country, city).
@@ -135,6 +145,11 @@ class CatalogRepository {
           ordered = ordered.order('full_name');
         case CatalogSort.newest:
           ordered = ordered.order('created_at', ascending: false);
+        case CatalogSort.popular:
+          ordered = ordered.order('popularity', ascending: false);
+          if (includePro) {
+            ordered = ordered.order('is_pro', ascending: false);
+          }
         case CatalogSort.ageAsc:
           ordered = ordered.order('age', ascending: true, nullsFirst: false);
         case CatalogSort.ageDesc:
@@ -148,14 +163,22 @@ class CatalogRepository {
       try {
         rows = await ordered.order('id');
       } on PostgrestException catch (e) {
-        // Older schema without created_at: newest ≈ highest id.
-        if (sort != CatalogSort.newest ||
+        if (sort == CatalogSort.popular &&
+            SupabaseCompat.isMissingColumn(e, 'popularity')) {
+          // catalog_popularity_sort.sql not applied yet: newest instead.
+          rows = await q
+              .range(offset, offset + limit - 1)
+              .order('created_at', ascending: false)
+              .order('id');
+        } else if (sort != CatalogSort.newest ||
             !SupabaseCompat.isMissingColumn(e, 'created_at')) {
           rethrow;
+        } else {
+          // Older schema without created_at: newest ≈ highest id.
+          rows = await q
+              .range(offset, offset + limit - 1)
+              .order('id', ascending: false);
         }
-        rows = await q
-            .range(offset, offset + limit - 1)
-            .order('id', ascending: false);
       }
 
       return rows

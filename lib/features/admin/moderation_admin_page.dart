@@ -73,6 +73,7 @@ List<String> _photosWithCoverFirst(
 
 String _moderationCoverLabel(BuildContext context) {
   final ru = Localizations.localeOf(context).languageCode == 'ru';
+  if (adminV2) return ru ? 'Главное фото' : 'Cover photo';
   return ru ? 'ГЛАВНОЕ ФОТО' : 'COVER PHOTO';
 }
 
@@ -439,7 +440,9 @@ class _ModerationAdminPageState extends ConsumerState<ModerationAdminPage> {
                                   ).languageCode ==
                                   'ru';
                               return AdminMessageCard(
-                                text: ru ? 'ЗАЯВОК НЕТ' : 'NO REQUESTS',
+                                text: adminV2
+                                    ? (ru ? 'Заявок нет' : 'No requests')
+                                    : (ru ? 'ЗАЯВОК НЕТ' : 'NO REQUESTS'),
                               );
                             }
 
@@ -833,7 +836,9 @@ class _ModerationDesktopQueuePanel extends StatelessWidget {
               children: [
                 Expanded(
                   child: Text(
-                    ru ? 'ОЧЕРЕДЬ' : 'QUEUE',
+                    adminV2
+                        ? (ru ? 'Очередь' : 'Queue')
+                        : (ru ? 'ОЧЕРЕДЬ' : 'QUEUE'),
                     style: adminCommandStyle(size: 17, letterSpacing: 1.2),
                   ),
                 ),
@@ -1381,7 +1386,9 @@ class _ModerationReviewMediaGallery extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          ru ? 'МЕДИА' : 'MEDIA',
+          adminV2
+              ? (ru ? 'Медиа' : 'Media')
+              : (ru ? 'МЕДИА' : 'MEDIA'),
           style: adminCommandStyle(size: 13, letterSpacing: 1.2),
         ),
         const SizedBox(height: 12),

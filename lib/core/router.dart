@@ -32,6 +32,8 @@ import '../features/auth/register_page.dart';
 import '../features/billing/billing_page.dart';
 import '../features/castings/casting_page.dart';
 import '../features/castings/castings_provider.dart';
+import '../features/castings/casting_reference_media.dart';
+import '../features/chat/chat_models.dart';
 import '../features/chat/chat_page.dart';
 import '../features/chat/chats_page.dart';
 import '../features/chat/chat_providers.dart';
@@ -126,6 +128,13 @@ abstract class Routes {
   static const publicSelection = '/s/:id';
   static const chatPrefix = '/chat/';
   static const chat = '/chat/:id';
+
+  /// Full-screen viewers as routes, so the browser «Back» closes them:
+  /// a photo / video from a chat and a casting reference.
+  static const chatMedia = '/chat/:id/media/:messageId';
+  static String chatMediaLocation(String chatId, String messageId) =>
+      '$chatPrefix$chatId/media/$messageId';
+  static const castingReference = '/castings/reference';
 
   /// Step 28 (web): the conversation open inside the two-column chats page
   /// lives in the URL, so a reload or a shared link lands on it.
@@ -578,6 +587,30 @@ final List<RouteBase> appRoutes = [
       final id = state.pathParameters[_routeParamId] ?? '';
       return ChatPage(chatId: id);
     },
+  ),
+  // The message travels in `extra`; on a direct open (reload, shared link)
+  // there is none, so we land on the chat.
+  GoRoute(
+    path: Routes.chatMedia,
+    redirect: (context, state) {
+      if (state.extra is ChatMessage) return null;
+      return Routes.chatLocation(state.pathParameters[_routeParamId] ?? '');
+    },
+    pageBuilder: (context, state) => _fadePage(
+      state,
+      ChatMediaViewerPage(message: state.extra as ChatMessage),
+    ),
+  ),
+  GoRoute(
+    path: Routes.castingReference,
+    redirect: (context, state) =>
+        state.extra is CastingReferenceMedia ? null : Routes.castings,
+    pageBuilder: (context, state) => _fadePage(
+      state,
+      CastingReferenceLightboxPage(
+        item: state.extra as CastingReferenceMedia,
+      ),
+    ),
   ),
 
   ShellRoute(

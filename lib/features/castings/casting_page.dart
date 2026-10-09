@@ -2277,41 +2277,48 @@ void _showCastingReferenceLightbox(
   BuildContext context,
   CastingReferenceMedia item,
 ) {
-  showDialog<void>(
-    context: context,
-    barrierColor: Colors.black.withValues(alpha: 0.86),
-    builder: (context) {
-      return Dialog.fullscreen(
-        backgroundColor: Colors.transparent,
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => Navigator.of(context).pop(),
-                child: const ColoredBox(color: Colors.transparent),
-              ),
+  // A route rather than a dialog, so the browser «Back» closes it.
+  context.push(Routes.castingReference, extra: item);
+}
+
+/// Full-screen casting reference (`/castings/reference`, item in `extra`).
+class CastingReferenceLightboxPage extends StatelessWidget {
+  const CastingReferenceLightboxPage({super.key, required this.item});
+
+  final CastingReferenceMedia item;
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog.fullscreen(
+      backgroundColor: const Color(0xDD000000),
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => Navigator.of(context).pop(),
+              child: const ColoredBox(color: Colors.transparent),
             ),
-            Positioned.fill(
-              child: SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.all(18),
-                  child: InteractiveViewer(
-                    minScale: 1,
-                    maxScale: 4,
-                    child: Center(
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(Tokens.radiusLg),
-                        child: CachedNetworkImage(
-                          imageUrl: item.url,
-                          fit: BoxFit.contain,
-                          placeholder: (_, _) =>
-                              const ColoredBox(color: Color(0x22000000)),
-                          errorWidget: (_, _, _) => const Icon(
-                            Icons.broken_image_rounded,
-                            color: Colors.white,
-                            size: 44,
-                          ),
+          ),
+          Positioned.fill(
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(18),
+                child: InteractiveViewer(
+                  minScale: 1,
+                  maxScale: 4,
+                  child: Center(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(Tokens.radiusLg),
+                      child: CachedNetworkImage(
+                        imageUrl: item.url,
+                        fit: BoxFit.contain,
+                        placeholder: (_, _) =>
+                            const ColoredBox(color: Color(0x22000000)),
+                        errorWidget: (_, _, _) => const Icon(
+                          Icons.broken_image_rounded,
+                          color: Colors.white,
+                          size: 44,
                         ),
                       ),
                     ),
@@ -2319,25 +2326,25 @@ void _showCastingReferenceLightbox(
                 ),
               ),
             ),
-            Positioned(
-              top: 18,
-              right: 18,
-              child: SafeArea(
-                child: IconButton.filled(
-                  style: IconButton.styleFrom(
-                    backgroundColor: Colors.white.withValues(alpha: 0.92),
-                    foregroundColor: Tokens.text,
-                  ),
-                  onPressed: () => Navigator.of(context).pop(),
-                  icon: const Icon(Icons.close_rounded),
+          ),
+          Positioned(
+            top: 18,
+            right: 18,
+            child: SafeArea(
+              child: IconButton.filled(
+                style: IconButton.styleFrom(
+                  backgroundColor: Colors.white.withValues(alpha: 0.92),
+                  foregroundColor: Tokens.text,
                 ),
+                onPressed: () => Navigator.of(context).pop(),
+                icon: const Icon(Icons.close_rounded),
               ),
             ),
-          ],
-        ),
-      );
-    },
-  );
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _ReferenceTileButton extends StatelessWidget {

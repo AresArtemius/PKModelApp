@@ -9,6 +9,15 @@ import 'admin_shell_v2.dart';
 /// helpers below switch on this so every section changes at once.
 const bool adminV2 = kIsWeb;
 
+/// Width for a horizontally scrolling admin table: at least [minWidth],
+/// and the whole available width when the page is wider (web v2 tables
+/// span the page instead of leaving a gap on the right).
+double adminTableWidth(BoxConstraints constraints, {required double minWidth}) {
+  final available = constraints.maxWidth;
+  if (!available.isFinite) return minWidth;
+  return available > minWidth ? available : minWidth;
+}
+
 TextStyle adminCommandStyle({
   double size = 16,
   double letterSpacing = 1.8,
