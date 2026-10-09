@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -2090,6 +2092,136 @@ class _CastingResponsesV2State extends State<_CastingResponsesV2> {
   final Set<String> _selected = <String>{};
   CastingResponseStatus _narrowStatus = CastingResponseStatus.submitted;
 
+  /// Step 38: the row under the mouse — keys 1/2/3 act on it when nothing
+  /// is selected.
+  String? _hoveredProfileId;
+  bool _keysBusy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (kIsWeb) HardwareKeyboard.instance.addHandler(_handleKey);
+  }
+
+  @override
+  void dispose() {
+    if (kIsWeb) HardwareKeyboard.instance.removeHandler(_handleKey);
+    super.dispose();
+  }
+
+  /// 1 / 2 / 3 move the selected profiles (or the hovered row) to the
+  /// first / second / third column; Esc clears the selection; C compares.
+  bool _handleKey(KeyEvent event) {
+    if (!mounted || event is! KeyDownEvent) return false;
+    if (HardwareKeyboard.instance.isControlPressed ||
+        HardwareKeyboard.instance.isMetaPressed ||
+        HardwareKeyboard.instance.isAltPressed) {
+      return false;
+    }
+    // Typing in a field (a note, the search) must stay typing.
+    final focus = FocusManager.instance.primaryFocus;
+    final focusContext = focus?.context;
+    if (focusContext != null &&
+        (focusContext.widget is EditableText ||
+            focusContext.findAncestorWidgetOfExactType<EditableText>() !=
+                null)) {
+      return false;
+    }
+    // Only while this board is the page on screen.
+    if (ModalRoute.of(context)?.isCurrent != true) return false;
+
+    final key = event.logicalKey;
+    if (key == LogicalKeyboardKey.escape) {
+      if (_selected.isEmpty) return false;
+      setState(_selected.clear);
+      return true;
+    }
+    if (key == LogicalKeyboardKey.keyC && _canCompare) {
+      unawaited(_compareSelected());
+      return true;
+    }
+    final index = key == LogicalKeyboardKey.digit1 || key == LogicalKeyboardKey.numpad1
+        ? 0
+        : key == LogicalKeyboardKey.digit2 || key == LogicalKeyboardKey.numpad2
+        ? 1
+        : key == LogicalKeyboardKey.digit3 || key == LogicalKeyboardKey.numpad3
+        ? 2
+        : -1;
+    if (index < 0) return false;
+    final columns = _boardColumns(context);
+    if (index >= columns.length) return false;
+    final status = columns[index].status;
+    if (_selected.isNotEmpty) {
+      unawaited(_bulkMoveGuarded(status));
+      return true;
+    }
+    final hovered = _hoveredProfileId;
+    if (hovered == null || hovered.isEmpty) return false;
+    final row = widget.items.where((r) {
+      final profile = (r['profile'] as Map?) ?? const {};
+      return (profile['id'] ?? '').toString() == hovered;
+    }).firstOrNull;
+    if (row == null) return false;
+    if (columns[index].matches((row['status'] ?? '').toString())) return true;
+    unawaited(_moveOneGuarded(hovered, status));
+    return true;
+  }
+
+  Future<void> _moveOneGuarded(
+    String profileId,
+    CastingResponseStatus status,
+  ) async {
+    if (_keysBusy) return;
+    _keysBusy = true;
+    try {
+      await _moveOne(profileId, status);
+    } finally {
+      _keysBusy = false;
+    }
+  }
+
+  Future<void> _bulkMoveGuarded(CastingResponseStatus status) async {
+    if (_keysBusy) return;
+    _keysBusy = true;
+    try {
+      await _bulkMove(status);
+    } finally {
+      _keysBusy = false;
+    }
+  }
+
+  void _setHovered(String profileId, bool hovered) {
+    if (hovered) {
+      _hoveredProfileId = profileId;
+    } else if (_hoveredProfileId == profileId) {
+      _hoveredProfileId = null;
+    }
+  }
+
+  bool get _canCompare => _selected.length >= 2 && _selected.length <= 4;
+
+  /// Step 38: 2–4 selected profiles side by side.
+  Future<void> _compareSelected() async {
+    if (!_canCompare) return;
+    final rows = widget.items.where((r) {
+      final profile = (r['profile'] as Map?) ?? const {};
+      return _selected.contains((profile['id'] ?? '').toString());
+    }).toList(growable: false);
+    if (rows.length < 2) return;
+    final columns = _boardColumns(context);
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => _CompareDialog(
+        rows: rows,
+        columns: columns,
+        castingId: widget.castingId,
+        onMove: (profileId, status) async {
+          await widget.onStatusChanged(profileId: profileId, status: status);
+        },
+      ),
+    );
+  }
+
   List<Map<String, dynamic>> _itemsFor(_BoardColumnSpec spec) {
     return widget.items
         .where((row) => spec.matches(row['status']?.toString()))
@@ -2340,15 +2472,45 @@ class _CastingResponsesV2State extends State<_CastingResponsesV2> {
                     style: AppText.smallStrong.copyWith(color: Colors.white),
                   ),
                 ),
-                for (final column in columns)
+                for (var i = 0; i < columns.length; i++)
                   TextButton(
-                    onPressed: () => _bulkMove(column.status),
+                    onPressed: () => _bulkMove(columns[i].status),
                     style: TextButton.styleFrom(
                       foregroundColor: Colors.white,
                       minimumSize: const Size(0, 34),
                     ),
-                    child: Text(
-                      '→ ${_sentenceCaseResponses(column.title)}',
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('→ ${_sentenceCaseResponses(columns[i].title)}'),
+                        if (wide) ...[
+                          const SizedBox(width: 6),
+                          _KeyHint('${i + 1}', onDark: true),
+                        ],
+                      ],
+                    ),
+                  ),
+                if (wide)
+                  TextButton(
+                    onPressed: _canCompare ? _compareSelected : null,
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      disabledForegroundColor: Colors.white38,
+                      minimumSize: const Size(0, 34),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _canCompare
+                              ? (ru ? 'Сравнить' : 'Compare')
+                              : (ru ? 'Сравнить (2–4)' : 'Compare (2–4)'),
+                        ),
+                        if (_canCompare) ...[
+                          const SizedBox(width: 6),
+                          const _KeyHint('C', onDark: true),
+                        ],
+                      ],
                     ),
                   ),
                 TextButton(
@@ -2383,6 +2545,8 @@ class _CastingResponsesV2State extends State<_CastingResponsesV2> {
         onToggle: _toggle,
         onMove: _moveOne,
         onNote: _editNote,
+        onHover: wide ? _setHovered : null,
+        keyHint: wide ? '${columns.indexOf(spec) + 1}' : null,
         allColumns: columns,
         t: t,
       );
@@ -2555,6 +2719,8 @@ class _BoardColumnV2 extends StatelessWidget {
     required this.onNote,
     required this.allColumns,
     required this.t,
+    this.onHover,
+    this.keyHint,
   });
 
   final _BoardColumnSpec spec;
@@ -2569,6 +2735,11 @@ class _BoardColumnV2 extends StatelessWidget {
   final Future<void> Function(Map<String, dynamic> row) onNote;
   final List<_BoardColumnSpec> allColumns;
   final AppLocalizations t;
+
+  /// Step 38: hover tracking for the 1/2/3 keys and the key shown in the
+  /// column header.
+  final void Function(String profileId, bool hovered)? onHover;
+  final String? keyHint;
 
   @override
   Widget build(BuildContext context) {
@@ -2603,6 +2774,15 @@ class _BoardColumnV2 extends StatelessWidget {
                           color: Tokens.textTertiary,
                         ),
                       ),
+                      if (keyHint != null) ...[
+                        const Spacer(),
+                        Tooltip(
+                          message: ru
+                              ? 'Клавиша $keyHint — переместить сюда выбранные или анкету под курсором'
+                              : 'Key $keyHint moves the selected (or hovered) profile here',
+                          child: _KeyHint(keyHint!),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -2626,12 +2806,43 @@ class _BoardColumnV2 extends StatelessWidget {
                     onToggle: onToggle,
                     onMove: onMove,
                     onNote: onNote,
+                    onHover: onHover,
                     t: t,
                   ),
             ],
           ),
         );
       },
+    );
+  }
+}
+
+/// Step 38: a small keyboard-key label.
+class _KeyHint extends StatelessWidget {
+  const _KeyHint(this.label, {this.onDark = false});
+
+  final String label;
+  final bool onDark;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(5),
+        border: Border.all(
+          color: onDark ? Colors.white38 : Tokens.borderStrong,
+        ),
+      ),
+      child: Text(
+        label,
+        style: AppText.caption.copyWith(
+          fontSize: 11,
+          height: 1.3,
+          fontWeight: FontWeight.w600,
+          color: onDark ? Colors.white70 : Tokens.textSecondary,
+        ),
+      ),
     );
   }
 }
@@ -2648,6 +2859,7 @@ class _ResponseRowV2 extends StatefulWidget {
     required this.onMove,
     required this.onNote,
     required this.t,
+    this.onHover,
   });
 
   final Map<String, dynamic> row;
@@ -2661,6 +2873,7 @@ class _ResponseRowV2 extends StatefulWidget {
   onMove;
   final Future<void> Function(Map<String, dynamic> row) onNote;
   final AppLocalizations t;
+  final void Function(String profileId, bool hovered)? onHover;
 
   @override
   State<_ResponseRowV2> createState() => _ResponseRowV2State();
@@ -2705,8 +2918,14 @@ class _ResponseRowV2State extends State<_ResponseRowV2> {
     final isSelected = widget.selected.contains(profileId);
 
     final rowWidget = MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
+      onEnter: (_) {
+        setState(() => _hovered = true);
+        widget.onHover?.call(profileId, true);
+      },
+      onExit: (_) {
+        setState(() => _hovered = false);
+        widget.onHover?.call(profileId, false);
+      },
       child: Material(
         color: isSelected
             ? Tokens.surfaceAlt
@@ -2955,6 +3174,284 @@ class _HistoryRowV2 extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Step 38: 2–4 responses side by side — cover, name, parameters, note and
+/// the current column, with a quick move for each.
+class _CompareDialog extends StatefulWidget {
+  const _CompareDialog({
+    required this.rows,
+    required this.columns,
+    required this.castingId,
+    required this.onMove,
+  });
+
+  final List<Map<String, dynamic>> rows;
+  final List<_BoardColumnSpec> columns;
+  final String castingId;
+  final Future<void> Function(String profileId, CastingResponseStatus status)
+  onMove;
+
+  @override
+  State<_CompareDialog> createState() => _CompareDialogState();
+}
+
+class _CompareDialogState extends State<_CompareDialog> {
+  late final Map<String, String> _status = {
+    for (final row in widget.rows)
+      _profileId(row): (row['status'] ?? '').toString(),
+  };
+  String? _busyId;
+
+  static String _profileId(Map<String, dynamic> row) {
+    final profile = (row['profile'] as Map?) ?? const {};
+    return (profile['id'] ?? '').toString();
+  }
+
+  Future<void> _move(String profileId, CastingResponseStatus status) async {
+    if (_busyId != null) return;
+    setState(() => _busyId = profileId);
+    try {
+      await widget.onMove(profileId, status);
+      if (!mounted) return;
+      setState(
+        () => _status[profileId] = castingResponseStatusToString(status),
+      );
+    } finally {
+      if (mounted) setState(() => _busyId = null);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final t = AppLocalizations.of(context)!;
+    final count = widget.rows.length;
+    final width = MediaQuery.sizeOf(context).width;
+    final dialogWidth = (count * 260 + 48).toDouble().clamp(560.0, width - 48);
+
+    String text(Map<String, dynamic> p, String key) =>
+        (p[key] ?? '').toString().trim();
+    int intOf(Map<String, dynamic> p, String key) =>
+        int.tryParse((p[key] ?? '').toString()) ?? 0;
+
+    final labels = <String>[
+      ru ? 'Возраст' : 'Age',
+      ru ? 'Рост' : 'Height',
+      ru ? 'Параметры' : 'Measurements',
+      ru ? 'Обувь' : 'Shoes',
+      ru ? 'Глаза' : 'Eyes',
+      ru ? 'Волосы' : 'Hair',
+      ru ? 'Город' : 'City',
+      ru ? 'Ставка' : 'Rate',
+      ru ? 'Заметка' : 'Note',
+    ];
+
+    List<String> values(Map<String, dynamic> row) {
+      final p = Map<String, dynamic>.from((row['profile'] as Map?) ?? {});
+      final age = ModelVm.displayAgeFromMap(p);
+      final height = intOf(p, 'height');
+      final bust = intOf(p, 'bust');
+      final waist = intOf(p, 'waist');
+      final hips = intOf(p, 'hips');
+      final shoe = intOf(p, 'shoe_size');
+      final hourly = intOf(p, 'min_hourly_rate');
+      final daily = intOf(p, 'min_daily_fee');
+      final city = [
+        text(p, 'city'),
+        text(p, 'country'),
+      ].where((e) => e.isNotEmpty).join(', ');
+      return [
+        age > 0 ? (ru ? '$age лет' : '$age y.o.') : '—',
+        height > 0 ? '$height ${ru ? 'см' : 'cm'}' : '—',
+        bust > 0 || waist > 0 || hips > 0
+            ? '${bust > 0 ? bust : '–'} / ${waist > 0 ? waist : '–'} / ${hips > 0 ? hips : '–'}'
+            : '—',
+        shoe > 0 ? '$shoe' : '—',
+        text(p, 'eye_color').isEmpty ? '—' : text(p, 'eye_color'),
+        text(p, 'hair_color').isEmpty ? '—' : text(p, 'hair_color'),
+        city.isEmpty ? '—' : city,
+        hourly > 0 || daily > 0
+            ? [
+                if (hourly > 0) '$hourly ₽/${ru ? 'ч' : 'h'}',
+                if (daily > 0) '$daily ₽/${ru ? 'день' : 'day'}',
+              ].join(' · ')
+            : '—',
+        (row['admin_note'] ?? '').toString().trim().isEmpty
+            ? '—'
+            : (row['admin_note'] ?? '').toString().trim(),
+      ];
+    }
+
+    Widget column(Map<String, dynamic> row) {
+      final p = Map<String, dynamic>.from((row['profile'] as Map?) ?? {});
+      final id = _profileId(row);
+      final name = text(p, 'full_name');
+      final photoUrlsRaw = p['photo_urls'];
+      final photoUrls = photoUrlsRaw is List
+          ? photoUrlsRaw
+                .map((e) => e.toString().trim())
+                .where((e) => e.isNotEmpty)
+                .toList(growable: false)
+          : const <String>[];
+      final cover = text(p, 'cover_photo_url').isNotEmpty
+          ? text(p, 'cover_photo_url')
+          : (photoUrls.isNotEmpty ? photoUrls.first : '');
+      double focal(dynamic v, double fallback) => v is num
+          ? v.toDouble()
+          : (double.tryParse('${v ?? ''}') ?? fallback);
+      final currentColumn = widget.columns.firstWhere(
+        (c) => c.matches(_status[id]),
+        orElse: () => widget.columns.first,
+      );
+      final rowValues = values(row);
+      final busy = _busyId == id;
+
+      return Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(Tokens.radiusMd),
+              child: AspectRatio(
+                aspectRatio: 3 / 4,
+                child: cover.isEmpty
+                    ? const ColoredBox(
+                        color: Tokens.surfaceAlt,
+                        child: Icon(
+                          Icons.person_outline_rounded,
+                          color: Tokens.textTertiary,
+                          size: 40,
+                        ),
+                      )
+                    : FocalImage(
+                        url: storageImageVariant(cover, width: 600),
+                        focalX: focal(p['cover_photo_focal_x'], 0),
+                        focalY: focal(p['cover_photo_focal_y'], -0.72),
+                        memCacheWidth: 600,
+                      ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            InkWell(
+              onTap: id.isEmpty
+                  ? null
+                  : () {
+                      Navigator.of(context).pop();
+                      context.go(
+                        '${Routes.modelPrefix}$id?from=casting&castingId=${widget.castingId}',
+                      );
+                    },
+              child: Text(
+                name.isEmpty ? t.profileUpper : name,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: AppText.smallStrong.copyWith(fontSize: 16),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              _sentenceCaseResponses(currentColumn.title),
+              style: AppText.caption.copyWith(
+                color: currentColumn.status == CastingResponseStatus.approved
+                    ? Tokens.success
+                    : Tokens.textSecondary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 14),
+            for (var i = 0; i < labels.length; i++) ...[
+              Text(labels[i], style: AppText.caption),
+              const SizedBox(height: 1),
+              Text(
+                rowValues[i],
+                maxLines: i == labels.length - 1 ? 4 : 2,
+                overflow: TextOverflow.ellipsis,
+                style: AppText.small.copyWith(
+                  color: rowValues[i] == '—' ? Tokens.textTertiary : Tokens.text,
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
+            const SizedBox(height: 4),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (final c in widget.columns)
+                  if (c.status != currentColumn.status)
+                    OutlinedButton(
+                      onPressed: busy || id.isEmpty
+                          ? null
+                          : () => _move(id, c.status),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(0, 34),
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        textStyle: AppText.caption.copyWith(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      child: Text('→ ${_sentenceCaseResponses(c.title)}'),
+                    ),
+              ],
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Dialog(
+      backgroundColor: Tokens.bg,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(Tokens.radiusLg),
+        side: const BorderSide(color: Tokens.border),
+      ),
+      insetPadding: const EdgeInsets.all(24),
+      child: SizedBox(
+        width: dialogWidth,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 18, 12, 0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      ru ? 'Сравнение · $count' : 'Compare · $count',
+                      style: AppText.h2.copyWith(fontSize: 20),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: ru ? 'Закрыть' : 'Close',
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+            ),
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (var i = 0; i < widget.rows.length; i++) ...[
+                      if (i > 0) const SizedBox(width: 20),
+                      column(widget.rows[i]),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
