@@ -341,7 +341,8 @@ section + section {
 }
 
 /* ---------------------------------------------------------------- grids */
-.grid-3 {
+.grid-3,
+.grid-4 {
   display: grid;
   gap: 20px;
 }
@@ -613,6 +614,9 @@ section + section {
   .grid-3 {
     grid-template-columns: repeat(3, 1fr);
   }
+  .grid-4 {
+    grid-template-columns: repeat(2, 1fr);
+  }
   .features {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -641,6 +645,9 @@ section + section {
   }
   .features {
     grid-template-columns: repeat(3, 1fr);
+  }
+  .grid-4 {
+    grid-template-columns: repeat(4, 1fr);
   }
   .plans {
     grid-template-columns: repeat(4, 1fr);
