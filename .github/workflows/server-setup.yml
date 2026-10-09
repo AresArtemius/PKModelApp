@@ -55,4 +55,11 @@ jobs:
           scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new -o BatchMode=yes deploy/Caddyfile deploy/setup-server.sh "root@$TIMEWEB_HOST:/root/pk-deploy/"
 
       - name: Run setup script
-        run: ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new -o BatchMode=yes "root@$TIMEWEB_HOST" "bash /root/pk-deploy/setup-server.sh"
+        run: |
+          set +e
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new -o BatchMode=yes "root@$TIMEWEB_HOST" "bash /root/pk-deploy/setup-server.sh" 2>&1 | tee setup.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" != "0" ]; then
+            tail -n 12 setup.log | while IFS= read -r line; do echo "::error::$line"; done
+            exit "$status"
+          fi

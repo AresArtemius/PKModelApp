@@ -17,7 +17,7 @@ cpSync(join(root, 'public'), dist, { recursive: true });
 // unknown paths).
 writeFileSync(
   join(dist, '404.html'),
-  `<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Страница не найдена — PK Management</title><meta name="robots" content="noindex"><link rel="stylesheet" href="/styles.css"></head><body><main class="wrap" style="padding:96px 16px"><p class="eyebrow">404</p><h1>Страница не найдена</h1><p class="lead">Такой страницы нет или она была удалена.</p><a class="btn btn-primary" href="/">На главную</a></main></body></html>\n`,
+  `<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Страница не найдена — PK Management</title><meta name="robots" content="noindex"><link rel="stylesheet" href="styles.css"></head><body><main class="wrap" style="padding:96px 16px"><p class="eyebrow">404</p><h1>Страница не найдена</h1><p class="lead">Такой страницы нет или она была удалена.</p><a class="btn btn-primary" href="./">На главную</a></main></body></html>\n`,
 );
 
 writeFileSync(

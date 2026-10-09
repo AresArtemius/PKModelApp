@@ -63,7 +63,10 @@ jobs:
       - name: Upload release
         run: |
           release="/var/www/site/releases/${GITHUB_SHA::12}"
-          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new -o BatchMode=yes "deploy@$TIMEWEB_HOST" "mkdir -p '$release'"
+          if ! out=$(ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new -o BatchMode=yes "deploy@$TIMEWEB_HOST" "mkdir -p '$release'" 2>&1); then
+            echo "::error::mkdir failed: $out (run the «Server Setup» workflow once — it creates /var/www/site)"
+            exit 1
+          fi
           rsync -az --delete -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new -o BatchMode=yes" site/dist/ "deploy@$TIMEWEB_HOST:$release/"
 
       - name: Switch release and prune
@@ -80,6 +83,6 @@ jobs:
       - name: Smoke test
         run: |
           sleep 3
-          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 https://pk.management/ || true)
-          echo "https://pk.management/ → $code"
-          # DNS / certificate may not be ready on the first deploy; do not fail.
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 https://app.pk.management/landing/ || true)
+          echo "https://app.pk.management/landing/ → $code"
+          if [ "$code" != "200" ]; then echo "::error::landing preview returned $code"; exit 1; fi
