@@ -1,0 +1,85 @@
+name: Site Deploy
+
+# Public site (site/): builds dist/ and rsyncs it to the Timeweb server next
+# to the app release. Caddy serves /var/www/site/current for pk.management.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'site/**'
+      - '.github/workflows/site-deploy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: site-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build and deploy site
+    runs-on: ubuntu-latest
+    env:
+      TIMEWEB_HOST: ${{ secrets.TIMEWEB_HOST }}
+      TIMEWEB_SSH_KEY: ${{ secrets.TIMEWEB_SSH_KEY }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Build
+        run: node site/build.mjs
+
+      - name: Precompress static files (brotli + gzip)
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq brotli >/dev/null
+          find site/dist -type f \( -name '*.html' -o -name '*.css' -o -name '*.js' -o -name '*.xml' -o -name '*.txt' -o -name '*.svg' -o -name '*.json' \) -size +1k \
+            -exec brotli -k -f -q 11 {} \; -exec gzip -k -f -9 {} \;
+          du -sh site/dist
+
+      - name: Check server secrets
+        run: |
+          if [ -z "$TIMEWEB_HOST" ] || [ -z "$TIMEWEB_SSH_KEY" ]; then
+            echo "TIMEWEB_HOST / TIMEWEB_SSH_KEY must be set."
+            exit 1
+          fi
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$TIMEWEB_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$TIMEWEB_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Upload release
+        run: |
+          release="/var/www/site/releases/${GITHUB_SHA::12}"
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new -o BatchMode=yes "deploy@$TIMEWEB_HOST" "mkdir -p '$release'"
+          rsync -az --delete -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new -o BatchMode=yes" site/dist/ "deploy@$TIMEWEB_HOST:$release/"
+
+      - name: Switch release and prune
+        run: |
+          release="/var/www/site/releases/${GITHUB_SHA::12}"
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new -o BatchMode=yes "deploy@$TIMEWEB_HOST" bash -s <<EOF2
+            set -e
+            ln -sfn "$release" /var/www/site/current.tmp
+            mv -T /var/www/site/current.tmp /var/www/site/current
+            cd /var/www/site/releases && ls -1dt */ | tail -n +4 | xargs -r rm -rf
+            echo "current -> \$(readlink /var/www/site/current)"
+          EOF2
+
+      - name: Smoke test
+        run: |
+          sleep 3
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 https://pk.management/ || true)
+          echo "https://pk.management/ → $code"
+          # DNS / certificate may not be ready on the first deploy; do not fail.

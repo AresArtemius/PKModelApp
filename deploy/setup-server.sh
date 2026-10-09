@@ -38,6 +38,18 @@ chmod 600 "/home/$DEPLOY_USER/.ssh/authorized_keys" 2>/dev/null || true
 
 mkdir -p "$APP_ROOT/releases"
 chown -R "$DEPLOY_USER:$DEPLOY_USER" "$APP_ROOT"
+
+# Public site (site/): /var/www/site/current is what Caddy serves for
+# pk.management; the Site Deploy workflow fills releases/.
+SITE_ROOT="/var/www/site"
+mkdir -p "$SITE_ROOT/releases"
+chown -R "$DEPLOY_USER:$DEPLOY_USER" "$SITE_ROOT"
+if [ ! -e "$SITE_ROOT/current" ]; then
+  mkdir -p "$SITE_ROOT/releases/bootstrap"
+  echo '<!doctype html><title>PK Management</title><p>Site deploy pending.' > "$SITE_ROOT/releases/bootstrap/index.html"
+  ln -sfn "$SITE_ROOT/releases/bootstrap" "$SITE_ROOT/current"
+  chown -R "$DEPLOY_USER:$DEPLOY_USER" "$SITE_ROOT"
+fi
 chmod 755 "$APP_ROOT" "$APP_ROOT/releases"
 # Placeholder so Caddy starts before the first deploy.
 if [ ! -e "$APP_ROOT/current" ]; then
