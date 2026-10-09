@@ -175,10 +175,17 @@ class ChatListItem {
     this.lastMessageDelivered = false,
     this.lastMessageRead = false,
     this.otherUserId = '',
+    this.isDirect = false,
+    this.isRequest = false,
   });
 
   /// Step 36: the counterpart's user id, for the online dot in the list.
   final String otherUserId;
+
+  /// Step 35: a direct conversation (not tied to a casting), and whether it
+  /// is still a request — started by the other side, not answered by me.
+  final bool isDirect;
+  final bool isRequest;
 
   /// Status of my own last message, for the ✓ / ✓✓ before the preview.
   final bool lastMessageMine;
@@ -233,9 +240,13 @@ class ChatListItem {
     bool? lastMessageDelivered,
     bool? lastMessageRead,
     String? otherUserId,
+    bool? isDirect,
+    bool? isRequest,
   }) {
     return ChatListItem(
       otherUserId: otherUserId ?? this.otherUserId,
+      isDirect: isDirect ?? this.isDirect,
+      isRequest: isRequest ?? this.isRequest,
       lastMessageMine: lastMessageMine ?? this.lastMessageMine,
       lastMessageDelivered: lastMessageDelivered ?? this.lastMessageDelivered,
       lastMessageRead: lastMessageRead ?? this.lastMessageRead,

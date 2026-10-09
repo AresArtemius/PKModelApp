@@ -31,13 +31,18 @@ const double _chatsV2ListWidth = 400;
 enum _ChatRoleFilter {
   all,
   model,
-  client;
+  client,
+
+  /// Step 35: direct chats started by strangers, not answered yet. Shown
+  /// as a tab only while there is at least one.
+  requests;
 
   String label(bool ru) {
     return switch (this) {
       _ChatRoleFilter.all => ru ? 'ВСЕ' : 'ALL',
       _ChatRoleFilter.model => ru ? 'КАК МОДЕЛЬ' : 'AS MODEL',
       _ChatRoleFilter.client => ru ? 'КАК ЗАКАЗЧИК' : 'AS CLIENT',
+      _ChatRoleFilter.requests => ru ? 'ЗАПРОСЫ' : 'REQUESTS',
     };
   }
 
@@ -46,16 +51,18 @@ enum _ChatRoleFilter {
       _ChatRoleFilter.all => ru ? 'Все' : 'All',
       _ChatRoleFilter.model => ru ? 'Как модель' : 'As model',
       _ChatRoleFilter.client => ru ? 'Как заказчик' : 'As client',
+      _ChatRoleFilter.requests => ru ? 'Запросы' : 'Requests',
     };
   }
 
   bool matches(ChatListItem item) {
     return switch (this) {
-      _ChatRoleFilter.all => true,
+      _ChatRoleFilter.all => !item.isRequest,
       _ChatRoleFilter.model =>
-        item.participantRole == ChatParticipantRole.model,
+        !item.isRequest && item.participantRole == ChatParticipantRole.model,
       _ChatRoleFilter.client =>
-        item.participantRole == ChatParticipantRole.client,
+        !item.isRequest && item.participantRole == ChatParticipantRole.client,
+      _ChatRoleFilter.requests => item.isRequest,
     };
   }
 
@@ -66,6 +73,7 @@ enum _ChatRoleFilter {
         ru ? 'ЧАТОВ КАК МОДЕЛЬ НЕТ' : 'NO CHATS AS MODEL',
       _ChatRoleFilter.client =>
         ru ? 'ЧАТОВ КАК ЗАКАЗЧИК НЕТ' : 'NO CHATS AS CLIENT',
+      _ChatRoleFilter.requests => ru ? 'ЗАПРОСОВ НЕТ' : 'NO REQUESTS',
     };
   }
 
@@ -83,6 +91,10 @@ enum _ChatRoleFilter {
         ru
             ? 'Здесь будут диалоги, которые вы начали как заказчик.'
             : 'Conversations you started as a client will appear here.',
+      _ChatRoleFilter.requests =>
+        ru
+            ? 'Первые сообщения от незнакомых людей будут ждать здесь.'
+            : 'First messages from people you do not know will wait here.',
     };
   }
 }
@@ -387,6 +399,10 @@ class _ChatsPageState extends ConsumerState<ChatsPage> {
                   padding: EdgeInsets.symmetric(horizontal: gutter),
                   child: _V2RoleTabs(
                     value: _roleFilter,
+                    requestCount:
+                        (chats.valueOrNull ?? const <ChatListItem>[])
+                            .where((item) => item.isRequest)
+                            .length,
                     onChanged: (value) =>
                         setState(() => _roleFilter = value),
                   ),
@@ -829,17 +845,32 @@ class _V2ContentFilterMenu extends StatelessWidget {
 }
 
 class _V2RoleTabs extends StatelessWidget {
-  const _V2RoleTabs({required this.value, required this.onChanged});
+  const _V2RoleTabs({
+    required this.value,
+    required this.onChanged,
+    this.requestCount = 0,
+  });
 
   final _ChatRoleFilter value;
   final ValueChanged<_ChatRoleFilter> onChanged;
 
+  /// Step 35: the «Запросы» tab appears only while there are requests.
+  final int requestCount;
+
   @override
   Widget build(BuildContext context) {
     final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final filters = _ChatRoleFilter.values
+        .where(
+          (filter) =>
+              filter != _ChatRoleFilter.requests ||
+              requestCount > 0 ||
+              value == _ChatRoleFilter.requests,
+        )
+        .toList(growable: false);
     return Row(
       children: [
-        for (final filter in _ChatRoleFilter.values) ...[
+        for (final filter in filters) ...[
           InkWell(
             borderRadius: BorderRadius.circular(Tokens.radiusSm),
             onTap: () => onChanged(filter),
@@ -849,7 +880,9 @@ class _V2RoleTabs extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    filter.labelV2(ru),
+                    filter == _ChatRoleFilter.requests && requestCount > 0
+                        ? '${filter.labelV2(ru)} · $requestCount'
+                        : filter.labelV2(ru),
                     style: AppText.small.copyWith(
                       fontSize: 15,
                       fontWeight: filter == value
