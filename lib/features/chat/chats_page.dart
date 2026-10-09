@@ -163,7 +163,10 @@ String _formatVoicePreviewDuration(Duration? duration) {
 }
 
 class ChatsPage extends ConsumerStatefulWidget {
-  const ChatsPage({super.key});
+  const ChatsPage({super.key, this.chatId});
+
+  /// Step 28 (web): the conversation from the URL (`/chats/:id`).
+  final String? chatId;
 
   @override
   ConsumerState<ChatsPage> createState() => _ChatsPageState();
@@ -248,11 +251,23 @@ class _ChatsPageState extends ConsumerState<ChatsPage> {
     await ref
         .read(chatServiceProvider)
         .setChatArchived(chatId: item.id, archived: value);
-    if (_selectedChatId == item.id) {
-      setState(() => _selectedChatId = null);
-    }
+    if (_activeChatId == item.id) _selectChat(null);
     ref.invalidate(myChatsProvider(_archived));
     ref.invalidate(myChatsProvider(!_archived));
+  }
+
+  /// The open conversation: on the web it is the route (`/chats/:id`), so
+  /// F5 and shared links keep it; native keeps it in state.
+  String? get _activeChatId => _chatsV2 ? widget.chatId : _selectedChatId;
+
+  void _selectChat(String? chatId) {
+    final id = chatId?.trim() ?? '';
+    if (_chatsV2) {
+      final target = id.isEmpty ? Routes.chats : Routes.chatsLocation(id);
+      if (GoRouterState.of(context).uri.path != target) context.go(target);
+      return;
+    }
+    setState(() => _selectedChatId = id.isEmpty ? null : id);
   }
 
   List<ChatListItem> _visibleItems(List<ChatListItem> items) {
@@ -276,6 +291,25 @@ class _ChatsPageState extends ConsumerState<ChatsPage> {
     final queryChat = GoRouterState.of(
       context,
     ).uri.queryParameters[Routes.chatsChatParam]?.trim();
+    if (_chatsV2) {
+      // Old `?chat=` links become `/chats/:id`; on a narrow screen the
+      // conversation opens as its own page over the list.
+      final routeChat = widget.chatId?.trim() ?? '';
+      final wanted = routeChat.isNotEmpty ? routeChat : (queryChat ?? '');
+      if (wanted.isEmpty || wanted == _lastQueryChatId) return;
+      _lastQueryChatId = wanted;
+      if (isDesktop && routeChat.isNotEmpty) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (isDesktop) {
+          context.go(Routes.chatsLocation(wanted));
+        } else {
+          context.go(Routes.chats);
+          context.push('${Routes.chatPrefix}$wanted');
+        }
+      });
+      return;
+    }
     if (queryChat == null || queryChat.isEmpty) return;
     if (queryChat == _lastQueryChatId) return;
     _lastQueryChatId = queryChat;
@@ -296,7 +330,7 @@ class _ChatsPageState extends ConsumerState<ChatsPage> {
     required AsyncValue<List<ChatListItem>> chats,
     required bool isDesktop,
   }) {
-    final selectedId = _selectedChatId;
+    final selectedId = _activeChatId;
     final gutter = isDesktop ? 24.0 : 16.0;
     final listColumn = Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -321,10 +355,10 @@ class _ChatsPageState extends ConsumerState<ChatsPage> {
                             ? (ru ? 'К диалогам' : 'Back to chats')
                             : (ru ? 'Архив' : 'Archive'),
                         active: _archived,
-                        onTap: () => setState(() {
-                          _archived = !_archived;
-                          _selectedChatId = null;
-                        }),
+                        onTap: () {
+                          setState(() => _archived = !_archived);
+                          _selectChat(null);
+                        },
                       ),
                       _V2IconButton(
                         icon: Icons.mail_outline_rounded,
@@ -343,10 +377,8 @@ class _ChatsPageState extends ConsumerState<ChatsPage> {
                     hint: ru ? 'Поиск по чатам' : 'Search chats',
                     trailing: _V2ContentFilterMenu(
                       value: _contentFilter,
-                      onChanged: (value) => setState(() {
-                        _contentFilter = value;
-                        _selectedChatId = null;
-                      }),
+                      onChanged: (value) =>
+                          setState(() => _contentFilter = value),
                     ),
                   ),
                 ),
@@ -355,10 +387,8 @@ class _ChatsPageState extends ConsumerState<ChatsPage> {
                   padding: EdgeInsets.symmetric(horizontal: gutter),
                   child: _V2RoleTabs(
                     value: _roleFilter,
-                    onChanged: (value) => setState(() {
-                      _roleFilter = value;
-                      _selectedChatId = null;
-                    }),
+                    onChanged: (value) =>
+                        setState(() => _roleFilter = value),
                   ),
                 ),
                 if (_contentFilter != _ChatContentFilter.all)
@@ -449,7 +479,7 @@ class _ChatsPageState extends ConsumerState<ChatsPage> {
                                           .read(tabAlertsProvider)
                                           .requestNotificationPermission(),
                                     );
-                                    setState(() => _selectedChatId = item.id);
+                                    _selectChat(item.id);
                                   }
                                 : () => context.push(
                                     '${Routes.chatPrefix}${item.id}',
@@ -485,7 +515,7 @@ class _ChatsPageState extends ConsumerState<ChatsPage> {
                     key: ValueKey(selectedId),
                     chatId: selectedId,
                     embedded: true,
-                    onClose: () => setState(() => _selectedChatId = null),
+                    onClose: () => _selectChat(null),
                   ),
           ),
         ],

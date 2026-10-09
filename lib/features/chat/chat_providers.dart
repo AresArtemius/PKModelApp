@@ -139,6 +139,12 @@ final userPresenceProvider = StreamProvider.autoDispose
       return ref.watch(chatServiceProvider).watchPresence(userId);
     });
 
+/// Step 29: media of a conversation for the context panel.
+final chatMediaProvider = FutureProvider.autoDispose
+    .family<List<ChatMessage>, String>((ref, chatId) {
+      return ref.watch(chatServiceProvider).fetchChatMedia(chatId);
+    });
+
 /// Step 36: Supabase Realtime Presence — the set of user ids connected
 /// right now. One shared channel; every client tracks itself while its
 /// tab is visible, and the server drops it the moment the socket closes,

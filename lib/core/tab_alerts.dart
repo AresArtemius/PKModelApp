@@ -72,6 +72,8 @@ void _onIncomingMessage(
   final uri = router.routerDelegate.currentConfiguration.uri;
   final openChatId = uri.path.startsWith(Routes.chatPrefix)
       ? uri.path.substring(Routes.chatPrefix.length)
+      : uri.path.startsWith(Routes.chatsChatPrefix)
+      ? uri.path.substring(Routes.chatsChatPrefix.length)
       : uri.path == Routes.chats
       ? (uri.queryParameters[Routes.chatsChatParam] ?? '')
       : '';

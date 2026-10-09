@@ -126,20 +126,34 @@ abstract class Routes {
   static const chatPrefix = '/chat/';
   static const chat = '/chat/:id';
 
-  /// Query parameter of [chats] that pre-selects a conversation.
+  /// Step 28 (web): the conversation open inside the two-column chats page
+  /// lives in the URL, so a reload or a shared link lands on it.
+  static const chatsChat = '/chats/:id';
+  static const chatsChatPrefix = '/chats/';
+  static String chatsLocation(String chatId) => '$chatsChatPrefix$chatId';
+
+  /// Query parameter of [chats] that pre-selects a conversation (older
+  /// links; redirected to [chatsLocation] on the web).
   static const chatsChatParam = 'chat';
 
   /// Where "write a message" should take the user: on the web the
   /// conversation opens inside the two-column chats page, on native apps it
   /// is a page of its own.
   static String chatLocation(String chatId) {
-    if (kIsWeb) return '$chats?$chatsChatParam=$chatId';
+    if (kIsWeb) return chatsLocation(chatId);
     return '$chatPrefix$chatId';
   }
 }
 
 const _routeParamId = 'id';
 const _routeParamTag = 'tag';
+
+Page<void> _chatsPage(Widget child) {
+  return NoTransitionPage<void>(
+    key: const ValueKey<String>('chats-page'),
+    child: child,
+  );
+}
 
 Page<void> _fadePage(GoRouterState state, Widget child) {
   return CustomTransitionPage<void>(
@@ -593,9 +607,17 @@ final List<RouteBase> appRoutes = [
         path: Routes.agentFolders,
         builder: (context, state) => const AgentFoldersPage(),
       ),
+      // /chats and /chats/:id share one page key, so switching between
+      // conversations updates the URL without rebuilding the list.
       GoRoute(
         path: Routes.chats,
-        builder: (context, state) => const ChatsPage(),
+        pageBuilder: (context, state) => _chatsPage(const ChatsPage()),
+      ),
+      GoRoute(
+        path: Routes.chatsChat,
+        pageBuilder: (context, state) => _chatsPage(
+          ChatsPage(chatId: state.pathParameters[_routeParamId]),
+        ),
       ),
       GoRoute(
         path: Routes.invitations,
