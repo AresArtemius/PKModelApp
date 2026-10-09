@@ -371,6 +371,34 @@ function modelsPage(profiles) {
   });
 }
 
+const monthsGen = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+
+/** "2026-10-02T00:00:00,2026-10-03T00:00:00" → "2–3 октября 2026"; free text stays. */
+function datesLabel(raw) {
+  const text = trim(raw);
+  if (!text) return '';
+  const parts = text.split(/[,;\s]+/).map(trim).filter(Boolean);
+  const dates = parts.map((x) => new Date(x)).filter((d) => !Number.isNaN(d.getTime()));
+  if (!dates.length || dates.length !== parts.length) return text;
+  dates.sort((a, b) => a - b);
+  const f = (d) => `${d.getDate()} ${monthsGen[d.getMonth()]} ${d.getFullYear()}`;
+  const a = dates[0];
+  const b = dates[dates.length - 1];
+  if (dates.length === 1) return f(a);
+  if (a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear()) {
+    return `${a.getDate()}–${b.getDate()} ${monthsGen[a.getMonth()]} ${a.getFullYear()}`;
+  }
+  return `${f(a)} — ${f(b)}`;
+}
+
+function feeLabel(raw) {
+  const text = trim(raw);
+  if (!text) return '';
+  const n = Number(text.replace(/\s/g, ''));
+  if (!Number.isFinite(n) || n <= 0) return text;
+  return `${n.toLocaleString('ru-RU')} ₽`;
+}
+
 const stageLabel = {
   intake: 'Набор',
   accepting_applications: 'Открыт приём откликов',
@@ -399,7 +427,7 @@ function castingsPage(castings) {
                     <span class="casting-stage">${esc(stageLabel[trim(c.project_stage)] || 'Открыт')}</span>
                     <b>${esc(trim(c.title) || 'Кастинг')}</b>
                     ${trim(c.description) ? `<p>${esc(trim(c.description).slice(0, 220))}${trim(c.description).length > 220 ? '…' : ''}</p>` : ''}
-                    <span class="muted">${[trim(c.dates), trim(c.fee)].filter(Boolean).map(esc).join(' · ')}</span>
+                    <span class="muted">${[datesLabel(c.dates), feeLabel(c.fee)].filter(Boolean).map(esc).join(' · ')}</span>
                   </a>`,
                 )
                 .join('')}</div>`
