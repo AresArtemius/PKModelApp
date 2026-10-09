@@ -9,8 +9,14 @@ APP_ROOT="/var/www/app"
 
 echo "== Packages"
 export DEBIAN_FRONTEND=noninteractive
-apt-get update -qq
-apt-get install -y -qq debian-keyring debian-archive-keyring apt-transport-https curl gnupg rsync ufw >/dev/null
+# The Caddy apt repo (cloudsmith) occasionally answers 402/unsigned, which
+# makes `apt-get update` fail as a whole; Caddy is already installed on a
+# provisioned server, so a failed refresh of that one list is not fatal.
+if ! apt-get update -qq; then
+  echo "apt-get update failed; retrying without third-party lists"
+  apt-get update -qq -o Dir::Etc::sourcelist=/etc/apt/sources.list -o Dir::Etc::sourceparts=- || true
+fi
+apt-get install -y -qq debian-keyring debian-archive-keyring apt-transport-https curl gnupg rsync ufw >/dev/null || true
 
 echo "== Caddy (official apt repo)"
 if ! command -v caddy >/dev/null 2>&1; then
