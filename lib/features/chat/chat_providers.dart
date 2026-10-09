@@ -156,7 +156,7 @@ final onlineUsersProvider = StreamProvider<Set<String>>((ref) {
   final sb = ref.read(supabaseProvider);
   final channel = sb.channel(
     'presence:online',
-    RealtimeChannelConfig(key: userId, enabled: true),
+    opts: RealtimeChannelConfig(key: userId, enabled: true),
   );
 
   void sync() {
