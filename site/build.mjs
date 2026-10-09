@@ -9,7 +9,7 @@
 // Env: SITE_URL (default https://pk.management), APP_URL (default
 // https://app.pk.management), SUPABASE_URL + SUPABASE_ANON_KEY (without them
 // the dynamic pages are skipped and only the landing is built).
-import { cpSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, rmSync, writeFileSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -173,9 +173,9 @@ ${body}
         <div class="footer-col">
           <b>Документы</b>
           <div class="footer-links">
-            <a href="${appUrl}/privacy">Политика конфиденциальности</a>
-            <a href="${appUrl}/terms">Пользовательское соглашение</a>
-            <a href="${appUrl}/child-safety">Безопасность детей</a>
+            <a href="${rel}privacy/">Политика конфиденциальности</a>
+            <a href="${rel}terms/">Пользовательское соглашение</a>
+            <a href="${rel}child-safety/">Безопасность детей</a>
           </div>
         </div>
       </div>
@@ -445,6 +445,104 @@ function castingsPage(castings) {
   });
 }
 
+
+// ------------------------------------------------------------------ legal (step 26)
+// The texts live in one place — lib/features/legal/legal_documents.dart —
+// and are parsed from the Dart source here, so the app and the site never
+// drift apart.
+
+function dartString(src) {
+  // One or more adjacent single-quoted Dart literals → plain text.
+  let out = '';
+  const re = /'((?:\\.|[^'\\])*)'/g;
+  let m;
+  while ((m = re.exec(src))) out += m[1].replace(/\\'/g, "'").replace(/\\n/g, '\n').replace(/\\\\/g, '\\');
+  return out;
+}
+
+function parseLegalDocuments() {
+  const file = join(root, '..', 'lib', 'features', 'legal', 'legal_documents.dart');
+  const src = readFileSync(file, 'utf8');
+  const legalVersion = (src.match(/const kLegalVersion = '([^']+)'/) || [])[1] || '';
+  const childVersion = (src.match(/const kChildSafetyStandardsVersion = '([^']+)'/) || [])[1] || legalVersion;
+  const docs = [];
+  const blocks = src.split(/\n  LegalDocument\(/).slice(1);
+  for (const block of blocks) {
+    const route = (block.match(/route: '([^']+)'/) || [])[1];
+    const titleRu = (block.match(/titleRu: '([^']+)'/) || [])[1];
+    if (!route || !titleRu) continue;
+    const version = /version: kChildSafetyStandardsVersion/.test(block) ? childVersion : legalVersion;
+    const ruStart = block.indexOf('sectionsRu:');
+    const ruEnd = block.indexOf('sectionsEn:');
+    const ru = block.slice(ruStart, ruEnd === -1 ? undefined : ruEnd);
+    const sections = [];
+    const re = /LegalDocumentSection\(\s*title:\s*((?:'(?:\\.|[^'\\])*'\s*)+),\s*body:\s*((?:'(?:\\.|[^'\\])*'\s*)+),?\s*\)/g;
+    let m;
+    while ((m = re.exec(ru))) sections.push({ title: dartString(m[1]), body: dartString(m[2]) });
+    docs.push({ route, title: titleRu, version, sections });
+  }
+  return docs;
+}
+
+function legalPage(doc, all) {
+  const canonical = `${siteUrl}${doc.route}/`;
+  const updated = doc.version.split('-').reverse().join('.');
+  const body = `
+    <section class="profile legal-page">
+      <div class="wrap">
+        <p class="crumbs"><a href="../">Главная</a> · Документы</p>
+        <div class="legal-grid">
+          <article class="legal-text">
+            <h1>${esc(doc.title)}</h1>
+            <p class="muted">Обновлено ${esc(updated)}</p>
+            ${doc.sections
+              .map(
+                (sec, i) =>
+                  `<h2 id="s${i + 1}">${esc(sec.title)}</h2>${sec.body
+                    .split(/\n{2,}/)
+                    .map((par) => `<p>${esc(par).replace(/\n/g, '<br>')}</p>`)
+                    .join('')}`,
+              )
+              .join('')}
+          </article>
+          <aside class="legal-side">
+            <b>Содержание</b>
+            <ol>${doc.sections.map((sec, i) => `<li><a href="#s${i + 1}">${esc(sec.title)}</a></li>`).join('')}</ol>
+            <b>Другие документы</b>
+            <ul>${all
+              .filter((d) => d.route !== doc.route)
+              .map((d) => `<li><a href="..${d.route}/">${esc(d.title)}</a></li>`)
+              .join('')}</ul>
+          </aside>
+        </div>
+      </div>
+    </section>`;
+  return layout({
+    title: `${doc.title} — PK Management`,
+    description: `${doc.title} платформы PK Management. Обновлено ${updated}.`,
+    canonical,
+    body,
+    rel: '../',
+  });
+}
+
+function generateLegal() {
+  let docs = [];
+  try {
+    docs = parseLegalDocuments();
+  } catch (e) {
+    console.warn(`legal documents not parsed: ${e.message}`);
+    return;
+  }
+  for (const doc of docs) {
+    const dir = join(dist, doc.route.replace(/^\//, ''));
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'index.html'), legalPage(doc, docs));
+    pages.push({ loc: `${doc.route}/`, priority: '0.3', changefreq: 'monthly', lastmod: doc.version });
+  }
+  console.log(`legal: ${docs.map((d) => `${d.route} (${d.sections.length})`).join(', ')}`);
+}
+
 // ------------------------------------------------------------------ data
 
 async function rest(path) {
@@ -520,6 +618,7 @@ async function generate() {
   console.log(`selections: ${written} of ${selections.length}`);
 }
 
+generateLegal();
 await generate();
 
 // ------------------------------------------------------------------ extras
