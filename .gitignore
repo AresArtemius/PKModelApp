@@ -63,3 +63,4 @@ supabase/.env
 # macOS local metadata
 .AppleDouble
 .LSOverride
+site/dist/

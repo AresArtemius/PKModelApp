@@ -53,3 +53,40 @@ app.pk.management {
 	# /var/log/caddy failed with "permission denied" under the packaged unit.
 	log
 }
+
+# Public site (steps 23–26): static pages built from site/ by the
+# Site Deploy workflow. www redirects to the apex domain.
+www.pk.management {
+	redir https://pk.management{uri} permanent
+}
+
+pk.management {
+	root * /var/www/site/current
+
+	encode zstd gzip
+
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+
+	@html path / /*.html
+	header @html Cache-Control "no-cache"
+
+	@assets path /assets/* /fonts/* /styles.css /favicon.png
+	header @assets Cache-Control "public, max-age=86400"
+
+	handle_errors {
+		@notfound expression {http.error.status_code} == 404
+		rewrite @notfound /404.html
+		file_server
+	}
+
+	try_files {path} {path}.html {path}/index.html
+	file_server {
+		precompressed br gzip
+	}
+
+	log
+}
