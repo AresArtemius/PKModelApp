@@ -3235,7 +3235,7 @@ class _CompareDialogState extends State<_CompareDialog> {
 
     String text(Map<String, dynamic> p, String key) =>
         (p[key] ?? '').toString().trim();
-    int num(Map<String, dynamic> p, String key) =>
+    int intOf(Map<String, dynamic> p, String key) =>
         int.tryParse((p[key] ?? '').toString()) ?? 0;
 
     final labels = <String>[
@@ -3253,13 +3253,13 @@ class _CompareDialogState extends State<_CompareDialog> {
     List<String> values(Map<String, dynamic> row) {
       final p = Map<String, dynamic>.from((row['profile'] as Map?) ?? {});
       final age = ModelVm.displayAgeFromMap(p);
-      final height = num(p, 'height');
-      final bust = num(p, 'bust');
-      final waist = num(p, 'waist');
-      final hips = num(p, 'hips');
-      final shoe = num(p, 'shoe_size');
-      final hourly = num(p, 'min_hourly_rate');
-      final daily = num(p, 'min_daily_fee');
+      final height = intOf(p, 'height');
+      final bust = intOf(p, 'bust');
+      final waist = intOf(p, 'waist');
+      final hips = intOf(p, 'hips');
+      final shoe = intOf(p, 'shoe_size');
+      final hourly = intOf(p, 'min_hourly_rate');
+      final daily = intOf(p, 'min_daily_fee');
       final city = [
         text(p, 'city'),
         text(p, 'country'),
