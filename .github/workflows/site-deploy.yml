@@ -10,6 +10,10 @@ on:
       - 'site/**'
       - '.github/workflows/site-deploy.yml'
   workflow_dispatch:
+  schedule:
+    # Daily rebuild so new approved profiles and castings reach the site
+    # without a commit (06:00 Moscow).
+    - cron: '0 3 * * *'
 
 permissions:
   contents: read
