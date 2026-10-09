@@ -778,6 +778,7 @@ class _CatalogSortMenu extends StatelessWidget {
     return switch (sort) {
       CatalogSort.recommended => ru ? 'Рекомендуемые' : 'Recommended',
       CatalogSort.newest => ru ? 'Сначала новые' : 'Newest first',
+      CatalogSort.popular => ru ? 'Популярные' : 'Popular',
       CatalogSort.ageAsc => ru ? 'Возраст: младше' : 'Age: youngest',
       CatalogSort.ageDesc => ru ? 'Возраст: старше' : 'Age: oldest',
       CatalogSort.heightAsc => ru ? 'Рост: ниже' : 'Height: shortest',
