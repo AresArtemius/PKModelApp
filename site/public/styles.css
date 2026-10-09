@@ -845,3 +845,66 @@ section + section {
     grid-template-columns: repeat(2, 1fr);
   }
 }
+
+/* ---------------------------------------------------------------- legal pages */
+.legal-grid {
+  display: grid;
+  gap: 32px;
+}
+.legal-text {
+  max-width: 720px;
+}
+.legal-text h1 {
+  margin-bottom: 4px;
+}
+.legal-text h2 {
+  font-size: 20px;
+  margin: 32px 0 8px;
+  scroll-margin-top: 80px;
+}
+.legal-text p {
+  color: var(--text-2);
+  margin: 0 0 12px;
+}
+.legal-side {
+  font-size: 14px;
+}
+.legal-side b {
+  display: block;
+  font-weight: 600;
+  margin: 0 0 8px;
+}
+.legal-side ol,
+.legal-side ul {
+  margin: 0 0 24px;
+  padding-left: 18px;
+  color: var(--text-2);
+  display: grid;
+  gap: 6px;
+}
+.legal-side a:hover {
+  color: var(--text);
+}
+@media (min-width: 1000px) {
+  .legal-grid {
+    grid-template-columns: 1fr 280px;
+    gap: 64px;
+    align-items: start;
+  }
+  .legal-side {
+    position: sticky;
+    top: 84px;
+  }
+}
+@media print {
+  .site-header,
+  .site-footer,
+  .legal-side,
+  .crumbs,
+  .skip {
+    display: none;
+  }
+  .legal-text {
+    max-width: none;
+  }
+}
