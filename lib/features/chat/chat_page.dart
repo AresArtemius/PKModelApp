@@ -90,6 +90,17 @@ String _formatVoiceDuration(Duration duration) {
   return '$minutes:$seconds';
 }
 
+/// Full-screen photo / video of a chat message as a page of its own
+/// (`/chat/:id/media/:messageId`).
+class ChatMediaViewerPage extends StatelessWidget {
+  const ChatMediaViewerPage({super.key, required this.message});
+
+  final ChatMessage message;
+
+  @override
+  Widget build(BuildContext context) => _MediaViewerDialog(message: message);
+}
+
 class ChatPage extends ConsumerStatefulWidget {
   const ChatPage({
     super.key,
@@ -2685,9 +2696,17 @@ class _ChatPageState extends ConsumerState<ChatPage> {
 
   void _openMediaViewer(BuildContext context, ChatMessage message) {
     if (!message.hasMedia) return;
-    showDialog<void>(
-      context: context,
-      builder: (context) => _MediaViewerDialog(message: message),
+    if (message.isFile) {
+      showDialog<void>(
+        context: context,
+        builder: (context) => _MediaViewerDialog(message: message),
+      );
+      return;
+    }
+    // Photos and videos open as a route, so «Back» closes the viewer.
+    context.push(
+      Routes.chatMediaLocation(widget.chatId, message.id),
+      extra: message,
     );
   }
 }
