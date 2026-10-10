@@ -14,6 +14,7 @@ import '../../core/app_error_mapper.dart';
 import '../../core/app_logger.dart';
 import '../../core/auth_providers.dart';
 import '../../core/storage_image_variant.dart';
+import '../feed/follow_button.dart';
 import '../../core/profile_action_log_service.dart';
 import '../../core/roles_provider.dart';
 import '../../core/page_titles.dart';
@@ -2094,6 +2095,8 @@ class _ProfileDesktopBodyV2State extends State<_ProfileDesktopBodyV2> {
             icon: const Icon(Icons.chat_bubble_outline_rounded, size: 18),
             label: Text(ru ? 'Войти, чтобы написать' : 'Sign in to message'),
           ),
+        if (widget.signedIn && widget.model.userId.trim().isNotEmpty)
+          FollowButton(userId: widget.model.userId, showCount: false),
         OutlinedButton.icon(
           onPressed: busy ? null : widget.onCompositePdf,
           icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),

@@ -108,6 +108,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         if (path == Routes.me ||
             path == Routes.chats ||
             path.startsWith(Routes.chatsChatPrefix) ||
+            path == Routes.following ||
             path == Routes.invitations) {
           return Routes.authRequired;
         }
