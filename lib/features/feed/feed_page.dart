@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/router.dart';
 import '../../core/storage_image_variant.dart';
-import '../../ui/brand/skeleton.dart';
 import '../../ui/brand/ui_constants.dart';
 import '../castings/casting_model.dart';
 import '../castings/casting_project_stage.dart';
