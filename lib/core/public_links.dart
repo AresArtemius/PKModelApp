@@ -31,6 +31,15 @@ String publicProfileTokenLink({
   );
 }
 
+/// Step 45: links shared from the feed.
+String publicCastingLink(String castingId) {
+  return _joinPublicPath('/castings?casting=${Uri.encodeQueryComponent(castingId)}');
+}
+
+String publicAccountLink(String tag) {
+  return _joinPublicPath('/@${Uri.encodeComponent(tag)}');
+}
+
 String publicSelectionLink(String selectionId) {
   return _joinPublicPath('/s/${Uri.encodeComponent(selectionId)}');
 }

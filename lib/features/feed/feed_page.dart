@@ -1,8 +1,11 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/auth_providers.dart';
+import '../../core/public_links.dart';
 import '../../core/router.dart';
 import '../../core/storage_image_variant.dart';
 import '../../ui/brand/ui_constants.dart';
@@ -11,6 +14,7 @@ import '../castings/casting_project_stage.dart';
 import '../castings/castings_provider.dart';
 import 'feed_models.dart';
 import 'feed_service.dart';
+import 'repost_dialog.dart';
 
 /// Step 44: the home feed (`/feed`). Read-only for now: a 600 px column of
 /// posts with infinite scroll, on wide screens a second column with open
@@ -233,13 +237,29 @@ class _PostCard extends StatelessWidget {
           _BookedBlock(post: post, ru: ru, onOpenProfile: () => _openProfile(context)),
         ];
       case FeedPostKind.repost:
-        if (post.repostBody.trim().isEmpty && post.repostAuthorName.isEmpty) {
-          return const [];
+        // A repost points at a post, a profile or a casting.
+        if (post.repostOf != null) {
+          if (post.repostBody.trim().isEmpty && post.repostAuthorName.isEmpty) {
+            return const [];
+          }
+          return [
+            const SizedBox(height: Tokens.s12),
+            _QuoteBlock(author: post.repostAuthorName, body: post.repostBody),
+          ];
         }
-        return [
-          const SizedBox(height: Tokens.s12),
-          _QuoteBlock(author: post.repostAuthorName, body: post.repostBody),
-        ];
+        if (post.castingId != null) {
+          return [
+            const SizedBox(height: Tokens.s12),
+            _CastingBlock(post: post, ru: ru),
+          ];
+        }
+        if (post.profileId != null) {
+          return [
+            const SizedBox(height: Tokens.s12),
+            _ProfileBlock(post: post, ru: ru, onOpen: () => _openProfile(context)),
+          ];
+        }
+        return const [];
       case FeedPostKind.text:
         if (post.media.isEmpty) return const [];
         return [
@@ -329,7 +349,10 @@ class _KindLabel extends StatelessWidget {
         Icons.check_circle_outline_rounded,
         ru ? 'Утверждение' : 'Booked',
       ),
-      FeedPostKind.repost => (Icons.repeat_rounded, ru ? 'Репост' : 'Repost'),
+      FeedPostKind.repost => (
+        Icons.repeat_rounded,
+        ru ? 'Поделился' : 'Shared',
+      ),
       FeedPostKind.text => null,
     };
     if (spec == null) return const SizedBox.shrink();
@@ -347,65 +370,181 @@ class _KindLabel extends StatelessWidget {
   }
 }
 
-class _PostFooter extends StatelessWidget {
+class _PostFooter extends ConsumerWidget {
   const _PostFooter({required this.post, required this.ru});
 
   final FeedPost post;
   final bool ru;
 
   @override
-  Widget build(BuildContext context) {
-    // Read-only counters until step 46 wires likes and saves.
+  Widget build(BuildContext context, WidgetRef ref) {
+    final signedIn = ref.watch(isAuthenticatedProvider);
+    final actions = ref.read(feedActionsProvider);
+
+    void requireSignIn() => context.go(Routes.authRequired);
+
+    Future<void> onLike() async {
+      if (!signedIn) {
+        requireSignIn();
+        return;
+      }
+      final ok = await actions.toggleLike(post);
+      if (!ok && context.mounted) _toast(context, ru ? 'Не получилось' : 'Failed');
+    }
+
+    Future<void> onSave() async {
+      if (!signedIn) {
+        requireSignIn();
+        return;
+      }
+      final ok = await actions.toggleSave(post);
+      if (!context.mounted) return;
+      if (!ok) {
+        _toast(context, ru ? 'Не получилось' : 'Failed');
+      } else if (!post.saved) {
+        _toast(context, ru ? 'Сохранено' : 'Saved');
+      }
+    }
+
+    Future<void> onRepost() async {
+      if (!signedIn) {
+        requireSignIn();
+        return;
+      }
+      // Reposting a repost shares the original.
+      final target = post.kind == FeedPostKind.repost && post.repostOf != null
+          ? post.repostOf!
+          : post.id;
+      final title = post.body.trim().isNotEmpty
+          ? post.body.trim()
+          : post.castingTitle.isNotEmpty
+          ? post.castingTitle
+          : post.profileName.isNotEmpty
+          ? post.profileName
+          : post.displayAuthor(ru);
+      final done = await showRepostDialog(context, title: title, repostOf: target);
+      if (done && context.mounted) showRepostDone(context);
+    }
+
+    Future<void> onShare() async {
+      final link = _shareLink(post);
+      if (link == null) return;
+      await Clipboard.setData(ClipboardData(text: link));
+      if (context.mounted) {
+        _toast(context, ru ? 'Ссылка скопирована' : 'Link copied');
+      }
+    }
+
     return Row(
       children: [
-        _Counter(
+        _FooterAction(
           icon: post.liked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
           value: post.likeCount,
           active: post.liked,
+          activeColor: Tokens.accent,
+          tooltip: ru ? 'Нравится' : 'Like',
+          onTap: onLike,
         ),
-        const SizedBox(width: Tokens.s20),
-        _Counter(
+        const SizedBox(width: Tokens.s16),
+        _FooterAction(
           icon: Icons.mode_comment_outlined,
           value: post.commentCount,
           active: false,
+          tooltip: ru ? 'Комментарии' : 'Comments',
+          onTap: null,
+        ),
+        const SizedBox(width: Tokens.s16),
+        _FooterAction(
+          icon: Icons.repeat_rounded,
+          value: post.repostCount,
+          active: false,
+          tooltip: ru ? 'Поделиться в ленту' : 'Repost',
+          onTap: onRepost,
         ),
         const Spacer(),
-        Icon(
-          post.saved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
-          size: 20,
-          color: post.saved ? Tokens.text : Tokens.textTertiary,
+        if (_shareLink(post) != null)
+          _FooterAction(
+            icon: Icons.link_rounded,
+            value: 0,
+            active: false,
+            tooltip: ru ? 'Скопировать ссылку' : 'Copy link',
+            onTap: onShare,
+          ),
+        const SizedBox(width: Tokens.s8),
+        _FooterAction(
+          icon: post.saved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+          value: 0,
+          active: post.saved,
+          activeColor: Tokens.text,
+          tooltip: ru ? 'Сохранить' : 'Save',
+          onTap: onSave,
         ),
       ],
     );
   }
+
+  /// Public page the post is about: the profile, the casting, or the author.
+  static String? _shareLink(FeedPost post) {
+    if (post.profileId != null) return publicProfileLink(post.profileId!);
+    if (post.castingId != null) return publicCastingLink(post.castingId!);
+    if (post.authorTag.isNotEmpty) return publicAccountLink(post.authorTag);
+    return null;
+  }
+
+  static void _toast(BuildContext context, String text) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(content: Text(text), duration: const Duration(seconds: 2)),
+      );
+  }
 }
 
-class _Counter extends StatelessWidget {
-  const _Counter({
+class _FooterAction extends StatelessWidget {
+  const _FooterAction({
     required this.icon,
     required this.value,
     required this.active,
+    required this.tooltip,
+    required this.onTap,
+    this.activeColor = Tokens.accent,
   });
 
   final IconData icon;
   final int value;
   final bool active;
+  final String tooltip;
+  final VoidCallback? onTap;
+  final Color activeColor;
 
   @override
   Widget build(BuildContext context) {
-    final color = active ? Tokens.accent : Tokens.textTertiary;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 20, color: color),
-        if (value > 0) ...[
-          const SizedBox(width: 6),
-          Text(
-            '$value',
-            style: AppText.small.copyWith(color: Tokens.textSecondary),
+    final color = active
+        ? activeColor
+        : (onTap == null ? Tokens.textTertiary : Tokens.textSecondary);
+    return Tooltip(
+      message: tooltip,
+      waitDuration: const Duration(milliseconds: 600),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(Tokens.radiusSm),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 20, color: color),
+              if (value > 0) ...[
+                const SizedBox(width: 6),
+                Text(
+                  '$value',
+                  style: AppText.small.copyWith(color: Tokens.textSecondary),
+                ),
+              ],
+            ],
           ),
-        ],
-      ],
+        ),
+      ),
     );
   }
 }
@@ -653,6 +792,74 @@ class _BookedBlock extends StatelessWidget {
             ),
           ),
           const Icon(Icons.check_circle_rounded, color: Tokens.success),
+        ],
+      ),
+    );
+  }
+}
+
+/// A profile from the catalogue shared to the feed.
+class _ProfileBlock extends StatelessWidget {
+  const _ProfileBlock({
+    required this.post,
+    required this.ru,
+    required this.onOpen,
+  });
+
+  final FeedPost post;
+  final bool ru;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final name = post.profileName.isNotEmpty
+        ? post.profileName
+        : (ru ? 'Анкета' : 'Profile');
+    return _Framed(
+      onTap: onOpen,
+      child: Row(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(Tokens.radiusSm),
+            child: SizedBox(
+              width: 56,
+              height: 70,
+              child: post.profilePhotoUrl.isEmpty
+                  ? const ColoredBox(
+                      color: Tokens.surfaceAlt,
+                      child: Icon(
+                        Icons.person_outline_rounded,
+                        color: Tokens.textTertiary,
+                      ),
+                    )
+                  : CachedNetworkImage(
+                      imageUrl: storageImageVariant(
+                        post.profilePhotoUrl,
+                        width: 160,
+                      ),
+                      fit: BoxFit.cover,
+                      errorWidget: (_, _, _) => CachedNetworkImage(
+                        imageUrl: post.profilePhotoUrl,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+            ),
+          ),
+          const SizedBox(width: Tokens.s12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(name, style: AppText.bodyStrong),
+                const SizedBox(height: 2),
+                Text(
+                  ru ? 'Анкета в каталоге' : 'Catalogue profile',
+                  style: AppText.small.copyWith(color: Tokens.textSecondary),
+                ),
+              ],
+            ),
+          ),
+          const Icon(Icons.chevron_right_rounded, color: Tokens.textTertiary),
         ],
       ),
     );

@@ -123,6 +123,7 @@ class FeedPost {
   FeedPost copyWith({
     int? likeCount,
     int? saveCount,
+    int? repostCount,
     bool? liked,
     bool? saved,
   }) {
@@ -149,7 +150,7 @@ class FeedPost {
       auto: auto,
       likeCount: likeCount ?? this.likeCount,
       commentCount: commentCount,
-      repostCount: repostCount,
+      repostCount: repostCount ?? this.repostCount,
       saveCount: saveCount ?? this.saveCount,
       media: media,
       liked: liked ?? this.liked,

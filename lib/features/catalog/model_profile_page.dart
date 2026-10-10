@@ -15,6 +15,7 @@ import '../../core/app_logger.dart';
 import '../../core/auth_providers.dart';
 import '../../core/storage_image_variant.dart';
 import '../feed/follow_button.dart';
+import '../feed/repost_dialog.dart';
 import '../../core/profile_action_log_service.dart';
 import '../../core/roles_provider.dart';
 import '../../core/page_titles.dart';
@@ -2097,6 +2098,22 @@ class _ProfileDesktopBodyV2State extends State<_ProfileDesktopBodyV2> {
           ),
         if (widget.signedIn && widget.model.userId.trim().isNotEmpty)
           FollowButton(userId: widget.model.userId, showCount: false),
+        // Step 45: share the profile to the feed.
+        if (widget.signedIn && kIsWeb)
+          OutlinedButton.icon(
+            onPressed: busy
+                ? null
+                : () async {
+                    final done = await showRepostDialog(
+                      context,
+                      title: widget.model.fullName.trim(),
+                      profileId: widget.model.id,
+                    );
+                    if (done && context.mounted) showRepostDone(context);
+                  },
+            icon: const Icon(Icons.repeat_rounded, size: 18),
+            label: Text(ru ? 'В ленту' : 'Share to feed'),
+          ),
         OutlinedButton.icon(
           onPressed: busy ? null : widget.onCompositePdf,
           icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
