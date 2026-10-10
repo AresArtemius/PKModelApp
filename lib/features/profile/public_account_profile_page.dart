@@ -18,6 +18,7 @@ import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/public_page_frame.dart';
 import '../../ui/brand/ui_constants.dart';
 import '../chat/chat_providers.dart';
+import '../feed/follow_button.dart';
 
 const double _kPublicAccountMaxWidth = 760;
 const double _kPublicAccountAvatarSize = 104;
@@ -567,6 +568,8 @@ extension _PublicAccountV2 on PublicAccountProfilePage {
                                 : (ru ? 'Войти, чтобы написать' : 'Sign in to message'),
                           ),
                         ),
+                        if (profile.userId.trim().isNotEmpty)
+                          FollowButton(userId: profile.userId),
                         if (profile.website.isNotEmpty)
                           OutlinedButton.icon(
                             onPressed: () => open(profile.website),

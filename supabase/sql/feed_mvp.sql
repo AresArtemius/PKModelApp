@@ -598,11 +598,70 @@ begin
   end if;
 end $$;
 
+
+-- ---------------------------------------------------------------------------
+-- Step 42. Who I follow / who follows me (user_profiles is not readable
+-- across accounts, so the lists come through security-definer RPCs).
+-- ---------------------------------------------------------------------------
+
+drop function if exists public.list_follow_accounts(text, uuid, integer);
+
+create or replace function public.list_follow_accounts(
+  p_direction text default 'following',   -- following | followers
+  p_user_id uuid default null,            -- whose list; null = mine
+  p_limit integer default 200
+)
+returns table (
+  user_id uuid,
+  full_name text,
+  avatar_url text,
+  account_tag text,
+  account_type text,
+  followed_at timestamptz,
+  i_follow boolean
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  with target as (select coalesce(p_user_id, auth.uid()) as uid),
+  pairs as (
+    select
+      case when p_direction = 'followers' then f.follower_id else f.followee_id end as other_id,
+      f.created_at
+    from public.follows f, target t
+    where case when p_direction = 'followers'
+      then f.followee_id = t.uid else f.follower_id = t.uid end
+  )
+  select
+    pr.other_id,
+    coalesce(nullif(btrim(up.full_name), ''), nullif(btrim(up.company_name), ''), ''),
+    coalesce(up.avatar_url, ''),
+    case when lower(coalesce(up.account_tag_visibility, 'public')) = 'hidden'
+      then '' else coalesce(up.account_tag, '') end,
+    coalesce(up.account_type, ''),
+    pr.created_at,
+    exists (
+      select 1 from public.follows x
+      where x.follower_id = auth.uid() and x.followee_id = pr.other_id
+    )
+  from pairs pr
+  left join public.user_profiles up on up.user_id = pr.other_id
+  where auth.uid() is not null
+    and not public.feed_pair_blocked(auth.uid(), pr.other_id)
+  order by pr.created_at desc
+  limit least(greatest(coalesce(p_limit, 200), 1), 500);
+$$;
+
+grant execute on function public.list_follow_accounts(text, uuid, integer) to authenticated;
+
 -- ---------------------------------------------------------------------------
 -- Rollback (run by hand if the feed has to go)
 -- ---------------------------------------------------------------------------
 -- drop function if exists public.get_feed(timestamptz, uuid, integer, text);
 -- drop function if exists public.follow_counts(uuid);
+-- drop function if exists public.list_follow_accounts(text, uuid, integer);
 -- drop function if exists public.feed_post_visible(public.posts);
 -- drop function if exists public.feed_pair_blocked(uuid, uuid);
 -- drop table if exists public.post_saves;

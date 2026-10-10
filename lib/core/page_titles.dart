@@ -60,6 +60,7 @@ String? titleForPath(String path, {required bool russian}) {
   if (path == Routes.billing) return pick('Тарифы', 'Plans');
   if (path == Routes.notifications) return pick('Уведомления', 'Notifications');
   if (path == Routes.profileAnalytics) return pick('Аналитика', 'Analytics');
+  if (path == Routes.following) return pick('Подписки', 'Follows');
   if (path == Routes.support) return pick('Помощь и поддержка', 'Help & support');
   if (path == Routes.accountProfile) {
     return pick('Профиль аккаунта', 'Account profile');

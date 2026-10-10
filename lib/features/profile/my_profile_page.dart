@@ -298,6 +298,15 @@ class MyProfilePage extends ConsumerWidget {
       ),
       if (!_accountV2) const SizedBox(height: kGap14),
       _AccountEntryCard(
+        icon: Icons.people_outline_rounded,
+        title: isRu ? 'ПОДПИСКИ' : 'FOLLOWS',
+        subtitle: isRu
+            ? 'На кого вы подписаны и кто подписан на вас'
+            : 'Who you follow and who follows you',
+        onTap: () => context.go(Routes.following),
+      ),
+      if (!_accountV2) const SizedBox(height: kGap14),
+      _AccountEntryCard(
         icon: Icons.support_agent_rounded,
         title: isRu ? 'ПОМОЩЬ И ПОДДЕРЖКА' : 'HELP & SUPPORT',
         subtitle: isRu

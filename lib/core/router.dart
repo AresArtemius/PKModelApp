@@ -52,6 +52,7 @@ import '../features/profile/account_devices_page.dart';
 import '../features/profile/account_mfa_page.dart';
 import '../features/profile/data_privacy_page.dart';
 import '../features/profile/public_account_profile_page.dart';
+import '../features/feed/following_page.dart';
 import '../features/support/support_page.dart';
 import '../features/legal/legal_document_page.dart';
 import '../features/legal/legal_documents.dart';
@@ -94,6 +95,7 @@ abstract class Routes {
   static const accountMfa = '/account_mfa';
   static const dataPrivacy = '/data_privacy';
   static const support = '/support';
+  static const following = '/following';
   static const publicAccountPrefix = '/@';
   static const publicAccount = '/@:tag';
 
@@ -200,6 +202,7 @@ class AppShell extends StatelessWidget {
     if (path.startsWith(Routes.accountMfa)) return 3;
     if (path.startsWith(Routes.dataPrivacy)) return 3;
     if (path.startsWith(Routes.support)) return 3;
+    if (path.startsWith(Routes.following)) return 3;
     if (path.startsWith(Routes.me)) return 3;
     if (path.startsWith(Routes.admin)) return 4;
     if (path.startsWith(Routes.catalogAdmin)) return 4;
@@ -699,6 +702,10 @@ final List<RouteBase> appRoutes = [
       GoRoute(
         path: Routes.support,
         builder: (context, state) => const SupportPage(),
+      ),
+      GoRoute(
+        path: Routes.following,
+        builder: (context, state) => const FollowingPage(),
       ),
       GoRoute(
         path: Routes.admin,
