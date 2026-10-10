@@ -309,6 +309,7 @@ class NotificationPreferences {
     required this.profileEnabled,
     required this.systemEnabled,
     this.autopostEnabled = true,
+    this.feedEnabled = true,
   });
 
   static const defaults = NotificationPreferences(
@@ -323,6 +324,9 @@ class NotificationPreferences {
   /// Step 43: automatic feed posts (approved media, published castings,
   /// bookings). Stored in the same preferences row.
   final bool autopostEnabled;
+
+  /// Step 48: likes, comments, reposts and follows from the feed.
+  final bool feedEnabled;
 
   final bool pushEnabled;
   final bool emailEnabled;
@@ -342,6 +346,7 @@ class NotificationPreferences {
       profileEnabled: flag('profile_enabled'),
       systemEnabled: flag('system_enabled'),
       autopostEnabled: flag('autopost_enabled'),
+      feedEnabled: flag('feed_enabled'),
     );
   }
 
@@ -353,6 +358,7 @@ class NotificationPreferences {
     bool? profileEnabled,
     bool? systemEnabled,
     bool? autopostEnabled,
+    bool? feedEnabled,
   }) {
     return NotificationPreferences(
       pushEnabled: pushEnabled ?? this.pushEnabled,
@@ -362,6 +368,7 @@ class NotificationPreferences {
       profileEnabled: profileEnabled ?? this.profileEnabled,
       systemEnabled: systemEnabled ?? this.systemEnabled,
       autopostEnabled: autopostEnabled ?? this.autopostEnabled,
+      feedEnabled: feedEnabled ?? this.feedEnabled,
     );
   }
 
@@ -375,6 +382,7 @@ class NotificationPreferences {
       'profile_enabled': profileEnabled,
       'system_enabled': systemEnabled,
       'autopost_enabled': autopostEnabled,
+      'feed_enabled': feedEnabled,
       'updated_at': DateTime.now().toUtc().toIso8601String(),
     };
   }
@@ -394,12 +402,11 @@ class NotificationPreferencesService {
     }
 
     try {
+      // `*` so the newer flags (autopost_enabled, feed_enabled) come along
+      // once their SQL is applied; missing columns just fall back to true.
       final row = await _sb
           .from(table)
-          .select(
-            'push_enabled,email_enabled,chat_enabled,casting_enabled,'
-            'profile_enabled,system_enabled',
-          )
+          .select()
           .eq('user_id', userId)
           .maybeSingle();
       if (row == null) return NotificationPreferences.defaults;
@@ -420,17 +427,25 @@ class NotificationPreferencesService {
     final userId = _sb.auth.currentUser?.id;
     if (userId == null || userId.isEmpty) return;
 
+    // Newer flags whose SQL may not be applied yet: drop the missing column
+    // and retry, so the rest of the preferences still save.
+    const optional = ['autopost_enabled', 'feed_enabled'];
+    final map = preferences.toMap(userId);
     try {
-      await _sb
-          .from(table)
-          .upsert(preferences.toMap(userId), onConflict: 'user_id');
-    } on PostgrestException catch (e) {
-      if (SupabaseCompat.isMissingColumn(e, 'autopost_enabled')) {
-        // feed_autoposts.sql not applied yet: save without the new flag.
-        final map = preferences.toMap(userId)..remove('autopost_enabled');
-        await _sb.from(table).upsert(map, onConflict: 'user_id');
-        return;
+      for (var attempt = 0; attempt <= optional.length; attempt++) {
+        try {
+          await _sb.from(table).upsert(map, onConflict: 'user_id');
+          return;
+        } on PostgrestException catch (e) {
+          final missing = optional.firstWhere(
+            (c) => map.containsKey(c) && SupabaseCompat.isMissingColumn(e, c),
+            orElse: () => '',
+          );
+          if (missing.isEmpty) rethrow;
+          map.remove(missing);
+        }
       }
+    } on PostgrestException catch (e) {
       if (SupabaseCompat.isMissingRelation(e, const [table])) {
         AppLogger.warning(
           'Notification preferences save skipped until SQL is applied',
