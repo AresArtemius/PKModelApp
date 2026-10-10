@@ -14,6 +14,7 @@ import '../castings/casting_project_stage.dart';
 import '../castings/castings_provider.dart';
 import 'feed_models.dart';
 import 'feed_service.dart';
+import 'post_composer.dart';
 import 'repost_dialog.dart';
 
 /// Step 44: the home feed (`/feed`). Read-only for now: a 600 px column of
@@ -64,6 +65,10 @@ class _FeedPageState extends ConsumerState<FeedPage> {
     final controller = ref.read(feedControllerProvider(widget.scope).notifier);
     final width = MediaQuery.sizeOf(context).width;
     final twoColumns = width >= _twoColumnBreakpoint;
+    // Step 46: the composer sits at the top of the home feed.
+    final showComposer =
+        ref.watch(isAuthenticatedProvider) && widget.scope == 'home';
+    final offset = showComposer ? 1 : 0;
 
     final column = RefreshIndicator(
       onRefresh: controller.refresh,
@@ -75,8 +80,10 @@ class _FeedPageState extends ConsumerState<FeedPage> {
           top: twoColumns ? Tokens.s24 : Tokens.s8,
           bottom: Tokens.s48,
         ),
-        itemCount: _itemCount(feed),
-        itemBuilder: (context, index) {
+        itemCount: _itemCount(feed) + offset,
+        itemBuilder: (context, rawIndex) {
+          if (showComposer && rawIndex == 0) return const PostComposer();
+          final index = rawIndex - offset;
           if (feed.loading) return const _PostSkeleton();
           if (feed.error != null && feed.posts.isEmpty) {
             return _FeedMessage(
