@@ -144,7 +144,7 @@ class TabAlerts {
         onClick?.call();
       }).toJS;
       // Close by itself so stale alerts do not pile up.
-      Timer(const Duration(seconds: 8), notification.close);
+      Timer(const Duration(seconds: 8), () => notification.close());
     } catch (_) {
       // Notification is best effort.
     }
