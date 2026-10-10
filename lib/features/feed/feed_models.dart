@@ -124,6 +124,7 @@ class FeedPost {
     int? likeCount,
     int? saveCount,
     int? repostCount,
+    int? commentCount,
     bool? liked,
     bool? saved,
   }) {
@@ -149,7 +150,7 @@ class FeedPost {
       commentsEnabled: commentsEnabled,
       auto: auto,
       likeCount: likeCount ?? this.likeCount,
-      commentCount: commentCount,
+      commentCount: commentCount ?? this.commentCount,
       repostCount: repostCount ?? this.repostCount,
       saveCount: saveCount ?? this.saveCount,
       media: media,
@@ -204,6 +205,51 @@ class FeedPost {
       media: media,
       liked: map['liked'] == true,
       saved: map['saved'] == true,
+      createdAt:
+          DateTime.tryParse(str('created_at'))?.toLocal() ??
+          DateTime.fromMillisecondsSinceEpoch(0),
+    );
+  }
+}
+
+/// Step 47: a row of `list_post_comments()`.
+class FeedComment {
+  const FeedComment({
+    required this.id,
+    required this.postId,
+    required this.authorId,
+    required this.authorName,
+    required this.authorAvatarUrl,
+    required this.authorTag,
+    required this.body,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String postId;
+  final String authorId;
+  final String authorName;
+  final String authorAvatarUrl;
+  final String authorTag;
+  final String body;
+  final DateTime createdAt;
+
+  String displayAuthor(bool ru) {
+    if (authorName.isNotEmpty) return authorName;
+    if (authorTag.isNotEmpty) return '@$authorTag';
+    return ru ? 'Аккаунт' : 'Account';
+  }
+
+  factory FeedComment.fromMap(Map<String, dynamic> map) {
+    String str(String key) => (map[key] ?? '').toString().trim();
+    return FeedComment(
+      id: str('id'),
+      postId: str('post_id'),
+      authorId: str('author_id'),
+      authorName: str('author_name'),
+      authorAvatarUrl: str('author_avatar_url'),
+      authorTag: str('author_tag'),
+      body: (map['body'] ?? '').toString(),
       createdAt:
           DateTime.tryParse(str('created_at'))?.toLocal() ??
           DateTime.fromMillisecondsSinceEpoch(0),
