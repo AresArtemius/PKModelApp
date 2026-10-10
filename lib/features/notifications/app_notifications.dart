@@ -308,6 +308,7 @@ class NotificationPreferences {
     required this.castingEnabled,
     required this.profileEnabled,
     required this.systemEnabled,
+    this.autopostEnabled = true,
   });
 
   static const defaults = NotificationPreferences(
@@ -318,6 +319,10 @@ class NotificationPreferences {
     profileEnabled: true,
     systemEnabled: true,
   );
+
+  /// Step 43: automatic feed posts (approved media, published castings,
+  /// bookings). Stored in the same preferences row.
+  final bool autopostEnabled;
 
   final bool pushEnabled;
   final bool emailEnabled;
@@ -336,6 +341,7 @@ class NotificationPreferences {
       castingEnabled: flag('casting_enabled'),
       profileEnabled: flag('profile_enabled'),
       systemEnabled: flag('system_enabled'),
+      autopostEnabled: flag('autopost_enabled'),
     );
   }
 
@@ -346,6 +352,7 @@ class NotificationPreferences {
     bool? castingEnabled,
     bool? profileEnabled,
     bool? systemEnabled,
+    bool? autopostEnabled,
   }) {
     return NotificationPreferences(
       pushEnabled: pushEnabled ?? this.pushEnabled,
@@ -354,6 +361,7 @@ class NotificationPreferences {
       castingEnabled: castingEnabled ?? this.castingEnabled,
       profileEnabled: profileEnabled ?? this.profileEnabled,
       systemEnabled: systemEnabled ?? this.systemEnabled,
+      autopostEnabled: autopostEnabled ?? this.autopostEnabled,
     );
   }
 
@@ -366,6 +374,7 @@ class NotificationPreferences {
       'casting_enabled': castingEnabled,
       'profile_enabled': profileEnabled,
       'system_enabled': systemEnabled,
+      'autopost_enabled': autopostEnabled,
       'updated_at': DateTime.now().toUtc().toIso8601String(),
     };
   }
@@ -416,6 +425,12 @@ class NotificationPreferencesService {
           .from(table)
           .upsert(preferences.toMap(userId), onConflict: 'user_id');
     } on PostgrestException catch (e) {
+      if (SupabaseCompat.isMissingColumn(e, 'autopost_enabled')) {
+        // feed_autoposts.sql not applied yet: save without the new flag.
+        final map = preferences.toMap(userId)..remove('autopost_enabled');
+        await _sb.from(table).upsert(map, onConflict: 'user_id');
+        return;
+      }
       if (SupabaseCompat.isMissingRelation(e, const [table])) {
         AppLogger.warning(
           'Notification preferences save skipped until SQL is applied',

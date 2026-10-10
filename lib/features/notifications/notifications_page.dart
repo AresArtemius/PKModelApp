@@ -1339,6 +1339,18 @@ class _SettingsShell extends StatelessWidget {
                 preferences.copyWith(systemEnabled: !preferences.systemEnabled),
               ),
       ),
+      _SettingsPill(
+        icon: Icons.dynamic_feed_rounded,
+        label: ru ? 'Автопосты в ленту' : 'Feed autoposts',
+        value: preferences.autopostEnabled,
+        onTap: busy || isError
+            ? null
+            : () => onChanged(
+                preferences.copyWith(
+                  autopostEnabled: !preferences.autopostEnabled,
+                ),
+              ),
+      ),
     ];
     final enabledCount = [
       preferences.pushEnabled,
