@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -11,8 +12,10 @@ import '../../core/app_logger.dart';
 import '../../core/open_external_url_stub.dart'
     if (dart.library.html) '../../core/open_external_url_web.dart';
 import '../../core/router.dart';
+import '../../core/public_links.dart';
 import '../../core/roles_provider.dart';
 import '../../gen_l10n/app_localizations.dart';
+import '../feed/repost_dialog.dart';
 import '../profile/my_profile_controller.dart';
 import '../profile/profile_model.dart';
 import '../../ui/brand/brand_logo.dart';
@@ -1594,6 +1597,61 @@ class _CastingDesktopDetailPanel extends StatelessWidget {
   }
 }
 
+/// Step 45: «В ленту» + «Ссылка» under the respond button.
+class _CastingShareRow extends ConsumerWidget {
+  const _CastingShareRow({required this.casting});
+
+  final CastingModel casting;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final signedIn = ref.watch(isAuthenticatedProvider);
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    return Row(
+      children: [
+        if (signedIn) ...[
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: () async {
+                final done = await showRepostDialog(
+                  context,
+                  title: casting.title,
+                  castingId: casting.id,
+                );
+                if (done && context.mounted) showRepostDone(context);
+              },
+              icon: const Icon(Icons.repeat_rounded, size: 18),
+              label: Text(ru ? 'В ленту' : 'Share'),
+            ),
+          ),
+          const SizedBox(width: 8),
+        ],
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: () async {
+              await Clipboard.setData(
+                ClipboardData(text: publicCastingLink(casting.id)),
+              );
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context)
+                ..hideCurrentSnackBar()
+                ..showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      ru ? 'Ссылка скопирована' : 'Link copied',
+                    ),
+                  ),
+                );
+            },
+            icon: const Icon(Icons.link_rounded, size: 18),
+            label: Text(ru ? 'Ссылка' : 'Link'),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 CastingReferenceMedia? _firstImageReference(CastingModel casting) {
   for (final item in casting.referenceMedia) {
     if (item.kind == CastingReferenceMediaKind.image && item.url.isNotEmpty) {
@@ -1800,6 +1858,9 @@ class _CastingSideCard extends StatelessWidget {
             textAlign: TextAlign.center,
             style: AppText.caption,
           ),
+          // Step 45: share to the feed / copy the link.
+          const SizedBox(height: 16),
+          _CastingShareRow(casting: casting),
           if (isAdmin) ...[
             const SizedBox(height: 24),
             const Divider(height: 1, thickness: 1, color: Tokens.border),
