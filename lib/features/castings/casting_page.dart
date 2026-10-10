@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/analytics_goals.dart';
 import '../../core/app_error_mapper.dart';
 import '../../core/admin_action_log_service.dart';
 import '../../core/app_logger.dart';
@@ -633,6 +634,10 @@ class _CastingPageState extends ConsumerState<CastingPage> {
       if (profilesError) {
         _showSnack(context, t.signInGenericError);
         return;
+      }
+      // Step 50: a response to a casting that was opened from the feed.
+      if (GoRouterState.of(context).uri.queryParameters['from'] == 'feed') {
+        reachGoal(Goals.feedCastingRespond, {'casting_id': castingId});
       }
       _onRespondTap(
         ref: ref,

@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../core/account_profile_service.dart';
+import '../../core/analytics_goals.dart';
 import '../../core/content_safety_filter.dart';
 import '../../core/storage_image_variant.dart';
 import '../../core/supabase_provider.dart';
@@ -198,6 +199,7 @@ class _PostComposerState extends ConsumerState<PostComposer> {
         _progress = 0;
       });
       _focus.unfocus();
+      reachGoal(Goals.feedPost, {'photos': uploaded.length});
       await ref.read(feedControllerProvider('home').notifier).refresh();
       widget.onPublished?.call();
     } catch (_) {
