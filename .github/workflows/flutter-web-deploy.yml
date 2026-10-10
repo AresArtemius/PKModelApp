@@ -88,25 +88,33 @@ jobs:
         run: flutter pub get
 
       - name: Build web
-        run: >-
-          flutter build web
-          --release
-          --pwa-strategy=none
-          --no-web-resources-cdn
-          --base-href=/
-          --dart-define=PUBLIC_BASE_URL=https://app.pk.management
-          --dart-define=APP_RELEASE_SHA=$GITHUB_SHA
-          --dart-define=SENTRY_DSN=$SENTRY_DSN
-          --dart-define=SUPABASE_URL=$SUPABASE_URL
-          --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY
-          --dart-define=FIREBASE_WEB_API_KEY=$FIREBASE_WEB_API_KEY
-          --dart-define=FIREBASE_WEB_AUTH_DOMAIN=$FIREBASE_WEB_AUTH_DOMAIN
-          --dart-define=FIREBASE_WEB_PROJECT_ID=$FIREBASE_WEB_PROJECT_ID
-          --dart-define=FIREBASE_WEB_STORAGE_BUCKET=$FIREBASE_WEB_STORAGE_BUCKET
-          --dart-define=FIREBASE_WEB_MESSAGING_SENDER_ID=$FIREBASE_WEB_MESSAGING_SENDER_ID
-          --dart-define=FIREBASE_WEB_APP_ID=$FIREBASE_WEB_APP_ID
-          --dart-define=FIREBASE_WEB_MEASUREMENT_ID=$FIREBASE_WEB_MEASUREMENT_ID
-          --dart-define=FIREBASE_WEB_VAPID_KEY=$FIREBASE_WEB_VAPID_KEY
+        # Output is captured so that a failing build surfaces its error as
+        # an annotation (the raw log is not always reachable).
+        run: |
+          set +e
+          flutter build web \
+          --release \
+          --pwa-strategy=none \
+          --no-web-resources-cdn \
+          --base-href=/ \
+          --dart-define=PUBLIC_BASE_URL=https://app.pk.management \
+          --dart-define=APP_RELEASE_SHA=$GITHUB_SHA \
+          --dart-define=SENTRY_DSN=$SENTRY_DSN \
+          --dart-define=SUPABASE_URL=$SUPABASE_URL \
+          --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
+          --dart-define=FIREBASE_WEB_API_KEY=$FIREBASE_WEB_API_KEY \
+          --dart-define=FIREBASE_WEB_AUTH_DOMAIN=$FIREBASE_WEB_AUTH_DOMAIN \
+          --dart-define=FIREBASE_WEB_PROJECT_ID=$FIREBASE_WEB_PROJECT_ID \
+          --dart-define=FIREBASE_WEB_STORAGE_BUCKET=$FIREBASE_WEB_STORAGE_BUCKET \
+          --dart-define=FIREBASE_WEB_MESSAGING_SENDER_ID=$FIREBASE_WEB_MESSAGING_SENDER_ID \
+          --dart-define=FIREBASE_WEB_APP_ID=$FIREBASE_WEB_APP_ID \
+          --dart-define=FIREBASE_WEB_MEASUREMENT_ID=$FIREBASE_WEB_MEASUREMENT_ID \
+          --dart-define=FIREBASE_WEB_VAPID_KEY=$FIREBASE_WEB_VAPID_KEY 2>&1 | tee build.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" != "0" ]; then
+            grep -nE "Error|error|Exception|Failed|failed" build.log | tail -n 25 | while IFS= read -r line; do echo "::error::$line"; done
+            exit "$status"
+          fi
 
       - name: Write release.json (used by the in-app "new version" banner)
         run: |
