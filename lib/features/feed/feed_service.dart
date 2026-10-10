@@ -77,6 +77,65 @@ class FeedService {
     await _sb.from('post_saves').delete().eq('post_id', postId).eq('user_id', me);
   }
 
+  // ---- Step 47: comments and reports ----------------------------------
+
+  Future<List<FeedComment>> listComments(String postId) async {
+    try {
+      final rows = await _sb.rpc(
+        'list_post_comments',
+        params: {'p_post_id': postId, 'p_limit': 200},
+      );
+      return (rows as List<dynamic>)
+          .map((e) => FeedComment.fromMap(Map<String, dynamic>.from(e as Map)))
+          .toList(growable: false);
+    } on PostgrestException catch (e) {
+      if (SupabaseCompat.isMissingRpc(e, 'list_post_comments')) {
+        return const <FeedComment>[];
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> addComment(String postId, String body) async {
+    final me = _sb.auth.currentUser?.id;
+    if (me == null) throw StateError('not signed in');
+    await _sb.from('post_comments').insert({
+      'post_id': postId,
+      'author_id': me,
+      'body': body.trim(),
+    });
+  }
+
+  Future<void> deleteComment(String commentId) async {
+    await _sb.from('post_comments').delete().eq('id', commentId);
+  }
+
+  Future<void> reportPost({
+    required String postId,
+    required String reason,
+    String comment = '',
+  }) async {
+    final me = _sb.auth.currentUser?.id;
+    if (me == null) throw StateError('not signed in');
+    await _sb.from('post_reports').upsert(
+      {
+        'post_id': postId,
+        'reporter_user_id': me,
+        'reason': reason,
+        'comment': comment.trim(),
+      },
+      onConflict: 'post_id,reporter_user_id',
+    );
+  }
+
+  /// Soft delete of my own post (admins can hide any post the same way).
+  Future<void> deletePost(String postId) async {
+    await _sb
+        .from('posts')
+        .update({'deleted_at': DateTime.now().toUtc().toIso8601String()})
+        .eq('id', postId);
+  }
+
   /// A repost is a post of kind `repost` that points at a post, a profile or
   /// a casting (exactly one of them) with an optional caption.
   Future<void> repost({
@@ -192,6 +251,15 @@ class FeedController extends StateNotifier<FeedState> {
     }
   }
 
+  void remove(String postId) {
+    state = state.copyWith(
+      posts: [
+        for (final p in state.posts)
+          if (p.id != postId) p,
+      ],
+    );
+  }
+
   /// Local patch (optimistic like / save, step 46).
   void patch(String postId, FeedPost Function(FeedPost) update) {
     state = state.copyWith(
@@ -268,6 +336,29 @@ class FeedActions {
     }
   }
 
+  Future<void> addComment(String postId, String body) async {
+    await _ref.read(feedServiceProvider).addComment(postId, body);
+    _patchAll(postId, (p) => p.copyWith(commentCount: p.commentCount + 1));
+    _ref.invalidate(postCommentsProvider(postId));
+  }
+
+  Future<void> deleteComment(String postId, String commentId) async {
+    await _ref.read(feedServiceProvider).deleteComment(commentId);
+    _patchAll(
+      postId,
+      (p) => p.copyWith(commentCount: (p.commentCount - 1).clamp(0, 1 << 30)),
+    );
+    _ref.invalidate(postCommentsProvider(postId));
+  }
+
+  Future<void> deletePost(String postId) async {
+    await _ref.read(feedServiceProvider).deletePost(postId);
+    for (final scope in _scopes) {
+      if (!_ref.exists(feedControllerProvider(scope))) continue;
+      _ref.read(feedControllerProvider(scope).notifier).remove(postId);
+    }
+  }
+
   /// After a repost the home feed is refreshed so the new post shows up.
   Future<void> repost({
     String? repostOf,
@@ -291,6 +382,12 @@ class FeedActions {
 }
 
 final feedActionsProvider = Provider<FeedActions>((ref) => FeedActions(ref));
+
+/// Comments of one post; invalidated after adding or removing one.
+final postCommentsProvider = FutureProvider.autoDispose
+    .family<List<FeedComment>, String>((ref, postId) {
+      return ref.watch(feedServiceProvider).listComments(postId);
+    });
 
 final feedControllerProvider =
     StateNotifierProvider.family<FeedController, FeedState, String>((

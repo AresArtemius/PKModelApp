@@ -123,13 +123,19 @@ Future<int> _countPendingRows(SupabaseClient sb, String table) async {
 }
 
 Future<int> _countOpenSafetyReports(SupabaseClient sb) async {
+  // Profile reports + (step 47) post reports share the «Безопасность» badge.
+  return await _countOpenReports(sb, 'profile_reports') +
+      await _countOpenReports(sb, 'post_reports');
+}
+
+Future<int> _countOpenReports(SupabaseClient sb, String table) async {
   try {
     return await sb
-        .from('profile_reports')
+        .from(table)
         .count(CountOption.exact)
         .or('status.is.null,status.eq.open,status.eq.in_review');
   } on PostgrestException catch (e) {
-    if (SupabaseCompat.isMissingRelation(e, const ['profile_reports']) ||
+    if (SupabaseCompat.isMissingRelation(e, [table]) ||
         SupabaseCompat.isMissingAnyColumn(e, const ['status'])) {
       return 0;
     }

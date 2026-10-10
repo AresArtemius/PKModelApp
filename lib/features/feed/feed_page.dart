@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/auth_providers.dart';
+import '../../core/roles_provider.dart';
 import '../../core/public_links.dart';
 import '../../core/router.dart';
 import '../../core/storage_image_variant.dart';
@@ -14,6 +15,7 @@ import '../castings/casting_project_stage.dart';
 import '../castings/castings_provider.dart';
 import 'feed_models.dart';
 import 'feed_service.dart';
+import 'post_comments.dart';
 import 'post_composer.dart';
 import 'repost_dialog.dart';
 
@@ -185,15 +187,25 @@ class _FeedPageState extends ConsumerState<FeedPage> {
 // Post card
 // ---------------------------------------------------------------------------
 
-class _PostCard extends StatelessWidget {
+class _PostCard extends StatefulWidget {
   const _PostCard({required this.post, required this.last});
 
   final FeedPost post;
   final bool last;
 
   @override
+  State<_PostCard> createState() => _PostCardState();
+}
+
+class _PostCardState extends State<_PostCard> {
+  bool _commentsOpen = false;
+
+  FeedPost get post => widget.post;
+
+  @override
   Widget build(BuildContext context) {
     final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final last = widget.last;
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: Tokens.s16,
@@ -216,7 +228,14 @@ class _PostCard extends StatelessWidget {
           ],
           ..._kindContent(context, ru),
           const SizedBox(height: Tokens.s12),
-          _PostFooter(post: post, ru: ru),
+          _PostFooter(
+            post: post,
+            ru: ru,
+            commentsOpen: _commentsOpen,
+            onToggleComments: () =>
+                setState(() => _commentsOpen = !_commentsOpen),
+          ),
+          if (_commentsOpen) PostCommentsSection(post: post),
         ],
       ),
     );
@@ -328,8 +347,93 @@ class _PostHeader extends StatelessWidget {
             ),
           ),
           _KindLabel(kind: post.kind, ru: ru),
+          const SizedBox(width: Tokens.s4),
+          _PostMenu(post: post, ru: ru),
         ],
       ),
+    );
+  }
+}
+
+/// «⋯»: report, or delete when the post is mine (admins can delete any).
+class _PostMenu extends ConsumerWidget {
+  const _PostMenu({required this.post, required this.ru});
+
+  final FeedPost post;
+  final bool ru;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final me = ref.watch(currentUserIdProvider);
+    final isAdmin = ref
+        .watch(isAdminProvider)
+        .maybeWhen(data: (v) => v, orElse: () => false);
+    if (me == null) return const SizedBox.shrink();
+    final mine = post.authorId == me;
+
+    void toast(String text) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(text)));
+    }
+
+    return PopupMenuButton<String>(
+      tooltip: ru ? 'Ещё' : 'More',
+      icon: const Icon(Icons.more_horiz_rounded, size: 20, color: Tokens.textTertiary),
+      padding: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(Tokens.radiusMd),
+      ),
+      color: Tokens.bg,
+      surfaceTintColor: Colors.transparent,
+      onSelected: (value) async {
+        switch (value) {
+          case 'report':
+            final sent = await showReportPostDialog(context, post);
+            if (sent && context.mounted) {
+              toast(ru ? 'Жалоба отправлена' : 'Report sent');
+            }
+          case 'delete':
+            final ok = await showDialog<bool>(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: Text(ru ? 'Удалить пост?' : 'Delete post?'),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(ctx).pop(false),
+                    child: Text(ru ? 'Отмена' : 'Cancel'),
+                  ),
+                  FilledButton(
+                    onPressed: () => Navigator.of(ctx).pop(true),
+                    child: Text(ru ? 'Удалить' : 'Delete'),
+                  ),
+                ],
+              ),
+            );
+            if (ok != true) return;
+            try {
+              await ref.read(feedActionsProvider).deletePost(post.id);
+              if (context.mounted) toast(ru ? 'Пост удалён' : 'Post deleted');
+            } catch (_) {
+              if (context.mounted) toast(ru ? 'Не получилось' : 'Failed');
+            }
+        }
+      },
+      itemBuilder: (_) => [
+        if (!mine)
+          PopupMenuItem(
+            value: 'report',
+            child: Text(ru ? 'Пожаловаться' : 'Report', style: AppText.body),
+          ),
+        if (mine || isAdmin)
+          PopupMenuItem(
+            value: 'delete',
+            child: Text(
+              ru ? 'Удалить' : 'Delete',
+              style: AppText.body.copyWith(color: Tokens.danger),
+            ),
+          ),
+      ],
     );
   }
 }
@@ -378,10 +482,17 @@ class _KindLabel extends StatelessWidget {
 }
 
 class _PostFooter extends ConsumerWidget {
-  const _PostFooter({required this.post, required this.ru});
+  const _PostFooter({
+    required this.post,
+    required this.ru,
+    required this.commentsOpen,
+    required this.onToggleComments,
+  });
 
   final FeedPost post;
   final bool ru;
+  final bool commentsOpen;
+  final VoidCallback onToggleComments;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -454,11 +565,14 @@ class _PostFooter extends ConsumerWidget {
         ),
         const SizedBox(width: Tokens.s16),
         _FooterAction(
-          icon: Icons.mode_comment_outlined,
+          icon: commentsOpen
+              ? Icons.mode_comment_rounded
+              : Icons.mode_comment_outlined,
           value: post.commentCount,
-          active: false,
+          active: commentsOpen,
+          activeColor: Tokens.text,
           tooltip: ru ? 'Комментарии' : 'Comments',
-          onTap: null,
+          onTap: onToggleComments,
         ),
         const SizedBox(width: Tokens.s16),
         _FooterAction(
