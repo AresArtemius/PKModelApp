@@ -517,6 +517,14 @@ String _pluralRuNotifications(int n, String one, String few, String many) {
 IconData _notificationIcon(AppNotification item) {
   final route = item.route.trim();
   final title = item.title.toLowerCase();
+  // Step 48: feed events.
+  if (route == '/feed' || route.startsWith('/@') || route == '/following') {
+    if (title.contains('оценил')) return Icons.favorite_border_rounded;
+    if (title.contains('комментир')) return Icons.mode_comment_outlined;
+    if (title.contains('поделил')) return Icons.repeat_rounded;
+    if (title.contains('подписал')) return Icons.person_add_alt_outlined;
+    return Icons.dynamic_feed_outlined;
+  }
   if (route.startsWith('/chat') || title.contains('сообщен')) {
     return Icons.chat_bubble_outline_rounded;
   }
@@ -1340,6 +1348,16 @@ class _SettingsShell extends StatelessWidget {
               ),
       ),
       _SettingsPill(
+        icon: Icons.favorite_border_rounded,
+        label: ru ? 'Лента' : 'Feed',
+        value: preferences.feedEnabled,
+        onTap: busy || isError
+            ? null
+            : () => onChanged(
+                preferences.copyWith(feedEnabled: !preferences.feedEnabled),
+              ),
+      ),
+      _SettingsPill(
         icon: Icons.dynamic_feed_rounded,
         label: ru ? 'Автопосты в ленту' : 'Feed autoposts',
         value: preferences.autopostEnabled,
@@ -1359,6 +1377,7 @@ class _SettingsShell extends StatelessWidget {
       preferences.castingEnabled,
       preferences.profileEnabled,
       preferences.systemEnabled,
+      preferences.feedEnabled,
     ].where((enabled) => enabled).length;
 
     if (compact) {
