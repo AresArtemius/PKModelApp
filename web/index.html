@@ -260,6 +260,10 @@
       history.pushState = function () { push.apply(this, arguments); hit(); };
       history.replaceState = function () { replace.apply(this, arguments); hit(); };
       window.addEventListener('popstate', hit);
+      // Step 50: product goals from the app (feed_visit, feed_repost, …).
+      window.pkReachGoal = function (name, params) {
+        try { ym(id, 'reachGoal', name, params || {}); } catch (e) {}
+      };
     })();
   </script>
   <!-- Older builds registered flutter_service_worker.js (offline-first);

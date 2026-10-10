@@ -61,6 +61,44 @@ class FollowAccount {
   }
 }
 
+/// Step 49: a row of `suggest_follow_accounts()`.
+class FollowSuggestion {
+  const FollowSuggestion({
+    required this.userId,
+    required this.name,
+    required this.avatarUrl,
+    required this.accountTag,
+    required this.accountType,
+    required this.city,
+    required this.followers,
+    required this.reason,
+  });
+
+  final String userId;
+  final String name;
+  final String avatarUrl;
+  final String accountTag;
+  final String accountType;
+  final String city;
+  final int followers;
+
+  /// `city` | `popular` | `active` | `profile`.
+  final String reason;
+
+  factory FollowSuggestion.fromMap(Map<String, dynamic> map) {
+    return FollowSuggestion(
+      userId: (map['user_id'] ?? '').toString(),
+      name: (map['full_name'] ?? '').toString().trim(),
+      avatarUrl: (map['avatar_url'] ?? '').toString().trim(),
+      accountTag: (map['account_tag'] ?? '').toString().trim(),
+      accountType: (map['account_type'] ?? '').toString().trim(),
+      city: (map['city'] ?? '').toString().trim(),
+      followers: (map['followers'] as num?)?.toInt() ?? 0,
+      reason: (map['reason'] ?? '').toString(),
+    );
+  }
+}
+
 class FollowService {
   FollowService(this._sb);
 
@@ -109,6 +147,27 @@ class FollowService {
         .eq('followee_id', id);
   }
 
+  Future<List<FollowSuggestion>> suggestions({int limit = 8}) async {
+    if (_sb.auth.currentUser == null) return const <FollowSuggestion>[];
+    try {
+      final rows = await _sb.rpc(
+        'suggest_follow_accounts',
+        params: {'p_limit': limit},
+      );
+      return (rows as List<dynamic>)
+          .map(
+            (e) => FollowSuggestion.fromMap(Map<String, dynamic>.from(e as Map)),
+          )
+          .where((a) => a.userId.isNotEmpty)
+          .toList(growable: false);
+    } on PostgrestException catch (e) {
+      if (SupabaseCompat.isMissingRpc(e, 'suggest_follow_accounts')) {
+        return const <FollowSuggestion>[];
+      }
+      rethrow;
+    }
+  }
+
   /// `following` — accounts [userId] follows; `followers` — who follows
   /// them. Null user = me.
   Future<List<FollowAccount>> list({
@@ -155,6 +214,14 @@ final followListProvider = FutureProvider.autoDispose
       return ref.watch(followServiceProvider).list(direction: direction);
     });
 
+/// «Кого читать» for the current account; refreshed after a follow.
+final followSuggestionsProvider = FutureProvider.autoDispose<List<FollowSuggestion>>((
+  ref,
+) {
+  ref.watch(currentUserIdProvider);
+  return ref.watch(followServiceProvider).suggestions();
+});
+
 /// Optimistic follow / unfollow: the counter moves at once, the server is
 /// asked afterwards; on failure the previous state comes back.
 class FollowActions {
@@ -174,6 +241,7 @@ class FollowActions {
       final me = _ref.read(currentUserIdProvider);
       if (me != null) _ref.invalidate(followCountsProvider(me));
       _ref.invalidate(followListProvider('following'));
+      _ref.invalidate(followSuggestionsProvider);
       return true;
     } catch (_) {
       _ref.invalidate(followCountsProvider(userId));

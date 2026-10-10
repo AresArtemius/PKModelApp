@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/analytics_goals.dart';
 import '../../core/auth_providers.dart';
 import '../../core/roles_provider.dart';
 import '../../core/public_links.dart';
@@ -13,8 +14,10 @@ import '../../ui/brand/ui_constants.dart';
 import '../castings/casting_model.dart';
 import '../castings/casting_project_stage.dart';
 import '../castings/castings_provider.dart';
+import '../catalog/agent_workspace.dart';
 import 'feed_models.dart';
 import 'feed_service.dart';
+import 'feed_sidebar.dart';
 import 'post_comments.dart';
 import 'post_composer.dart';
 import 'repost_dialog.dart';
@@ -38,10 +41,14 @@ class _FeedPageState extends ConsumerState<FeedPage> {
 
   final _scroll = ScrollController();
 
+  /// Step 49: `home` | `saved`, switched by the tabs above the column.
+  late String _scope = widget.scope;
+
   @override
   void initState() {
     super.initState();
     _scroll.addListener(_onScroll);
+    reachGoal(Goals.feedVisit);
   }
 
   @override
@@ -56,21 +63,23 @@ class _FeedPageState extends ConsumerState<FeedPage> {
     if (!_scroll.hasClients) return;
     final pos = _scroll.position;
     if (pos.pixels >= pos.maxScrollExtent - 800) {
-      ref.read(feedControllerProvider(widget.scope).notifier).loadMore();
+      ref.read(feedControllerProvider(_scope).notifier).loadMore();
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final ru = Localizations.localeOf(context).languageCode == 'ru';
-    final feed = ref.watch(feedControllerProvider(widget.scope));
-    final controller = ref.read(feedControllerProvider(widget.scope).notifier);
+    final feed = ref.watch(feedControllerProvider(_scope));
+    final controller = ref.read(feedControllerProvider(_scope).notifier);
     final width = MediaQuery.sizeOf(context).width;
     final twoColumns = width >= _twoColumnBreakpoint;
     // Step 46: the composer sits at the top of the home feed.
-    final showComposer =
-        ref.watch(isAuthenticatedProvider) && widget.scope == 'home';
-    final offset = showComposer ? 1 : 0;
+    final signedIn = ref.watch(isAuthenticatedProvider);
+    final showComposer = signedIn && _scope == 'home';
+    // Tabs row + optional composer sit at the top of the scrolling column.
+    final showTabs = signedIn;
+    final offset = (showTabs ? 1 : 0) + (showComposer ? 1 : 0);
 
     final column = RefreshIndicator(
       onRefresh: controller.refresh,
@@ -84,7 +93,16 @@ class _FeedPageState extends ConsumerState<FeedPage> {
         ),
         itemCount: _itemCount(feed) + offset,
         itemBuilder: (context, rawIndex) {
-          if (showComposer && rawIndex == 0) return const PostComposer();
+          if (showTabs && rawIndex == 0) {
+            return _FeedTabs(
+              scope: _scope,
+              ru: ru,
+              onChanged: (v) => setState(() => _scope = v),
+            );
+          }
+          if (showComposer && rawIndex == (showTabs ? 1 : 0)) {
+            return const PostComposer();
+          }
           final index = rawIndex - offset;
           if (feed.loading) return const _PostSkeleton();
           if (feed.error != null && feed.posts.isEmpty) {
@@ -97,7 +115,17 @@ class _FeedPageState extends ConsumerState<FeedPage> {
               ),
             );
           }
-          if (feed.posts.isEmpty) return _EmptyFeed(ru: ru);
+          if (feed.posts.isEmpty) {
+            return _scope == 'saved'
+                ? _FeedMessage(
+                    icon: Icons.bookmark_border_rounded,
+                    title: ru ? 'Сохранённых постов нет' : 'Nothing saved yet',
+                    subtitle: ru
+                        ? 'Нажмите закладку под постом — он появится здесь.'
+                        : 'Tap the bookmark under a post to keep it here.',
+                  )
+                : _EmptyFeed(ru: ru);
+          }
           if (index < feed.posts.length) {
             return _PostCard(
               post: feed.posts[index],
@@ -163,11 +191,16 @@ class _FeedPageState extends ConsumerState<FeedPage> {
           children: [
             SizedBox(width: _columnWidth, child: column),
             const SizedBox(width: Tokens.s48),
-            const SizedBox(
+            SizedBox(
               width: _asideWidth,
-              child: Padding(
-                padding: EdgeInsets.only(top: Tokens.s24),
-                child: _OpenCastingsAside(),
+              child: ListView(
+                padding: const EdgeInsets.only(top: Tokens.s24, bottom: Tokens.s48),
+                children: const [
+                  // Step 49: recommendations first, open castings below.
+                  WhoToFollowAside(),
+                  SizedBox(height: Tokens.s32),
+                  _OpenCastingsAside(),
+                ],
               ),
             ),
           ],
@@ -180,6 +213,62 @@ class _FeedPageState extends ConsumerState<FeedPage> {
     if (feed.loading) return 4;
     if (feed.posts.isEmpty) return 1;
     return feed.posts.length + 1;
+  }
+}
+
+/// Step 49: «Лента» / «Сохранённое» — plain text tabs, underline on the
+/// active one (no pills).
+class _FeedTabs extends StatelessWidget {
+  const _FeedTabs({
+    required this.scope,
+    required this.ru,
+    required this.onChanged,
+  });
+
+  final String scope;
+  final bool ru;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget tab(String value, String label) {
+      final active = scope == value;
+      return InkWell(
+        onTap: active ? null : () => onChanged(value),
+        borderRadius: BorderRadius.circular(Tokens.radiusSm),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                color: active ? Tokens.text : Colors.transparent,
+                width: 2,
+              ),
+            ),
+          ),
+          child: Text(
+            label,
+            style: AppText.bodyStrong.copyWith(
+              color: active ? Tokens.text : Tokens.textSecondary,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: Tokens.s16),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: Tokens.border)),
+      ),
+      child: Row(
+        children: [
+          tab('home', ru ? 'Лента' : 'Feed'),
+          const SizedBox(width: Tokens.s20),
+          tab('saved', ru ? 'Сохранённое' : 'Saved'),
+        ],
+      ),
+    );
   }
 }
 
@@ -519,7 +608,19 @@ class _PostFooter extends ConsumerWidget {
       if (!context.mounted) return;
       if (!ok) {
         _toast(context, ru ? 'Не получилось' : 'Failed');
-      } else if (!post.saved) {
+        return;
+      }
+      if (!post.saved) {
+        // Step 49: for an agent, saving a post about a profile also files
+        // the profile into one of their folders.
+        final profileId = post.profileId;
+        final isAgent = ref
+            .read(canCreateSelectionsProvider)
+            .maybeWhen(data: (v) => v, orElse: () => false);
+        if (profileId != null && isAgent) {
+          await showAgentFolderPicker(context, profileId: profileId);
+          return;
+        }
         _toast(context, ru ? 'Сохранено' : 'Saved');
       }
     }
@@ -807,7 +908,12 @@ class _CastingBlock extends StatelessWidget {
         ? post.castingTitle
         : (ru ? 'Кастинг' : 'Casting');
     return _Framed(
-      onTap: id == null ? null : () => context.go('${Routes.castings}?casting=$id'),
+      onTap: id == null
+          ? null
+          : () {
+              reachGoal(Goals.feedCastingOpen, {'casting_id': id});
+              context.go('${Routes.castings}?casting=$id&from=feed');
+            },
       child: Row(
         children: [
           Container(
@@ -1344,4 +1450,151 @@ String feedRelativeTime(DateTime at, bool ru) {
   final month = (ru ? ruMonths : enMonths)[at.month - 1];
   final base = ru ? '${at.day} $month' : '$month ${at.day}';
   return at.year == now.year ? base : '$base ${at.year}';
+}
+
+// ---------------------------------------------------------------------------
+// Step 49: agent folder picker
+// ---------------------------------------------------------------------------
+
+/// Checklist of the agent's folders for one profile; toggling writes at once.
+Future<void> showAgentFolderPicker(
+  BuildContext context, {
+  required String profileId,
+}) async {
+  await showDialog<void>(
+    context: context,
+    builder: (_) => _AgentFolderPickerDialog(profileId: profileId),
+  );
+}
+
+class _AgentFolderPickerDialog extends ConsumerStatefulWidget {
+  const _AgentFolderPickerDialog({required this.profileId});
+
+  final String profileId;
+
+  @override
+  ConsumerState<_AgentFolderPickerDialog> createState() =>
+      _AgentFolderPickerDialogState();
+}
+
+class _AgentFolderPickerDialogState
+    extends ConsumerState<_AgentFolderPickerDialog> {
+  final _newFolder = TextEditingController();
+  String? _busyId;
+
+  @override
+  void dispose() {
+    _newFolder.dispose();
+    super.dispose();
+  }
+
+  Future<void> _toggle(AgentFolder folder) async {
+    setState(() => _busyId = folder.id);
+    try {
+      await ref.read(agentWorkspaceServiceProvider).setProfileInFolder(
+        folderId: folder.id,
+        profileId: widget.profileId,
+        selected: !folder.containsProfile,
+      );
+      ref.invalidate(agentFoldersForProfileProvider(widget.profileId));
+      ref.invalidate(agentFoldersProvider);
+    } finally {
+      if (mounted) setState(() => _busyId = null);
+    }
+  }
+
+  Future<void> _create() async {
+    final title = _newFolder.text.trim();
+    if (title.isEmpty) return;
+    setState(() => _busyId = 'new');
+    try {
+      await ref.read(agentWorkspaceServiceProvider).addProfileToNamedFolder(
+        title: title,
+        profileId: widget.profileId,
+      );
+      _newFolder.clear();
+      ref.invalidate(agentFoldersForProfileProvider(widget.profileId));
+      ref.invalidate(agentFoldersProvider);
+    } finally {
+      if (mounted) setState(() => _busyId = null);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final folders = ref.watch(agentFoldersForProfileProvider(widget.profileId));
+    return AlertDialog(
+      backgroundColor: Tokens.bg,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(Tokens.radiusLg),
+      ),
+      title: Text(ru ? 'В папку' : 'Add to folder', style: AppText.h2),
+      content: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 400),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            folders.when(
+              loading: () => const Padding(
+                padding: EdgeInsets.all(Tokens.s16),
+                child: Center(child: CircularProgressIndicator()),
+              ),
+              error: (_, _) => Text(
+                ru ? 'Не удалось загрузить папки' : 'Could not load folders',
+                style: AppText.small.copyWith(color: Tokens.danger),
+              ),
+              data: (items) => items.isEmpty
+                  ? Text(
+                      ru ? 'Папок пока нет — создайте первую.' : 'No folders yet — create one.',
+                      style: AppText.small.copyWith(color: Tokens.textSecondary),
+                    )
+                  : Column(
+                      children: [
+                        for (final f in items)
+                          CheckboxListTile(
+                            value: f.containsProfile,
+                            onChanged: _busyId != null ? null : (_) => _toggle(f),
+                            title: Text(f.title, style: AppText.body),
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                            controlAffinity: ListTileControlAffinity.leading,
+                          ),
+                      ],
+                    ),
+            ),
+            const SizedBox(height: Tokens.s12),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _newFolder,
+                    enabled: _busyId == null,
+                    onSubmitted: (_) => _create(),
+                    decoration: InputDecoration(
+                      hintText: ru ? 'Новая папка' : 'New folder',
+                      isDense: true,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: Tokens.s8),
+                TextButton(
+                  onPressed: _busyId == null ? _create : null,
+                  child: Text(ru ? 'Создать' : 'Create'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(ru ? 'Готово' : 'Done'),
+        ),
+      ],
+    );
+  }
 }

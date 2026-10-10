@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/analytics_goals.dart';
 import '../../core/router.dart';
 import '../../ui/brand/ui_constants.dart';
 import 'feed_service.dart';
@@ -76,6 +77,13 @@ class _RepostDialogState extends ConsumerState<_RepostDialog> {
         body: _caption.text,
         visibility: _visibility,
       );
+      reachGoal(Goals.feedRepost, {
+        'kind': widget.repostOf != null
+            ? 'post'
+            : widget.profileId != null
+            ? 'profile'
+            : 'casting',
+      });
       if (!mounted) return;
       Navigator.of(context).pop(true);
     } catch (_) {
