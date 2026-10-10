@@ -62,7 +62,7 @@ class _FollowingPageState extends ConsumerState<FollowingPage> {
             ),
             error: (e, _) => SettingsNote(
               text: ru ? 'Не удалось загрузить список' : 'Could not load the list',
-              tone: SettingsNoteTone.warning,
+              tone: SettingsNoteTone.danger,
             ),
             data: (items) => items.isEmpty
                 ? SettingsNote(

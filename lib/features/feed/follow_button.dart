@@ -49,7 +49,7 @@ class _FollowButtonState extends ConsumerState<FollowButton> {
 
     Future<void> toggle() async {
       if (me.isEmpty) {
-        context.go(Routes.authRequired);
+        this.context.go(Routes.authRequired);
         return;
       }
       if (_busy) return;
@@ -65,8 +65,8 @@ class _FollowButtonState extends ConsumerState<FollowButton> {
         _busy = false;
         _optimistic = null;
       });
-      if (!ok) {
-        ScaffoldMessenger.of(context).showSnackBar(
+      if (!ok && mounted) {
+        ScaffoldMessenger.of(this.context).showSnackBar(
           SnackBar(
             content: Text(
               ru ? 'Не удалось изменить подписку' : 'Could not update the follow',
