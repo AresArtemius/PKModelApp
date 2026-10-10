@@ -270,6 +270,13 @@ class _CommandPaletteState extends ConsumerState<_CommandPalette> {
         ),
         _PaletteItem(
           kind: _ItemKind.nav,
+          title: ru ? 'Лента' : 'Feed',
+          location: Routes.feed,
+          icon: Icons.dynamic_feed_outlined,
+          keywords: 'feed лента посты posts home главная',
+        ),
+        _PaletteItem(
+          kind: _ItemKind.nav,
           title: ru ? 'Подписки' : 'Follows',
           location: Routes.following,
           icon: Icons.people_outline_rounded,
