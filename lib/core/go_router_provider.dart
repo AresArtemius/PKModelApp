@@ -51,6 +51,10 @@ const _adminPaths = <String>{
   Routes.adminSelectionProject,
 };
 
+/// Step 44: on the web a signed-in user lands on the feed; native apps keep
+/// the catalogue as the first screen.
+const String _homeAfterLogin = kIsWeb ? Routes.feed : Routes.search;
+
 final goRouterProvider = Provider<GoRouter>((ref) {
   final supabase = ref.watch(supabaseProvider);
 
@@ -109,6 +113,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
             path == Routes.chats ||
             path.startsWith(Routes.chatsChatPrefix) ||
             path == Routes.following ||
+            path == Routes.feed ||
             path == Routes.invitations) {
           return Routes.authRequired;
         }
@@ -121,7 +126,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       }
 
       if (!emailNeedsConfirmation && goingToEmailVerification) {
-        return Routes.search;
+        return _homeAfterLogin;
       }
 
       if (goingToAuth) {
@@ -129,7 +134,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         final next = state.uri.queryParameters['next']?.trim() ?? '';
         if (next.startsWith('/') && !next.startsWith('//')) return next;
         final isAdmin = await getIsAdmin();
-        return isAdmin ? Routes.admin : Routes.search;
+        return isAdmin ? Routes.admin : _homeAfterLogin;
       }
 
       if (isAdminRoute) {

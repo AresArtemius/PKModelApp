@@ -21,7 +21,8 @@ import 'supabase_provider.dart';
 class AppTopBar extends ConsumerWidget {
   const AppTopBar({super.key, required this.currentIndex});
 
-  /// 0 castings, 1 catalogue, 2 chats, 3 account, 4 admin (AppShell order).
+  /// 0 castings, 1 catalogue, 2 chats, 3 account, 4 admin, 5 feed
+  /// (AppShell order).
   final int currentIndex;
 
   static const double height = 72;
@@ -51,9 +52,17 @@ class AppTopBar extends ConsumerWidget {
         .maybeWhen(data: (value) => value, orElse: () => 0);
 
     final sections = [
-      (label: t.castingsTab, route: Routes.castings, badge: castingsBadge),
-      (label: t.catalogTab, route: Routes.search, badge: 0),
-      (label: 'Чаты', route: Routes.chats, badge: unreadChats),
+      // Step 44: the feed is the signed-in home.
+      if (signedIn)
+        (label: 'Лента', route: Routes.feed, badge: 0, index: 5),
+      (
+        label: t.castingsTab,
+        route: Routes.castings,
+        badge: castingsBadge,
+        index: 0,
+      ),
+      (label: t.catalogTab, route: Routes.search, badge: 0, index: 1),
+      (label: 'Чаты', route: Routes.chats, badge: unreadChats, index: 2),
     ];
 
     final rightActions = <Widget>[
@@ -110,7 +119,11 @@ class AppTopBar extends ConsumerWidget {
             Positioned.fill(
               child: Row(
                 children: [
-                  _Brand(onTap: () => context.go(Routes.castings)),
+                  _Brand(
+                    onTap: () => context.go(
+                      signedIn ? Routes.feed : Routes.castings,
+                    ),
+                  ),
                   const Spacer(),
                   ...rightActions,
                 ],
@@ -124,7 +137,7 @@ class AppTopBar extends ConsumerWidget {
                     _SectionLink(
                       label: sections[i].label,
                       badge: sections[i].badge,
-                      selected: currentIndex == i,
+                      selected: currentIndex == sections[i].index,
                       onTap: () => context.go(sections[i].route),
                     ),
                 ],

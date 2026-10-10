@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'app_top_bar.dart';
+import 'auth_providers.dart';
 import 'admin_dashboard_counts_provider.dart';
 import 'roles_provider.dart';
 import 'tab_alerts.dart';
@@ -52,6 +53,7 @@ import '../features/profile/account_devices_page.dart';
 import '../features/profile/account_mfa_page.dart';
 import '../features/profile/data_privacy_page.dart';
 import '../features/profile/public_account_profile_page.dart';
+import '../features/feed/feed_page.dart';
 import '../features/feed/following_page.dart';
 import '../features/support/support_page.dart';
 import '../features/legal/legal_document_page.dart';
@@ -96,6 +98,9 @@ abstract class Routes {
   static const dataPrivacy = '/data_privacy';
   static const support = '/support';
   static const following = '/following';
+
+  /// Step 44: the home feed (web). Nav index 5 in [AppShell].
+  static const feed = '/feed';
   static const publicAccountPrefix = '/@';
   static const publicAccount = '/@:tag';
 
@@ -189,6 +194,7 @@ class AppShell extends StatelessWidget {
   final Widget child;
 
   int _indexFromLocation(String path) {
+    if (path.startsWith(Routes.feed)) return 5;
     if (path.startsWith(Routes.castings)) return 0;
     if (path.startsWith(Routes.search)) return 1;
     if (path.startsWith(Routes.agentFolders)) return 1;
@@ -300,25 +306,44 @@ class AppBottomNav extends ConsumerWidget {
     final castingsBadge = ref
         .watch(actionableCastingsCountProvider)
         .maybeWhen(data: (value) => value, orElse: () => 0);
+    final signedIn = ref.watch(isAuthenticatedProvider);
     final items = [
+      // Step 44: the feed is web-only for now; native keeps the old tabs.
+      if (kIsWeb && signedIn)
+        (
+          icon: Icons.dynamic_feed_rounded,
+          label: 'Лента',
+          route: Routes.feed,
+          badge: 0,
+          index: 5,
+        ),
       (
         icon: Icons.videocam,
         label: t.castingsTab,
         route: Routes.castings,
         badge: castingsBadge,
+        index: 0,
       ),
-      (icon: Icons.search, label: t.catalogTab, route: Routes.search, badge: 0),
+      (
+        icon: Icons.search,
+        label: t.catalogTab,
+        route: Routes.search,
+        badge: 0,
+        index: 1,
+      ),
       (
         icon: Icons.mail_rounded,
         label: 'Чаты',
         route: Routes.chats,
         badge: unreadChats,
+        index: 2,
       ),
       (
         icon: Icons.person,
         label: t.myProfileTab,
         route: Routes.me,
         badge: unreadNotifications,
+        index: 3,
       ),
       if (isAdmin)
         (
@@ -326,6 +351,7 @@ class AppBottomNav extends ConsumerWidget {
           label: t.adminTab,
           route: Routes.admin,
           badge: adminBadge,
+          index: 4,
         ),
     ];
 
@@ -342,7 +368,7 @@ class AppBottomNav extends ConsumerWidget {
                   child: _BottomNavItem(
                     icon: items[i].icon,
                     label: items[i].label,
-                    selected: currentIndex == i,
+                    selected: currentIndex == items[i].index,
                     badge: items[i].badge,
                     onTap: () => context.go(items[i].route),
                   ),
@@ -706,6 +732,13 @@ final List<RouteBase> appRoutes = [
       GoRoute(
         path: Routes.following,
         builder: (context, state) => const FollowingPage(),
+      ),
+      GoRoute(
+        path: Routes.feed,
+        pageBuilder: (context, state) => const NoTransitionPage<void>(
+          key: ValueKey<String>('feed-page'),
+          child: FeedPage(),
+        ),
       ),
       GoRoute(
         path: Routes.admin,
