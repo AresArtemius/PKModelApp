@@ -270,6 +270,13 @@ class _CommandPaletteState extends ConsumerState<_CommandPalette> {
         ),
         _PaletteItem(
           kind: _ItemKind.nav,
+          title: ru ? 'Подписки' : 'Follows',
+          location: Routes.following,
+          icon: Icons.people_outline_rounded,
+          keywords: 'follows подписки подписчики following',
+        ),
+        _PaletteItem(
+          kind: _ItemKind.nav,
           title: ru ? 'Уведомления' : 'Notifications',
           location: Routes.notifications,
           icon: Icons.notifications_none_rounded,
