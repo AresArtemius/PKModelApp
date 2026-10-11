@@ -84,6 +84,16 @@ final telegramSupportLinkProvider = FutureProvider.autoDispose<bool>((
   }
 });
 
+
+/// Step 54: dialog buttons — caps in the old design, sentence case on the
+/// web (v2).
+String _btnLabel(bool ru, String ruCaps, String enCaps) {
+  final raw = ru ? ruCaps : enCaps;
+  if (!kIsWeb) return raw;
+  final lower = raw.toLowerCase();
+  return lower[0].toUpperCase() + lower.substring(1);
+}
+
 class SupportSetupRequiredException implements Exception {
   const SupportSetupRequiredException();
 }
@@ -212,7 +222,7 @@ class SupportPage extends ConsumerWidget {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(),
-              child: Text(ru ? 'ОТМЕНА' : 'CANCEL'),
+              child: Text(_btnLabel(ru, 'ОТМЕНА', 'CANCEL')),
             ),
             FilledButton.icon(
               onPressed: () async {
@@ -228,7 +238,7 @@ class SupportPage extends ConsumerWidget {
                 }
               },
               icon: const Icon(Icons.telegram_rounded),
-              label: Text(ru ? 'ОТКРЫТЬ БОТА' : 'OPEN BOT'),
+              label: Text(_btnLabel(ru, 'ОТКРЫТЬ БОТА', 'OPEN BOT')),
             ),
           ],
         ),
@@ -281,11 +291,11 @@ class SupportPage extends ConsumerWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: Text(ru ? 'ОТМЕНА' : 'CANCEL'),
+            child: Text(_btnLabel(ru, 'ОТМЕНА', 'CANCEL')),
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: Text(ru ? 'УДАЛИТЬ' : 'DELETE'),
+            child: Text(_btnLabel(ru, 'УДАЛИТЬ', 'DELETE')),
           ),
         ],
       ),
@@ -726,12 +736,12 @@ class _TelegramSupportCard extends StatelessWidget {
         if (linked)
           OutlinedButton(
             onPressed: onDisconnect,
-            child: Text(ru ? 'ОТКЛЮЧИТЬ' : 'DISCONNECT'),
+            child: Text(_btnLabel(ru, 'ОТКЛЮЧИТЬ', 'DISCONNECT')),
           )
         else
           FilledButton(
             onPressed: onConnect,
-            child: Text(ru ? 'ПОДКЛЮЧИТЬ' : 'CONNECT'),
+            child: Text(_btnLabel(ru, 'ПОДКЛЮЧИТЬ', 'CONNECT')),
           ),
       ],
     ),
@@ -1151,9 +1161,7 @@ class _SupportTicketDialogState extends ConsumerState<_SupportTicketDialog> {
                   icon: const Icon(Icons.attach_file_rounded),
                   label: Text(
                     _attachment?.name ??
-                        (widget.ru
-                            ? 'ПРИЛОЖИТЬ СКРИНШОТ'
-                            : 'ATTACH SCREENSHOT'),
+                        _btnLabel(widget.ru, 'ПРИЛОЖИТЬ СКРИНШОТ', 'ATTACH SCREENSHOT'),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
@@ -1170,7 +1178,7 @@ class _SupportTicketDialogState extends ConsumerState<_SupportTicketDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: Text(widget.ru ? 'ЗАКРЫТЬ' : 'CLOSE'),
+          child: Text(_btnLabel(widget.ru, 'ЗАКРЫТЬ', 'CLOSE')),
         ),
         FilledButton.icon(
           onPressed: _sending ? null : _sendReply,
@@ -1178,7 +1186,7 @@ class _SupportTicketDialogState extends ConsumerState<_SupportTicketDialog> {
           label: Text(
             _sending
                 ? (widget.ru ? 'ОТПРАВКА…' : 'SENDING…')
-                : (widget.ru ? 'ОТПРАВИТЬ' : 'SEND'),
+                : (_btnLabel(widget.ru, 'ОТПРАВИТЬ', 'SEND')),
           ),
         ),
       ],
@@ -1338,7 +1346,7 @@ class _NewSupportTicketDialogState extends State<_NewSupportTicketDialog> {
                       icon: const Icon(Icons.attach_file_rounded),
                       label: Text(
                         _attachment?.name ??
-                            (ru ? 'ПРИЛОЖИТЬ СКРИНШОТ' : 'ATTACH SCREENSHOT'),
+                            _btnLabel(ru, 'ПРИЛОЖИТЬ СКРИНШОТ', 'ATTACH SCREENSHOT'),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
@@ -1357,7 +1365,7 @@ class _NewSupportTicketDialogState extends State<_NewSupportTicketDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: Text(ru ? 'ОТМЕНА' : 'CANCEL'),
+          child: Text(_btnLabel(ru, 'ОТМЕНА', 'CANCEL')),
         ),
         FilledButton(
           onPressed: () {
@@ -1373,7 +1381,7 @@ class _NewSupportTicketDialogState extends State<_NewSupportTicketDialog> {
               ),
             );
           },
-          child: Text(ru ? 'ОТПРАВИТЬ' : 'SEND'),
+          child: Text(_btnLabel(ru, 'ОТПРАВИТЬ', 'SEND')),
         ),
       ],
     );
