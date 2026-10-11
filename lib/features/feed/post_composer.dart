@@ -47,6 +47,10 @@ class _PostComposerState extends ConsumerState<PostComposer> {
   final _picker = ImagePicker();
 
   final List<_PickedPhoto> _photos = [];
+
+  /// Step 56: one video per post, uploaded through the profile storage
+  /// (preview frame is made there).
+  XFile? _video;
   String _visibility = 'public';
   bool _expanded = false;
   bool _busy = false;
@@ -69,7 +73,55 @@ class _PostComposerState extends ConsumerState<PostComposer> {
   }
 
   bool get _canPublish =>
-      !_busy && (_text.text.trim().isNotEmpty || _photos.isNotEmpty);
+      !_busy &&
+      (_text.text.trim().isNotEmpty || _photos.isNotEmpty || _video != null);
+
+  static const _maxVideoBytes = 200 * 1024 * 1024;
+
+  bool _isVideoFile(XFile file) {
+    final mime = file.mimeType?.toLowerCase() ?? '';
+    if (mime.startsWith('video/')) return true;
+    final name = file.name.toLowerCase();
+    return name.endsWith('.mp4') ||
+        name.endsWith('.mov') ||
+        name.endsWith('.m4v') ||
+        name.endsWith('.webm');
+  }
+
+  Future<void> _pickVideo() async {
+    if (_busy) return;
+    setState(() => _error = null);
+    try {
+      final picked = kIsWeb && ProfileMediaWebNativePicker.isSupported
+          ? await ProfileMediaWebNativePicker.pickVideos()
+          : <XFile>[
+              if (await _picker.pickVideo(source: ImageSource.gallery)
+                  case final v?)
+                v,
+            ];
+      final file = picked.where(_isVideoFile).firstOrNull;
+      if (file == null || !mounted) return;
+      final size = await file.length();
+      if (!mounted) return;
+      if (size > _maxVideoBytes) {
+        setState(
+          () => _error = _ru
+              ? 'Видео больше 200 МБ — сожмите его перед загрузкой'
+              : 'The video is over 200 MB — compress it first',
+        );
+        return;
+      }
+      setState(() {
+        _video = file;
+        _expanded = true;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(
+        () => _error = _ru ? 'Не удалось выбрать видео' : 'Could not pick a video',
+      );
+    }
+  }
 
   Future<void> _pickPhotos() async {
     if (_busy) return;
@@ -172,6 +224,25 @@ class _PostComposerState extends ConsumerState<PostComposer> {
         });
         if (mounted) setState(() => _progress = (i + 1) / _photos.length);
       }
+      final video = _video;
+      if (video != null) {
+        if (mounted) setState(() => _progress = 0);
+        final result = await storage.uploadVideo(
+          bucket: kProfileMediaBucket,
+          uid: uid,
+          file: video,
+          pathSeed: 'post_${stamp}_video',
+          onProgress: (v) {
+            if (mounted) setState(() => _progress = v);
+          },
+        );
+        uploaded.add({
+          'position': uploaded.length,
+          'media_type': 'video',
+          'url': result.videoUrl,
+          'thumbnail_url': result.previewUrl,
+        });
+      }
 
       final inserted = await sb
           .from('posts')
@@ -194,6 +265,7 @@ class _PostComposerState extends ConsumerState<PostComposer> {
       setState(() {
         _text.clear();
         _photos.clear();
+        _video = null;
         _expanded = false;
         _busy = false;
         _progress = 0;
@@ -269,12 +341,50 @@ class _PostComposerState extends ConsumerState<PostComposer> {
               onAdd: _photos.length < PostComposer.maxPhotos ? _pickPhotos : null,
             ),
           ],
+          if (_video != null) ...[
+            const SizedBox(height: Tokens.s8),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: Tokens.s12,
+                vertical: Tokens.s8,
+              ),
+              decoration: BoxDecoration(
+                border: Border.all(color: Tokens.border),
+                borderRadius: BorderRadius.circular(Tokens.radiusSm),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.videocam_outlined,
+                    size: 18,
+                    color: Tokens.textSecondary,
+                  ),
+                  const SizedBox(width: Tokens.s8),
+                  Expanded(
+                    child: Text(
+                      _video!.name.isEmpty ? (ru ? 'Видео' : 'Video') : _video!.name,
+                      style: AppText.small,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (!_busy)
+                    IconButton(
+                      tooltip: ru ? 'Убрать' : 'Remove',
+                      onPressed: () => setState(() => _video = null),
+                      icon: const Icon(Icons.close_rounded, size: 18),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                ],
+              ),
+            ),
+          ],
           if (_busy) ...[
             const SizedBox(height: Tokens.s8),
             ClipRRect(
               borderRadius: BorderRadius.circular(Tokens.radiusPill),
               child: LinearProgressIndicator(
-                value: _photos.isEmpty ? null : _progress,
+                value: _photos.isEmpty && _video == null ? null : _progress,
                 minHeight: 3,
                 color: Tokens.text,
                 backgroundColor: Tokens.surfaceAlt,
@@ -285,7 +395,7 @@ class _PostComposerState extends ConsumerState<PostComposer> {
             const SizedBox(height: Tokens.s8),
             Text(_error!, style: AppText.small.copyWith(color: Tokens.danger)),
           ],
-          if (_expanded || _photos.isNotEmpty) ...[
+          if (_expanded || _photos.isNotEmpty || _video != null) ...[
             const SizedBox(height: Tokens.s8),
             Row(
               children: [
@@ -297,6 +407,15 @@ class _PostComposerState extends ConsumerState<PostComposer> {
                         ? null
                         : _pickPhotos,
                     icon: const Icon(Icons.add_photo_alternate_outlined),
+                    color: Tokens.textSecondary,
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ),
+                Tooltip(
+                  message: ru ? 'Добавить видео' : 'Add a video',
+                  child: IconButton(
+                    onPressed: _busy || _video != null ? null : _pickVideo,
+                    icon: const Icon(Icons.videocam_outlined),
                     color: Tokens.textSecondary,
                     visualDensity: VisualDensity.compact,
                   ),
@@ -325,7 +444,7 @@ class _PostComposerState extends ConsumerState<PostComposer> {
                       : (v) => setState(() => _visibility = v.first),
                 ),
                 const Spacer(),
-                if (!_busy && _text.text.isEmpty && _photos.isEmpty)
+                if (!_busy && _text.text.isEmpty && _photos.isEmpty && _video == null)
                   TextButton(
                     onPressed: () {
                       _focus.unfocus();
