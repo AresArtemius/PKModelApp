@@ -375,7 +375,9 @@ class AdminShellV2 extends ConsumerWidget {
                   ],
                 ),
               ),
-              if (actions.isNotEmpty) ...[
+              // Wide: actions next to the title. Narrow (phone): below it,
+              // so the title keeps its width.
+              if (actions.isNotEmpty && wide) ...[
                 const SizedBox(width: 16),
                 Row(
                   mainAxisSize: MainAxisSize.min,
@@ -389,9 +391,20 @@ class AdminShellV2 extends ConsumerWidget {
               ],
             ],
           ),
+          if (actions.isNotEmpty && !wide) ...[
+            const SizedBox(height: 12),
+            Wrap(spacing: 8, runSpacing: 8, children: actions),
+          ],
           if (headerBottom != null) ...[
             const SizedBox(height: 16),
-            headerBottom!,
+            // On a phone the strip scrolls sideways instead of wrapping
+            // into several rows that would push the body off the screen.
+            wide
+                ? headerBottom!
+                : SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: headerBottom!,
+                  ),
           ],
           const SizedBox(height: 20),
         ],
@@ -645,8 +658,11 @@ class AdminStatsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final narrow = MediaQuery.sizeOf(context).width < kAdminShellWideBreakpoint;
+    // Inside a horizontal scroller (narrow shell) a Wrap has no width to
+    // wrap in, so it degrades to a single row — that is what we want.
     return Wrap(
-      spacing: 36,
+      spacing: narrow ? 24 : 36,
       runSpacing: 14,
       children: [
         for (final item in items)

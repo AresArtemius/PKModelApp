@@ -273,7 +273,9 @@ class AppShell extends StatelessWidget {
     }
 
     return Scaffold(
-      body: content,
+      // Phones: keep pages clear of the status bar / notch; the bottom
+      // bar handles its own inset.
+      body: SafeArea(bottom: false, child: content),
       bottomNavigationBar: AppBottomNav(currentIndex: currentIndex),
     );
   }
