@@ -2590,13 +2590,16 @@ class _MediaTile extends StatelessWidget {
           height: height,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(_mediaThumbRadius),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x18000000),
-                blurRadius: 12,
-                offset: Offset(0, 7),
-              ),
-            ],
+            // v2: no soft drop shadows on the web.
+            boxShadow: kIsWeb
+                ? null
+                : const [
+                    BoxShadow(
+                      color: Color(0x18000000),
+                      blurRadius: 12,
+                      offset: Offset(0, 7),
+                    ),
+                  ],
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(_mediaThumbRadius),
@@ -2604,7 +2607,34 @@ class _MediaTile extends StatelessWidget {
               fit: StackFit.expand,
               children: [
                 child,
-                if (label.trim().isNotEmpty)
+                if (label.trim().isNotEmpty && kIsWeb)
+                  // v2 (step 53): a quiet caption in the corner instead of
+                  // a dark pill across the photo.
+                  Positioned(
+                    left: 10,
+                    bottom: 10,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.92),
+                        borderRadius: BorderRadius.circular(Tokens.radiusSm),
+                      ),
+                      child: Text(
+                        label.trim(),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppText.caption.copyWith(
+                          color: label.trim().toUpperCase() == 'SHOWREEL'
+                              ? Tokens.accent
+                              : Tokens.textSecondary,
+                        ),
+                      ),
+                    ),
+                  )
+                else if (label.trim().isNotEmpty)
                   Positioned(
                     left: 8,
                     right: 8,
