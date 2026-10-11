@@ -18,6 +18,7 @@ import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/public_page_frame.dart';
 import '../../ui/brand/ui_constants.dart';
 import '../chat/chat_providers.dart';
+import '../feed/feed_page.dart' show AuthorPostsSection;
 import '../feed/follow_button.dart';
 
 const double _kPublicAccountMaxWidth = 760;
@@ -617,6 +618,16 @@ extension _PublicAccountV2 on PublicAccountProfilePage {
                           label: ru ? 'Соцсети' : 'Social',
                           value: profile.socialUrl,
                         ),
+                    ],
+                    // Step 56: the account's posts, newest first.
+                    if (profile.userId.trim().isNotEmpty) ...[
+                      const SizedBox(height: 32),
+                      Text(
+                        (ru ? 'Посты' : 'Posts').toUpperCase(),
+                        style: AppText.label.copyWith(color: Tokens.textTertiary),
+                      ),
+                      const SizedBox(height: 6),
+                      AuthorPostsSection(userId: profile.userId),
                     ],
                   ],
                 ),

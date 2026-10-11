@@ -127,7 +127,7 @@ class _FeedPageState extends ConsumerState<FeedPage> {
                 : _EmptyFeed(ru: ru);
           }
           if (index < feed.posts.length) {
-            return _PostCard(
+            return FeedPostCard(
               post: feed.posts[index],
               last: index == feed.posts.length - 1 && !feed.hasMore,
             );
@@ -276,17 +276,18 @@ class _FeedTabs extends StatelessWidget {
 // Post card
 // ---------------------------------------------------------------------------
 
-class _PostCard extends StatefulWidget {
-  const _PostCard({required this.post, required this.last});
+/// One post of the feed; also used on the author's public page (step 56).
+class FeedPostCard extends StatefulWidget {
+  const FeedPostCard({super.key, required this.post, required this.last});
 
   final FeedPost post;
   final bool last;
 
   @override
-  State<_PostCard> createState() => _PostCardState();
+  State<FeedPostCard> createState() => _PostCardState();
 }
 
-class _PostCardState extends State<_PostCard> {
+class _PostCardState extends State<FeedPostCard> {
   bool _commentsOpen = false;
 
   FeedPost get post => widget.post;
@@ -783,14 +784,21 @@ class _MediaGrid extends StatelessWidget {
 
   static const _maxTiles = 4;
 
+  VoidCallback? _tapFor(BuildContext context, FeedMedia m) {
+    if (m.isVideo && m.url.isNotEmpty) {
+      return () => context.push(Routes.modelVideoLocation('feed'), extra: m.url);
+    }
+    return onTap;
+  }
+
   @override
   Widget build(BuildContext context) {
     if (media.length == 1) {
       final m = media.first;
       return _MediaTile(
         media: m,
-        aspectRatio: m.aspectRatio.clamp(0.6, 1.6).toDouble(),
-        onTap: onTap,
+        aspectRatio: m.isVideo ? 16 / 9 : m.aspectRatio.clamp(0.6, 1.6).toDouble(),
+        onTap: _tapFor(context, m),
         width: 600,
       );
     }
@@ -812,7 +820,7 @@ class _MediaGrid extends StatelessWidget {
                 height: tileHeight,
                 child: _MediaTile(
                   media: shown[i],
-                  onTap: onTap,
+                  onTap: _tapFor(context, shown[i]),
                   width: tileWidth.round(),
                   overlayCount: i == shown.length - 1 ? overflow : 0,
                 ),
@@ -842,7 +850,9 @@ class _MediaTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final src = media.thumbnailUrl.isNotEmpty ? media.thumbnailUrl : media.url;
-    Widget image = CachedNetworkImage(
+    Widget image = media.isVideo && media.thumbnailUrl.isEmpty
+        ? const ColoredBox(color: Tokens.ink)
+        : CachedNetworkImage(
       imageUrl: storageImageVariant(src, width: width * 2),
       fit: BoxFit.cover,
       placeholder: (_, _) => const ColoredBox(color: Tokens.surfaceAlt),
@@ -1594,6 +1604,68 @@ class _AgentFolderPickerDialogState
           onPressed: () => Navigator.of(context).pop(),
           child: Text(ru ? 'Готово' : 'Done'),
         ),
+      ],
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Step 56: an author's posts on their public page (/@tag)
+// ---------------------------------------------------------------------------
+
+/// Posts of one account for the public page: the first page at once, a
+/// «Показать ещё» button for the rest (the page has its own scroll).
+class AuthorPostsSection extends ConsumerWidget {
+  const AuthorPostsSection({super.key, required this.userId});
+
+  final String userId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final id = userId.trim();
+    if (id.isEmpty) return const SizedBox.shrink();
+    final scope = 'author:$id';
+    final feed = ref.watch(feedControllerProvider(scope));
+    final controller = ref.read(feedControllerProvider(scope).notifier);
+
+    if (feed.loading) {
+      return const Column(children: [_PostSkeleton(), _PostSkeleton()]);
+    }
+    if (feed.posts.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: Tokens.s12),
+        child: Text(
+          feed.error != null
+              ? (ru ? 'Не удалось загрузить посты' : 'Could not load posts')
+              : (ru ? 'Постов пока нет' : 'No posts yet'),
+          style: AppText.small.copyWith(color: Tokens.textSecondary),
+        ),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var i = 0; i < feed.posts.length; i++)
+          FeedPostCard(
+            post: feed.posts[i],
+            last: i == feed.posts.length - 1,
+          ),
+        if (feed.hasMore)
+          Padding(
+            padding: const EdgeInsets.only(top: Tokens.s8),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                onPressed: feed.loadingMore ? null : controller.loadMore,
+                child: Text(
+                  feed.loadingMore
+                      ? (ru ? 'Загружаем…' : 'Loading…')
+                      : (ru ? 'Показать ещё' : 'Show more'),
+                ),
+              ),
+            ),
+          ),
       ],
     );
   }
