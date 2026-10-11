@@ -92,13 +92,20 @@ class _PostComposerState extends ConsumerState<PostComposer> {
     if (_busy) return;
     setState(() => _error = null);
     try {
-      final picked = kIsWeb && ProfileMediaWebNativePicker.isSupported
-          ? await ProfileMediaWebNativePicker.pickVideos()
-          : <XFile>[
-              if (await _picker.pickVideo(source: ImageSource.gallery)
-                  case final v?)
-                v,
-            ];
+      List<XFile> picked;
+      if (kIsWeb && ProfileMediaWebNativePicker.isSupported) {
+        picked = await ProfileMediaWebNativePicker.pickVideos();
+      } else {
+        final source = kIsWeb
+            ? ImageSource.gallery
+            : await _askSource(video: true);
+        if (source == null) return;
+        final v = await _picker.pickVideo(
+          source: source,
+          maxDuration: const Duration(minutes: 3),
+        );
+        picked = [if (v != null) v];
+      }
       final file = picked.where(_isVideoFile).firstOrNull;
       if (file == null || !mounted) return;
       final size = await file.length();
@@ -127,9 +134,26 @@ class _PostComposerState extends ConsumerState<PostComposer> {
     if (_busy) return;
     setState(() => _error = null);
     try {
-      final list = kIsWeb && ProfileMediaWebNativePicker.isSupported
-          ? await ProfileMediaWebNativePicker.pickPhotos()
-          : await _picker.pickMultiImage(imageQuality: 85, maxWidth: 1800);
+      List<XFile> list;
+      if (kIsWeb) {
+        list = ProfileMediaWebNativePicker.isSupported
+            ? await ProfileMediaWebNativePicker.pickPhotos()
+            : await _picker.pickMultiImage(imageQuality: 85, maxWidth: 1800);
+      } else {
+        // Step 58 (phone): camera or gallery.
+        final source = await _askSource(video: false);
+        if (source == null) return;
+        if (source == ImageSource.camera) {
+          final shot = await _picker.pickImage(
+            source: ImageSource.camera,
+            imageQuality: 85,
+            maxWidth: 1800,
+          );
+          list = [if (shot != null) shot];
+        } else {
+          list = await _picker.pickMultiImage(imageQuality: 85, maxWidth: 1800);
+        }
+      }
       if (list.isEmpty || !mounted) return;
       final room = PostComposer.maxPhotos - _photos.length;
       final picked = <_PickedPhoto>[];
@@ -155,6 +179,48 @@ class _PostComposerState extends ConsumerState<PostComposer> {
   }
 
   bool get _ru => Localizations.localeOf(context).languageCode == 'ru';
+
+  /// Phone: «Снять» / «Из галереи» in a bottom sheet.
+  Future<ImageSource?> _askSource({required bool video}) {
+    final ru = _ru;
+    return showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: Tokens.bg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(Tokens.radiusLg)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: Tokens.s8),
+            ListTile(
+              leading: Icon(
+                video ? Icons.videocam_outlined : Icons.photo_camera_outlined,
+                color: Tokens.text,
+              ),
+              title: Text(
+                video
+                    ? (ru ? 'Снять видео' : 'Record a video')
+                    : (ru ? 'Сделать фото' : 'Take a photo'),
+                style: AppText.body,
+              ),
+              onTap: () => Navigator.of(ctx).pop(ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined, color: Tokens.text),
+              title: Text(
+                ru ? 'Выбрать из галереи' : 'Choose from the library',
+                style: AppText.body,
+              ),
+              onTap: () => Navigator.of(ctx).pop(ImageSource.gallery),
+            ),
+            const SizedBox(height: Tokens.s8),
+          ],
+        ),
+      ),
+    );
+  }
 
   Future<({int width, int height})?> _dimensions(Uint8List bytes) async {
     try {

@@ -315,7 +315,9 @@ class AppBottomNav extends ConsumerWidget {
       if (uiV2 && signedIn)
         (
           icon: Icons.dynamic_feed_rounded,
-          label: 'Лента',
+          label: Localizations.localeOf(context).languageCode == 'ru'
+              ? 'Лента'
+              : 'Feed',
           route: Routes.feed,
           badge: 0,
           index: 5,
