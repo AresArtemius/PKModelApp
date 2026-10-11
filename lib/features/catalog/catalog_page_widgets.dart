@@ -2391,6 +2391,66 @@ class _CatalogRoleTabs extends StatelessWidget {
   }
 }
 
+/// Step 52 (mobile web): roles as a horizontally scrolling row of text
+/// tabs with an underline — no pill, no bottom sheet.
+class _CatalogRoleTabsV2 extends StatelessWidget {
+  const _CatalogRoleTabsV2({
+    required this.selectedRole,
+    required this.onChanged,
+  });
+
+  final ProfessionalProfileType? selectedRole;
+  final ValueChanged<ProfessionalProfileType?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final items = <({ProfessionalProfileType? role, String label})>[
+      (role: null, label: ru ? 'Все' : 'All'),
+      for (final role in _CatalogRoleTabs._roles)
+        (role: role, label: _catalogProfileTypeLabel(t, role)),
+    ];
+    return Container(
+      height: 44,
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: Tokens.border)),
+      ),
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: EdgeInsets.zero,
+        itemCount: items.length,
+        separatorBuilder: (_, _) => const SizedBox(width: Tokens.s16),
+        itemBuilder: (context, i) {
+          final item = items[i];
+          final active = selectedRole == item.role;
+          return InkWell(
+            onTap: active ? null : () => onChanged(item.role),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 2),
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(
+                    color: active ? Tokens.text : Colors.transparent,
+                    width: 2,
+                  ),
+                ),
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                item.label,
+                style: AppText.bodyStrong.copyWith(
+                  color: active ? Tokens.text : Tokens.textSecondary,
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
 class _CatalogRoleChoice {
   const _CatalogRoleChoice(this.role);
 

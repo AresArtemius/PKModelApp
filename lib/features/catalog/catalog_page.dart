@@ -965,10 +965,12 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
             savedSearchItems.isNotEmpty ||
             (savedSearches?.isLoading ?? false) ||
             savedSearches?.lastError != null);
-    final resetFiltersLabel =
-        Localizations.localeOf(context).languageCode.toLowerCase() == 'ru'
-        ? 'СБРОСИТЬ ФИЛЬТРЫ'
-        : 'RESET FILTERS';
+    final ruLocale =
+        Localizations.localeOf(context).languageCode.toLowerCase() == 'ru';
+    // v2 (web): sentence case; native keeps the caps of the old design.
+    final resetFiltersLabel = kIsWeb
+        ? (ruLocale ? 'Сбросить фильтры' : 'Reset filters')
+        : (ruLocale ? 'СБРОСИТЬ ФИЛЬТРЫ' : 'RESET FILTERS');
     final previewModel = isDesktop && filteredItems.isNotEmpty
         ? filteredItems.firstWhere(
             (model) => model.id == _desktopPreviewModelId,
@@ -977,6 +979,12 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
         : null;
     final roleTabs = isDesktop
         ? _CatalogRoleList(selectedRole: c.profileRole, onChanged: _onRoleChanged)
+        : kIsWeb
+        // Step 52: mobile web gets text tabs instead of the pill + sheet.
+        ? _CatalogRoleTabsV2(
+            selectedRole: c.profileRole,
+            onChanged: _onRoleChanged,
+          )
         : _CatalogRoleTabs(selectedRole: c.profileRole, onChanged: _onRoleChanged);
 
     // Desktop: every filter group lives in the rail and applies live.
