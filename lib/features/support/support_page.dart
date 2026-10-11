@@ -1178,7 +1178,7 @@ class _SupportTicketDialogState extends ConsumerState<_SupportTicketDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: Text(widget._btnLabel(ru, 'ЗАКРЫТЬ', 'CLOSE')),
+          child: Text(_btnLabel(widget.ru, 'ЗАКРЫТЬ', 'CLOSE')),
         ),
         FilledButton.icon(
           onPressed: _sending ? null : _sendReply,
@@ -1186,7 +1186,7 @@ class _SupportTicketDialogState extends ConsumerState<_SupportTicketDialog> {
           label: Text(
             _sending
                 ? (widget.ru ? 'ОТПРАВКА…' : 'SENDING…')
-                : (widget._btnLabel(ru, 'ОТПРАВИТЬ', 'SEND')),
+                : (_btnLabel(widget.ru, 'ОТПРАВИТЬ', 'SEND')),
           ),
         ),
       ],
