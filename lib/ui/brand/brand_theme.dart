@@ -2,6 +2,8 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import 'ui_mode.dart';
+
 /// Единый стиль приложения (цвета, радиусы, тени, фон, кнопки).
 /// Font family registered in pubspec.yaml (Golos Text, OFL).
 const String kBrandFontFamily = 'GolosText';
@@ -134,6 +136,11 @@ class BrandBackground extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // v2 (every platform): pages are white; the old dark gradient would
+    // show through under the status bar and the home indicator.
+    if (uiV2) {
+      return const ColoredBox(color: Color(0xFFFFFFFF));
+    }
     if (kIsWeb) {
       return const ColoredBox(color: BrandTheme.greyTop);
     }
