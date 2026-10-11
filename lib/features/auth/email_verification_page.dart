@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -223,7 +222,7 @@ class _EmailVerificationPageState extends ConsumerState<EmailVerificationPage> {
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
 
-    if (kIsWeb) {
+    if (uiV2) {
       return Scaffold(
         backgroundColor: Tokens.bg,
         body: AuthPageFrame(

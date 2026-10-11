@@ -1,5 +1,4 @@
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -17,7 +16,7 @@ import 'chat_providers.dart';
 
 /// v2 (web): full-width page — hairline list of invitations on the left,
 /// the selected invitation on the right; chat opens on the chats page.
-const bool _invitationsV2 = kIsWeb;
+const bool _invitationsV2 = uiV2;
 const double _invitationsV2ListWidth = 400;
 const double _invitationsV2Breakpoint = 960;
 

@@ -233,10 +233,10 @@ class SelectionProjectPage extends ConsumerWidget {
     final dataAsync = ref.watch(selectionProjectProvider(selectionId));
 
     return Scaffold(
-      backgroundColor: kIsWeb ? Tokens.bg : _bg,
+      backgroundColor: uiV2 ? Tokens.bg : _bg,
       body: SafeArea(
         child: Padding(
-          padding: kIsWeb ? EdgeInsets.zero : const EdgeInsets.all(16),
+          padding: uiV2 ? EdgeInsets.zero : const EdgeInsets.all(16),
           child: dataAsync.when(
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (e, _) => Center(
@@ -456,7 +456,7 @@ class SelectionProjectPage extends ConsumerWidget {
                 });
               }
 
-              if (kIsWeb && isPublic) {
+              if (uiV2 && isPublic) {
                 return _PublicSelectionV2(
                   selectionId: selectionId,
                   title: title,
@@ -474,7 +474,7 @@ class SelectionProjectPage extends ConsumerWidget {
                 );
               }
 
-              if (kIsWeb && !isPublic) {
+              if (uiV2 && !isPublic) {
                 return _SelectionProjectV2(
                   selectionId: selectionId,
                   title: title,

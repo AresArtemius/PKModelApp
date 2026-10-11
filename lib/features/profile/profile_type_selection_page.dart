@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../../gen_l10n/app_localizations.dart';
@@ -60,7 +59,7 @@ class ProfileTypeSelectionPage extends StatelessWidget {
   /// Asks for a profile type: a themed dialog on the web, the full-screen
   /// page elsewhere. Returns null when dismissed.
   static Future<ProfessionalProfileType?> pick(BuildContext context) {
-    if (!kIsWeb) {
+    if (!uiV2) {
       return Navigator.of(context).push<ProfessionalProfileType>(
         MaterialPageRoute(builder: (_) => const ProfileTypeSelectionPage()),
       );

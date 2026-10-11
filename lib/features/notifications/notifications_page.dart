@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -45,7 +44,7 @@ TextStyle _notificationBodyStyle({
 
 /// v2 (web): full-width page — the feed grouped by day on the left, push
 /// status and preferences on the right; no cards, pills or caps.
-const bool _notificationsV2 = kIsWeb;
+const bool _notificationsV2 = uiV2;
 const double _notificationsV2SideWidth = 380;
 const double _notificationsV2Breakpoint = 960;
 

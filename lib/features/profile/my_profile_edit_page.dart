@@ -41,7 +41,7 @@ const String _kSkipMediaDeleteConfirmKey = 'skip_media_delete_confirm';
 const double _kMediaRemoveInset = 4;
 /// v2 (web): the editor on the settings template — sections with a title
 /// column on the left, flat fields, one «Сохранить» in the header.
-const bool _editV2 = kIsWeb;
+const bool _editV2 = uiV2;
 
 const double _kProfileEditDesktopBreakpoint = 900.0;
 const double _kProfileEditDesktopMaxWidth = 1360.0;

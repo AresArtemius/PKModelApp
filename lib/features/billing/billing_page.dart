@@ -223,7 +223,7 @@ class _BillingPageState extends ConsumerState<BillingPage> {
         .maybeWhen(data: (value) => value, orElse: () => false);
     final ru = _isRussian;
 
-    if (kIsWeb) return _buildV2(ru, isAdmin, profilesAsync);
+    if (uiV2) return _buildV2(ru, isAdmin, profilesAsync);
 
     return Scaffold(
       body: Stack(

@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -15,7 +14,7 @@ class AuthRequiredPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
-    if (kIsWeb) {
+    if (uiV2) {
       final ru = Localizations.localeOf(context).languageCode == 'ru';
       return Scaffold(
         backgroundColor: Tokens.bg,

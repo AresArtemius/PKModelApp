@@ -968,7 +968,7 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
     final ruLocale =
         Localizations.localeOf(context).languageCode.toLowerCase() == 'ru';
     // v2 (web): sentence case; native keeps the caps of the old design.
-    final resetFiltersLabel = kIsWeb
+    final resetFiltersLabel = uiV2
         ? (ruLocale ? 'Сбросить фильтры' : 'Reset filters')
         : (ruLocale ? 'СБРОСИТЬ ФИЛЬТРЫ' : 'RESET FILTERS');
     final previewModel = isDesktop && filteredItems.isNotEmpty
@@ -979,7 +979,7 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
         : null;
     final roleTabs = isDesktop
         ? _CatalogRoleList(selectedRole: c.profileRole, onChanged: _onRoleChanged)
-        : kIsWeb
+        : uiV2
         // Step 52: mobile web gets text tabs instead of the pill + sheet.
         ? _CatalogRoleTabsV2(
             selectedRole: c.profileRole,
@@ -993,10 +993,10 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
         : null;
 
     return Scaffold(
-      backgroundColor: kIsWeb ? Tokens.bg : null,
+      backgroundColor: uiV2 ? Tokens.bg : null,
       body: Stack(
         children: [
-          if (!kIsWeb) const BrandBackground(),
+          if (!uiV2) const BrandBackground(),
           SafeArea(
             child: Align(
               alignment: Alignment.topCenter,
@@ -1007,7 +1007,7 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                       : double.infinity,
                 ),
                 child: Padding(
-                  padding: kIsWeb && !isDesktop
+                  padding: uiV2 && !isDesktop
                       ? const EdgeInsets.fromLTRB(16, 12, 16, 0)
                       : pagePadding,
                   child: Stack(
@@ -1155,7 +1155,7 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                             canUseAgentTools: canCreateSelections,
                           ),
                         )
-                      else if (kIsWeb)
+                      else if (uiV2)
                         // Narrow web: v2 header, flat search, role chips.
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,

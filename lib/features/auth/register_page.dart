@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -29,7 +28,7 @@ const _legalRequiredMessage =
 
 /// v2 (web): the sign-up form in the split layout with field-level
 /// errors, an Email / Телефон switch and the phone flow inline.
-const bool _registerV2 = kIsWeb;
+const bool _registerV2 = uiV2;
 
 enum _SignUpMode { email, phone }
 

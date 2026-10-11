@@ -1,5 +1,4 @@
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -31,7 +30,7 @@ import 'profile_type_selection_page.dart';
 /// v2 (web): a "settings" page — header with the account avatar and name,
 /// a section menu on the left, profile cards on the right; no cards with
 /// shadows or pills.
-const bool _accountV2 = kIsWeb;
+const bool _accountV2 = uiV2;
 const double _kAccountV2NavWidth = 280;
 
 String _sentenceCaseAccount(String value) {
@@ -149,7 +148,7 @@ class MyProfilePage extends ConsumerWidget {
     MyProfileState? initial,
     ProfessionalProfileType? initialProfileType,
   }) {
-    if (kIsWeb) {
+    if (uiV2) {
       // Web: the editor is a page of its own, so the URL and the browser's
       // Back button work; the profile travels as `extra`.
       if (startBlank) {

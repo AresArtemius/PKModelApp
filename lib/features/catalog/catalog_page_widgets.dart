@@ -66,7 +66,7 @@ class _CatalogSearchRow extends StatelessWidget {
               ),
             ),
             if (canSelect) ...[
-              SizedBox(width: kIsWeb ? 8 : kGap10),
+              SizedBox(width: uiV2 ? 8 : kGap10),
               _SelectAllPill(
                 value: items.isEmpty
                     ? false
@@ -76,7 +76,7 @@ class _CatalogSearchRow extends StatelessWidget {
             ],
           ],
         ),
-        if (!kIsWeb) const SizedBox(height: kGap12),
+        if (!uiV2) const SizedBox(height: kGap12),
       ],
     );
   }
@@ -3114,7 +3114,7 @@ class _SearchBarState extends State<_SearchBar> {
     final hasText = widget.controller.text.trim().isNotEmpty;
     final hasFocus = _focusNode.hasFocus;
 
-    if (kIsWeb) {
+    if (uiV2) {
       // v2: the theme input (48 px, hairline, no pill), sentence-case hint.
       return TextField(
         controller: widget.controller,
@@ -3692,7 +3692,7 @@ class _SelectAllPill extends StatelessWidget {
               ? Icons.indeterminate_check_box_rounded
               : Icons.check_box_outline_blank_rounded);
 
-    if (kIsWeb) {
+    if (uiV2) {
       return Tooltip(
         message: Localizations.localeOf(context).languageCode == 'ru'
             ? 'Выбрать все'

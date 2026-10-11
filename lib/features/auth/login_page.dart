@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -507,7 +506,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       ),
     );
 
-    if (isDesktop || kIsWeb) {
+    if (isDesktop || uiV2) {
       // v2: brand panel on the left, a 360 px form on the right; on a
       // narrow web window the same form fills a plain white page.
       return Scaffold(
@@ -1025,7 +1024,7 @@ class _PhoneLoginFields extends StatelessWidget {
         AuthPhoneNumberField(
           controller: phoneController,
           enabled: !loading,
-          flat: kIsWeb,
+          flat: uiV2,
           countryIso: phoneIso,
           codeLabel: isRu ? 'Код страны' : 'Country code',
           phoneLabel: t.phoneNumber,

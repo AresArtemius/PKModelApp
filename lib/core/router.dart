@@ -65,6 +65,7 @@ import '../ui/brand/brand_theme.dart';
 import '../ui/brand/command_palette.dart';
 import '../ui/brand/design_tokens.dart';
 import '../features/admin/selection_project_page.dart' deferred as selection_project_page;
+import '../ui/brand/ui_mode.dart';
 
 abstract class Routes {
   static const landingPreview = '/landing-preview';
@@ -309,7 +310,7 @@ class AppBottomNav extends ConsumerWidget {
     final signedIn = ref.watch(isAuthenticatedProvider);
     final items = [
       // Step 44: the feed is web-only for now; native keeps the old tabs.
-      if (kIsWeb && signedIn)
+      if (uiV2 && signedIn)
         (
           icon: Icons.dynamic_feed_rounded,
           label: 'Лента',

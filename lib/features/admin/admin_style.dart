@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../../ui/brand/brand_theme.dart';
@@ -7,7 +6,7 @@ import 'admin_shell_v2.dart';
 
 /// Web admin pages use the flat v2 look (see admin_shell_v2.dart); the
 /// helpers below switch on this so every section changes at once.
-const bool adminV2 = kIsWeb;
+const bool adminV2 = uiV2;
 
 /// Width for a horizontally scrolling admin table: at least [minWidth],
 /// and the whole available width when the page is wider (web v2 tables

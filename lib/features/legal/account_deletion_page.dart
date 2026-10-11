@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -14,7 +13,7 @@ class AccountDeletionPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final isRu = Localizations.localeOf(context).languageCode == 'ru';
     final sections = isRu ? _sectionsRu : _sectionsEn;
-    if (kIsWeb) {
+    if (uiV2) {
       return LegalPageV2(
         title: isRu ? 'Удаление аккаунта' : 'Account deletion',
         lead: isRu

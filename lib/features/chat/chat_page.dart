@@ -1952,7 +1952,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     final chatContext = summary.valueOrNull;
     // v2 (web, inside the two-column chats page): flat full-height column —
     // 72 px header with a hairline, the feed, the composer at the bottom.
-    final v2 = kIsWeb;
+    final v2 = uiV2;
 
     final profileId = chatContext?.profileId.trim() ?? '';
     final selectionId = chatContext?.selectionId.trim() ?? '';

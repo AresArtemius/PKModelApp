@@ -717,7 +717,7 @@ class _AccountProfileEditPageState
   }) async {
     final controller = TextEditingController();
     var obscure = true;
-    if (kIsWeb) {
+    if (uiV2) {
       final flat = await showDialog<String>(
         context: context,
         builder: (context) => StatefulBuilder(
@@ -1577,7 +1577,7 @@ class _AccountProfileEditPageState
     final profileAsync = ref.watch(accountOwnerProfileProvider);
     final title = _isRussian ? 'ПРОФИЛЬ АККАУНТА' : 'ACCOUNT PROFILE';
 
-    if (kIsWeb) return _buildV2(profileAsync);
+    if (uiV2) return _buildV2(profileAsync);
 
     return Scaffold(
       body: Stack(
@@ -2702,7 +2702,7 @@ class _AvatarCropPageState extends State<_AvatarCropPage> {
   Widget build(BuildContext context) {
     final isRussian =
         Localizations.localeOf(context).languageCode.toLowerCase() == 'ru';
-    if (kIsWeb) return _buildV2(context, isRussian);
+    if (uiV2) return _buildV2(context, isRussian);
     return Scaffold(
       backgroundColor: Colors.black,
       body: SafeArea(

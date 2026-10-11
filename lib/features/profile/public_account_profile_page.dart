@@ -1,5 +1,4 @@
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -269,7 +268,7 @@ class PublicAccountProfilePage extends ConsumerWidget {
     final ru = _isRussian(context);
     final profileAsync = ref.watch(publicAccountProfileProvider(tag));
 
-    if (kIsWeb) return _buildV2(context, ref, tag, ru, profileAsync);
+    if (uiV2) return _buildV2(context, ref, tag, ru, profileAsync);
 
     return Scaffold(
       body: Stack(

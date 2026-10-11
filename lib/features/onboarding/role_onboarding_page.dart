@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -236,7 +235,7 @@ class _RoleOnboardingPageState extends ConsumerState<RoleOnboardingPage> {
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
     final roleOptions = _roleOptions(t);
-    if (kIsWeb) return _buildV2(t, roleOptions);
+    if (uiV2) return _buildV2(t, roleOptions);
 
     return Scaffold(
       body: Stack(
