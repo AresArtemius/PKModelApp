@@ -198,6 +198,21 @@ jobs:
             exit 1
           fi
 
+      - name: Fill app-link placeholders (step 59)
+        if: steps.gate.outputs.enabled == 'true'
+        env:
+          APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+          ANDROID_SHA256: ${{ vars.ANDROID_SHA256 }}
+        run: |
+          set -e
+          # Flutter may skip dot-directories when copying web/; copy by hand.
+          mkdir -p build/web/.well-known
+          cp web/.well-known/* build/web/.well-known/
+          f=build/web/.well-known/apple-app-site-association
+          g=build/web/.well-known/assetlinks.json
+          if [ -n "$APPLE_TEAM_ID" ]; then sed -i "s/__APPLE_TEAM_ID__/$APPLE_TEAM_ID/g" "$f"; else echo "::notice::APPLE_TEAM_ID variable not set — universal links stay inactive"; fi
+          if [ -n "$ANDROID_SHA256" ]; then sed -i "s/__ANDROID_SHA256__/$ANDROID_SHA256/g" "$g"; else echo "::notice::ANDROID_SHA256 variable not set — Android app links stay inactive"; fi
+
       - name: Upload release
         if: steps.gate.outputs.enabled == 'true'
         run: |

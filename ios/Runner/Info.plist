@@ -35,6 +35,8 @@
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>PK Management использует медиатеку, чтобы добавлять фотографии и видео в анкеты, кастинги и чаты.</string>
 
+	<key>FlutterDeepLinkingEnabled</key>
+	<true/>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

@@ -1,0 +1,24 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appIDs": ["__APPLE_TEAM_ID__.com.artemkukhar.modelapp"],
+        "components": [
+          { "/": "/p/*" },
+          { "/": "/s/*" },
+          { "/": "/model/*" },
+          { "/": "/@*" },
+          { "/": "/castings*" },
+          { "/": "/feed" },
+          { "/": "/chats*" },
+          { "/": "/landing/*", "exclude": true },
+          { "/": "/functions/*", "exclude": true }
+        ]
+      }
+    ]
+  },
+  "webcredentials": {
+    "apps": ["__APPLE_TEAM_ID__.com.artemkukhar.modelapp"]
+  }
+}
