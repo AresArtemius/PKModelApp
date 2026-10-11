@@ -437,6 +437,41 @@ class _BillingPageState extends ConsumerState<BillingPage> {
               orElse: () => _billingProducts.first,
             );
             final approved = selected.status == ProfileStatus.approved;
+            // Store policy: the mobile apps never show prices, periods or a
+            // way to pay. They only show the current placement status.
+            if (!kIsWeb) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SettingsSection(
+                    title: ru ? 'Анкета' : 'Profile',
+                    hint: ru
+                        ? 'Выберите анкету, чтобы проверить срок её размещения.'
+                        : 'Choose a profile to check its placement period.',
+                    child: Column(
+                      children: [
+                        for (var i = 0; i < saved.length; i++)
+                          _ProfileRowV2(
+                            profile: saved[i],
+                            selected: saved[i].id == selected.id,
+                            last: i == saved.length - 1,
+                            onTap: () => setState(() {
+                              _selectedProfileId = saved[i].id;
+                            }),
+                          ),
+                      ],
+                    ),
+                  ),
+                  SettingsSection(
+                    title: ru ? 'Срок размещения' : 'Placement period',
+                    hint: ru
+                        ? 'Здесь отображается текущий статус и срок размещения анкеты.'
+                        : 'The current placement status and period are shown here.',
+                    child: _BillingStatusV2(profileId: selected.id, ru: ru),
+                  ),
+                ],
+              );
+            }
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -612,9 +647,13 @@ class _BillingPageState extends ConsumerState<BillingPage> {
 
     return SettingsPageV2(
       title: ru ? 'Размещение в базе' : 'Profile placement',
-      subtitle: ru
-          ? 'Оплата и срок показа анкеты в каталоге'
-          : 'Payment and the period your profile is listed',
+      subtitle: kIsWeb
+          ? (ru
+                ? 'Оплата и срок показа анкеты в каталоге'
+                : 'Payment and the period your profile is listed')
+          : (ru
+                ? 'Срок показа анкеты в каталоге'
+                : 'The period your profile is listed'),
       backLabel: ru ? 'Аккаунт' : 'Account',
       onBack: () => context.go('/me'),
       children: children,
