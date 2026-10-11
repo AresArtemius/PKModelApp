@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
+
 const kLegalVersion = '2026-07-15';
 const kChildSafetyStandardsVersion = '2026-08-06';
 
@@ -11,10 +13,18 @@ enum LegalDocumentKind {
 }
 
 class LegalDocumentSection {
-  const LegalDocumentSection({required this.title, required this.body});
+  const LegalDocumentSection({
+    required this.title,
+    required this.body,
+    this.webOnly = false,
+  });
 
   final String title;
   final String body;
+
+  /// Store policy: prices and payment-provider details are shown on the
+  /// web only. The mobile apps omit these sections entirely.
+  final bool webOnly;
 }
 
 class LegalDocument {
@@ -37,8 +47,11 @@ class LegalDocument {
   final String version;
 
   String title(bool isRu) => isRu ? titleRu : titleEn;
-  List<LegalDocumentSection> sections(bool isRu) =>
-      isRu ? sectionsRu : sectionsEn;
+  List<LegalDocumentSection> sections(bool isRu) {
+    final all = isRu ? sectionsRu : sectionsEn;
+    if (kIsWeb) return all;
+    return all.where((s) => !s.webOnly).toList(growable: false);
+  }
 }
 
 const legalDocuments = <LegalDocument>[
@@ -167,11 +180,13 @@ const legalDocuments = <LegalDocument>[
         title: 'Платное размещение в базе',
         body:
             'Платная услуга PK Management — размещение утвержденной анкеты в базе на выбранный срок: 1 месяц — 499 ₽ без скидки, 3 месяца — 1422 ₽ со скидкой 5%, 6 месяцев — 2784 ₽ со скидкой 7%, 12 месяцев — 5389 ₽ со скидкой 10%. Оплата относится к конкретной анкете, а не ко всему аккаунту. После успешной оплаты размещение активируется автоматически на оплаченный период.',
+        webOnly: true,
       ),
       LegalDocumentSection(
         title: 'Оплата и платежные данные',
         body:
             'Платежи обрабатываются через платежного провайдера ЮKassa. PK Management не получает и не хранит данные банковской карты. Возвраты, отмены и спорные ситуации обрабатываются через поддержку с учетом фактически оказанной услуги и применимых правил платежного провайдера.',
+        webOnly: true,
       ),
       LegalDocumentSection(
         title: 'Безопасность аккаунта',
@@ -219,11 +234,13 @@ const legalDocuments = <LegalDocument>[
         title: 'Paid profile placement',
         body:
             'PK Management paid service is placement of an approved profile in the database for the selected period: 1 month — 499 ₽ without a discount, 3 months — 1422 ₽ with a 5% discount, 6 months — 2784 ₽ with a 7% discount, 12 months — 5389 ₽ with a 10% discount. Payment applies to a specific profile, not to the whole account. After a successful payment, placement is activated automatically for the paid period.',
+        webOnly: true,
       ),
       LegalDocumentSection(
         title: 'Payments and card data',
         body:
             'Payments are processed by the YooKassa payment provider. PK Management does not receive or store bank card details. Refunds, cancellations and disputes are handled through support, taking into account the actually provided service and applicable payment provider rules.',
+        webOnly: true,
       ),
       LegalDocumentSection(
         title: 'Account security',
@@ -463,6 +480,7 @@ const legalDocuments = <LegalDocument>[
         title: 'Платная услуга',
         body:
             'Размещение утвержденной анкеты в базе PK Management на выбранный период: 1 месяц — 499 ₽ без скидки, 3 месяца — 1422 ₽ со скидкой 5%, 6 месяцев — 2784 ₽ со скидкой 7%, 12 месяцев — 5389 ₽ со скидкой 10%. Услуга оплачивается отдельно для каждой анкеты.',
+        webOnly: true,
       ),
       LegalDocumentSection(
         title: 'Контакты',
@@ -495,6 +513,7 @@ const legalDocuments = <LegalDocument>[
         title: 'Paid service',
         body:
             'Placement of an approved profile in the PK Management database for the selected period: 1 month — 499 ₽ without a discount, 3 months — 1422 ₽ with a 5% discount, 6 months — 2784 ₽ with a 7% discount, 12 months — 5389 ₽ with a 10% discount. The service is paid separately for each profile.',
+        webOnly: true,
       ),
       LegalDocumentSection(
         title: 'Contacts',
