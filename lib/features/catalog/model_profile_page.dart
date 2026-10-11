@@ -1824,7 +1824,17 @@ class _ProfileDesktopBodyV2State extends State<_ProfileDesktopBodyV2> {
             const SizedBox(height: 16),
           ],
           _cover(context),
+          // Phone: the gallery (photos / videos / about) right under the
+          // cover, then the name, the actions and the facts.
           const SizedBox(height: 16),
+          _ProfileTabBar(
+            tabs: tabs,
+            selected: _tab,
+            onChanged: (tab) => setState(() => _tab = tab),
+          ),
+          const SizedBox(height: 16),
+          _tabContent(context),
+          const SizedBox(height: 28),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1855,17 +1865,7 @@ class _ProfileDesktopBodyV2State extends State<_ProfileDesktopBodyV2> {
           ],
           const SizedBox(height: 16),
           _headerActions(context),
-          // Phone (step 57 feedback): the photos come right after the
-          // actions; facts and the agent's folders follow below.
           const SizedBox(height: 24),
-          _ProfileTabBar(
-            tabs: tabs,
-            selected: _tab,
-            onChanged: (tab) => setState(() => _tab = tab),
-          ),
-          const SizedBox(height: 20),
-          _tabContent(context),
-          const SizedBox(height: 28),
           _facts(context),
           if (widget.canUseAgentActions &&
               widget.actionHistoryFuture != null) ...[
