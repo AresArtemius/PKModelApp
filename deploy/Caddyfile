@@ -28,6 +28,12 @@ app.pk.management {
 	@wasm path *.wasm
 	header @wasm Content-Type application/wasm
 
+	# Step 59: universal links (iOS) / app links (Android). Apple fetches the
+	# file without an extension and wants JSON; both files live in web/.well-known.
+	@aasa path /.well-known/apple-app-site-association
+	header @aasa Content-Type application/json
+	header @aasa Cache-Control "public, max-age=3600"
+
 	# Link previews (step 17): preview bots asking for a public profile or
 	# selection get a small HTML page with Open Graph tags from the og-page
 	# Edge Function; browsers keep getting the app.

@@ -30,6 +30,22 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
             
+            <!-- Step 59: https links to app.pk.management open the app
+                 once assetlinks.json on the site lists the signing key. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="app.pk.management" />
+                <data android:pathPrefix="/p/" />
+                <data android:pathPrefix="/s/" />
+                <data android:pathPrefix="/model/" />
+                <data android:pathPrefix="/@" />
+                <data android:pathPrefix="/castings" />
+                <data android:pathPrefix="/feed" />
+                <data android:pathPrefix="/chats" />
+            </intent-filter>
+
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
 
