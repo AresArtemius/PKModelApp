@@ -704,6 +704,58 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
   bool _mineOnly = false;
   _AdminBulkResult? _lastBulkResult;
 
+  /// Step 55: column sort (null = the default urgency order).
+  String? _sortKey;
+  bool _sortAsc = true;
+
+  void _onSort(String key) {
+    setState(() {
+      if (_sortKey == key) {
+        if (_sortAsc) {
+          _sortAsc = false;
+        } else {
+          _sortKey = null;
+          _sortAsc = true;
+        }
+      } else {
+        _sortKey = key;
+        _sortAsc = true;
+      }
+    });
+  }
+
+  static int _compareBy(String key, _AdminWorkspaceRow a, _AdminWorkspaceRow b) {
+    switch (key) {
+      case 'kind':
+        return a.kind.compareTo(b.kind);
+      case 'title':
+        return a.title.toLowerCase().compareTo(b.title.toLowerCase());
+      case 'details':
+        return a.subtitle.toLowerCase().compareTo(b.subtitle.toLowerCase());
+      case 'sla':
+        final aDue = a.dueAt;
+        final bDue = b.dueAt;
+        if (aDue != null && bDue != null) return aDue.compareTo(bDue);
+        if (aDue != null) return -1;
+        if (bDue != null) return 1;
+        return 0;
+      case 'assignee':
+        return a.assignmentLabel.toLowerCase().compareTo(
+          b.assignmentLabel.toLowerCase(),
+        );
+      case 'status':
+        return a.status.compareTo(b.status);
+      case 'date':
+        // dd.MM strings: compare month first, then day.
+        String norm(String v) {
+          final parts = v.split('.');
+          return parts.length == 2 ? '${parts[1]}.${parts[0]}' : v;
+        }
+        return norm(a.dateText).compareTo(norm(b.dateText));
+    }
+    return 0;
+  }
+
   @override
   void dispose() {
     _searchC.dispose();
@@ -887,7 +939,7 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
     });
 
     final query = _searchC.text.trim().toLowerCase();
-    final filtered = rows
+    var filtered = rows
         .where((row) {
           final filterOk =
               _filter == _AdminWorkspaceFilter.all || row.filter == _filter;
@@ -899,6 +951,16 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
           return filterOk && searchOk && mineOk;
         })
         .toList(growable: false);
+
+    final sortKey = _sortKey;
+    if (sortKey != null) {
+      final sorted = [...filtered]
+        ..sort((a, b) {
+          final c = _compareBy(sortKey, a, b);
+          return _sortAsc ? c : -c;
+        });
+      filtered = sorted;
+    }
 
     _selected.removeWhere((id) => !filtered.any((row) => row.id == id));
 
@@ -1120,6 +1182,9 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
                 });
               },
               onOpen: (row) => context.go(row.route),
+              sortKey: _sortKey,
+              sortAscending: _sortAsc,
+              onSort: _onSort,
             )
           else
             _AdminRowsTable(
@@ -2629,12 +2694,18 @@ class _AdminRowsTableV2 extends StatelessWidget {
     required this.selected,
     required this.onToggle,
     required this.onOpen,
+    this.sortKey,
+    this.sortAscending = true,
+    this.onSort,
   });
 
   final List<_AdminWorkspaceRow> rows;
   final Set<String> selected;
   final ValueChanged<String> onToggle;
   final ValueChanged<_AdminWorkspaceRow> onOpen;
+  final String? sortKey;
+  final bool sortAscending;
+  final ValueChanged<String>? onSort;
 
   static const _check = 36.0;
   static const _kind = 120.0;
@@ -2701,18 +2772,22 @@ class _AdminRowsTableV2 extends StatelessWidget {
     return Column(
       children: [
         AdminTableHeaderV2(
+          sortKey: sortKey,
+          sortAscending: sortAscending,
+          onSort: onSort,
           cells: [
             const AdminTableCellSpec('', width: _check),
-            AdminTableCellSpec(ru ? 'Тип' : 'Type', width: _kind),
-            AdminTableCellSpec(ru ? 'Название' : 'Title', flex: 5),
-            AdminTableCellSpec(ru ? 'Детали' : 'Details', flex: 4),
-            const AdminTableCellSpec('SLA', width: _sla),
+            AdminTableCellSpec(ru ? 'Тип' : 'Type', width: _kind, sortKey: 'kind'),
+            AdminTableCellSpec(ru ? 'Название' : 'Title', flex: 5, sortKey: 'title'),
+            AdminTableCellSpec(ru ? 'Детали' : 'Details', flex: 4, sortKey: 'details'),
+            const AdminTableCellSpec('SLA', width: _sla, sortKey: 'sla'),
             AdminTableCellSpec(
               ru ? 'Ответственный' : 'Assignee',
               width: _assignee,
+              sortKey: 'assignee',
             ),
-            AdminTableCellSpec(ru ? 'Статус' : 'Status', width: _status),
-            AdminTableCellSpec(ru ? 'Дата' : 'Date', width: _date),
+            AdminTableCellSpec(ru ? 'Статус' : 'Status', width: _status, sortKey: 'status'),
+            AdminTableCellSpec(ru ? 'Дата' : 'Date', width: _date, sortKey: 'date'),
           ],
         ),
         for (var i = 0; i < rows.length; i++)
