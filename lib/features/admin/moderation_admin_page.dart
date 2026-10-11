@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../gen_l10n/app_localizations.dart';
 import '../../ui/brand/brand_theme.dart';
@@ -737,36 +738,129 @@ class _ModerationDesktopLayout extends StatelessWidget {
   final Future<void> Function(MyProfileState profile) onApprove;
   final Future<void> Function(MyProfileState profile) onReject;
 
+  /// Step 55: A — approve, R — reject, ↑/↓ or J/K — move along the queue.
+  /// Ignored while a text field has the focus (the reject reason, search).
+  KeyEventResult _onKey(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    final focused = FocusManager.instance.primaryFocus?.context?.widget;
+    if (focused is EditableText) return KeyEventResult.ignored;
+    final key = event.logicalKey;
+    if (key == LogicalKeyboardKey.keyA) {
+      onApprove(selected);
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.keyR) {
+      onReject(selected);
+      return KeyEventResult.handled;
+    }
+    final index = items.indexWhere((p) => p.id == selected.id);
+    if (key == LogicalKeyboardKey.arrowDown || key == LogicalKeyboardKey.keyJ) {
+      if (index >= 0 && index < items.length - 1) onSelect(items[index + 1]);
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.arrowUp || key == LogicalKeyboardKey.keyK) {
+      if (index > 0) onSelect(items[index - 1]);
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Align(
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final body = Align(
       alignment: Alignment.topCenter,
       child: ConstrainedBox(
         constraints: BoxConstraints(
           maxWidth: adminV2 ? double.infinity : _moderationDesktopMaxWidth,
         ),
-        child: Row(
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            SizedBox(
-              width: adminV2 ? 400 : _moderationDesktopListWidth,
-              child: _ModerationDesktopQueuePanel(
-                items: items,
-                selectedId: selected.id,
-                onTap: onSelect,
-                onApprove: onApprove,
-                onReject: onReject,
-              ),
-            ),
-            SizedBox(width: adminV2 ? 28 : 18),
             Expanded(
-              child: _ModerationProfileDetailsPanel(
-                profile: selected,
-                onApprove: () => onApprove(selected),
-                onReject: () => onReject(selected),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SizedBox(
+                    width: adminV2 ? 400 : _moderationDesktopListWidth,
+                    child: _ModerationDesktopQueuePanel(
+                      items: items,
+                      selectedId: selected.id,
+                      onTap: onSelect,
+                      onApprove: onApprove,
+                      onReject: onReject,
+                    ),
+                  ),
+                  SizedBox(width: adminV2 ? 28 : 18),
+                  Expanded(
+                    child: _ModerationProfileDetailsPanel(
+                      profile: selected,
+                      onApprove: () => onApprove(selected),
+                      onReject: () => onReject(selected),
+                    ),
+                  ),
+                ],
               ),
             ),
+            if (adminV2)
+              Padding(
+                padding: const EdgeInsets.only(top: 10),
+                child: Row(
+                  children: [
+                    const _ModerationKeyHint('A'),
+                    const SizedBox(width: 6),
+                    Text(
+                      ru ? 'одобрить' : 'approve',
+                      style: AppText.caption.copyWith(color: Tokens.textTertiary),
+                    ),
+                    const SizedBox(width: 16),
+                    const _ModerationKeyHint('R'),
+                    const SizedBox(width: 6),
+                    Text(
+                      ru ? 'отклонить' : 'reject',
+                      style: AppText.caption.copyWith(color: Tokens.textTertiary),
+                    ),
+                    const SizedBox(width: 16),
+                    const _ModerationKeyHint('↑'),
+                    const SizedBox(width: 4),
+                    const _ModerationKeyHint('↓'),
+                    const SizedBox(width: 6),
+                    Text(
+                      ru ? 'по очереди' : 'move along the queue',
+                      style: AppText.caption.copyWith(color: Tokens.textTertiary),
+                    ),
+                  ],
+                ),
+              ),
           ],
+        ),
+      ),
+    );
+    if (!adminV2) return body;
+    return Focus(autofocus: true, onKeyEvent: _onKey, child: body);
+  }
+}
+
+class _ModerationKeyHint extends StatelessWidget {
+  const _ModerationKeyHint(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(5),
+        border: Border.all(color: Tokens.borderStrong),
+      ),
+      child: Text(
+        label,
+        style: AppText.caption.copyWith(
+          fontSize: 11,
+          height: 1.3,
+          fontWeight: FontWeight.w600,
+          color: Tokens.textSecondary,
         ),
       ),
     );

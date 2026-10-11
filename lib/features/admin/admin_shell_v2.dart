@@ -771,12 +771,22 @@ class AdminTableHeaderV2 extends StatelessWidget {
     super.key,
     required this.cells,
     this.padding = const EdgeInsets.symmetric(horizontal: 12),
+    this.sortKey,
+    this.sortAscending = true,
+    this.onSort,
   });
 
   /// Each cell is (label, flex or fixed width). Use `width` for a fixed
   /// column and `flex` otherwise.
   final List<AdminTableCellSpec> cells;
   final EdgeInsets padding;
+
+  /// Step 55: the column the table is sorted by (a cell's `sortKey`); a
+  /// click on a sortable header calls [onSort] with that key — the same
+  /// key again flips the direction.
+  final String? sortKey;
+  final bool sortAscending;
+  final ValueChanged<String>? onSort;
 
   @override
   Widget build(BuildContext context) {
@@ -789,17 +799,41 @@ class AdminTableHeaderV2 extends StatelessWidget {
       child: Row(
         children: [
           for (final cell in cells)
-            cell.wrap(
-              Text(
-                adminSentenceCase(cell.label),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppText.caption.copyWith(
-                  color: Tokens.textTertiary,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
+            cell.wrap(_headerCell(cell)),
+        ],
+      ),
+    );
+  }
+
+  Widget _headerCell(AdminTableCellSpec cell) {
+    final active = cell.sortKey != null && cell.sortKey == sortKey;
+    final label = Text(
+      adminSentenceCase(cell.label),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: AppText.caption.copyWith(
+        color: active ? Tokens.text : Tokens.textTertiary,
+        fontWeight: FontWeight.w600,
+      ),
+    );
+    if (cell.sortKey == null || onSort == null) return label;
+    return InkWell(
+      onTap: () => onSort!(cell.sortKey!),
+      borderRadius: BorderRadius.circular(Tokens.radiusSm),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Flexible(child: label),
+          const SizedBox(width: 2),
+          Icon(
+            active
+                ? (sortAscending
+                      ? Icons.arrow_upward_rounded
+                      : Icons.arrow_downward_rounded)
+                : Icons.unfold_more_rounded,
+            size: 14,
+            color: active ? Tokens.text : Tokens.textTertiary,
+          ),
         ],
       ),
     );
@@ -807,11 +841,14 @@ class AdminTableHeaderV2 extends StatelessWidget {
 }
 
 class AdminTableCellSpec {
-  const AdminTableCellSpec(this.label, {this.flex, this.width});
+  const AdminTableCellSpec(this.label, {this.flex, this.width, this.sortKey});
 
   final String label;
   final int? flex;
   final double? width;
+
+  /// Set to make the column sortable (step 55).
+  final String? sortKey;
 
   Widget wrap(Widget child) {
     if (width != null) {
