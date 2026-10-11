@@ -236,10 +236,10 @@ class SelectionCastingPage extends ConsumerWidget {
     final res = ref.watch(castingResponsesProvider(castingId));
 
     return Scaffold(
-      backgroundColor: kIsWeb ? Tokens.bg : _bg,
+      backgroundColor: uiV2 ? Tokens.bg : _bg,
       body: SafeArea(
         child: Padding(
-          padding: kIsWeb ? EdgeInsets.zero : const EdgeInsets.all(16),
+          padding: uiV2 ? EdgeInsets.zero : const EdgeInsets.all(16),
           child: res.when(
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (e, _) => Center(
@@ -580,7 +580,7 @@ class SelectionCastingPage extends ConsumerWidget {
                 _ => Routes.adminSelection,
               };
 
-              if (kIsWeb) {
+              if (uiV2) {
                 return _CastingResponsesV2(
                   castingId: castingId,
                   castingTitle: castingTitle,

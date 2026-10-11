@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -422,7 +421,7 @@ class _AccountMfaPageState extends ConsumerState<AccountMfaPage> {
     final asyncStatus = ref.watch(accountMfaStatusProvider);
     final asyncRecovery = ref.watch(mfaRecoveryCodeStatusProvider);
     final asyncAudit = ref.watch(userSecurityAuditEntriesProvider);
-    if (kIsWeb) return _buildV2(asyncStatus, asyncRecovery, asyncAudit);
+    if (uiV2) return _buildV2(asyncStatus, asyncRecovery, asyncAudit);
     return Scaffold(
       body: Stack(
         children: [

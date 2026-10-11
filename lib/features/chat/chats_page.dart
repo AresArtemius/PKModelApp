@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -25,7 +24,7 @@ const double _chatsDesktopListWidth = 430;
 /// v2 (web): the chats page is a full-width two-column layout — the
 /// conversation list on the left, the open conversation on the right —
 /// with no cards, pills or empty side margins.
-const bool _chatsV2 = kIsWeb;
+const bool _chatsV2 = uiV2;
 const double _chatsV2ListWidth = 400;
 
 enum _ChatRoleFilter {

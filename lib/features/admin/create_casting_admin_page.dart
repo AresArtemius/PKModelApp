@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -169,7 +168,7 @@ class _CreateCastingAdminPageState
     final t = AppLocalizations.of(context)!;
     final isDesktop =
         MediaQuery.sizeOf(context).width >= _createCastingDesktopBreakpoint;
-    if (isDesktop || kIsWeb) return _buildV2(context, t, isDesktop: isDesktop);
+    if (isDesktop || uiV2) return _buildV2(context, t, isDesktop: isDesktop);
     return _buildLegacy(context, t);
   }
 
@@ -341,7 +340,7 @@ class _CreateCastingAdminPageState
       body = Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (!kIsWeb) ...[header, const SizedBox(height: 32)],
+          if (!uiV2) ...[header, const SizedBox(height: 32)],
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -356,7 +355,7 @@ class _CreateCastingAdminPageState
       body = Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (!kIsWeb) ...[header, const SizedBox(height: 32)],
+          if (!uiV2) ...[header, const SizedBox(height: 32)],
           mainFields,
           const SizedBox(height: 28),
           sidePanel,
@@ -364,7 +363,7 @@ class _CreateCastingAdminPageState
       );
     }
 
-    if (kIsWeb) {
+    if (uiV2) {
       // Admin shell: side menu + title; the form keeps its own widths.
       return AdminShellV2(
         title: t.newCastingTitle,

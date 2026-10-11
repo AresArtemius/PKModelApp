@@ -1,5 +1,4 @@
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -43,7 +42,7 @@ const EdgeInsets _castingsDesktopPadding = EdgeInsets.fromLTRB(32, 24, 32, 28);
 
 /// The v2 look (white page, flat cards, sentence case) is the web standard
 /// on every width; native apps keep the pill style for now.
-const bool _castingsV2 = kIsWeb;
+const bool _castingsV2 = uiV2;
 
 typedef _ReferenceMediaChanged =
     Future<void> Function(

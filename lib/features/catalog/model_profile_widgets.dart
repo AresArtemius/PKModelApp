@@ -2591,7 +2591,7 @@ class _MediaTile extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(_mediaThumbRadius),
             // v2: no soft drop shadows on the web.
-            boxShadow: kIsWeb
+            boxShadow: uiV2
                 ? null
                 : const [
                     BoxShadow(
@@ -2607,7 +2607,7 @@ class _MediaTile extends StatelessWidget {
               fit: StackFit.expand,
               children: [
                 child,
-                if (label.trim().isNotEmpty && kIsWeb)
+                if (label.trim().isNotEmpty && uiV2)
                   // v2 (step 53): a quiet caption in the corner instead of
                   // a dark pill across the photo.
                   Positioned(

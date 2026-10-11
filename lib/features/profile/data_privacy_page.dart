@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -199,7 +198,7 @@ class _DataPrivacyPageState extends ConsumerState<DataPrivacyPage> {
 
   @override
   Widget build(BuildContext context) {
-    if (kIsWeb) {
+    if (uiV2) {
       final ru = _isRussian;
       final isError = _message.contains('\n');
       return SettingsPageV2(

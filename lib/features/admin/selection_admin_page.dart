@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -357,7 +356,7 @@ class _SelectionAdminPageState extends ConsumerState<SelectionAdminPage> {
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
     final itemsAsync = ref.watch(adminSelectionListProvider);
-    if (kIsWeb) {
+    if (uiV2) {
       final valid = itemsAsync.valueOrNull;
       if (valid != null) {
         final validIds = valid

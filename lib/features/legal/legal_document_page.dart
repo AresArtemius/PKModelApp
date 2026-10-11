@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -17,7 +16,7 @@ class LegalDocumentPage extends StatelessWidget {
     final isRu = Localizations.localeOf(context).languageCode == 'ru';
     final document = legalDocumentByKind(kind);
     final sections = document.sections(isRu);
-    if (kIsWeb) {
+    if (uiV2) {
       return LegalPageV2(
         title: document.title(isRu),
         updated: document.version,

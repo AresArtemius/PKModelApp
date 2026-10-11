@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -113,7 +112,7 @@ class AccountDevicesPage extends ConsumerWidget {
     final user = ref.watch(currentUserProvider);
     final asyncDevices = ref.watch(accountDevicesProvider);
 
-    if (kIsWeb) {
+    if (uiV2) {
       final fromProfile =
           GoRouterState.of(context).uri.queryParameters['from'] == 'profile';
       final email = user?.email?.trim() ?? '';

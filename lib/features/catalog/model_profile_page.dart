@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
@@ -901,7 +900,7 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
 
                 final gap = const SizedBox(height: _sectionGap);
                 final signedIn = ref.watch(isAuthenticatedProvider);
-                final body = isDesktop || kIsWeb
+                final body = isDesktop || uiV2
                     ? _ProfileDesktopBodyV2(
                         model: m,
                         t: t,
@@ -964,7 +963,7 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
                         ),
                       );
 
-                if (isDesktop || kIsWeb) {
+                if (isDesktop || uiV2) {
                   return PageTitle(
                     title: m.fullName,
                     child: PublicPageFrame(
@@ -2099,7 +2098,7 @@ class _ProfileDesktopBodyV2State extends State<_ProfileDesktopBodyV2> {
         if (widget.signedIn && widget.model.userId.trim().isNotEmpty)
           FollowButton(userId: widget.model.userId, showCount: false),
         // Step 45: share the profile to the feed.
-        if (widget.signedIn && kIsWeb)
+        if (widget.signedIn && uiV2)
           OutlinedButton.icon(
             onPressed: busy
                 ? null

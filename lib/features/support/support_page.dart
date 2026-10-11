@@ -89,7 +89,7 @@ final telegramSupportLinkProvider = FutureProvider.autoDispose<bool>((
 /// web (v2).
 String _btnLabel(bool ru, String ruCaps, String enCaps) {
   final raw = ru ? ruCaps : enCaps;
-  if (!kIsWeb) return raw;
+  if (!uiV2) return raw;
   final lower = raw.toLowerCase();
   return lower[0].toUpperCase() + lower.substring(1);
 }
@@ -406,7 +406,7 @@ class SupportPage extends ConsumerWidget {
         .maybeWhen(data: (value) => value, orElse: () => false);
     final compact = MediaQuery.sizeOf(context).width < 720;
 
-    if (kIsWeb) {
+    if (uiV2) {
       return SettingsPageV2(
         title: ru ? 'Помощь и поддержка' : 'Help & support',
         subtitle: ru

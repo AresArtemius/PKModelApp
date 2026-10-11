@@ -8,6 +8,7 @@ import 'page_titles.dart';
 import 'roles_provider.dart';
 import 'router.dart';
 import 'supabase_provider.dart';
+import '../ui/brand/ui_mode.dart';
 
 const _authPaths = <String>{
   Routes.login,
@@ -53,7 +54,7 @@ const _adminPaths = <String>{
 
 /// Step 44: on the web a signed-in user lands on the feed; native apps keep
 /// the catalogue as the first screen.
-const String _homeAfterLogin = kIsWeb ? Routes.feed : Routes.search;
+const String _homeAfterLogin = uiV2 ? Routes.feed : Routes.search;
 
 final goRouterProvider = Provider<GoRouter>((ref) {
   final supabase = ref.watch(supabaseProvider);

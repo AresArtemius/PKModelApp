@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -65,7 +64,7 @@ class ProfileAnalyticsPage extends ConsumerWidget {
     final t = AppLocalizations.of(context)!;
     final async = ref.watch(profileAnalyticsProvider);
 
-    if (kIsWeb) {
+    if (uiV2) {
       final ru = Localizations.localeOf(context).languageCode == 'ru';
       return SettingsPageV2(
         title: ru ? 'Аналитика' : 'Analytics',
