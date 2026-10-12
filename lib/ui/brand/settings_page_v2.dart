@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../core/pop_or.dart';
+
 import 'design_tokens.dart';
 
 /// One template for the service pages (billing, support, devices, 2FA,
@@ -53,7 +55,7 @@ class SettingsPageV2 extends StatelessWidget {
                         child: Transform.translate(
                           offset: const Offset(-8, 0),
                           child: TextButton.icon(
-                            onPressed: onBack,
+                            onPressed: () => popOr(context, onBack),
                             icon: const Icon(Icons.arrow_back_rounded, size: 18),
                             label: Text(backLabel ?? ''),
                             style: TextButton.styleFrom(

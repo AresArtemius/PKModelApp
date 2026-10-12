@@ -36,6 +36,10 @@ String publicCastingLink(String castingId) {
   return _joinPublicPath('/castings?casting=${Uri.encodeQueryComponent(castingId)}');
 }
 
+String publicPostLink(String postId) {
+  return _joinPublicPath('/post/${Uri.encodeComponent(postId)}');
+}
+
 String publicAccountLink(String tag) {
   return _joinPublicPath('/@${Uri.encodeComponent(tag)}');
 }

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/admin_dashboard_counts_provider.dart';
+import '../../core/pop_or.dart';
 import '../../core/router.dart';
 import '../../ui/brand/brand_admin_header.dart';
 import '../../ui/brand/brand_theme.dart';
@@ -339,7 +340,7 @@ class AdminShellV2 extends ConsumerWidget {
               child: Transform.translate(
                 offset: const Offset(-8, 0),
                 child: TextButton.icon(
-                  onPressed: onBack,
+                  onPressed: () => popOr(context, onBack),
                   icon: const Icon(Icons.arrow_back_rounded, size: 18),
                   label: Text(ru ? 'Назад' : 'Back'),
                   style: TextButton.styleFrom(

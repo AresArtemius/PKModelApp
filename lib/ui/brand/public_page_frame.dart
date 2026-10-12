@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/app_top_bar.dart';
 import '../../core/auth_providers.dart';
+import '../../core/pop_or.dart';
 import '../../core/router.dart';
 import '../../gen_l10n/app_localizations.dart';
 import 'design_tokens.dart';
@@ -67,7 +68,7 @@ class PublicPageFrame extends ConsumerWidget {
                 children: [
                   if (onBack != null)
                     IconButton(
-                      onPressed: onBack,
+                      onPressed: () => popOr(context, onBack),
                       tooltip: backLabel,
                       style: IconButton.styleFrom(
                         foregroundColor: Tokens.textSecondary,

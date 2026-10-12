@@ -278,17 +278,25 @@ class _FeedTabs extends StatelessWidget {
 
 /// One post of the feed; also used on the author's public page (step 56).
 class FeedPostCard extends StatefulWidget {
-  const FeedPostCard({super.key, required this.post, required this.last});
+  const FeedPostCard({
+    super.key,
+    required this.post,
+    required this.last,
+    this.openComments = false,
+  });
 
   final FeedPost post;
   final bool last;
+
+  /// Post page: comments are open from the start.
+  final bool openComments;
 
   @override
   State<FeedPostCard> createState() => _PostCardState();
 }
 
 class _PostCardState extends State<FeedPostCard> {
-  bool _commentsOpen = false;
+  late bool _commentsOpen = widget.openComments;
 
   FeedPost get post => widget.post;
 
@@ -706,12 +714,10 @@ class _PostFooter extends ConsumerWidget {
     );
   }
 
-  /// Public page the post is about: the profile, the casting, or the author.
+  /// The post's own page (/post/:id); from there the author's account.
   static String? _shareLink(FeedPost post) {
-    if (post.profileId != null) return publicProfileLink(post.profileId!);
-    if (post.castingId != null) return publicCastingLink(post.castingId!);
-    if (post.authorTag.isNotEmpty) return publicAccountLink(post.authorTag);
-    return null;
+    if (post.id.isEmpty) return null;
+    return publicPostLink(post.id);
   }
 
   static void _toast(BuildContext context, String text) {

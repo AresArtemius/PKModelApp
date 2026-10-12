@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/pop_or.dart';
 import 'brand_theme.dart';
 import 'ui_constants.dart';
 
@@ -34,7 +35,7 @@ class BrandAdminHeader extends StatelessWidget {
             width: sideWidth,
             child: Center(
               child: IconButton(
-                onPressed: onBack,
+                onPressed: () => popOr(context, onBack),
                 icon: const Icon(Icons.arrow_back_rounded, color: kTextDark),
                 splashRadius: 22,
               ),
