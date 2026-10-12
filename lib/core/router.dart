@@ -54,6 +54,7 @@ import '../features/profile/account_mfa_page.dart';
 import '../features/profile/data_privacy_page.dart';
 import '../features/profile/public_account_profile_page.dart';
 import '../features/feed/feed_page.dart';
+import '../features/feed/post_page.dart';
 import '../features/feed/following_page.dart';
 import '../features/support/support_page.dart';
 import '../features/legal/legal_document_page.dart';
@@ -102,6 +103,8 @@ abstract class Routes {
 
   /// Step 44: the home feed (web). Nav index 5 in [AppShell].
   static const feed = '/feed';
+  static const postPrefix = '/post/';
+  static const post = '/post/:id';
   static const publicAccountPrefix = '/@';
   static const publicAccount = '/@:tag';
 
@@ -588,6 +591,12 @@ final List<RouteBase> appRoutes = [
     },
     pageBuilder: (context, state) =>
         _fadePage(state, ModelVideoPage(url: state.extra as String)),
+  ),
+
+  GoRoute(
+    path: Routes.post,
+    builder: (context, state) =>
+        PostPage(postId: state.pathParameters[_routeParamId] ?? ''),
   ),
 
   GoRoute(

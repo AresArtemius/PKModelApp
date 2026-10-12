@@ -158,13 +158,14 @@ class _RepostDialogState extends ConsumerState<_RepostDialog> {
               ),
             ),
             const SizedBox(height: Tokens.s8),
-            Row(
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   ru ? 'Кто увидит' : 'Visible to',
                   style: AppText.small.copyWith(color: Tokens.textSecondary),
                 ),
-                const SizedBox(width: Tokens.s12),
+                const SizedBox(height: Tokens.s8),
                 SegmentedButton<String>(
                   segments: [
                     ButtonSegment(
@@ -214,14 +215,20 @@ class _RepostDialogState extends ConsumerState<_RepostDialog> {
 /// Shows the result of a repost in a snackbar with a way to the feed.
 void showRepostDone(BuildContext context) {
   final ru = Localizations.localeOf(context).languageCode == 'ru';
-  ScaffoldMessenger.of(context)
+  final messenger = ScaffoldMessenger.of(context);
+  final router = GoRouter.of(context);
+  messenger
     ..hideCurrentSnackBar()
     ..showSnackBar(
       SnackBar(
         content: Text(ru ? 'Опубликовано в ленте' : 'Shared to your feed'),
+        duration: const Duration(seconds: 4),
         action: SnackBarAction(
           label: ru ? 'Открыть' : 'Open',
-          onPressed: () => context.go(Routes.feed),
+          onPressed: () {
+            messenger.hideCurrentSnackBar();
+            router.go(Routes.feed);
+          },
         ),
       ),
     );

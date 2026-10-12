@@ -69,7 +69,11 @@ class _FollowButtonState extends ConsumerState<FollowButton> {
         ScaffoldMessenger.of(this.context).showSnackBar(
           SnackBar(
             content: Text(
-              ru ? 'Не удалось изменить подписку' : 'Could not update the follow',
+              following
+                  ? (ru ? 'Не удалось отписаться' : 'Could not unfollow')
+                  : (ru
+                        ? 'Не удалось подписаться. Возможно, один из вас заблокировал другого.'
+                        : 'Could not follow. One of you may have blocked the other.'),
             ),
           ),
         );
