@@ -254,11 +254,12 @@ class _CommentRow extends StatelessWidget {
                   children: [
                     Flexible(
                       child: InkWell(
-                        onTap: comment.authorTag.isEmpty
-                            ? null
-                            : () => context.push(
-                                '${Routes.publicAccountPrefix}${comment.authorTag}',
-                              ),
+                        onTap: () => context.push(
+                          Routes.accountLocation(
+                            tag: comment.authorTag,
+                            userId: comment.authorId,
+                          ),
+                        ),
                         child: Text(
                           comment.displayAuthor(ru),
                           style: AppText.smallStrong,

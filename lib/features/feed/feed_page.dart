@@ -408,7 +408,7 @@ class _PostHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final canOpen = post.authorTag.isNotEmpty;
+    final canOpen = post.authorTag.isNotEmpty || post.authorId.isNotEmpty;
     final meta = <String>[
       if (post.authorTag.isNotEmpty) '@${post.authorTag}',
       feedRelativeTime(post.createdAt, ru),
@@ -417,7 +417,9 @@ class _PostHeader extends StatelessWidget {
 
     return InkWell(
       onTap: canOpen
-          ? () => context.push('${Routes.publicAccountPrefix}${post.authorTag}')
+          ? () => context.push(
+              Routes.accountLocation(tag: post.authorTag, userId: post.authorId),
+            )
           : null,
       borderRadius: BorderRadius.circular(Tokens.radiusSm),
       child: Row(
