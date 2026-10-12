@@ -1,107 +1,59 @@
-# PK Management: чек-лист запуска iOS и Android
+# PK Management: чек-лист запуска iOS (Android — после релиза на iPhone)
 
-Обновлено: 2026-08-01
+Обновлено: 2026-10-12. Этап 6 плана, шаги 57–66. Android (шаг 63) не начинаем до публикации в App Store.
 
-## Текущий результат аудита
+## Что уже сделано
 
-- `flutter analyze --no-pub`: ошибок нет.
-- iOS plist и entitlements: синтаксически валидны.
-- Мобильный responsive smoke на 390×844 и 360×800: стартовая страница, вход, регистрация, каталог и кастинги не имеют горизонтального переполнения или критически сломанной компоновки.
-- Брендовые иконки PK Management уже установлены для iOS и Android.
-- iOS использует bundle ID `com.artemkukhar.modelapp`, команду разработчика `89HUP535JN` и минимальную версию iOS 15.0.
-- Android приведён к тому же application ID `com.artemkukhar.modelapp`.
-- В Android release добавлены обязательные разрешения Internet, Camera, Record audio и Notifications.
-- В iOS добавлены понятные описания доступа к камере, медиатеке и микрофону, Background Mode для remote notifications и декларация стандартного шифрования.
-- Android release больше нельзя случайно собрать с debug-ключом: без локального `android/key.properties` release-сборка завершится понятной ошибкой.
+- Единый дизайн v2 на телефоне (`uiV2`), `kIsWeb` только для браузерных вещей и оплаты.
+- Лента, подписки, посты с камеры/галереи, комментарии, репосты, жалобы, страница поста `/post/:id`, страницы аккаунтов `/@tag` и `/u/:id`.
+- iOS подпись: Apple Individual-аккаунт Игоря (Team `8587NSJ32Z`), bundle `com.artemkukhar.modelapp`, automatic signing. Приложение «PK Management» создано в App Store Connect.
+- APNs key `7PP63T3352` загружен в Firebase `pkmanagementapp` (Development + Production); тестовый пуш приходит на iPhone.
+- TestFlight: внутренняя группа «Я и Рома», сборки 1.1.0 (3–7) загружены.
+- Магазинные ограничения: на телефоне нет цен, тарифов, ЮKassa и ссылок на оплату (billing_page, legal_documents `webOnly`).
+- Universal links подготовлены (AASA / assetlinks, entitlements, Caddy) — активируются переменной `APPLE_TEAM_ID` в GitHub и передеплоем веба.
+- Store-материалы: черновик `docs/store_listing.md`.
 
-## Блокеры до первой нативной сборки
+## Как собрать и залить сборку в TestFlight
 
-### На компьютере разработчика
-
-- [ ] Установить недостающие компоненты Xcode (`sudo xcodebuild -runFirstLaunch`), затем снова выполнить `flutter doctor -v`.
-- [ ] Установить Android Studio, Android SDK, platform-tools, emulator и JDK 17.
-- [ ] Создать минимум один Android-эмулятор актуальной версии и проверить его через `flutter devices`.
-- [ ] Убедиться, что Android SDK записан в `android/local.properties` как `sdk.dir=...`.
-
-### Android Firebase и push
-
-- [ ] В Firebase Console зарегистрировать Android-приложение `com.artemkukhar.modelapp` в том же проекте, где настроен iOS.
-- [ ] Скачать `google-services.json` и положить в `android/app/google-services.json`.
-- [ ] Подключить Google Services Gradle plugin после добавления файла.
-- [ ] Проверить получение FCM token, foreground/background push и переход по push в нужный экран.
-
-### Подпись Android
-
-- [x] Создать upload keystore и сохранить резервную копию вне репозитория.
-- [x] Создать локальный `android/key.properties` со значениями `storeFile`, `storePassword`, `keyAlias`, `keyPassword`.
-- [x] Не добавлять keystore и `key.properties` в Git.
-- [x] Собрать `flutter build appbundle --release` и проверить подпись AAB.
-
-### iOS signing и push
-
-- [ ] Проверить App ID `com.artemkukhar.modelapp` в Apple Developer.
-- [ ] Включить Push Notifications и Background Modes / Remote notifications для App ID и Runner target.
-- [ ] Загрузить APNs key в Firebase Console.
-- [ ] Собрать archive Release с distribution profile и загрузить в TestFlight.
-- [ ] Проверить push на реальном iPhone: симулятор не заменяет этот тест полностью.
-
-## Функциональный QA на обеих платформах
-
-- [ ] Первый запуск, splash, русский/английский язык, системные размеры шрифта.
-- [ ] Регистрация email и телефона, подтверждение, вход/выход, восстановление доступа.
-- [ ] Google/Apple sign-in и возврат через `modelapp://login-callback`.
-- [ ] Создание, редактирование и удаление анкеты; фото, камера, видео, голосовые сообщения и системные разрешения.
-- [ ] Модерация: realtime-обновление статуса и уведомление пользователю.
-- [ ] Каталог, обычный/расширенный поиск, карточка анкеты, фото-галерея и стрелки.
-- [ ] Кастинги: создание, просмотр, отклик, статусы, референсы, удаление.
-- [ ] Подборки и PDF: генерация, открытие модели, название файла и системный share/download.
-- [ ] Чаты: текст, копирование, редактирование, удаление у обоих участников, фото/файл/голосовое, push и unread badge.
-- [ ] Поддержка: приложение ↔ Telegram ↔ администратор, вложения, назначение оператора и непрочитанные.
-- [x] Тарифы: в iOS/Android отображаются только текущий статус и срок размещения; цены, выбор периода, ЮKassa и внешняя оплата скрыты. Web checkout, webhook, продление и скрытие анкеты после окончания продолжают работать отдельно.
-- [ ] Админка на телефоне: AdminGuard, модерация, предпросмотр анкеты, ручное размещение и восстановление отключённой анкеты.
-- [ ] Работа при медленной сети, без сети, после сворачивания/возврата и после принудительного закрытия приложения.
-
-## Визуальная матрица
-
-- [ ] iPhone SE / компактный экран.
-- [ ] iPhone 15/16/17 Pro и устройство с Dynamic Island.
-- [ ] iPhone Pro Max.
-- [ ] iPad portrait/landscape или официально отключить iPad, если планшетный интерфейс не готов.
-- [ ] Android 360×800.
-- [ ] Android 412×915.
-- [ ] Android с увеличенным шрифтом 130–150%.
-- [ ] Светлая и тёмная системная тема: приложение должно сохранять осознанный фирменный вид.
-- [ ] Клавиатура открыта: кнопки отправки/сохранения и активное поле остаются видимыми.
-- [ ] Камера, фото, системные диалоги разрешений и возврат из внешнего браузера.
-
-## Store-ready материалы и решения
-
-- [ ] Утвердить название, подзаголовок, описание, ключевые слова, категорию и возрастной рейтинг.
-- [ ] Подготовить store-скриншоты без тестовых анкет и чужих персональных данных.
-- [ ] Подготовить URL поддержки, Privacy Policy, Terms, удаление аккаунта и контакт для review.
-- [x] Добавить публичные стандарты безопасности детей для Google Play: `https://app.pk.management/#/child-safety`, встроенный канал жалоб по категории «Безопасность» и контакт `artem@president-kids.ru`.
-- [ ] Заполнить Apple App Privacy и Google Play Data safety по фактическим данным/SDK.
-- [ ] Добавить тестовый review-аккаунт и инструкцию, как проверить закрытые функции.
-- [x] Для первого store-релиза утверждена безопасная мобильная платёжная схема: iOS/Android не показывают цены, выбор срока, ЮKassa, внешние ссылки и призывы оплатить вне приложения. Мобильный экран показывает только статус и дату окончания; checkout остаётся только в web. Вызов платёжной Edge Function дополнительно заблокирован на уровне мобильного клиента.
-- [ ] Настроить universal/app links для `app.pk.management`, чтобы публичные ссылки и возврат оплаты открывали приложение, когда оно установлено.
-- [ ] Провести закрытый TestFlight и Google Play Internal testing минимум на двух реальных устройствах каждой платформы.
-
-## Команды финальной проверки
+Один раз: файл `~/Documents/pk-keys/supabase.env` с двумя строками `SUPABASE_URL=…` и `SUPABASE_ANON_KEY=…` (anon-ключ, не secret).
 
 ```bash
-flutter doctor -v
-flutter analyze
-flutter test
-flutter build ios --release --no-codesign \
-  --dart-define=SUPABASE_URL=... \
-  --dart-define=SUPABASE_ANON_KEY=...
-flutter build appbundle --release \
-  --dart-define=SUPABASE_URL=... \
-  --dart-define=SUPABASE_ANON_KEY=...
+git pull
+scripts/ios_release_build.sh --ipa
+open build/ios/archive/Runner.xcarchive
 ```
 
-Для Android release-сборки предпочтительно использовать
-`scripts/android_release_build.sh`: скрипт завершится с ошибкой, если обязательные
-клиентские параметры Supabase не переданы.
+Organizer → проверить номер сборки → Distribute App → App Store Connect → Upload. Номер сборки (`version:` в `pubspec.yaml`) поднимается в репозитории перед каждой загрузкой.
 
-Секреты service role, ЮKassa, Firebase Admin и Telegram никогда не передаются в клиентские `dart-define` и не включаются в IPA/AAB.
+## Осталось до Submit (шаги 62–65)
+
+- [ ] Полный прогон TestFlight-сборки по всем экранам (отчёт → правки одной пачкой → сборка 8).
+- [ ] Выполнить SQL: `feed_post_page.sql`, `account_profile_by_id.sql`, `feed_delete_post.sql` (в Supabase SQL Editor).
+- [ ] GitHub → Settings → Secrets and variables → Actions → Variables: `APPLE_TEAM_ID = 8587NSJ32Z`; GitHub Pages → Unpublish; передеплой веба; проверить, что ссылка `https://app.pk.management/p/<id>` открывает приложение.
+- [ ] Скриншоты 6.9″ (iPhone 17 Pro), 6 экранов по `docs/store_listing.md` § 6.
+- [ ] Review-аккаунт со статусом «Заказчик»; пароль только в App Store Connect.
+- [ ] Заполнить App Store Connect по `docs/store_listing.md` (описание, ключевые слова, рейтинг 17+, App Privacy, Review Notes).
+- [ ] Submit for Review; релиз вручную после одобрения.
+
+## Проверка пушей и ссылок (шаги 59–60, закрыть при прогоне)
+
+- [ ] Лайк с веба под другим аккаунтом → пуш на iPhone → тап открывает ленту.
+- [ ] Ссылка на анкету из мессенджера открывает приложение (после `APPLE_TEAM_ID` и деплоя).
+
+## После релиза (не блокирует)
+
+- 65а: автомодерация фото/видео (Yandex Vision), правила публикаций, подсветка в модерации.
+- Перевыпустить секретный ключ Supabase (`sb_secret_…` попал в чат 12.10).
+- Удалить `CNAME` в корне репозитория после отключения GitHub Pages.
+- Android: Play Console, keystore, `google-services.json` для проекта `pkmanagementapp`, `ANDROID_SHA256`.
+- In-App Purchase (Paid Apps Agreement, StoreKit) — если понадобится продавать внутри приложения.
+
+## Команды проверки
+
+```bash
+flutter analyze
+flutter test
+scripts/ios_release_build.sh --ipa
+```
+
+Секреты service role, ЮKassa, Firebase Admin и Telegram никогда не передаются в клиентские `dart-define` и не включаются в IPA.
