@@ -1991,6 +1991,7 @@ class _RejectReasonDialogState extends State<_RejectReasonDialog> {
               ),
               const SizedBox(height: 14),
               TextField(
+                textCapitalization: TextCapitalization.sentences,
                 controller: _commentC,
                 minLines: 2,
                 maxLines: 4,

@@ -202,13 +202,15 @@ final followServiceProvider = Provider<FollowService>((ref) {
 
 /// Followers / following / «do I follow» for an account; refreshed after
 /// every follow or unfollow through [followActionsProvider].
-final followCountsProvider = FutureProvider.autoDispose
+// Kept alive (not autoDispose): on invalidate the previous value stays
+// visible while the new one loads, so buttons and tabs do not flicker.
+final followCountsProvider = FutureProvider
     .family<FollowCounts, String>((ref, userId) {
       ref.watch(currentUserIdProvider);
       return ref.watch(followServiceProvider).counts(userId);
     });
 
-final followListProvider = FutureProvider.autoDispose
+final followListProvider = FutureProvider
     .family<List<FollowAccount>, String>((ref, direction) {
       ref.watch(currentUserIdProvider);
       return ref.watch(followServiceProvider).list(direction: direction);

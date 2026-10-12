@@ -1020,6 +1020,7 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
                 width: compact ? double.infinity : 360,
                 child: adminV2
                     ? TextField(
+                        textCapitalization: TextCapitalization.sentences,
                         controller: _searchC,
                         onChanged: (_) => setState(() {}),
                         style: AppText.body,
@@ -1037,6 +1038,7 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
                         ),
                       )
                     : TextField(
+                  textCapitalization: TextCapitalization.sentences,
                   controller: _searchC,
                   onChanged: (_) => setState(() {}),
                   decoration: InputDecoration(

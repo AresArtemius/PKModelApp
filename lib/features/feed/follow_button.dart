@@ -38,8 +38,16 @@ class _FollowButtonState extends ConsumerState<FollowButton> {
     final id = widget.userId.trim();
     if (id.isEmpty || id == me) return const SizedBox.shrink();
 
-    final counts =
-        ref.watch(followCountsProvider(id)).valueOrNull ?? FollowCounts.empty;
+    final countsAsync = ref.watch(followCountsProvider(id));
+    final counts = countsAsync.valueOrNull ?? FollowCounts.empty;
+    // Keep the optimistic state until fresh data agrees with it.
+    if (_optimistic != null &&
+        !_busy &&
+        countsAsync.hasValue &&
+        !countsAsync.isRefreshing &&
+        counts.iFollow == _optimistic) {
+      _optimistic = null;
+    }
     final following = _optimistic ?? counts.iFollow;
     final followers =
         counts.followers +
@@ -63,7 +71,7 @@ class _FollowButtonState extends ConsumerState<FollowButton> {
       if (!mounted) return;
       setState(() {
         _busy = false;
-        _optimistic = null;
+        if (!ok) _optimistic = null;
       });
       if (!ok && mounted) {
         ScaffoldMessenger.of(this.context).showSnackBar(

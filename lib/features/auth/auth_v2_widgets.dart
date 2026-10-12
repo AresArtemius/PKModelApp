@@ -203,24 +203,28 @@ class AuthConsentRow extends StatelessWidget {
             ),
           ),
         ),
+        // Documents as a tidy two-column list instead of a ragged line.
         Padding(
-          padding: const EdgeInsets.only(left: 34),
-          child: Wrap(
-            spacing: 2,
-            runSpacing: 0,
-            children: [
-              for (var i = 0; i < links.length; i++) ...[
-                _LegalLinkV2(
-                  label: links[i].$1,
-                  route: legalDocumentByKind(links[i].$2).route,
-                ),
-                if (i != links.length - 1)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 4),
-                    child: Text('·', style: TextStyle(color: Tokens.textTertiary)),
-                  ),
-              ],
-            ],
+          padding: const EdgeInsets.only(left: 34, top: 2),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final columns = constraints.maxWidth >= 420 ? 3 : 2;
+              final width = (constraints.maxWidth - 8 * (columns - 1)) / columns;
+              return Wrap(
+                spacing: 8,
+                runSpacing: 0,
+                children: [
+                  for (final link in links)
+                    SizedBox(
+                      width: width,
+                      child: _LegalLinkV2(
+                        label: link.$1,
+                        route: legalDocumentByKind(link.$2).route,
+                      ),
+                    ),
+                ],
+              );
+            },
           ),
         ),
         if (errorText != null)

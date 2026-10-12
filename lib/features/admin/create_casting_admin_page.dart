@@ -871,6 +871,7 @@ class _TextField extends StatelessWidget {
     if (flat) {
       // Theme inputs are already v2 (48 px, radius 10, grey border).
       return TextField(
+        textCapitalization: TextCapitalization.sentences,
         controller: controller,
         maxLines: maxLines,
         minLines: minLines,
@@ -889,6 +890,7 @@ class _TextField extends StatelessWidget {
       );
     }
     return TextField(
+      textCapitalization: TextCapitalization.sentences,
       controller: controller,
       maxLines: maxLines,
       style: adminBodyStyle(

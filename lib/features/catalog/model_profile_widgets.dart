@@ -1309,6 +1309,7 @@ class _ProfileInviteSheetState extends State<_ProfileInviteSheet> {
                 ),
                 const SizedBox(height: kGap8),
                 TextField(
+                  textCapitalization: TextCapitalization.sentences,
                   controller: _messageController,
                   minLines: 3,
                   maxLines: 5,

@@ -19,6 +19,8 @@ import '../../ui/brand/ui_constants.dart';
 import '../chat/chat_providers.dart';
 import '../feed/feed_page.dart' show AuthorPostsSection;
 import '../feed/follow_button.dart';
+import 'account_links.dart';
+import 'account_profiles_section.dart';
 
 const double _kPublicAccountMaxWidth = 760;
 const double _kPublicAccountAvatarSize = 104;
@@ -161,6 +163,17 @@ class PublicAccountProfile {
       socialUrl = '',
       bio = '';
 }
+
+IconData _linkIcon(AccountLinkKind kind) => switch (kind) {
+  AccountLinkKind.website => Icons.language_rounded,
+  AccountLinkKind.telegram => Icons.send_rounded,
+  AccountLinkKind.instagram => Icons.camera_alt_outlined,
+  AccountLinkKind.vk => Icons.groups_outlined,
+  AccountLinkKind.whatsapp => Icons.phone_outlined,
+  AccountLinkKind.youtube => Icons.play_circle_outline_rounded,
+  AccountLinkKind.tiktok => Icons.music_note_outlined,
+  AccountLinkKind.other => Icons.link_rounded,
+};
 
 class PublicAccountProfilePage extends ConsumerWidget {
   const PublicAccountProfilePage({super.key, required this.rawTag});
@@ -473,7 +486,11 @@ extension _PublicAccountV2 on PublicAccountProfilePage {
           final typeLabel = _accountTypeLabel(context, profile.accountType);
           final meta = [
             if (profile.accountTag.isNotEmpty) '@${profile.accountTag}',
-            typeLabel,
+            // «Участник» says nothing to a visitor — only real roles show.
+            if (typeLabel.isNotEmpty &&
+                registrationAccountTypeFromStorage(profile.accountType) !=
+                    RegistrationAccountType.user)
+              typeLabel,
             if (profile.locationLabel.isNotEmpty) profile.locationLabel,
           ].join(' · ');
           final subtitle = [
@@ -569,52 +586,77 @@ extension _PublicAccountV2 on PublicAccountProfilePage {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 24),
-                    Wrap(
-                      spacing: 10,
-                      runSpacing: 10,
+                    const SizedBox(height: 20),
+                    // Primary actions: two equal buttons on one line.
+                    Row(
                       children: [
-                        FilledButton.icon(
-                          onPressed: () => signedIn
-                              ? _startDirectChat(context, ref, profile)
-                              : context.go(
-                                  PublicPageFrame.loginWithReturn(context),
-                                ),
-                          style: FilledButton.styleFrom(
-                            minimumSize: const Size(0, Tokens.controlHeight),
-                            padding: const EdgeInsets.symmetric(horizontal: 20),
-                          ),
-                          icon: const Icon(
-                            Icons.chat_bubble_outline_rounded,
-                            size: 18,
-                          ),
-                          label: Text(
-                            signedIn
-                                ? (ru ? 'Написать' : 'Message')
-                                : (ru ? 'Войти, чтобы написать' : 'Sign in to message'),
-                          ),
-                        ),
-                        if (profile.userId.trim().isNotEmpty)
-                          FollowButton(userId: profile.userId),
-                        if (profile.website.isNotEmpty)
-                          OutlinedButton.icon(
-                            onPressed: () => open(profile.website),
-                            icon: const Icon(Icons.language_rounded, size: 18),
-                            label: Text(ru ? 'Сайт' : 'Website'),
-                          ),
-                        if (profile.socialUrl.isNotEmpty)
-                          OutlinedButton.icon(
-                            onPressed: () => open(profile.socialUrl),
+                        Expanded(
+                          child: FilledButton.icon(
+                            onPressed: () => signedIn
+                                ? _startDirectChat(context, ref, profile)
+                                : context.go(
+                                    PublicPageFrame.loginWithReturn(context),
+                                  ),
+                            style: FilledButton.styleFrom(
+                              minimumSize: const Size(0, Tokens.controlHeight),
+                            ),
                             icon: const Icon(
-                              Icons.alternate_email_rounded,
+                              Icons.chat_bubble_outline_rounded,
                               size: 18,
                             ),
-                            label: Text(ru ? 'Соцсети' : 'Social'),
+                            label: Text(
+                              signedIn
+                                  ? (ru ? 'Написать' : 'Message')
+                                  : (ru ? 'Войти' : 'Sign in'),
+                            ),
                           ),
+                        ),
+                        if (profile.userId.trim().isNotEmpty) ...[
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: FollowButton(
+                              userId: profile.userId,
+                              showCount: false,
+                            ),
+                          ),
+                        ],
                       ],
                     ),
+                    // Links: one button per network (parsed from the free
+                    // text), no second list below.
+                    Builder(
+                      builder: (context) {
+                        final links = parseAccountLinks(
+                          website: profile.website,
+                          social: profile.socialUrl,
+                          ru: ru,
+                        );
+                        if (links.isEmpty) return const SizedBox.shrink();
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 10),
+                          child: Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              for (final link in links)
+                                OutlinedButton.icon(
+                                  onPressed: () => open(link.url),
+                                  style: OutlinedButton.styleFrom(
+                                    minimumSize: const Size(0, 40),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 14,
+                                    ),
+                                  ),
+                                  icon: Icon(_linkIcon(link.kind), size: 18),
+                                  label: Text(link.label),
+                                ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
                     if (profile.bio.isNotEmpty) ...[
-                      const SizedBox(height: 32),
+                      const SizedBox(height: 28),
                       Text(
                         (ru ? 'Об аккаунте' : 'About').toUpperCase(),
                         style: AppText.label.copyWith(color: Tokens.textTertiary),
@@ -625,25 +667,9 @@ extension _PublicAccountV2 on PublicAccountProfilePage {
                         style: AppText.body.copyWith(fontSize: 17, height: 1.6),
                       ),
                     ],
-                    if (profile.website.isNotEmpty ||
-                        profile.socialUrl.isNotEmpty) ...[
-                      const SizedBox(height: 28),
-                      Text(
-                        (ru ? 'Ссылки' : 'Links').toUpperCase(),
-                        style: AppText.label.copyWith(color: Tokens.textTertiary),
-                      ),
-                      const SizedBox(height: 6),
-                      if (profile.website.isNotEmpty)
-                        SettingsRow(
-                          label: ru ? 'Сайт' : 'Website',
-                          value: profile.website,
-                        ),
-                      if (profile.socialUrl.isNotEmpty)
-                        SettingsRow(
-                          label: ru ? 'Соцсети' : 'Social',
-                          value: profile.socialUrl,
-                        ),
-                    ],
+                    // Profiles this account represents (models, actors…).
+                    if (profile.userId.trim().isNotEmpty)
+                      AccountProfilesSection(userId: profile.userId),
                     // Step 56: the account's posts, newest first.
                     if (profile.userId.trim().isNotEmpty) ...[
                       const SizedBox(height: 32),

@@ -1738,6 +1738,7 @@ Future<void> _editCandidateNote({
                     ),
                     const SizedBox(height: 12),
                     TextField(
+                      textCapitalization: TextCapitalization.sentences,
                       controller: controller,
                       minLines: 4,
                       maxLines: 8,
@@ -2309,6 +2310,7 @@ class _CastingResponsesV2State extends State<_CastingResponsesV2> {
               ),
               const SizedBox(height: 12),
               TextField(
+                textCapitalization: TextCapitalization.sentences,
                 controller: controller,
                 autofocus: true,
                 minLines: 3,

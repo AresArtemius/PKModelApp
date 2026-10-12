@@ -1913,6 +1913,7 @@ class _ClientFeedbackControlsState
           ),
           const SizedBox(height: 8),
           TextField(
+            textCapitalization: TextCapitalization.sentences,
             controller: _commentC,
             minLines: 1,
             maxLines: 3,
@@ -1979,6 +1980,7 @@ class _ClientFeedbackControlsState
           ),
           const SizedBox(height: 10),
           TextField(
+            textCapitalization: TextCapitalization.sentences,
             controller: _commentC,
             minLines: 1,
             maxLines: 3,

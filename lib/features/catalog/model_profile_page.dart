@@ -250,32 +250,36 @@ class ModelProfilePage extends ConsumerStatefulWidget {
 }
 
 class _AdminCatalogPreviewNotice extends StatelessWidget {
-  const _AdminCatalogPreviewNotice();
+  const _AdminCatalogPreviewNotice({required this.published});
+
+  /// Whether the profile is approved (visible in the catalogue) right now.
+  final bool published;
 
   @override
   Widget build(BuildContext context) {
     final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final color = published ? const Color(0xFF1B7F3B) : BrandTheme.redTop;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: BrandTheme.redTop.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: BrandTheme.redTop.withValues(alpha: 0.28)),
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.28)),
       ),
       child: Row(
         children: [
-          const Icon(Icons.visibility_rounded, color: BrandTheme.redTop),
-          const SizedBox(width: 12),
+          Icon(
+            published ? Icons.check_circle_outline_rounded : Icons.visibility_off_outlined,
+            color: color,
+            size: 20,
+          ),
+          const SizedBox(width: 10),
           Expanded(
             child: Text(
-              ru
-                  ? 'ПРЕДПРОСМОТР КАТАЛОГА — АНКЕТА ЕЩЁ НЕ ОБЯЗАТЕЛЬНО ОПУБЛИКОВАНА'
-                  : 'CATALOG PREVIEW — THIS PROFILE MAY NOT BE PUBLISHED YET',
-              style: _commandStyle(
-                fontSize: 12,
-                color: BrandTheme.redTop,
-                letterSpacing: 0.7,
-              ),
+              published
+                  ? (ru ? 'Предпросмотр · анкета опубликована' : 'Preview · profile is published')
+                  : (ru ? 'Предпросмотр · анкета не опубликована' : 'Preview · profile is not published'),
+              style: AppText.smallStrong.copyWith(color: color),
             ),
           ),
         ],
@@ -321,6 +325,8 @@ class _ProfileActionHistoryItem {
 }
 
 class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
+  /// Admin preview: whether the profile is approved right now.
+  bool _previewPublished = false;
   late Future<ModelVm?> _future;
   final GlobalKey _backKey = GlobalKey();
   bool _didInitFuture = false;
@@ -359,7 +365,9 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
     if (adminPreview) {
       if (!fromAdmin || !await ref.read(isAdminProvider.future)) return null;
       final row = await _loadAdminPreview(sb);
-      return row == null ? null : ModelVm.fromMap(row);
+      if (row == null) return null;
+      _previewPublished = (row['status'] ?? '').toString() == 'approved';
+      return ModelVm.fromMap(row);
     }
 
     if (!fromAdmin && token.isNotEmpty) {
@@ -907,7 +915,7 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
                         displayPhotoUrls: displayPhotoUrls,
                         coverAlignment: _profileCoverAlignmentFor(m),
                         adminNotice: adminPreview
-                            ? _AdminCatalogPreviewNotice()
+                            ? _AdminCatalogPreviewNotice(published: _previewPublished)
                             : null,
                         onBack: () => _back(isAdmin: isAdmin),
                         onOpenPhotos: (index) =>
@@ -946,7 +954,7 @@ class _ModelProfilePageState extends ConsumerState<ModelProfilePage> {
                             topBar,
                             gap,
                             if (adminPreview) ...[
-                              _AdminCatalogPreviewNotice(),
+                              _AdminCatalogPreviewNotice(published: _previewPublished),
                               gap,
                             ],
                             heroCard,

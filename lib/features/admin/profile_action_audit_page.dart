@@ -955,6 +955,7 @@ class _AuditTextFieldState extends State<_AuditTextField> {
   @override
   Widget build(BuildContext context) {
     return TextField(
+      textCapitalization: TextCapitalization.sentences,
       controller: _controller,
       onChanged: widget.onChanged,
       style: adminBodyStyle(size: 13, color: kTextDark),

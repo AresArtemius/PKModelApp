@@ -15,6 +15,7 @@ import '../castings/casting_model.dart';
 import '../castings/casting_project_stage.dart';
 import '../castings/castings_provider.dart';
 import '../catalog/agent_workspace.dart';
+import 'edit_text_dialog.dart';
 import 'feed_models.dart';
 import 'feed_service.dart';
 import 'feed_sidebar.dart';
@@ -494,6 +495,19 @@ class _PostMenu extends ConsumerWidget {
             if (sent && context.mounted) {
               toast(ru ? 'Жалоба отправлена' : 'Report sent');
             }
+          case 'edit':
+            final text = await showEditTextDialog(
+              context,
+              title: ru ? 'Редактировать пост' : 'Edit post',
+              initial: post.body,
+              maxLength: 4000,
+            );
+            if (text == null || !context.mounted) return;
+            try {
+              await ref.read(feedActionsProvider).editPost(post.id, text);
+            } catch (_) {
+              if (context.mounted) toast(ru ? 'Не получилось' : 'Failed');
+            }
           case 'delete':
             final ok = await showDialog<bool>(
               context: context,
@@ -521,6 +535,11 @@ class _PostMenu extends ConsumerWidget {
         }
       },
       itemBuilder: (_) => [
+        if (mine && post.kind != FeedPostKind.casting && post.kind != FeedPostKind.booked)
+          PopupMenuItem(
+            value: 'edit',
+            child: Text(ru ? 'Редактировать' : 'Edit', style: AppText.body),
+          ),
         if (!mine)
           PopupMenuItem(
             value: 'report',
@@ -549,10 +568,8 @@ class _KindLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (IconData, String)? spec = switch (kind) {
-      FeedPostKind.media => (
-        Icons.photo_outlined,
-        ru ? 'Новые фото' : 'New photos',
-      ),
+      // Media posts carry no marker — the photos speak for themselves.
+      FeedPostKind.media => null,
       FeedPostKind.casting => (
         Icons.videocam_outlined,
         ru ? 'Кастинг' : 'Casting',
@@ -1589,6 +1606,7 @@ class _AgentFolderPickerDialogState
               children: [
                 Expanded(
                   child: TextField(
+                    textCapitalization: TextCapitalization.sentences,
                     controller: _newFolder,
                     enabled: _busyId == null,
                     onSubmitted: (_) => _create(),

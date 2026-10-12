@@ -250,6 +250,7 @@ class _ChatSearchPanel extends StatelessWidget {
             const SizedBox(width: 8),
             Expanded(
               child: TextField(
+                textCapitalization: TextCapitalization.sentences,
                 controller: controller,
                 autofocus: true,
                 onChanged: onChanged,
@@ -317,6 +318,7 @@ class _ChatSearchPanel extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
             child: TextField(
+              textCapitalization: TextCapitalization.sentences,
               controller: controller,
               autofocus: true,
               onChanged: onChanged,

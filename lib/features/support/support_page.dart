@@ -1121,6 +1121,7 @@ class _SupportTicketDialogState extends ConsumerState<_SupportTicketDialog> {
             ),
             const SizedBox(height: 14),
             TextField(
+              textCapitalization: TextCapitalization.sentences,
               controller: _replyController,
               minLines: 2,
               maxLines: 4,
@@ -1300,12 +1301,14 @@ class _NewSupportTicketDialogState extends State<_NewSupportTicketDialog> {
             ),
             const SizedBox(height: 12),
             TextField(
+              textCapitalization: TextCapitalization.sentences,
               controller: _subject,
               maxLength: 160,
               decoration: InputDecoration(labelText: ru ? 'Тема' : 'Subject'),
             ),
             const SizedBox(height: 8),
             TextField(
+              textCapitalization: TextCapitalization.sentences,
               controller: _message,
               minLines: 4,
               maxLines: 7,

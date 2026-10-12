@@ -110,6 +110,27 @@ class FeedService {
     await _sb.from('post_comments').delete().eq('id', commentId);
   }
 
+  Future<void> editComment(String commentId, String body) async {
+    await _sb
+        .from('post_comments')
+        .update({
+          'body': body.trim(),
+          'edited_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', commentId);
+  }
+
+  /// Edits the text of an own post (media stays as it is).
+  Future<void> editPost(String postId, String body) async {
+    await _sb
+        .from('posts')
+        .update({
+          'body': body.trim(),
+          'edited_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', postId);
+  }
+
   Future<void> reportPost({
     required String postId,
     required String reason,
@@ -339,6 +360,16 @@ class FeedActions {
     await _ref.read(feedServiceProvider).addComment(postId, body);
     _patchAll(postId, (p) => p.copyWith(commentCount: p.commentCount + 1));
     _ref.invalidate(postCommentsProvider(postId));
+  }
+
+  Future<void> editComment(String postId, String commentId, String body) async {
+    await _ref.read(feedServiceProvider).editComment(commentId, body);
+    _ref.invalidate(postCommentsProvider(postId));
+  }
+
+  Future<void> editPost(String postId, String body) async {
+    await _ref.read(feedServiceProvider).editPost(postId, body);
+    _patchAll(postId, (p) => p.copyWith(body: body.trim()));
   }
 
   Future<void> deleteComment(String postId, String commentId) async {

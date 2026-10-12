@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/analytics_goals.dart';
 import '../../core/router.dart';
@@ -86,13 +87,13 @@ class _RepostDialogState extends ConsumerState<_RepostDialog> {
       });
       if (!mounted) return;
       Navigator.of(context).pop(true);
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
+      final detail = e is PostgrestException ? e.message : e.toString();
       setState(() {
         _busy = false;
-        _error = ru
-            ? 'Не удалось опубликовать. Попробуйте ещё раз.'
-            : 'Could not publish. Try again.';
+        _error =
+            '${ru ? 'Не удалось опубликовать' : 'Could not publish'}: $detail';
       });
     }
   }
@@ -147,6 +148,7 @@ class _RepostDialogState extends ConsumerState<_RepostDialog> {
             ),
             const SizedBox(height: Tokens.s16),
             TextField(
+              textCapitalization: TextCapitalization.sentences,
               controller: _caption,
               autofocus: true,
               minLines: 2,

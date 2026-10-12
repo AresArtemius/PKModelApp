@@ -1207,6 +1207,7 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
                             ),
                             const SizedBox(height: 10),
                             TextField(
+                              textCapitalization: TextCapitalization.sentences,
                               controller: _searchC,
                               onChanged: _onSearchChanged,
                               style: AppText.body,
