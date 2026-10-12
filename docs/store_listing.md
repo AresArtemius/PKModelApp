@@ -9,7 +9,7 @@
 | Название | PK Management | 30 |
 | Подзаголовок | Модели, актёры, кастинги | 30 |
 | Категория | Основная: Бизнес (Business). Дополнительная: Социальные сети (Social Networking) | — |
-| Возрастной рейтинг | 17+ (см. раздел 4) | — |
+| Возрастной рейтинг | 13+ (рассчитан новой анкетой, см. раздел 4) | — |
 | Цена | Бесплатно | — |
 | URL поддержки | https://app.pk.management/#/support | — |
 | URL маркетинга | https://app.pk.management | — |
@@ -95,7 +95,7 @@ Support: in the app (My account → Help & support) or artem@president-kids.ru.
 | User-Generated Content | **Yes** (лента, анкеты, чаты) |
 | Made for Kids | **No** |
 
-Итоговый рейтинг с такими ответами — 12+; в поле **Age Rating override** ставим **17+** вручную (решение от 12.10: честнее для UGC с модельным контентом).
+Итоговый рейтинг по новой анкете (13.10) — **13+**, переопределение не ставим (решение Артёма).
 
 ## 5. App Privacy (Data collection) — по фактическим SDK
 
@@ -156,7 +156,7 @@ Sign in with Apple is available on the login screen (iOS); email and phone sign-
 - [ ] Скриншоты 6.7″ загружены (6 шт.).
 - [ ] Название, подзаголовок, описание, ключевые слова, промо-текст заполнены (ru-RU основной, en-US добавить).
 - [ ] Категория Business / Social Networking.
-- [ ] Возрастной рейтинг заполнен, override 17+.
+- [x] Возрастной рейтинг заполнен, 13+ без переопределения.
 - [ ] App Privacy заполнен по таблице выше.
 - [ ] Review account `art@test.ru`: пароль введён в App Review Information, Notes вставлены.
 - [ ] Export Compliance: «не использует нестандартное шифрование» (HTTPS только) — ответ No.
