@@ -167,7 +167,12 @@ class AdminShellV2 extends ConsumerWidget {
     this.actions = const [],
     this.bodyPadding,
     this.headerBottom,
+    this.compact = false,
   });
+
+  /// Phone forms: one-line header (back + title), no subtitle, so the
+  /// content gets the screen.
+  final bool compact;
 
   final String title;
   final String? subtitle;
@@ -329,6 +334,46 @@ class AdminShellV2 extends ConsumerWidget {
     // With the side menu on screen a «Назад» link is noise; it stays for
     // the narrow layout where the menu is a strip.
     final onBack = wide ? null : this.onBack;
+    if (compact && !wide) {
+      final header = Padding(
+        padding: EdgeInsets.fromLTRB(8, 6, gutter, 0),
+        child: Row(
+          children: [
+            IconButton(
+              onPressed: () => popOr(context, onBack),
+              icon: const Icon(Icons.arrow_back_rounded),
+              color: Tokens.text,
+            ),
+            Expanded(
+              child: Text(
+                adminSentenceCase(title),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppText.h2,
+              ),
+            ),
+            ...actions,
+          ],
+        ),
+      );
+      return Scaffold(
+        backgroundColor: Tokens.bg,
+        body: SafeArea(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              header,
+              Expanded(
+                child: Padding(
+                  padding: bodyPadding ?? EdgeInsets.fromLTRB(gutter, 8, gutter, 0),
+                  child: body,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     final header = Padding(
       padding: EdgeInsets.fromLTRB(gutter, onBack == null ? 28 : 16, gutter, 0),
       child: Column(
