@@ -1,5 +1,9 @@
+import 'dart:convert';
+
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/supabase_provider.dart';
@@ -110,12 +114,64 @@ class AuthController {
     );
   }
 
-  Future<bool> signInWithApple() {
+  /// Web: Apple OAuth in the browser (needs the Services ID in Supabase).
+  Future<bool> signInWithAppleWeb() {
     return _sb.auth.signInWithOAuth(
       OAuthProvider.apple,
       redirectTo: authRedirectTo,
     );
   }
+
+  /// iOS: the native «Sign in with Apple» sheet; the identity token goes
+  /// straight to Supabase (no browser round-trip).
+  Future<AuthResponse> signInWithAppleNative() async {
+    final rawNonce = _sb.auth.generateRawNonce();
+    final hashedNonce = sha256.convert(utf8.encode(rawNonce)).toString();
+    final credential = await SignInWithApple.getAppleIDCredential(
+      scopes: [AppleIDAuthorizationScopes.email, AppleIDAuthorizationScopes.fullName],
+      nonce: hashedNonce,
+    );
+    final idToken = credential.identityToken;
+    if (idToken == null) {
+      throw const AuthException('Apple did not return an identity token');
+    }
+    final response = await _sb.auth.signInWithIdToken(
+      provider: OAuthProvider.apple,
+      idToken: idToken,
+      nonce: rawNonce,
+    );
+    // Apple sends the name only on the first sign-in — keep it.
+    final given = credential.givenName?.trim() ?? '';
+    final family = credential.familyName?.trim() ?? '';
+    final name = [given, family].where((p) => p.isNotEmpty).join(' ');
+    if (name.isNotEmpty) {
+      final current = (response.user?.userMetadata?['full_name'] ?? '')
+          .toString()
+          .trim();
+      if (current.isEmpty) {
+        try {
+          await _sb.auth.updateUser(UserAttributes(data: {'full_name': name}));
+        } catch (_) {
+          // Not critical.
+        }
+      }
+    }
+    return response;
+  }
+
+  /// Signed-in user adds Apple as another way to sign in (OAuth flow,
+  /// comes back through the app link).
+  Future<bool> linkApple() {
+    return _sb.auth.linkIdentity(
+      OAuthProvider.apple,
+      redirectTo: authRedirectTo,
+    );
+  }
+
+  Future<List<UserIdentity>> identities() => _sb.auth.getUserIdentities();
+
+  Future<void> unlinkIdentity(UserIdentity identity) =>
+      _sb.auth.unlinkIdentity(identity);
 
   Future<void> resendSignUpEmail(String email) {
     return _sb.auth.resend(

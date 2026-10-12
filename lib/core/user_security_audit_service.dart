@@ -21,6 +21,7 @@ class UserSecurityAuditEvent {
 
   static const loginEmail = 'login_email';
   static const loginPhone = 'login_phone';
+  static const loginApple = 'login_apple';
   static const emailChangeRequested = 'email_change_requested';
   static const phoneChanged = 'phone_changed';
   static const passwordChanged = 'password_changed';
