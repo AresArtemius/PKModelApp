@@ -1,0 +1,23 @@
+PK Management is a working platform for the modelling and advertising industry: models, actors, photographers, agencies and clients find each other, run castings and build selections in one place.
+
+FOR MODELS AND ACTORS
+• A profile with a portfolio: photos, videos, measurements, experience. Every profile is reviewed by moderators before it is published.
+• Profiles of minors are managed by a parent or legal guardian.
+• Castings: browse current projects, apply in one tap, follow the status.
+• Feed: post new work, follow colleagues and clients.
+• Chats with clients, voice messages, invitation notifications.
+
+FOR CLIENTS, CASTING DIRECTORS AND AGENCIES
+• A catalogue with filters by gender, age, height, measurements, city and experience.
+• Selections: shortlist candidates, share a link or a PDF with the client, collect feedback.
+• Castings: create projects, receive applications, invite candidates directly.
+• Comp cards as PDF in one tap.
+
+SAFETY
+• All profiles are moderated manually.
+• Report a profile, a post or a message from any screen; block users.
+• Separate rules and child-safety standards for minors: https://app.pk.management/#/child-safety
+
+The app is free. Listing a profile in the catalogue is a paid service purchased on app.pk.management; the app only shows the listing status and expiry date.
+
+Support: in the app (My account → Help & support) or artem@president-kids.ru.

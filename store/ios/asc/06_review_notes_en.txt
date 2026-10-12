@@ -1,0 +1,9 @@
+PK Management is a B2B platform for the modelling industry (models, actors, casting directors, agencies).
+
+How to test: sign in with the review account above (email + password). The catalogue, castings, feed and chats are available immediately. The review account has the "client" role, so you can also create a selection and apply to a casting.
+
+User-generated content: every model profile is reviewed by a human moderator before it becomes visible. Posts, comments and chat messages can be reported from the "..." menu; users can be blocked from the account page. Reported content is reviewed and removed within 24 hours; the moderation team is reachable at artem@president-kids.ru. Child-safety standards: https://app.pk.management/#/child-safety
+
+Payments: listing a profile in the catalogue is a service purchased on our website; the iOS app does not sell anything and does not show prices or links to purchase. It only shows the current listing status.
+
+Sign in with Apple is available on the login screen; email and phone sign-in are also available. The review account uses email sign-in.
