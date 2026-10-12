@@ -1,6 +1,6 @@
 # PK Management — материалы для App Store (шаг 64)
 
-Обновлено: 2026-10-12. Черновик для проверки; после правок переносим в App Store Connect.
+Обновлено: 2026-10-12 (после сборки 8). Переносим в App Store Connect на шаге 64.
 
 ## 1. Карточка приложения
 
@@ -134,12 +134,7 @@ SDK в сборке: Supabase (auth, база, storage), Firebase Cloud Messagin
 
 ## 8. Информация для App Review
 
-**Review account** (создать отдельно, роль «Заказчик», одобренная тестовая анкета у второго аккаунта):
-
-```
-Login:    review@pk.management   (создать)
-Password: (сгенерировать, передать только в App Store Connect → App Review Information)
-```
+**Review account:** `art@test.ru` (существующий тестовый аккаунт). Пароль — только в App Store Connect → App Information → App Review Information → Sign-in required; в документы и чат не копируем.
 
 **Notes for the reviewer (en):**
 
@@ -151,19 +146,19 @@ User-generated content: every model profile is reviewed by a human moderator bef
 
 Payments: listing a profile in the catalogue is a service purchased on our website; the iOS app does not sell anything and does not show prices or links to purchase — it only shows the current listing status.
 
-Sign in with Apple is not offered because the app does not offer third-party social sign-in (email/phone only).
+Sign in with Apple is available on the login screen (iOS); email and phone sign-in are also available. The review account above uses email sign-in.
 
 **Contact:** Artem Kukhar, artem@president-kids.ru, +7 925 507-86-93.
 
 ## 9. Чеклист перед Submit
 
-- [ ] Сборка с номером ≥ 7 обработана и выбрана в версии 1.1.0.
+- [ ] Сборка 8 (1.1.0+8) обработана и выбрана в версии 1.1.0.
 - [ ] Скриншоты 6.7″ загружены (6 шт.).
 - [ ] Название, подзаголовок, описание, ключевые слова, промо-текст заполнены (ru-RU основной, en-US добавить).
 - [ ] Категория Business / Social Networking.
 - [ ] Возрастной рейтинг заполнен, override 17+.
 - [ ] App Privacy заполнен по таблице выше.
-- [ ] Review account создан, пароль введён в App Review Information, Notes вставлены.
+- [ ] Review account `art@test.ru`: пароль введён в App Review Information, Notes вставлены.
 - [ ] Export Compliance: «не использует нестандартное шифрование» (HTTPS только) — ответ No.
 - [ ] Content Rights: приложение содержит контент третьих лиц (фото пользователей) — «Yes, I have the rights» (согласие по Условиям).
 - [ ] Release: Manually release this version (чтобы выпустить после ревью вручную).
