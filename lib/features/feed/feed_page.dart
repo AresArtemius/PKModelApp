@@ -87,6 +87,7 @@ class _FeedPageState extends ConsumerState<FeedPage> {
       child: ListView.builder(
         controller: _scroll,
         physics: const AlwaysScrollableScrollPhysics(),
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: EdgeInsets.only(
           top: twoColumns ? Tokens.s24 : Tokens.s8,
           bottom: Tokens.s48,

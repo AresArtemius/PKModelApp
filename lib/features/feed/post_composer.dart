@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -328,6 +329,12 @@ class _PostComposerState extends ConsumerState<PostComposer> {
       }
 
       if (!mounted) return;
+      // Drop the keyboard first, then collapse: unfocusing after the
+      // rebuild left the keyboard open on iOS.
+      _focus.unfocus();
+      FocusManager.instance.primaryFocus?.unfocus();
+      await SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
+      if (!mounted) return;
       setState(() {
         _text.clear();
         _photos.clear();
@@ -336,7 +343,6 @@ class _PostComposerState extends ConsumerState<PostComposer> {
         _busy = false;
         _progress = 0;
       });
-      _focus.unfocus();
       reachGoal(Goals.feedPost, {'photos': uploaded.length});
       await ref.read(feedControllerProvider('home').notifier).refresh();
       widget.onPublished?.call();
@@ -517,6 +523,7 @@ class _PostComposerState extends ConsumerState<PostComposer> {
                     TextButton(
                       onPressed: () {
                         _focus.unfocus();
+                        FocusManager.instance.primaryFocus?.unfocus();
                         setState(() => _expanded = false);
                       },
                       child: Text(ru ? 'Отмена' : 'Cancel'),
