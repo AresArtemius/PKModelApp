@@ -13,17 +13,19 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  // The test MaterialApp has no locale → English copy (ru is a runtime
+  // choice via Localizations.localeOf).
   testWidgets('landing preview renders on desktop', (tester) async {
     await pumpLanding(tester, size: const Size(1280, 720));
 
-    expect(find.text('ТАЛАНТЫ. КАСТИНГИ. НОВЫЕ ВОЗМОЖНОСТИ.'), findsOneWidget);
+    expect(find.text('TALENT. CASTINGS. NEW OPPORTUNITIES.'), findsOneWidget);
     expect(find.text('PK MANAGEMENT'), findsOneWidget);
   });
 
   testWidgets('landing preview renders on mobile', (tester) async {
     await pumpLanding(tester, size: const Size(390, 844));
 
-    expect(find.text('СОЗДАТЬ АНКЕТУ'), findsOneWidget);
-    expect(find.text('РАЗМЕСТИТЬ КАСТИНГ'), findsOneWidget);
+    expect(find.text('CREATE A PROFILE'), findsOneWidget);
+    expect(find.text('POST A CASTING'), findsOneWidget);
   });
 }
