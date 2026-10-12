@@ -4,6 +4,7 @@
 
 ## Что уже сделано
 
+- Sign in with Apple (ключ `75AW7X2H27`, Services ID `management.pk.app.signin`; секрет Supabase истекает ≈ 12.04.2027 — перевыпустить заранее).
 - Единый дизайн v2 на телефоне (`uiV2`), `kIsWeb` только для браузерных вещей и оплаты.
 - Лента, подписки, посты с камеры/галереи, комментарии, репосты, жалобы, страница поста `/post/:id`, страницы аккаунтов `/@tag` и `/u/:id`.
 - iOS подпись: Apple Individual-аккаунт Игоря (Team `8587NSJ32Z`), bundle `com.artemkukhar.modelapp`, automatic signing. Приложение «PK Management» создано в App Store Connect.
@@ -27,11 +28,12 @@ Organizer → проверить номер сборки → Distribute App → 
 
 ## Осталось до Submit (шаги 62–65)
 
-- [ ] Полный прогон TestFlight-сборки по всем экранам (отчёт → правки одной пачкой → сборка 8).
-- [ ] Выполнить SQL: `feed_post_page.sql`, `account_profile_by_id.sql`, `feed_delete_post.sql` (в Supabase SQL Editor).
-- [ ] GitHub → Settings → Secrets and variables → Actions → Variables: `APPLE_TEAM_ID = 8587NSJ32Z`; GitHub Pages → Unpublish; передеплой веба; проверить, что ссылка `https://app.pk.management/p/<id>` открывает приложение.
-- [ ] Скриншоты 6.9″ (iPhone 17 Pro), 6 экранов по `docs/store_listing.md` § 6.
-- [ ] Review-аккаунт со статусом «Заказчик»; пароль только в App Store Connect.
+- [x] Полный прогон TestFlight-сборки, правки четырьмя пачками, сборка 8 (1.1.0+8) с Sign in with Apple.
+- [x] SQL выполнен: `feed_post_page.sql`, `account_profile_by_id.sql`, `feed_delete_post.sql`, `smoke_batch1.sql`, `casting_extra_info.sql`, `smoke_batch4.sql`.
+- [x] `APPLE_TEAM_ID` задан, AASA отдаётся с `/p/*`, `/@*`, `/u/*`, `/post/*`.
+- [ ] Проверить на сборке 8: репост, вход по телефону, вход через Apple, ссылка на анкету открывает приложение.
+- [ ] Скриншоты 6.9″ (iPhone 17 Pro), 6 экранов по `docs/store_listing.md` § 6 (без «Тестовый кастинг» и тестовых анкет).
+- [x] Review-аккаунт `art@test.ru`; пароль только в App Store Connect.
 - [ ] Заполнить App Store Connect по `docs/store_listing.md` (описание, ключевые слова, рейтинг 17+, App Privacy, Review Notes).
 - [ ] Submit for Review; релиз вручную после одобрения.
 
