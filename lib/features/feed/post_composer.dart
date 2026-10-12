@@ -463,71 +463,88 @@ class _PostComposerState extends ConsumerState<PostComposer> {
           ],
           if (_expanded || _photos.isNotEmpty || _video != null) ...[
             const SizedBox(height: Tokens.s8),
-            Row(
-              children: [
-                Tooltip(
-                  message: ru ? 'Добавить фото' : 'Add photos',
-                  child: IconButton(
-                    onPressed:
-                        _busy || _photos.length >= PostComposer.maxPhotos
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final narrow = constraints.maxWidth < 480;
+                final media = [
+                  Tooltip(
+                    message: ru ? 'Добавить фото' : 'Add photos',
+                    child: IconButton(
+                      onPressed:
+                          _busy || _photos.length >= PostComposer.maxPhotos
+                          ? null
+                          : _pickPhotos,
+                      icon: const Icon(Icons.add_photo_alternate_outlined),
+                      color: Tokens.textSecondary,
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
+                  Tooltip(
+                    message: ru ? 'Добавить видео' : 'Add a video',
+                    child: IconButton(
+                      onPressed: _busy || _video != null ? null : _pickVideo,
+                      icon: const Icon(Icons.videocam_outlined),
+                      color: Tokens.textSecondary,
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
+                  const SizedBox(width: Tokens.s4),
+                  SegmentedButton<String>(
+                    segments: [
+                      ButtonSegment(
+                        value: 'public',
+                        icon: const Icon(Icons.public_rounded, size: 16),
+                        label: Text(ru ? 'Все' : 'Everyone'),
+                      ),
+                      ButtonSegment(
+                        value: 'followers',
+                        icon: const Icon(Icons.people_outline_rounded, size: 16),
+                        label: Text(ru ? 'Подписчики' : 'Followers'),
+                      ),
+                    ],
+                    selected: {_visibility},
+                    showSelectedIcon: false,
+                    style: const ButtonStyle(
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    onSelectionChanged: _busy
                         ? null
-                        : _pickPhotos,
-                    icon: const Icon(Icons.add_photo_alternate_outlined),
-                    color: Tokens.textSecondary,
-                    visualDensity: VisualDensity.compact,
+                        : (v) => setState(() => _visibility = v.first),
                   ),
-                ),
-                Tooltip(
-                  message: ru ? 'Добавить видео' : 'Add a video',
-                  child: IconButton(
-                    onPressed: _busy || _video != null ? null : _pickVideo,
-                    icon: const Icon(Icons.videocam_outlined),
-                    color: Tokens.textSecondary,
-                    visualDensity: VisualDensity.compact,
+                ];
+                final actions = [
+                  if (!_busy && _text.text.isEmpty && _photos.isEmpty && _video == null)
+                    TextButton(
+                      onPressed: () {
+                        _focus.unfocus();
+                        setState(() => _expanded = false);
+                      },
+                      child: Text(ru ? 'Отмена' : 'Cancel'),
+                    ),
+                  const SizedBox(width: Tokens.s4),
+                  FilledButton(
+                    onPressed: _canPublish ? _publish : null,
+                    child: Text(
+                      _busy
+                          ? (ru ? 'Публикуем…' : 'Publishing…')
+                          : (ru ? 'Опубликовать' : 'Publish'),
+                    ),
                   ),
-                ),
-                const SizedBox(width: Tokens.s4),
-                SegmentedButton<String>(
-                  segments: [
-                    ButtonSegment(
-                      value: 'public',
-                      icon: const Icon(Icons.public_rounded, size: 16),
-                      label: Text(ru ? 'Все' : 'Everyone'),
-                    ),
-                    ButtonSegment(
-                      value: 'followers',
-                      icon: const Icon(Icons.people_outline_rounded, size: 16),
-                      label: Text(ru ? 'Подписчики' : 'Followers'),
-                    ),
+                ];
+                if (!narrow) {
+                  return Row(children: [...media, const Spacer(), ...actions]);
+                }
+                // Phone: media + visibility on one line, publish on its own
+                // line so the button never gets pushed off-screen.
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(children: media),
+                    const SizedBox(height: Tokens.s8),
+                    Row(mainAxisAlignment: MainAxisAlignment.end, children: actions),
                   ],
-                  selected: {_visibility},
-                  showSelectedIcon: false,
-                  style: const ButtonStyle(
-                    visualDensity: VisualDensity.compact,
-                  ),
-                  onSelectionChanged: _busy
-                      ? null
-                      : (v) => setState(() => _visibility = v.first),
-                ),
-                const Spacer(),
-                if (!_busy && _text.text.isEmpty && _photos.isEmpty && _video == null)
-                  TextButton(
-                    onPressed: () {
-                      _focus.unfocus();
-                      setState(() => _expanded = false);
-                    },
-                    child: Text(ru ? 'Отмена' : 'Cancel'),
-                  ),
-                const SizedBox(width: Tokens.s4),
-                FilledButton(
-                  onPressed: _canPublish ? _publish : null,
-                  child: Text(
-                    _busy
-                        ? (ru ? 'Публикуем…' : 'Publishing…')
-                        : (ru ? 'Опубликовать' : 'Publish'),
-                  ),
-                ),
-              ],
+                );
+              },
             ),
           ],
         ],
