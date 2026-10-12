@@ -200,7 +200,9 @@ begin
     end if;
 
     update auth.users
-    set phone = v_requested_phone,
+    -- GoTrue stores phones as digits only (no «+»); keep the same shape or
+    -- phone + password sign-in will not find the user.
+    set phone = regexp_replace(v_requested_phone, '[^0-9]', '', 'g'),
         phone_confirmed_at = coalesce(phone_confirmed_at, now()),
         updated_at = now()
     where id = v_request.requester_user_id;
@@ -386,7 +388,7 @@ begin
   end if;
 
   update auth.users
-  set phone = v_phone,
+  set phone = regexp_replace(v_phone, '[^0-9]', '', 'g'),
       phone_confirmed_at = coalesce(phone_confirmed_at, now()),
       updated_at = now()
   where id = v_target_user_id;

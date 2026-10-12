@@ -32,7 +32,7 @@ create policy "posts_insert_own"
       repost_of is null
       or exists (
         select 1 from public.posts src
-        where src.id = repost_of
+        where src.id = posts.repost_of
           and src.deleted_at is null
           and public.feed_post_visible(src)
       )
