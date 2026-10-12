@@ -78,7 +78,12 @@ class PublicPageFrame extends ConsumerWidget {
                   else
                     const SizedBox(width: 8),
                   InkWell(
-                    onTap: () => context.go(Routes.castings),
+                    onTap: () {
+                      while (context.canPop()) {
+                        context.pop();
+                      }
+                      context.go(Routes.castings);
+                    },
                     borderRadius: BorderRadius.circular(Tokens.radiusSm),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
@@ -119,7 +124,14 @@ class PublicPageFrame extends ConsumerWidget {
                     )
                   else
                     TextButton(
-                      onPressed: () => context.go(Routes.search),
+                      onPressed: () {
+                        // Leave the pushed page first, then switch the
+                        // shell — otherwise both animate at once.
+                        while (context.canPop()) {
+                          context.pop();
+                        }
+                        context.go(Routes.search);
+                      },
                       style: TextButton.styleFrom(
                         foregroundColor: Tokens.textSecondary,
                       ),
