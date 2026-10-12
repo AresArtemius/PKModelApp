@@ -353,7 +353,10 @@ class MyProfilePage extends ConsumerWidget {
   ) {
     ProfileMediaUploadTask? latestUpload(String profileId) {
       for (final task in uploads.reversed) {
-        if (task.profileId == profileId) return task;
+        if (task.profileId != profileId) continue;
+        // Finished uploads need no status line on the card.
+        if (task.status == ProfileMediaUploadStatus.completed) return null;
+        return task;
       }
       return null;
     }
@@ -557,7 +560,10 @@ class MyProfilePage extends ConsumerWidget {
 
     ProfileMediaUploadTask? latestUpload(String profileId) {
       for (final task in uploads.reversed) {
-        if (task.profileId == profileId) return task;
+        if (task.profileId != profileId) continue;
+        // Finished uploads need no status line on the card.
+        if (task.status == ProfileMediaUploadStatus.completed) return null;
+        return task;
       }
       return null;
     }
