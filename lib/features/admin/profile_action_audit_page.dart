@@ -183,11 +183,48 @@ class _ProfileActionAuditPageState
     final width = MediaQuery.sizeOf(context).width;
     final isWide = width >= 980;
 
+    final narrow = width < 700;
+    final narrowData = logsAsync.valueOrNull;
+    final narrowLogs = narrow && narrowData != null
+        ? _filtered(narrowData.items)
+        : const <AuditLogItem>[];
+    final hasFilters =
+        _scope != AuditLogScope.all ||
+        _filter != ProfileActionLogType.all ||
+        _query.trim().isNotEmpty ||
+        _actorQuery.trim().isNotEmpty ||
+        _profileQuery.trim().isNotEmpty ||
+        _dateFrom != null ||
+        _dateTo != null;
+
     return AdminPageScaffold(
-      title: isRu ? 'ЖУРНАЛ ДЕЙСТВИЙ' : 'ACTION AUDIT LOG',
+      title: isRu ? 'Журнал действий' : 'Action log',
       subtitle: isRu ? 'История действий администраторов' : 'Admin history',
       onBack: () => context.go(Routes.admin),
       headerGap: 14,
+      // Phone: the toolbar icons move to the one-line shell header.
+      actions: narrow
+          ? [
+              IconButton(
+                tooltip: isRu ? 'Скопировать CSV' : 'Copy CSV',
+                onPressed: narrowLogs.isEmpty
+                    ? null
+                    : () => _copyCsv(narrowLogs, isRu),
+                style: IconButton.styleFrom(
+                  foregroundColor: Tokens.textSecondary,
+                ),
+                icon: const Icon(Icons.content_copy_rounded, size: 20),
+              ),
+              IconButton(
+                tooltip: isRu ? 'Сбросить фильтры' : 'Clear filters',
+                onPressed: hasFilters ? _clearFilters : null,
+                style: IconButton.styleFrom(
+                  foregroundColor: Tokens.textSecondary,
+                ),
+                icon: const Icon(Icons.filter_alt_off_outlined, size: 20),
+              ),
+            ]
+          : const [],
       children: [
               Expanded(
                 child: isAdminAsync.when(
@@ -201,7 +238,7 @@ class _ProfileActionAuditPageState
                   data: (isAdmin) {
                     if (!isAdmin) {
                       return AdminMessageCard(
-                        text: isRu ? 'ТОЛЬКО ДЛЯ АДМИНА' : 'ADMIN ONLY',
+                        text: isRu ? 'Только для админа' : 'Admin only',
                         isError: true,
                         maxWidth: 720,
                       );
@@ -229,6 +266,44 @@ class _ProfileActionAuditPageState
                         final selectedVisibleIds = _selectedAuditIds
                             .intersection(visibleIds);
                         final selected = _selected(logs);
+                        if (narrow) {
+                          // Phone: everything — the toolbar, the selection
+                          // line and the rows — is one scrolling list, so
+                          // the page never runs out of room.
+                          return _AuditNarrowBody(
+                            isRu: isRu,
+                            logs: logs,
+                            scope: _scope,
+                            filter: _filter,
+                            query: _query,
+                            dateFrom: _dateFrom,
+                            dateTo: _dateTo,
+                            selectedIds: _selectedAuditIds,
+                            selectedVisibleCount: selectedVisibleIds.length,
+                            allSelected:
+                                logs.isNotEmpty &&
+                                selectedVisibleIds.length == logs.length,
+                            isDeleting: _isDeletingSelectedAudit,
+                            onScopeChanged: _setScope,
+                            onTypeChanged: _setFilter,
+                            onQueryChanged: (value) =>
+                                setState(() => _query = value),
+                            onPickDateFrom: () => _pickDate(isFrom: true),
+                            onPickDateTo: () => _pickDate(isFrom: false),
+                            onSelectAll: () => _selectVisibleAuditLogs(logs),
+                            onClearSelection: _clearAuditSelection,
+                            onDeleteSelected:
+                                selectedVisibleIds.isEmpty ||
+                                    _isDeletingSelectedAudit
+                                ? null
+                                : () => _deleteSelectedAuditLogs(
+                                    selectedVisibleIds,
+                                    isRu,
+                                  ),
+                            onOpen: (entry) => _showDetails(entry, isRu),
+                            onToggle: _toggleAuditLogSelection,
+                          );
+                        }
                         if (logs.isEmpty) {
                           return _AuditPanel(
                             child: Column(
@@ -261,7 +336,7 @@ class _ProfileActionAuditPageState
                                 ),
                                 const Spacer(),
                                 AdminMessageCard(
-                                  text: isRu ? 'ДЕЙСТВИЙ НЕТ' : 'NO ACTIONS',
+                                  text: isRu ? 'Действий нет' : 'No actions',
                                   maxWidth: 520,
                                 ),
                                 const Spacer(),
@@ -470,7 +545,8 @@ class _ProfileActionAuditPageState
           if (query.isEmpty) return true;
           final haystack =
               '${item.title} ${item.description} ${item.actionType} ${item.status} '
-                      '${item.relatedTable} ${item.relatedText} ${item.templateBody} ${item.metadata}'
+                      '${item.relatedTable} ${item.relatedText} ${item.templateBody} ${item.metadata} '
+                      '${item.actorLabel} ${item.actorUserId} ${item.profileId} ${item.relatedId}'
                   .toLowerCase();
           return haystack.contains(query);
         })
@@ -626,12 +702,12 @@ class _ProfileActionAuditPageState
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: Text(isRu ? 'ОТМЕНА' : 'CANCEL'),
+            child: Text(isRu ? 'Отмена' : 'Cancel'),
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
             child: Text(
-              isRu ? 'УДАЛИТЬ' : 'DELETE',
+              isRu ? 'Удалить' : 'Delete',
               style: const TextStyle(color: BrandTheme.redTop),
             ),
           ),
@@ -694,6 +770,31 @@ class _ProfileActionAuditPageState
   }
 
   void _showDetails(AuditLogItem entry, bool isRu) {
+    if (adminV2) {
+      showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Tokens.bg,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(Tokens.radiusLg),
+          ),
+        ),
+        builder: (sheetContext) => SafeArea(
+          top: false,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.85,
+            ),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+              child: _AuditDetails(entry: entry, isRu: isRu),
+            ),
+          ),
+        ),
+      );
+      return;
+    }
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -709,6 +810,353 @@ class _ProfileActionAuditPageState
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+enum _AuditBulkActionV2 { selectAll, clearSelection, delete }
+
+/// Phone layout: one scrolling list — search, a chip row of filters, the
+/// selection line and the rows.
+class _AuditNarrowBody extends StatelessWidget {
+  const _AuditNarrowBody({
+    required this.isRu,
+    required this.logs,
+    required this.scope,
+    required this.filter,
+    required this.query,
+    required this.dateFrom,
+    required this.dateTo,
+    required this.selectedIds,
+    required this.selectedVisibleCount,
+    required this.allSelected,
+    required this.isDeleting,
+    required this.onScopeChanged,
+    required this.onTypeChanged,
+    required this.onQueryChanged,
+    required this.onPickDateFrom,
+    required this.onPickDateTo,
+    required this.onSelectAll,
+    required this.onClearSelection,
+    required this.onDeleteSelected,
+    required this.onOpen,
+    required this.onToggle,
+  });
+
+  final bool isRu;
+  final List<AuditLogItem> logs;
+  final AuditLogScope scope;
+  final ProfileActionLogType filter;
+  final String query;
+  final DateTime? dateFrom;
+  final DateTime? dateTo;
+  final Set<String> selectedIds;
+  final int selectedVisibleCount;
+  final bool allSelected;
+  final bool isDeleting;
+  final ValueChanged<AuditLogScope> onScopeChanged;
+  final ValueChanged<ProfileActionLogType> onTypeChanged;
+  final ValueChanged<String> onQueryChanged;
+  final VoidCallback onPickDateFrom;
+  final VoidCallback onPickDateTo;
+  final VoidCallback onSelectAll;
+  final VoidCallback onClearSelection;
+  final VoidCallback? onDeleteSelected;
+  final ValueChanged<AuditLogItem> onOpen;
+  final ValueChanged<AuditLogItem> onToggle;
+
+  String _scopeLabel(AuditLogScope value) => switch (value) {
+    AuditLogScope.all => isRu ? 'Все' : 'All',
+    AuditLogScope.profile => isRu ? 'Профили' : 'Profiles',
+    AuditLogScope.admin => isRu ? 'Админка' : 'Back office',
+  };
+
+  String _typeLabel(ProfileActionLogType type) => switch (type) {
+    ProfileActionLogType.all => isRu ? 'Все типы' : 'All types',
+    ProfileActionLogType.invite => isRu ? 'Приглашения' : 'Invites',
+    ProfileActionLogType.selection => isRu ? 'Подборки' : 'Selections',
+    ProfileActionLogType.folder => isRu ? 'Папки' : 'Folders',
+    ProfileActionLogType.message => isRu ? 'Чат' : 'Chat',
+  };
+
+  String _shortDate(DateTime? value) {
+    if (value == null) return '';
+    return '${value.day.toString().padLeft(2, '0')}.${value.month.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final chips = <Widget>[
+      for (final value in AuditLogScope.values)
+        AdminChipV2(
+          label: _scopeLabel(value),
+          selected: scope == value,
+          onTap: () => onScopeChanged(value),
+        ),
+      if (scope != AuditLogScope.admin)
+        for (final type in ProfileActionLogType.values)
+          AdminChipV2(
+            label: _typeLabel(type),
+            selected: filter == type,
+            onTap: () => onTypeChanged(type),
+          ),
+      AdminChipV2(
+        label: dateFrom == null
+            ? (isRu ? 'С даты' : 'From')
+            : '${isRu ? 'с' : 'from'} ${_shortDate(dateFrom)}',
+        selected: dateFrom != null,
+        onTap: onPickDateFrom,
+      ),
+      AdminChipV2(
+        label: dateTo == null
+            ? (isRu ? 'По дату' : 'To')
+            : '${isRu ? 'по' : 'to'} ${_shortDate(dateTo)}',
+        selected: dateTo != null,
+        onTap: onPickDateTo,
+      ),
+    ];
+
+    final toolbar = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _AuditTextField(
+          initialValue: query,
+          hint: isRu
+              ? 'Поиск: действие, автор, анкета'
+              : 'Search: action, actor, profile',
+          icon: Icons.search_rounded,
+          onChanged: onQueryChanged,
+        ),
+        const SizedBox(height: 10),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              for (var i = 0; i < chips.length; i++) ...[
+                if (i > 0) const SizedBox(width: 8),
+                chips[i],
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+      ],
+    );
+
+    final bulk = selectedVisibleCount == 0
+        ? const SizedBox.shrink()
+        : Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    isRu
+                        ? 'Выбрано: $selectedVisibleCount'
+                        : 'Selected: $selectedVisibleCount',
+                    style: AppText.smallStrong,
+                  ),
+                ),
+                if (isDeleting)
+                  const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                else
+                  AdminPopupMenuButton<_AuditBulkActionV2>(
+                    tooltip: isRu ? 'Действия' : 'Actions',
+                    onSelected: (action) {
+                      switch (action) {
+                        case _AuditBulkActionV2.selectAll:
+                          onSelectAll();
+                        case _AuditBulkActionV2.clearSelection:
+                          onClearSelection();
+                        case _AuditBulkActionV2.delete:
+                          onDeleteSelected?.call();
+                      }
+                    },
+                    options: [
+                      AdminMenuOption(
+                        value: _AuditBulkActionV2.selectAll,
+                        label: allSelected
+                            ? (isRu ? 'Снять все' : 'Unselect all')
+                            : (isRu ? 'Выбрать все' : 'Select all'),
+                        icon: allSelected
+                            ? Icons.check_box_outline_blank_rounded
+                            : Icons.check_box_rounded,
+                      ),
+                      AdminMenuOption(
+                        value: _AuditBulkActionV2.clearSelection,
+                        label: isRu ? 'Снять выделение' : 'Clear selection',
+                        icon: Icons.deselect_rounded,
+                      ),
+                      AdminMenuOption(
+                        value: _AuditBulkActionV2.delete,
+                        label: isRu ? 'Удалить выбранные' : 'Delete selected',
+                        icon: Icons.delete_outline_rounded,
+                        destructive: true,
+                        enabled: onDeleteSelected != null,
+                      ),
+                    ],
+                    child: const SizedBox(
+                      width: 40,
+                      height: 40,
+                      child: Icon(
+                        Icons.more_horiz_rounded,
+                        size: 22,
+                        color: Tokens.textSecondary,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          );
+
+    return CustomScrollView(
+      slivers: [
+        SliverToBoxAdapter(child: toolbar),
+        SliverToBoxAdapter(child: bulk),
+        if (logs.isEmpty)
+          SliverToBoxAdapter(
+            child: AdminEmptyV2(text: isRu ? 'Действий нет' : 'No actions'),
+          )
+        else
+          SliverList.builder(
+            itemCount: logs.length,
+            itemBuilder: (context, index) => _AuditRowNarrow(
+              log: logs[index],
+              isRu: isRu,
+              checked: selectedIds.contains(logs[index].id),
+              last: index == logs.length - 1,
+              onOpen: () => onOpen(logs[index]),
+              onToggle: () => onToggle(logs[index]),
+            ),
+          ),
+        const SliverToBoxAdapter(child: SizedBox(height: 40)),
+      ],
+    );
+  }
+}
+
+/// Phone row: date, actor, action, target — plus a checkbox for the bulk
+/// delete and a status dot.
+class _AuditRowNarrow extends StatelessWidget {
+  const _AuditRowNarrow({
+    required this.log,
+    required this.isRu,
+    required this.checked,
+    required this.last,
+    required this.onOpen,
+    required this.onToggle,
+  });
+
+  final AuditLogItem log;
+  final bool isRu;
+  final bool checked;
+  final bool last;
+  final VoidCallback onOpen;
+  final VoidCallback onToggle;
+
+  String _kind(String type) => switch (type) {
+    'invite' => isRu ? 'Приглашение' : 'Invitation',
+    'selection' => isRu ? 'Подборка' : 'Selection',
+    'folder' => isRu ? 'Папка' : 'Folder',
+    'message' => isRu ? 'Чат' : 'Chat',
+    _ => type,
+  };
+
+  (String, Color) _status(String status) => switch (status) {
+    'sent' => (isRu ? 'Отправлено' : 'Sent', Tokens.textTertiary),
+    'delivered' => (isRu ? 'Доставлено' : 'Delivered', Tokens.warning),
+    'read' => (isRu ? 'Прочитано' : 'Read', Tokens.success),
+    'failed' => (isRu ? 'Ошибка' : 'Failed', Tokens.danger),
+    'deleted' => (isRu ? 'Удалено' : 'Deleted', Tokens.danger),
+    _ => (status, Tokens.textTertiary),
+  };
+
+  String _date(DateTime? value) {
+    if (value == null) return '';
+    final local = value.toLocal();
+    String two(int v) => v.toString().padLeft(2, '0');
+    return '${two(local.day)}.${two(local.month)}.${local.year} ${two(local.hour)}:${two(local.minute)}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final title = log.title.isEmpty ? _kind(log.actionType) : log.title;
+    final actor = [
+      log.isAdminAction ? (isRu ? 'Админка' : 'Back office') : '',
+      log.actorLabel,
+    ].where((e) => e.trim().isNotEmpty).join(' · ');
+    final target = [
+      log.relatedText,
+      if (log.relatedText.trim().isEmpty) log.relatedTable,
+    ].where((e) => e.trim().isNotEmpty).join(' · ');
+    final status = log.status.trim().isEmpty ? null : _status(log.status);
+
+    return AdminTableRowV2(
+      selected: checked,
+      last: last,
+      onTap: onOpen,
+      padding: const EdgeInsets.fromLTRB(0, 8, 4, 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 36,
+            child: Checkbox(
+              value: checked,
+              onChanged: (_) => onToggle(),
+              activeColor: Tokens.ink,
+              checkColor: Colors.white,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              visualDensity: VisualDensity.compact,
+            ),
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _date(log.createdAt),
+                  style: AppText.caption.copyWith(color: Tokens.textTertiary),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppText.smallStrong,
+                ),
+                if (actor.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    actor,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppText.caption.copyWith(color: Tokens.textSecondary),
+                  ),
+                ],
+                if (target.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    target,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppText.caption.copyWith(color: Tokens.textSecondary),
+                  ),
+                ],
+                if (status != null) ...[
+                  const SizedBox(height: 4),
+                  AdminStatusV2(text: status.$1, color: status.$2),
+                ],
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -954,6 +1402,23 @@ class _AuditTextFieldState extends State<_AuditTextField> {
 
   @override
   Widget build(BuildContext context) {
+    if (adminV2) {
+      return TextField(
+        textCapitalization: TextCapitalization.sentences,
+        controller: _controller,
+        onChanged: widget.onChanged,
+        style: AppText.body,
+        decoration: InputDecoration(
+          isDense: true,
+          hintText: widget.hint,
+          prefixIcon: Icon(widget.icon, size: 20),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 12,
+          ),
+        ),
+      );
+    }
     return TextField(
       textCapitalization: TextCapitalization.sentences,
       controller: _controller,

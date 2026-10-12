@@ -19,8 +19,8 @@ const double kAdminShellNavWidth = 240;
 /// Width below which the side menu collapses into a horizontal strip.
 const double kAdminShellWideBreakpoint = 1100;
 
-class _AdminShellSection {
-  const _AdminShellSection({
+class AdminShellSection {
+  const AdminShellSection({
     required this.route,
     required this.label,
     required this.icon,
@@ -33,11 +33,11 @@ class _AdminShellSection {
   final int badge;
 }
 
-class _AdminShellGroup {
-  const _AdminShellGroup({required this.title, required this.items});
+class AdminShellGroup {
+  const AdminShellGroup({required this.title, required this.items});
 
   final String title;
-  final List<_AdminShellSection> items;
+  final List<AdminShellSection> items;
 }
 
 /// Converts an admin label written in capitals («ВСЕ АНКЕТЫ») to sentence
@@ -167,12 +167,11 @@ class AdminShellV2 extends ConsumerWidget {
     this.actions = const [],
     this.bodyPadding,
     this.headerBottom,
-    this.compact = false,
+    this.menu = false,
   });
 
-  /// Phone forms: one-line header (back + title), no subtitle, so the
-  /// content gets the screen.
-  final bool compact;
+  /// Phone: this is the admin menu itself — no back arrow.
+  final bool menu;
 
   final String title;
   final String? subtitle;
@@ -184,110 +183,14 @@ class AdminShellV2 extends ConsumerWidget {
   /// Optional strip under the header (stats, tabs).
   final Widget? headerBottom;
 
-  List<_AdminShellGroup> _groups(
+  List<AdminShellGroup> _groups(
     BuildContext context, {
     required AdminDashboardCounts counts,
     required int selections,
     required int support,
-  }) {
-    final ru = Localizations.localeOf(context).languageCode == 'ru';
-    return [
-      _AdminShellGroup(
-        title: ru ? 'Обзор' : 'Overview',
-        items: [
-          _AdminShellSection(
-            route: Routes.admin,
-            label: ru ? 'Рабочий стол' : 'Dashboard',
-            icon: Icons.space_dashboard_outlined,
-          ),
-        ],
-      ),
-      _AdminShellGroup(
-        title: ru ? 'Очередь' : 'Queue',
-        items: [
-          _AdminShellSection(
-            route: Routes.moderationAdmin,
-            label: ru ? 'Модерация' : 'Moderation',
-            icon: Icons.verified_user_outlined,
-            badge: counts.moderation,
-          ),
-          _AdminShellSection(
-            route: Routes.adminSupport,
-            label: ru ? 'Поддержка' : 'Support',
-            icon: Icons.support_agent_outlined,
-            badge: support,
-          ),
-          _AdminShellSection(
-            route: Routes.castingAgentApplicationsAdmin,
-            label: ru ? 'Заявки на статус' : 'Role requests',
-            icon: Icons.badge_outlined,
-            badge: counts.agentApplications,
-          ),
-          _AdminShellSection(
-            route: Routes.accountMergeRequestsAdmin,
-            label: ru ? 'Объединения' : 'Account merges',
-            icon: Icons.merge_type_rounded,
-            badge: counts.accountMerges,
-          ),
-          _AdminShellSection(
-            route: Routes.profileSlotRequestsAdmin,
-            label: ru ? 'Дополнительные анкеты' : 'Extra profiles',
-            icon: Icons.library_add_outlined,
-            badge: counts.profileSlotRequests,
-          ),
-          _AdminShellSection(
-            route: Routes.safetyAdmin,
-            label: ru ? 'Безопасность' : 'Safety',
-            icon: Icons.health_and_safety_outlined,
-            badge: counts.safety,
-          ),
-        ],
-      ),
-      _AdminShellGroup(
-        title: ru ? 'Данные' : 'Data',
-        items: [
-          _AdminShellSection(
-            route: Routes.adminUsers,
-            label: ru ? 'Пользователи' : 'Users',
-            icon: Icons.groups_outlined,
-          ),
-          _AdminShellSection(
-            route: Routes.adminProfiles,
-            label: ru ? 'Анкеты' : 'Profiles',
-            icon: Icons.view_list_outlined,
-          ),
-          _AdminShellSection(
-            route: Routes.adminCastings,
-            label: ru ? 'Кастинги' : 'Castings',
-            icon: Icons.videocam_outlined,
-          ),
-          _AdminShellSection(
-            route: Routes.adminSelectionsTable,
-            label: ru ? 'Подборки' : 'Selections',
-            icon: Icons.folder_copy_outlined,
-          ),
-          _AdminShellSection(
-            route: Routes.adminSelection,
-            label: ru ? 'Отбор' : 'Selection desk',
-            icon: Icons.dashboard_customize_outlined,
-            badge: selections,
-          ),
-        ],
-      ),
-      _AdminShellGroup(
-        title: ru ? 'Контроль' : 'Control',
-        items: [
-          _AdminShellSection(
-            route: Routes.profileActionAuditAdmin,
-            label: ru ? 'Журнал действий' : 'Action log',
-            icon: Icons.history_rounded,
-          ),
-        ],
-      ),
-    ];
-  }
+  }) => adminShellGroups(context, counts: counts, selections: selections, support: support);
 
-  String _activeRoute(BuildContext context, List<_AdminShellGroup> groups) {
+  String _activeRoute(BuildContext context, List<AdminShellGroup> groups) {
     final location = GoRouterState.of(context).uri.path;
     String best = '';
     for (final group in groups) {
@@ -334,25 +237,52 @@ class AdminShellV2 extends ConsumerWidget {
     // With the side menu on screen a «Назад» link is noise; it stays for
     // the narrow layout where the menu is a strip.
     final onBack = wide ? null : this.onBack;
-    if (compact && !wide) {
+    if (!wide) {
+      // Phone: one compact header line (back + title + icon actions),
+      // optional strip below, then the body. Sections are reached from
+      // the admin menu (Routes.admin), not from a tab strip.
+      final isMenu = menu;
+      final iconActions = actions.whereType<IconButton>().toList();
+      final otherActions = actions.where((a) => a is! IconButton).toList();
       final header = Padding(
-        padding: EdgeInsets.fromLTRB(8, 6, gutter, 0),
-        child: Row(
+        padding: EdgeInsets.fromLTRB(isMenu ? gutter : 4, 6, 8, 0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            IconButton(
-              onPressed: () => popOr(context, onBack),
-              icon: const Icon(Icons.arrow_back_rounded),
-              color: Tokens.text,
+            Row(
+              children: [
+                if (!isMenu)
+                  IconButton(
+                    tooltip: ru ? 'Назад' : 'Back',
+                    onPressed: () =>
+                        popOr(context, onBack ?? () => context.go(Routes.admin)),
+                    icon: const Icon(Icons.arrow_back_rounded),
+                    color: Tokens.text,
+                  ),
+                Expanded(
+                  child: Text(
+                    adminSentenceCase(title),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppText.h2,
+                  ),
+                ),
+                ...iconActions,
+              ],
             ),
-            Expanded(
-              child: Text(
-                adminSentenceCase(title),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppText.h2,
+            if (otherActions.isNotEmpty)
+              Padding(
+                padding: EdgeInsets.fromLTRB(isMenu ? 0 : 12, 8, 8, 0),
+                child: Wrap(spacing: 8, runSpacing: 8, children: otherActions),
               ),
-            ),
-            ...actions,
+            if (headerBottom != null)
+              Padding(
+                padding: EdgeInsets.fromLTRB(isMenu ? 0 : 12, 10, 0, 0),
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: headerBottom!,
+                ),
+              ),
           ],
         ),
       );
@@ -460,8 +390,6 @@ class AdminShellV2 extends ConsumerWidget {
     final content = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (!wide)
-          _AdminShellStrip(groups: groups, active: active),
         header,
         Expanded(
           child: Padding(
@@ -493,7 +421,7 @@ class AdminShellV2 extends ConsumerWidget {
 class _AdminShellNav extends StatelessWidget {
   const _AdminShellNav({required this.groups, required this.active});
 
-  final List<_AdminShellGroup> groups;
+  final List<AdminShellGroup> groups;
   final String active;
 
   @override
@@ -526,7 +454,7 @@ class _AdminShellNav extends StatelessWidget {
 class _AdminShellNavItem extends StatelessWidget {
   const _AdminShellNavItem({required this.item, required this.active});
 
-  final _AdminShellSection item;
+  final AdminShellSection item;
   final bool active;
 
   @override
@@ -574,94 +502,6 @@ class _AdminShellNavItem extends StatelessWidget {
 }
 
 /// Narrow screens: the sections as a horizontal strip under the top bar.
-class _AdminShellStrip extends StatefulWidget {
-  const _AdminShellStrip({required this.groups, required this.active});
-
-  final List<_AdminShellGroup> groups;
-  final String active;
-
-  @override
-  State<_AdminShellStrip> createState() => _AdminShellStripState();
-}
-
-class _AdminShellStripState extends State<_AdminShellStrip> {
-  final _activeKey = GlobalKey();
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _revealActive());
-  }
-
-  @override
-  void didUpdateWidget(covariant _AdminShellStrip oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.active != widget.active) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _revealActive());
-    }
-  }
-
-  // Scrolls the strip so the current section is on screen.
-  void _revealActive() {
-    final context = _activeKey.currentContext;
-    if (context == null || !mounted) return;
-    Scrollable.ensureVisible(
-      context,
-      alignment: 0.3,
-      duration: const Duration(milliseconds: 200),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final items = [for (final g in widget.groups) ...g.items];
-    final active = widget.active;
-    return Container(
-      height: 48,
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: Tokens.border)),
-      ),
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        itemCount: items.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 4),
-        itemBuilder: (context, index) {
-          final item = items[index];
-          final isActive = item.route == active;
-          return Material(
-            key: isActive ? _activeKey : null,
-            color: isActive ? Tokens.ink : Colors.transparent,
-            borderRadius: BorderRadius.circular(Tokens.radiusSm),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(Tokens.radiusSm),
-              onTap: isActive ? null : () => context.go(item.route),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: Row(
-                  children: [
-                    Text(
-                      item.label,
-                      style: AppText.smallStrong.copyWith(
-                        color: isActive ? Colors.white : Tokens.text,
-                      ),
-                    ),
-                    if (item.badge > 0) ...[
-                      const SizedBox(width: 6),
-                      AdminCountBadge(count: item.badge, onInk: isActive),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-}
-
-/// Small count badge for the menu and headers: accent when non-zero.
 class AdminCountBadge extends StatelessWidget {
   const AdminCountBadge({
     super.key,
@@ -1166,4 +1006,109 @@ String adminDateV2(DateTime? date) {
   if (date == null) return '';
   final d = date.toLocal();
   return '${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}.${d.year}';
+}
+
+/// Admin sections, grouped — the side menu on wide screens and the menu
+/// page on phones use the same list.
+List<AdminShellGroup> adminShellGroups(
+  BuildContext context, {
+  required AdminDashboardCounts counts,
+  required int selections,
+  required int support,
+}) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    return [
+      AdminShellGroup(
+        title: ru ? 'Обзор' : 'Overview',
+        items: [
+          AdminShellSection(
+            route: Routes.admin,
+            label: ru ? 'Рабочий стол' : 'Dashboard',
+            icon: Icons.space_dashboard_outlined,
+          ),
+        ],
+      ),
+      AdminShellGroup(
+        title: ru ? 'Очередь' : 'Queue',
+        items: [
+          AdminShellSection(
+            route: Routes.moderationAdmin,
+            label: ru ? 'Модерация' : 'Moderation',
+            icon: Icons.verified_user_outlined,
+            badge: counts.moderation,
+          ),
+          AdminShellSection(
+            route: Routes.adminSupport,
+            label: ru ? 'Поддержка' : 'Support',
+            icon: Icons.support_agent_outlined,
+            badge: support,
+          ),
+          AdminShellSection(
+            route: Routes.castingAgentApplicationsAdmin,
+            label: ru ? 'Заявки на статус' : 'Status requests',
+            icon: Icons.badge_outlined,
+            badge: counts.agentApplications,
+          ),
+          AdminShellSection(
+            route: Routes.accountMergeRequestsAdmin,
+            label: ru ? 'Объединения' : 'Account merges',
+            icon: Icons.merge_type_rounded,
+            badge: counts.accountMerges,
+          ),
+          AdminShellSection(
+            route: Routes.profileSlotRequestsAdmin,
+            label: ru ? 'Дополнительные анкеты' : 'Extra profiles',
+            icon: Icons.library_add_outlined,
+            badge: counts.profileSlotRequests,
+          ),
+          AdminShellSection(
+            route: Routes.safetyAdmin,
+            label: ru ? 'Безопасность' : 'Safety',
+            icon: Icons.health_and_safety_outlined,
+            badge: counts.safety,
+          ),
+        ],
+      ),
+      AdminShellGroup(
+        title: ru ? 'Данные' : 'Data',
+        items: [
+          AdminShellSection(
+            route: Routes.adminUsers,
+            label: ru ? 'Пользователи' : 'Users',
+            icon: Icons.groups_outlined,
+          ),
+          AdminShellSection(
+            route: Routes.adminProfiles,
+            label: ru ? 'Анкеты' : 'Profiles',
+            icon: Icons.view_list_outlined,
+          ),
+          AdminShellSection(
+            route: Routes.adminCastings,
+            label: ru ? 'Кастинги' : 'Castings',
+            icon: Icons.videocam_outlined,
+          ),
+          AdminShellSection(
+            route: Routes.adminSelectionsTable,
+            label: ru ? 'Подборки' : 'Selections',
+            icon: Icons.folder_copy_outlined,
+          ),
+          AdminShellSection(
+            route: Routes.adminSelection,
+            label: ru ? 'Отбор' : 'Selection desk',
+            icon: Icons.dashboard_customize_outlined,
+            badge: selections,
+          ),
+        ],
+      ),
+      AdminShellGroup(
+        title: ru ? 'Контроль' : 'Control',
+        items: [
+          AdminShellSection(
+            route: Routes.profileActionAuditAdmin,
+            label: ru ? 'Журнал действий' : 'Action log',
+            icon: Icons.history_rounded,
+          ),
+        ],
+      ),
+    ];
 }

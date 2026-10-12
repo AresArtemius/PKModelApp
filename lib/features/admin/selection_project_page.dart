@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -19,6 +21,7 @@ import '../../ui/brand/public_page_frame.dart';
 import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
 import 'admin_shell_v2.dart';
+import 'admin_style.dart';
 import '../chat/chat_providers.dart';
 import '../catalog/model_data.dart';
 import '../selection/selection_export_item.dart';
@@ -239,22 +242,38 @@ class SelectionProjectPage extends ConsumerWidget {
           padding: uiV2 ? EdgeInsets.zero : const EdgeInsets.all(16),
           child: dataAsync.when(
             loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) => Center(
-              child: _CardPill(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 18),
-                  child: Text(
-                    '${t.errorUpper}: ${AppErrorMapper.message(e, t)}',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 1.1,
-                      color: _text,
+            error: (e, _) => uiV2
+                ? (isPublic
+                      ? Center(
+                          child: AdminEmptyV2(
+                            text: AppErrorMapper.message(e, t),
+                            error: true,
+                          ),
+                        )
+                      : AdminShellV2(
+                          title: t.selectionUpper,
+                          onBack: () => context.go(Routes.adminSelection),
+                          body: AdminEmptyV2(
+                            text: AppErrorMapper.message(e, t),
+                            error: true,
+                          ),
+                        ))
+                : Center(
+                    child: _CardPill(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 18),
+                        child: Text(
+                          '${t.errorUpper}: ${AppErrorMapper.message(e, t)}',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 1.1,
+                            color: _text,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
-                ),
-              ),
-            ),
             data: (data) {
               final selection = Map<String, dynamic>.from(
                 data['selection'] as Map<String, dynamic>,
@@ -311,6 +330,11 @@ class SelectionProjectPage extends ConsumerWidget {
                       ],
                     ),
                   ),
+                );
+              }
+              if (isPublic && !publicEnabled && uiV2) {
+                return Center(
+                  child: AdminEmptyV2(text: t.publicSelectionUnavailable),
                 );
               }
               if (isPublic && !publicEnabled) {
@@ -2473,7 +2497,7 @@ class _SelectionProjectV2 extends StatelessWidget {
               Padding(
                 padding: EdgeInsets.fromLTRB(gutter, 20, gutter, 6),
                 child: Text(
-                  (ru ? 'Анкеты' : 'Profiles').toUpperCase(),
+                  ru ? 'Анкеты' : 'Profiles',
                   style: AppText.label.copyWith(color: Tokens.textTertiary),
                 ),
               ),
@@ -2493,7 +2517,7 @@ class _SelectionProjectV2 extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            (ru ? 'Статус подборки' : 'Selection status').toUpperCase(),
+            ru ? 'Статус подборки' : 'Selection status',
             style: AppText.label.copyWith(color: Tokens.textTertiary),
           ),
           const SizedBox(height: 10),
@@ -2512,7 +2536,7 @@ class _SelectionProjectV2 extends StatelessWidget {
           if (campaignRows.isNotEmpty) ...[
             const SizedBox(height: 28),
             Text(
-              (ru ? 'Кампания' : 'Campaign').toUpperCase(),
+              ru ? 'Кампания' : 'Campaign',
               style: AppText.label.copyWith(color: Tokens.textTertiary),
             ),
             const SizedBox(height: 4),
@@ -2522,7 +2546,7 @@ class _SelectionProjectV2 extends StatelessWidget {
           if (_managerName(manager).isNotEmpty) ...[
             const SizedBox(height: 28),
             Text(
-              (ru ? 'Менеджер' : 'Manager').toUpperCase(),
+              ru ? 'Менеджер' : 'Manager',
               style: AppText.label.copyWith(color: Tokens.textTertiary),
             ),
             const SizedBox(height: 4),
@@ -2546,19 +2570,137 @@ class _SelectionProjectV2 extends StatelessWidget {
     );
 
     if (!wide) {
+      // Phone: one scrolling column — status line, the share / PDF
+      // buttons, the status choice, the profiles, then the facts.
+      Widget sectionLabel(String text) => Padding(
+        padding: const EdgeInsets.only(top: 24, bottom: 8),
+        child: Text(
+          text,
+          style: AppText.label.copyWith(color: Tokens.textTertiary),
+        ),
+      );
       return AdminShellV2(
         title: shellTitle,
         subtitle: shellSubtitle,
         onBack: onBack,
-        actions: headerActions,
+        actions: [headerActions.first],
         bodyPadding: EdgeInsets.zero,
         body: ListView(
-          padding: const EdgeInsets.only(bottom: 40),
+          padding: EdgeInsets.fromLTRB(gutter, 8, gutter, 40),
           children: [
-            const Divider(height: 1, thickness: 1, color: Tokens.border),
-            side,
-            const Divider(height: 1, thickness: 1, color: Tokens.border),
-            list,
+            Row(
+              children: [
+                AdminStatusV2(
+                  text: selectionStatusLabel(t, status),
+                  color: selectionStatusColor(status),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    countText,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppText.caption.copyWith(color: Tokens.textSecondary),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                if (publicEnabled) ...[
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: onCopyLink,
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(0, 40),
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                      ),
+                      icon: const Icon(Icons.link_rounded, size: 18),
+                      label: Text(
+                        ru ? 'Ссылка для клиента' : 'Client link',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: hasExportItems ? onPdf : null,
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size(0, 40),
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                    ),
+                    icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
+                    label: const Text('PDF'),
+                  ),
+                ),
+              ],
+            ),
+            sectionLabel(ru ? 'Статус' : 'Status'),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  for (var i = 0; i < SelectionStatus.values.length; i++) ...[
+                    if (i > 0) const SizedBox(width: 8),
+                    AdminChipV2(
+                      label: selectionStatusLabel(t, SelectionStatus.values[i]),
+                      selected: SelectionStatus.values[i] == status,
+                      onTap: () {
+                        if (SelectionStatus.values[i] != status) {
+                          onStatus(SelectionStatus.values[i]);
+                        }
+                      },
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            sectionLabel(ru ? 'Анкеты · $count' : 'Profiles · $count'),
+            if (profiles.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Text(
+                  ru
+                      ? 'В подборке пока нет анкет. Добавьте их из каталога — кнопка «В подборку» на карточке модели.'
+                      : 'No profiles yet. Add them from the catalogue — the «Add to selection» button on a model card.',
+                  style: AppText.small.copyWith(color: Tokens.textTertiary),
+                ),
+              )
+            else
+              for (final profile in profiles)
+                _SelectionProfileRowV2(
+                  selectionId: selectionId,
+                  profile: profile,
+                  feedback: agentFeedbackByProfile[profile.profileId],
+                  gutter: 0,
+                  compact: true,
+                ),
+            if (campaignRows.isNotEmpty) ...[
+              sectionLabel(ru ? 'Кампания' : 'Campaign'),
+              for (final row in campaignRows)
+                _FactRowV2(label: row.key, value: row.value),
+            ],
+            if (_managerName(manager).isNotEmpty) ...[
+              sectionLabel(ru ? 'Менеджер' : 'Manager'),
+              _FactRowV2(
+                label: ru ? 'Имя' : 'Name',
+                value: _managerName(manager),
+              ),
+              if ((manager['email'] ?? '').toString().trim().isNotEmpty)
+                _FactRowV2(
+                  label: 'Email',
+                  value: (manager['email'] ?? '').toString().trim(),
+                ),
+              if ((manager['phone'] ?? '').toString().trim().isNotEmpty)
+                _FactRowV2(
+                  label: ru ? 'Телефон' : 'Phone',
+                  value: (manager['phone'] ?? '').toString().trim(),
+                ),
+            ],
           ],
         ),
       );
@@ -2679,12 +2821,15 @@ class _StatusChoiceV2 extends StatelessWidget {
   }
 }
 
-class _SelectionProfileRowV2 extends StatefulWidget {
+enum _ProfileRowActionV2 { open, chat }
+
+class _SelectionProfileRowV2 extends ConsumerStatefulWidget {
   const _SelectionProfileRowV2({
     required this.selectionId,
     required this.profile,
     required this.feedback,
     required this.gutter,
+    this.compact = false,
   });
 
   final String selectionId;
@@ -2692,12 +2837,38 @@ class _SelectionProfileRowV2 extends StatefulWidget {
   final _AgentFeedbackSummary? feedback;
   final double gutter;
 
+  /// Phone: a feedback chip under the name and one «⋯» menu instead of
+  /// the hover-only chat icon.
+  final bool compact;
+
   @override
-  State<_SelectionProfileRowV2> createState() => _SelectionProfileRowV2State();
+  ConsumerState<_SelectionProfileRowV2> createState() =>
+      _SelectionProfileRowV2State();
 }
 
-class _SelectionProfileRowV2State extends State<_SelectionProfileRowV2> {
+class _SelectionProfileRowV2State
+    extends ConsumerState<_SelectionProfileRowV2> {
   bool _hovered = false;
+  bool _chatBusy = false;
+
+  Future<void> _openChat() async {
+    final p = widget.profile;
+    if (_chatBusy || p.profileId.isEmpty || p.modelUserId.isEmpty) return;
+    setState(() => _chatBusy = true);
+    try {
+      final chatId = await ref
+          .read(chatServiceProvider)
+          .ensureSelectionChat(
+            selectionId: widget.selectionId,
+            profileId: p.profileId,
+            modelUserId: p.modelUserId,
+          );
+      if (!mounted || chatId.isEmpty) return;
+      context.push(Routes.chatLocation(chatId));
+    } finally {
+      if (mounted) setState(() => _chatBusy = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -2722,6 +2893,74 @@ class _SelectionProfileRowV2State extends State<_SelectionProfileRowV2> {
             if (feedback.comments.isNotEmpty) '«${feedback.comments.first}»',
           ].join(' · ')
         : t.clientFeedbackEmpty;
+    final compact = widget.compact;
+    final (String chipText, Color chipColor) = !hasFeedback
+        ? (ru ? 'Без отзыва' : 'No feedback', Tokens.textTertiary)
+        : feedback.selected > 0
+        ? (ru ? 'Выбран' : 'Selected', Tokens.success)
+        : feedback.reserve > 0
+        ? (ru ? 'Резерв' : 'Reserve', Tokens.warning)
+        : feedback.rejects > 0
+        ? (ru ? 'Отказ' : 'Rejected', Tokens.danger)
+        : (ru ? 'Комментарий' : 'Comment', Tokens.textSecondary);
+    void openProfile() => context.go(
+      '${Routes.modelPrefix}${p.profileId}?from=project&selectionId=${widget.selectionId}',
+    );
+
+    final Widget trailing = compact
+        ? AdminPopupMenuButton<_ProfileRowActionV2>(
+            tooltip: ru ? 'Действия' : 'Actions',
+            onSelected: (action) {
+              switch (action) {
+                case _ProfileRowActionV2.open:
+                  openProfile();
+                case _ProfileRowActionV2.chat:
+                  unawaited(_openChat());
+              }
+            },
+            options: [
+              AdminMenuOption(
+                value: _ProfileRowActionV2.open,
+                label: ru ? 'Открыть анкету' : 'Open profile',
+                icon: Icons.person_outline_rounded,
+              ),
+              AdminMenuOption(
+                value: _ProfileRowActionV2.chat,
+                label: ru ? 'Открыть чат' : 'Open chat',
+                icon: Icons.chat_bubble_outline_rounded,
+                enabled: !_chatBusy && p.modelUserId.isNotEmpty,
+              ),
+            ],
+            child: const SizedBox(
+              width: 40,
+              height: 40,
+              child: Icon(
+                Icons.more_horiz_rounded,
+                size: 22,
+                color: Tokens.textSecondary,
+              ),
+            ),
+          )
+        : Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AnimatedOpacity(
+                duration: Tokens.fast,
+                opacity: _hovered ? 1 : 0,
+                child: _SelectionChatButton(
+                  selectionId: widget.selectionId,
+                  profileId: p.profileId,
+                  modelUserId: p.modelUserId,
+                  flat: true,
+                ),
+              ),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 20,
+                color: _hovered ? Tokens.text : Tokens.textTertiary,
+              ),
+            ],
+          );
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
@@ -2729,9 +2968,7 @@ class _SelectionProfileRowV2State extends State<_SelectionProfileRowV2> {
       child: Material(
         color: _hovered ? Tokens.surface : Colors.transparent,
         child: InkWell(
-          onTap: () => context.go(
-            '${Routes.modelPrefix}${p.profileId}?from=project&selectionId=${widget.selectionId}',
-          ),
+          onTap: openProfile,
           child: Container(
             decoration: const BoxDecoration(
               border: Border(bottom: BorderSide(color: Tokens.border)),
@@ -2739,7 +2976,7 @@ class _SelectionProfileRowV2State extends State<_SelectionProfileRowV2> {
             padding: EdgeInsets.fromLTRB(
               widget.gutter,
               10,
-              widget.gutter - 8,
+              widget.gutter > 8 ? widget.gutter - 8 : 0,
               10,
             ),
             child: Row(
@@ -2793,33 +3030,24 @@ class _SelectionProfileRowV2State extends State<_SelectionProfileRowV2> {
                         ),
                       ],
                       const SizedBox(height: 3),
-                      Text(
-                        feedbackLine,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppText.caption.copyWith(
-                          color: hasFeedback ? Tokens.text : Tokens.textTertiary,
+                      if (compact)
+                        AdminStatusV2(text: chipText, color: chipColor)
+                      else
+                        Text(
+                          feedbackLine,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppText.caption.copyWith(
+                            color: hasFeedback
+                                ? Tokens.text
+                                : Tokens.textTertiary,
+                          ),
                         ),
-                      ),
                     ],
                   ),
                 ),
                 const SizedBox(width: 8),
-                AnimatedOpacity(
-                  duration: Tokens.fast,
-                  opacity: _hovered ? 1 : 0,
-                  child: _SelectionChatButton(
-                    selectionId: widget.selectionId,
-                    profileId: p.profileId,
-                    modelUserId: p.modelUserId,
-                    flat: true,
-                  ),
-                ),
-                Icon(
-                  Icons.chevron_right_rounded,
-                  size: 20,
-                  color: _hovered ? Tokens.text : Tokens.textTertiary,
-                ),
+                trailing,
               ],
             ),
           ),
@@ -2882,7 +3110,7 @@ class _PublicSelectionV2 extends StatelessWidget {
         padding: EdgeInsets.fromLTRB(gutter, wide ? 32 : 20, gutter, 56),
         children: [
           Text(
-            (ru ? 'Подборка' : 'Selection').toUpperCase(),
+            ru ? 'Подборка' : 'Selection',
             style: AppText.label.copyWith(color: Tokens.textTertiary),
           ),
           const SizedBox(height: 8),

@@ -233,11 +233,14 @@ class CastingAgentApplicationsPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final t = AppLocalizations.of(context)!;
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
     final itemsAsync = ref.watch(castingAgentApplicationsProvider);
 
     return AdminPageScaffold(
-      title: t.adminAgentApplicationsUpper,
-      subtitle: Localizations.localeOf(context).languageCode == 'ru' ? 'Статусы заказчиков' : 'Client role requests',
+      // One name everywhere: the menu entry, the page title and the
+      // empty state all say «Заявки на статус» / «Status requests».
+      title: ru ? 'Заявки на статус' : 'Status requests',
+      subtitle: ru ? 'Статусы заказчиков' : 'Client role requests',
       onBack: () => context.go(Routes.admin),
       brandBackground: true,
       padding: const EdgeInsets.fromLTRB(
@@ -265,6 +268,7 @@ class CastingAgentApplicationsPage extends ConsumerWidget {
                         }
 
                         return ListView.separated(
+                          padding: const EdgeInsets.only(bottom: 24),
                           itemCount: items.length,
                           separatorBuilder: (_, _) => adminV2
                               ? const SizedBox.shrink()

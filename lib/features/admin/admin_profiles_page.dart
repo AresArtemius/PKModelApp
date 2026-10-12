@@ -714,6 +714,12 @@ class _ProfilesEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (adminV2) {
+      return Align(
+        alignment: Alignment.topCenter,
+        child: AdminEmptyV2(text: text),
+      );
+    }
     return DecoratedBox(
       decoration: adminCardDecoration().copyWith(
         border: Border.all(color: kBorderColor),
@@ -806,6 +812,10 @@ class _ProfileMobileCard extends StatelessWidget {
       subtitle: profile.id,
       meta: meta,
       badge: _StatusBadge(status: profile.status),
+      // Tap → preview in the catalog (same as the first menu item).
+      onOpen: () => context.go(
+        '${Routes.modelPrefix}${profile.id}?from=admin_profiles&preview=1',
+      ),
       action: _ProfileActionsMenu(
         profile: profile,
         onDeleteProfile: onDeleteProfile,
@@ -836,6 +846,54 @@ class _ProfilesToolbar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final narrow = MediaQuery.sizeOf(context).width < 700;
+    if (adminV2 && narrow) {
+      // Phone: search field, then statuses and roles as one scrolling row
+      // of chips (a hairline divides the two groups).
+      final chips = <Widget>[
+        for (final filter in _AdminProfileStatusFilter.values)
+          AdminChipV2(
+            label: filter.label(ru),
+            selected: filter == statusFilter,
+            onTap: () => onStatusFilterChanged(filter),
+          ),
+        const _ChipGroupDivider(),
+        AdminChipV2(
+          label: ru ? 'Все роли' : 'All roles',
+          selected: roleFilter == null,
+          onTap: () => onRoleFilterChanged(null),
+        ),
+        for (final role in ProfessionalProfileType.values)
+          AdminChipV2(
+            label: _roleLabel(role, ru),
+            selected: roleFilter == role,
+            onTap: () => onRoleFilterChanged(role),
+          ),
+      ];
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AdminMobileToolbar(
+            controller: controller,
+            hintText: ru ? 'Поиск по имени, городу, владельцу' : 'Search',
+            onSearchChanged: onSearchChanged,
+            filters: const [],
+          ),
+          const SizedBox(height: 8),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                for (var i = 0; i < chips.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 8),
+                  chips[i],
+                ],
+              ],
+            ),
+          ),
+        ],
+      );
+    }
     return AdminMobileToolbar(
       controller: controller,
       hintText: ru ? 'Поиск по имени, городу, владельцу' : 'Search',
@@ -866,6 +924,21 @@ class _ProfilesToolbar extends StatelessWidget {
           onSelected: onRoleFilterChanged,
         ),
       ],
+    );
+  }
+}
+
+/// Thin vertical hairline between two chip groups in a scrolling row.
+class _ChipGroupDivider extends StatelessWidget {
+  const _ChipGroupDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 1,
+      height: 20,
+      margin: const EdgeInsets.symmetric(horizontal: 2),
+      color: Tokens.borderStrong,
     );
   }
 }

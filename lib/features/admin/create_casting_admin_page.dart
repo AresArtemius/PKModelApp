@@ -397,7 +397,6 @@ class _CreateCastingAdminPageState
         title: t.newCastingTitle,
         subtitle: t.newCastingHint,
         onBack: () => popOr(context, () => context.go(_returnRoute(context))),
-        compact: !twoColumns,
         body: SingleChildScrollView(
           padding: const EdgeInsets.only(bottom: 48),
           child: Align(

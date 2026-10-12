@@ -201,11 +201,11 @@ class _AdminSupportPageState extends ConsumerState<AdminSupportPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: Text(_ru ? 'ОТМЕНА' : 'CANCEL'),
+            child: Text(_ru ? 'Отмена' : 'Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: Text(_ru ? 'УДАЛИТЬ' : 'DELETE'),
+            child: Text(_ru ? 'Удалить' : 'Delete'),
           ),
         ],
       ),
@@ -265,9 +265,28 @@ class _AdminSupportPageState extends ConsumerState<AdminSupportPage> {
         .maybeWhen(data: (value) => value, orElse: () => const <String, int>{});
     final width = MediaQuery.sizeOf(context).width;
     final split = width >= 900;
+    final narrow = width < 700;
+    final chips = [
+      for (final status in _filterStatuses)
+        AdminChipV2(
+          label: _supportStatus(status, ru),
+          selected: status == _filter,
+          onTap: () => setState(() {
+            _filter = status;
+            _selectedId = null;
+          }),
+        ),
+    ];
+    void openFaq() => showDialog<void>(
+      context: context,
+      builder: (_) => const _FaqAdminDialog(),
+    );
+    // Phone with a ticket open: the conversation takes the whole height,
+    // the filter row comes back with the list.
+    final hideFilters = !split && _selectedId != null;
 
     return AdminPageScaffold(
-      title: ru ? 'ОБРАЩЕНИЯ В ПОДДЕРЖКУ' : 'SUPPORT INBOX',
+      title: ru ? 'Обращения в поддержку' : 'Support inbox',
       subtitle: ru
           ? 'Обращения и ответы пользователям'
           : 'Requests and user replies',
@@ -276,34 +295,41 @@ class _AdminSupportPageState extends ConsumerState<AdminSupportPage> {
       padding: const EdgeInsets.all(kPagePadH),
       headerGap: 14,
       actions: [
-        if (adminV2)
+        if (adminV2 && narrow)
+          // Phone: an icon in the header line instead of a button that
+          // would wrap under the title.
+          IconButton(
+            tooltip: 'FAQ',
+            onPressed: openFaq,
+            icon: const Icon(Icons.quiz_outlined),
+          )
+        else if (adminV2)
           OutlinedButton.icon(
-            onPressed: () => showDialog<void>(
-              context: context,
-              builder: (_) => const _FaqAdminDialog(),
-            ),
+            onPressed: openFaq,
             icon: const Icon(Icons.quiz_outlined, size: 18),
             label: const Text('FAQ'),
           ),
       ],
       children: [
-                  if (adminV2)
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        for (final status in _filterStatuses)
-                          AdminChipV2(
-                            label: _supportStatus(status, ru),
-                            selected: status == _filter,
-                            onTap: () => setState(() {
-                              _filter = status;
-                              _selectedId = null;
-                            }),
-                          ),
-                      ],
-                    )
-                  else
+                  if (adminV2 && !hideFilters) ...[
+                    if (narrow)
+                      // Phone: one scrolling row, not a tall stack of chips.
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            for (var i = 0; i < chips.length; i++) ...[
+                              if (i > 0) const SizedBox(width: 8),
+                              chips[i],
+                            ],
+                          ],
+                        ),
+                      )
+                    else
+                      Wrap(spacing: 8, runSpacing: 8, children: chips),
+                    const SizedBox(height: 12),
+                  ],
+                  if (!adminV2) ...[
                   Row(
                     children: [
                       Expanded(
@@ -328,6 +354,7 @@ class _AdminSupportPageState extends ConsumerState<AdminSupportPage> {
                     ],
                   ),
                   const SizedBox(height: 14),
+                  ],
                   Expanded(
                     child: ticketsAsync.when(
                       data: (tickets) {
@@ -350,6 +377,7 @@ class _AdminSupportPageState extends ConsumerState<AdminSupportPage> {
                                   replyController: _replyController,
                                   sending: _sending,
                                   currentAdminId: currentAdminId,
+                                  narrow: narrow,
                                   onClaim: () => _claimTicket(selected),
                                   onBack: () =>
                                       setState(() => _selectedId = null),
@@ -394,12 +422,19 @@ class _AdminSupportPageState extends ConsumerState<AdminSupportPage> {
                       },
                       loading: () =>
                           const Center(child: CircularProgressIndicator()),
-                      error: (error, _) => Center(
-                        child: Text(
-                          'Не удалось загрузить обращения: $error',
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
+                      error: (error, _) => adminV2
+                          ? AdminEmptyV2(
+                              text: ru
+                                  ? 'Не удалось загрузить обращения: $error'
+                                  : 'Could not load requests: $error',
+                              error: true,
+                            )
+                          : Center(
+                              child: Text(
+                                'Не удалось загрузить обращения: $error',
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
                     ),
                   ),
       ],
@@ -462,6 +497,7 @@ class _TicketList extends StatelessWidget {
       );
     }
     return ListView.separated(
+      padding: adminV2 ? const EdgeInsets.only(bottom: 24) : EdgeInsets.zero,
       itemCount: tickets.length,
       separatorBuilder: (_, _) =>
           adminV2 ? const SizedBox.shrink() : const SizedBox(height: 10),
@@ -647,7 +683,7 @@ class _FaqAdminDialog extends ConsumerWidget {
     final ru = Localizations.localeOf(context).languageCode == 'ru';
     final items = ref.watch(adminSupportFaqProvider);
     return AlertDialog(
-      title: Text(ru ? 'FAQ ПОДДЕРЖКИ' : 'SUPPORT FAQ'),
+      title: Text(ru ? 'FAQ поддержки' : 'Support FAQ'),
       content: SizedBox(
         width: 760,
         height: 560,
@@ -697,12 +733,12 @@ class _FaqAdminDialog extends ConsumerWidget {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: Text(ru ? 'ЗАКРЫТЬ' : 'CLOSE'),
+          child: Text(ru ? 'Закрыть' : 'Close'),
         ),
         FilledButton.icon(
           onPressed: () => _edit(context, ref),
           icon: const Icon(Icons.add_rounded),
-          label: Text(ru ? 'ДОБАВИТЬ ВОПРОС' : 'ADD QUESTION'),
+          label: Text(ru ? 'Добавить вопрос' : 'Add question'),
         ),
       ],
     );
@@ -769,8 +805,8 @@ class _FaqEditDialogState extends State<_FaqEditDialog> {
     return AlertDialog(
       title: Text(
         widget.item == null
-            ? (ru ? 'НОВЫЙ ВОПРОС' : 'NEW QUESTION')
-            : (ru ? 'РЕДАКТИРОВАТЬ FAQ' : 'EDIT FAQ'),
+            ? (ru ? 'Новый вопрос' : 'New question')
+            : (ru ? 'Редактировать FAQ' : 'Edit FAQ'),
       ),
       content: SizedBox(
         width: 620,
@@ -843,6 +879,7 @@ class _TicketDetail extends ConsumerWidget {
     required this.onStatus,
     required this.onDelete,
     this.onBack,
+    this.narrow = false,
   });
   final _AdminSupportTicket ticket;
   final TextEditingController replyController;
@@ -853,6 +890,7 @@ class _TicketDetail extends ConsumerWidget {
   final ValueChanged<String> onStatus;
   final VoidCallback onDelete;
   final VoidCallback? onBack;
+  final bool narrow;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -862,6 +900,15 @@ class _TicketDetail extends ConsumerWidget {
     final assignedToMe = ticket.assignedTo == currentAdminId;
     final assignedElsewhere =
         ticket.assignedTo != null && ticket.assignedTo != currentAdminId;
+    if (adminV2) {
+      return _buildV2(
+        ru: ru,
+        messages: messages,
+        attachments: attachments,
+        assignedToMe: assignedToMe,
+        assignedElsewhere: assignedElsewhere,
+      );
+    }
     return Container(
       padding: adminV2 ? EdgeInsets.zero : const EdgeInsets.all(18),
       decoration: adminV2 ? null : adminCardDecoration(),
@@ -1041,7 +1088,261 @@ class _TicketDetail extends ConsumerWidget {
       ),
     );
   }
+
+  /// Flat v2 conversation: header with a «⋯» menu (status, delete),
+  /// status line, bubbles, attachments, composer at the bottom.
+  Widget _buildV2({
+    required bool ru,
+    required AsyncValue<List<_AdminSupportMessage>> messages,
+    required AsyncValue<List<_AdminSupportAttachment>> attachments,
+    required bool assignedToMe,
+    required bool assignedElsewhere,
+  }) {
+    final menu = AdminPopupMenuButton<String>(
+      tooltip: ru ? 'Действия' : 'Actions',
+      options: [
+        for (final status in _editableStatuses)
+          AdminMenuOption<String>(
+            value: status,
+            label: _supportStatus(status, ru),
+            icon: status == ticket.status
+                ? Icons.check_rounded
+                : Icons.circle_outlined,
+            enabled: assignedToMe && status != ticket.status,
+          ),
+        AdminMenuOption<String>(
+          value: 'delete',
+          label: ru ? 'Удалить обращение' : 'Delete request',
+          icon: Icons.delete_outline_rounded,
+          destructive: true,
+        ),
+      ],
+      onSelected: (value) {
+        if (value == 'delete') {
+          onDelete();
+        } else {
+          onStatus(value);
+        }
+      },
+      child: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(Tokens.radiusSm),
+          border: Border.all(color: Tokens.border),
+        ),
+        child: const Icon(
+          Icons.more_horiz_rounded,
+          size: 20,
+          color: Tokens.textSecondary,
+        ),
+      ),
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (onBack != null)
+              Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: IconButton(
+                  tooltip: ru ? 'К списку' : 'Back to list',
+                  onPressed: onBack,
+                  icon: const Icon(Icons.arrow_back_rounded),
+                  color: Tokens.text,
+                ),
+              ),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    ticket.subject,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: narrow
+                        ? AppText.h2.copyWith(fontSize: 18)
+                        : AppText.h2,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${_channelLabel(ticket.channel, ru)} · ${_categoryLabel(ticket.category, ru)} · ${ticket.userId}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppText.caption,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            menu,
+          ],
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 16,
+          runSpacing: 6,
+          children: [
+            AdminStatusV2(
+              text: _supportStatus(ticket.status, ru),
+              color: _supportStatusColor(ticket.status),
+            ),
+            if (assignedToMe)
+              AdminStatusV2(
+                text: ru ? 'Назначено вам' : 'Assigned to you',
+                color: Tokens.success,
+              ),
+          ],
+        ),
+        if (!assignedToMe) ...[
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
+            decoration: BoxDecoration(
+              color: Tokens.surfaceAlt,
+              borderRadius: BorderRadius.circular(Tokens.radiusMd),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    assignedElsewhere
+                        ? (ru
+                              ? 'Обращение назначено другому администратору.'
+                              : 'Request assigned to another administrator.')
+                        : (ru
+                              ? 'Обращение пока никому не назначено.'
+                              : 'This request has not been assigned yet.'),
+                    style: AppText.small,
+                  ),
+                ),
+                if (!assignedElsewhere) ...[
+                  const SizedBox(width: 10),
+                  FilledButton(
+                    onPressed: onClaim,
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size(0, 36),
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      textStyle: AppText.smallStrong,
+                    ),
+                    child: Text(ru ? 'Взять в работу' : 'Claim'),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+        const SizedBox(height: 12),
+        Expanded(
+          child: DecoratedBox(
+            decoration: const BoxDecoration(
+              border: Border(top: BorderSide(color: Tokens.border)),
+            ),
+            child: messages.when(
+              data: (items) => items.isEmpty
+                  ? AdminEmptyV2(
+                      text: ru ? 'Сообщений пока нет' : 'No messages yet',
+                    )
+                  : ListView.separated(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      itemCount: items.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 8),
+                      itemBuilder: (_, index) =>
+                          _MessageBubble(message: items[index]),
+                    ),
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (_, _) => AdminEmptyV2(
+                text: ru
+                    ? 'Не удалось загрузить переписку.'
+                    : 'Could not load the conversation.',
+                error: true,
+              ),
+            ),
+          ),
+        ),
+        attachments.when(
+          data: (items) => items.isEmpty
+              ? const SizedBox.shrink()
+              : Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: SizedBox(
+                    height: 96,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: items.length,
+                      separatorBuilder: (_, _) => const SizedBox(width: 8),
+                      itemBuilder: (_, index) =>
+                          _AttachmentCard(attachment: items[index]),
+                    ),
+                  ),
+                ),
+          loading: () => const SizedBox.shrink(),
+          error: (_, _) => const SizedBox.shrink(),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Expanded(
+              child: TextField(
+                textCapitalization: TextCapitalization.sentences,
+                controller: replyController,
+                enabled: assignedToMe,
+                minLines: 1,
+                maxLines: 4,
+                maxLength: 5000,
+                style: AppText.body,
+                decoration: InputDecoration(
+                  hintText: assignedToMe
+                      ? (ru ? 'Ответ пользователю…' : 'Reply to user…')
+                      : (ru
+                            ? 'Возьмите обращение в работу, чтобы ответить'
+                            : 'Claim the request to reply'),
+                  counterText: '',
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 12,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            SizedBox(
+              width: 44,
+              height: 44,
+              child: IconButton.filled(
+                tooltip: ru ? 'Отправить' : 'Send',
+                onPressed: sending || !assignedToMe ? null : onReply,
+                icon: sending
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.send_rounded, size: 20),
+              ),
+            ),
+          ],
+        ),
+        SizedBox(height: narrow ? 8 : 0),
+      ],
+    );
+  }
 }
+
+Color _supportStatusColor(String status) => switch (status) {
+  'resolved' || 'closed' => Tokens.textTertiary,
+  'waiting_for_user' => Tokens.warning,
+  'in_progress' => Tokens.success,
+  _ => Tokens.danger,
+};
 
 class _AttachmentCard extends StatelessWidget {
   const _AttachmentCard({required this.attachment});
@@ -1105,11 +1406,14 @@ class _MessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final admin = message.authorKind == 'admin';
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
     return Align(
       alignment: admin ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
         constraints: const BoxConstraints(maxWidth: 620),
-        padding: const EdgeInsets.all(12),
+        padding: adminV2
+            ? const EdgeInsets.fromLTRB(12, 8, 12, 10)
+            : const EdgeInsets.all(12),
         decoration: adminV2
             ? BoxDecoration(
                 color: admin ? Tokens.ink : Tokens.surfaceAlt,
@@ -1124,7 +1428,9 @@ class _MessageBubble extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              admin ? 'Администратор' : 'Пользователь',
+              admin
+                  ? (ru ? 'Администратор' : 'Administrator')
+                  : (ru ? 'Пользователь' : 'User'),
               style: adminV2
                   ? AppText.caption.copyWith(
                       color: admin

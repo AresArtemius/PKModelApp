@@ -198,8 +198,49 @@ class ModerationAdminPage extends ConsumerStatefulWidget {
       _ModerationAdminPageState();
 }
 
+/// Phone queue filters: everything, first submissions, media updates.
+const List<String> _moderationFilters = ['all', 'new', 'media'];
+
 class _ModerationAdminPageState extends ConsumerState<ModerationAdminPage> {
   String? _selectedProfileId;
+  final _searchC = TextEditingController();
+  String _filter = 'all';
+
+  @override
+  void dispose() {
+    _searchC.dispose();
+    super.dispose();
+  }
+
+  List<MyProfileState> _filtered(List<MyProfileState> items) {
+    final query = _searchC.text.trim().toLowerCase();
+    return items.where((profile) {
+      final matchesFilter = switch (_filter) {
+        'new' => !profile.hasPendingMedia,
+        'media' => profile.hasPendingMedia,
+        _ => true,
+      };
+      if (!matchesFilter) return false;
+      if (query.isEmpty) return true;
+      final haystack = [
+        profile.fullName,
+        profile.city,
+        profile.country,
+        profile.id,
+      ].join(' ').toLowerCase();
+      return haystack.contains(query);
+    }).toList(growable: false);
+  }
+
+  String _filterLabel(String filter, bool ru) => switch (filter) {
+    'new' => ru ? 'Новые анкеты' : 'New profiles',
+    'media' => ru ? 'Новые медиа' : 'New media',
+    _ => ru ? 'Все' : 'All',
+  };
+
+  void _openPreview(BuildContext context, MyProfileState profile) {
+    context.go('${Routes.modelPrefix}${profile.id}?from=moderation&preview=1');
+  }
 
   Future<void> _approveProfile(
     WidgetRef ref, {
@@ -508,14 +549,111 @@ class _ModerationAdminPageState extends ConsumerState<ModerationAdminPage> {
                               );
                             }
 
-                            return _ModerationRequestList(
-                              items: items,
+                            final filtered = adminV2
+                                ? _filtered(items)
+                                : items;
+                            final list = _ModerationRequestList(
+                              items: filtered,
                               selectedId: null,
                               onTap: (profile) =>
                                   _openProfileDetails(context, ref, profile),
                               onApprove: approve,
                               onReject: reject,
+                              onPreview: (profile) =>
+                                  _openPreview(context, profile),
                               showInlineActions: true,
+                            );
+                            if (!adminV2) return list;
+
+                            // Phone: compact toolbar (search + one scrolling
+                            // row of chips), then the queue rows.
+                            final ru =
+                                Localizations.localeOf(context).languageCode ==
+                                'ru';
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                TextField(
+                                  textCapitalization:
+                                      TextCapitalization.sentences,
+                                  controller: _searchC,
+                                  onChanged: (_) => setState(() {}),
+                                  style: AppText.body,
+                                  decoration: InputDecoration(
+                                    hintText: ru
+                                        ? 'Поиск по имени или городу'
+                                        : 'Search by name or city',
+                                    prefixIcon: const Icon(
+                                      Icons.search_rounded,
+                                      size: 20,
+                                    ),
+                                    isDense: true,
+                                    contentPadding:
+                                        const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 12,
+                                        ),
+                                    suffixIcon: _searchC.text.trim().isEmpty
+                                        ? null
+                                        : IconButton(
+                                            tooltip: ru ? 'Очистить' : 'Clear',
+                                            onPressed: () => setState(
+                                              _searchC.clear,
+                                            ),
+                                            icon: const Icon(
+                                              Icons.close_rounded,
+                                              size: 18,
+                                            ),
+                                          ),
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                SingleChildScrollView(
+                                  scrollDirection: Axis.horizontal,
+                                  child: Row(
+                                    children: [
+                                      for (
+                                        var i = 0;
+                                        i < _moderationFilters.length;
+                                        i++
+                                      ) ...[
+                                        if (i > 0) const SizedBox(width: 8),
+                                        AdminChipV2(
+                                          label: _filterLabel(
+                                            _moderationFilters[i],
+                                            ru,
+                                          ),
+                                          selected:
+                                              _filter == _moderationFilters[i],
+                                          count: switch (_moderationFilters[i]) {
+                                            'new' => items
+                                                .where((p) => !p.hasPendingMedia)
+                                                .length,
+                                            'media' => items
+                                                .where((p) => p.hasPendingMedia)
+                                                .length,
+                                            _ => items.length,
+                                          },
+                                          onTap: () => setState(
+                                            () => _filter =
+                                                _moderationFilters[i],
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                Expanded(
+                                  child: filtered.isEmpty
+                                      ? AdminEmptyV2(
+                                          text: ru
+                                              ? 'Ничего не найдено'
+                                              : 'Nothing found',
+                                        )
+                                      : list,
+                                ),
+                              ],
                             );
                           },
                         );
@@ -570,9 +708,11 @@ class _ModerationProfileDetailsSheet extends StatelessWidget {
       child: FractionallySizedBox(
         heightFactor: 0.86,
         child: Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+            borderRadius: BorderRadius.vertical(
+              top: Radius.circular(adminV2 ? Tokens.radiusLg : 28),
+            ),
           ),
           child: Column(
             children: [
@@ -586,9 +726,13 @@ class _ModerationProfileDetailsSheet extends StatelessWidget {
                     ),
                     Expanded(
                       child: Text(
-                        ru ? 'АНКЕТА НА МОДЕРАЦИИ' : 'PROFILE REVIEW',
+                        adminV2
+                            ? (ru ? 'Анкета на модерации' : 'Profile review')
+                            : (ru ? 'АНКЕТА НА МОДЕРАЦИИ' : 'PROFILE REVIEW'),
                         textAlign: TextAlign.center,
-                        style: adminCommandStyle(size: 16, letterSpacing: 1.2),
+                        style: adminV2
+                            ? AppText.h2
+                            : adminCommandStyle(size: 16, letterSpacing: 1.2),
                       ),
                     ),
                     const SizedBox(width: 48),
@@ -664,6 +808,55 @@ class _ModerationProfileDetailsSheet extends StatelessWidget {
                   ],
                 ),
               ),
+              if (adminV2)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 8, 18, 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      OutlinedButton.icon(
+                        onPressed: () {
+                          final router = GoRouter.of(context);
+                          Navigator.of(context).pop();
+                          router.go(
+                            '${Routes.modelPrefix}${profile.id}'
+                            '?from=moderation&preview=1',
+                          );
+                        },
+                        icon: const Icon(Icons.visibility_outlined, size: 18),
+                        label: Text(
+                          ru
+                              ? 'Предпросмотр в каталоге'
+                              : 'Preview in catalogue',
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: onReject,
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Tokens.danger,
+                              ),
+                              icon: const Icon(Icons.close_rounded, size: 18),
+                              label: Text(ru ? 'Отклонить' : 'Reject'),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: FilledButton.icon(
+                              onPressed: onApprove,
+                              icon: const Icon(Icons.check_rounded, size: 18),
+                              label: Text(ru ? 'Одобрить' : 'Approve'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                )
+              else
               Padding(
                 padding: const EdgeInsets.fromLTRB(18, 8, 18, 18),
                 child: Column(
@@ -999,6 +1192,7 @@ class _ModerationRequestList extends StatelessWidget {
     required this.onApprove,
     required this.onReject,
     required this.showInlineActions,
+    this.onPreview,
     this.padding = EdgeInsets.zero,
   });
 
@@ -1007,20 +1201,25 @@ class _ModerationRequestList extends StatelessWidget {
   final ValueChanged<MyProfileState> onTap;
   final Future<void> Function(MyProfileState profile) onApprove;
   final Future<void> Function(MyProfileState profile) onReject;
+  final ValueChanged<MyProfileState>? onPreview;
   final bool showInlineActions;
   final EdgeInsetsGeometry padding;
 
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
 
     return ListView.separated(
-      padding: padding,
+      padding: adminV2 && showInlineActions
+          ? const EdgeInsets.only(bottom: 24)
+          : padding,
       itemCount: items.length,
       separatorBuilder: (_, _) =>
           adminV2 ? const SizedBox.shrink() : const SizedBox(height: 12),
       itemBuilder: (context, i) {
         final p = items[i];
+        final preview = onPreview;
         return _ModerationRequestCard(
           last: i == items.length - 1,
           profile: p,
@@ -1029,8 +1228,13 @@ class _ModerationRequestList extends StatelessWidget {
           onTap: () => onTap(p),
           onApprove: () => onApprove(p),
           onReject: () => onReject(p),
-          approveTooltip: t.profileStatusApprovedUpper,
-          rejectTooltip: t.moderationRejectActionUpper,
+          onPreview: preview == null ? null : () => preview(p),
+          approveTooltip: adminV2
+              ? (ru ? 'Одобрить' : 'Approve')
+              : t.profileStatusApprovedUpper,
+          rejectTooltip: adminV2
+              ? (ru ? 'Отклонить' : 'Reject')
+              : t.moderationRejectActionUpper,
         );
       },
     );
@@ -1047,6 +1251,7 @@ class _ModerationRequestCard extends StatelessWidget {
     required this.onReject,
     required this.approveTooltip,
     required this.rejectTooltip,
+    this.onPreview,
     this.last = false,
   });
 
@@ -1057,6 +1262,7 @@ class _ModerationRequestCard extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback onApprove;
   final VoidCallback onReject;
+  final VoidCallback? onPreview;
   final String approveTooltip;
   final String rejectTooltip;
 
@@ -1121,19 +1327,54 @@ class _ModerationRequestCard extends StatelessWidget {
               ),
             ),
             if (showInlineActions && profile.status == ProfileStatus.pending)
-              Row(
-                children: [
-                  IconButton(
-                    tooltip: rejectTooltip,
-                    icon: const Icon(Icons.close_rounded, size: 20),
-                    onPressed: onReject,
+              Padding(
+                padding: const EdgeInsets.only(left: 8),
+                child: AdminPopupMenuButton<String>(
+                  tooltip: ru ? 'Действия' : 'Actions',
+                  options: [
+                    AdminMenuOption(
+                      value: 'approve',
+                      label: approveTooltip,
+                      icon: Icons.check_rounded,
+                    ),
+                    AdminMenuOption(
+                      value: 'reject',
+                      label: rejectTooltip,
+                      icon: Icons.close_rounded,
+                      destructive: true,
+                    ),
+                    if (onPreview != null)
+                      AdminMenuOption(
+                        value: 'preview',
+                        label: ru
+                            ? 'Предпросмотр в каталоге'
+                            : 'Preview in catalogue',
+                        icon: Icons.visibility_outlined,
+                      ),
+                  ],
+                  onSelected: (value) {
+                    if (value == 'approve') {
+                      onApprove();
+                    } else if (value == 'reject') {
+                      onReject();
+                    } else {
+                      onPreview?.call();
+                    }
+                  },
+                  child: Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(Tokens.radiusSm),
+                      border: Border.all(color: Tokens.border),
+                    ),
+                    child: const Icon(
+                      Icons.more_horiz_rounded,
+                      size: 20,
+                      color: Tokens.textSecondary,
+                    ),
                   ),
-                  IconButton(
-                    tooltip: approveTooltip,
-                    icon: const Icon(Icons.check_rounded, size: 20),
-                    onPressed: onApprove,
-                  ),
-                ],
+                ),
               ),
           ],
         ),
@@ -1283,13 +1524,13 @@ class _ModerationProfileDetailsPanel extends StatelessWidget {
                 onPressed: onReject,
                 style: OutlinedButton.styleFrom(foregroundColor: Tokens.danger),
                 icon: const Icon(Icons.close_rounded, size: 18),
-                label: Text(adminSentenceCase(t.moderationRejectActionUpper)),
+                label: Text(ru ? 'Отклонить' : 'Reject'),
               ),
               const SizedBox(width: 8),
               FilledButton.icon(
                 onPressed: onApprove,
                 icon: const Icon(Icons.check_rounded, size: 18),
-                label: Text(adminSentenceCase(t.profileStatusApprovedUpper)),
+                label: Text(ru ? 'Одобрить' : 'Approve'),
               ),
             ],
           ),
@@ -1934,6 +2175,76 @@ class _RejectReasonDialogState extends State<_RejectReasonDialog> {
       t.moderationRejectInvalidMedia,
       t.moderationRejectSuspicious,
     ];
+
+    if (adminV2) {
+      // Flat v2 dialog: reason chips, a comment field, two buttons.
+      return AlertDialog(
+        title: Text(t.moderationRejectTitle),
+        content: SizedBox(
+          width: 480,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (var i = 0; i < reasons.length; i += 1)
+                      AdminChipV2(
+                        label: reasons[i],
+                        selected: _selectedIndex == i,
+                        onTap: () {
+                          setState(() {
+                            _selectedIndex = i;
+                            _showRequired = false;
+                          });
+                        },
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  textCapitalization: TextCapitalization.sentences,
+                  controller: _commentC,
+                  minLines: 2,
+                  maxLines: 4,
+                  style: AppText.body,
+                  onChanged: (_) {
+                    if (_showRequired) setState(() => _showRequired = false);
+                  },
+                  decoration: InputDecoration(
+                    hintText: t.moderationRejectHint,
+                    errorText: _showRequired
+                        ? t.moderationRejectRequired
+                        : null,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(adminSentenceCase(t.cancel)),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Tokens.danger),
+            onPressed: () {
+              final reason = _reason(reasons);
+              if (reason.isEmpty) {
+                setState(() => _showRequired = true);
+                return;
+              }
+              Navigator.of(context).pop(reason);
+            },
+            child: Text(adminSentenceCase(t.moderationRejectActionUpper)),
+          ),
+        ],
+      );
+    }
 
     return Dialog(
       backgroundColor: Colors.transparent,
