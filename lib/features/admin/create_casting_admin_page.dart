@@ -912,6 +912,11 @@ class _TextField extends StatelessWidget {
       // Theme inputs are already v2 (48 px, radius 10, grey border).
       return TextField(
         textCapitalization: TextCapitalization.sentences,
+        // Single-line fields: the keyboard «Done» closes it; multi-line
+        // keep the return key for new lines.
+        textInputAction: maxLines == 1
+            ? TextInputAction.done
+            : TextInputAction.newline,
         controller: controller,
         maxLines: maxLines,
         minLines: minLines,
