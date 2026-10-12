@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/supabase_compat.dart';
 import '../../core/supabase_provider.dart';
 import '../../core/admin_action_log_service.dart';
+import '../../core/pop_or.dart';
 import '../../core/router.dart';
 import '../../gen_l10n/app_localizations.dart';
 import '../../ui/brand/brand_admin_header.dart';
@@ -41,10 +42,11 @@ class _CreateCastingAdminPageState
   final _descC = TextEditingController();
   final _rightsC = TextEditingController();
   final _feeC = TextEditingController();
+  final _extraC = TextEditingController();
 
   final _selectedDates = <DateTime>{};
   final _pendingReferences = <PendingCastingReferenceMedia>[];
-  CastingProjectStage _stage = defaultCastingProjectStage;
+  CastingProjectStage _stage = CastingProjectStage.acceptingApplications;
   bool _creating = false;
   bool _pickingReferences = false;
 
@@ -54,6 +56,7 @@ class _CreateCastingAdminPageState
     _descC.dispose();
     _rightsC.dispose();
     _feeC.dispose();
+    _extraC.dispose();
     super.dispose();
   }
 
@@ -65,6 +68,7 @@ class _CreateCastingAdminPageState
     final desc = _descC.text.trim();
     final rights = _rightsC.text.trim();
     final fee = _feeC.text.trim();
+    final extra = _extraC.text.trim();
 
     // Минимальная валидация без лишнего UI: не создаём пустое
     if (title.isEmpty) return;
@@ -87,6 +91,7 @@ class _CreateCastingAdminPageState
         'description': desc,
         'rights': rights,
         'fee': fee,
+        'extra_info': extra,
         'project_stage': castingProjectStageToString(_stage),
         'reference_media': referenceMedia.map((item) => item.toJson()).toList(),
         // храню как список ISO-дат (YYYY-MM-DD)
@@ -100,12 +105,14 @@ class _CreateCastingAdminPageState
         if (!SupabaseCompat.isMissingAnyColumn(e, [
           'project_stage',
           'reference_media',
+          'extra_info',
         ])) {
           rethrow;
         }
         final legacyPayload = Map<String, dynamic>.from(payload)
           ..remove('project_stage')
-          ..remove('reference_media');
+          ..remove('reference_media')
+          ..remove('extra_info');
         await sb.from('castings').insert(legacyPayload);
       }
       await AdminActionLogService(sb).log(
@@ -124,7 +131,7 @@ class _CreateCastingAdminPageState
         ..invalidate(adminSelectionCountProvider);
 
       if (!mounted) return;
-      context.go(_returnRoute(context));
+      popOr(context, () => context.go(_returnRoute(context)));
     } catch (e) {
       if (!mounted) return;
       final isRu = Localizations.localeOf(context).languageCode == 'ru';
@@ -182,6 +189,7 @@ class _CreateCastingAdminPageState
   }) {
     final from = GoRouterState.of(context).uri.queryParameters['from'];
     final backLabel = from == 'admin' ? t.adminTab : t.castingsTab;
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
     final canPublish =
         !_creating && !_pickingReferences && _titleC.text.trim().isNotEmpty;
     final width = MediaQuery.sizeOf(context).width;
@@ -264,9 +272,23 @@ class _CreateCastingAdminPageState
           const SizedBox(height: 24),
           feeField,
         ],
+        const SizedBox(height: 24),
+        _FormField(
+          label: ru ? 'Дополнительная информация' : 'Additional information',
+          child: _TextField(
+            controller: _extraC,
+            hint: ru
+                ? 'Условия, место, что взять с собой…'
+                : 'Conditions, location, what to bring…',
+            minLines: 2,
+            maxLines: 6,
+            flat: true,
+          ),
+        ),
         const SizedBox(height: 28),
         _FormField(
           label: t.castingReferencesLabel,
+          hint: ru ? 'Фото и видео из галереи' : 'Photos and videos from the gallery',
           child: _ReferencesPicker(
             items: _pendingReferences,
             picking: _pickingReferences,
@@ -308,7 +330,9 @@ class _CreateCastingAdminPageState
           : Text(t.publish),
     );
     final cancelButton = OutlinedButton(
-      onPressed: _creating ? null : () => context.go(_returnRoute(context)),
+      onPressed: _creating
+          ? null
+          : () => popOr(context, () => context.go(_returnRoute(context))),
       child: Text(t.cancel),
     );
 
@@ -322,7 +346,11 @@ class _CreateCastingAdminPageState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _FormField(label: t.dates, hint: t.castingDatesHint, child: calendar),
+          _FormField(
+            label: ru ? 'Даты съёмки' : 'Shoot dates',
+            hint: t.castingDatesHint,
+            child: calendar,
+          ),
           const SizedBox(height: 24),
           _FormField(label: t.castingProjectStageLabel, child: stage),
           const SizedBox(height: 24),
@@ -368,7 +396,8 @@ class _CreateCastingAdminPageState
       return AdminShellV2(
         title: t.newCastingTitle,
         subtitle: t.newCastingHint,
-        onBack: () => context.go(_returnRoute(context)),
+        onBack: () => popOr(context, () => context.go(_returnRoute(context))),
+        compact: !twoColumns,
         body: SingleChildScrollView(
           padding: const EdgeInsets.only(bottom: 48),
           child: Align(
@@ -748,17 +777,29 @@ class _StageSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (flat) {
-      return Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: [
-          for (final stage in CastingProjectStage.values)
-            _StageChip(
-              stage: stage,
-              selected: value == stage,
-              onTap: () => onChanged(stage),
-            ),
-        ],
+      // Two equal columns; «Подготовка» (intake) is not offered any more.
+      final stages = CastingProjectStage.values
+          .where((s) => s != CastingProjectStage.intake)
+          .toList(growable: false);
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          final w = (constraints.maxWidth - 8) / 2;
+          return Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final stage in stages)
+                SizedBox(
+                  width: w,
+                  child: _StageChip(
+                    stage: stage,
+                    selected: value == stage,
+                    onTap: () => onChanged(stage),
+                  ),
+                ),
+            ],
+          );
+        },
       );
     }
     return Wrap(

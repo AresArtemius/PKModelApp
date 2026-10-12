@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -96,6 +97,30 @@ String castingReferenceMediaKindLabel(
 }
 
 Future<List<PendingCastingReferenceMedia>> pickCastingReferenceMedia() async {
+  // Phones: photos and videos straight from the gallery (not «Files»).
+  if (!kIsWeb) {
+    final picked = await ImagePicker().pickMultipleMedia();
+    final items = <PendingCastingReferenceMedia>[];
+    for (final x in picked) {
+      final bytes = await x.readAsBytes();
+      if (bytes.isEmpty) continue;
+      final extension = _extensionFromName(x.name).toLowerCase();
+      final contentType = (x.mimeType ?? '').trim().isNotEmpty
+          ? x.mimeType!.trim()
+          : _contentTypeForExtension(extension);
+      items.add(
+        PendingCastingReferenceMedia(
+          kind: _kindForContentType(contentType),
+          name: x.name.trim().isEmpty ? 'reference.$extension' : x.name,
+          bytes: bytes,
+          contentType: contentType,
+          extension: extension,
+        ),
+      );
+    }
+    return items;
+  }
+
   final result = await FilePicker.platform.pickFiles(
     allowMultiple: true,
     withData: true,

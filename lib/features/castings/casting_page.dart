@@ -711,7 +711,8 @@ class _CastingPageState extends ConsumerState<CastingPage> {
     }
 
     void openCreateCasting() {
-      context.go('${Routes.createCastingAdmin}?from=castings');
+      // push → «назад» returns here with the reverse slide.
+      context.push('${Routes.createCastingAdmin}?from=castings');
     }
 
     // States other than the loaded list sit inside the page paddings; the
@@ -864,6 +865,9 @@ class _CastingPageState extends ConsumerState<CastingPage> {
               _CastingsMobileHeader(
                 count: castings.value?.length,
                 onCreateTap: isAdmin ? openCreateCasting : null,
+                onNotifyTap: ref.watch(isAuthenticatedProvider)
+                    ? () => context.push(Routes.notifications)
+                    : null,
               ),
               Expanded(child: body),
             ],
@@ -936,10 +940,18 @@ class _CastingPageState extends ConsumerState<CastingPage> {
 
 /// Mobile web header: section title, counter and the admin «create» button.
 class _CastingsMobileHeader extends StatelessWidget {
-  const _CastingsMobileHeader({required this.count, required this.onCreateTap});
+  const _CastingsMobileHeader({
+    required this.count,
+    required this.onCreateTap,
+    this.onNotifyTap,
+  });
 
   final int? count;
   final VoidCallback? onCreateTap;
+
+  /// «Уведомлять о новых кастингах» — always reachable, not only when
+  /// the list is empty.
+  final VoidCallback? onNotifyTap;
 
   @override
   Widget build(BuildContext context) {
@@ -962,6 +974,13 @@ class _CastingsMobileHeader extends StatelessWidget {
               ],
             ),
           ),
+          if (onNotifyTap != null)
+            IconButton(
+              tooltip: t.castingsEmptyNotifyAction,
+              onPressed: onNotifyTap,
+              icon: const Icon(Icons.notifications_none_rounded),
+              color: Tokens.textSecondary,
+            ),
           if (onCreateTap != null)
             IconButton.filled(
               tooltip: t.createCasting,
@@ -1041,22 +1060,54 @@ class _CastingMobileCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(casting.title, style: AppText.h2),
-          const SizedBox(height: 10),
-          _CastingMetaRow(casting: casting, status: status),
+          const SizedBox(height: 6),
+          // Stage · dates · fee in one quiet line.
+          Text(
+            [
+              castingProjectStageLabel(context, casting.projectStage),
+              if (casting.datesText.isNotEmpty) casting.datesText,
+              if (casting.fee.isNotEmpty) casting.fee,
+            ].join(' · '),
+            style: AppText.small.copyWith(color: Tokens.textSecondary),
+          ),
           if (casting.description.isNotEmpty) ...[
             const SizedBox(height: 12),
-            Text(
-              casting.description,
-              style: AppText.small.copyWith(color: Tokens.textSecondary),
-            ),
+            Text(casting.description, style: AppText.body),
           ],
-          if (casting.rights.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            _CastingInlineFact(label: t.rights, value: casting.rights),
+          if (casting.rights.isNotEmpty || casting.extraInfo.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            if (casting.rights.isNotEmpty)
+              _CastingInlineFact(label: t.rights, value: casting.rights),
+            if (casting.extraInfo.isNotEmpty) ...[
+              if (casting.rights.isNotEmpty) const SizedBox(height: 6),
+              _CastingInlineFact(
+                label: _castingLocaleText(context, 'Дополнительно', 'More'),
+                value: casting.extraInfo,
+              ),
+            ],
           ],
           if (casting.referenceMedia.isNotEmpty) ...[
             const SizedBox(height: 12),
             _CastingReferencePreviewStrip(items: casting.referenceMedia),
+          ],
+          if (status != null) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Icon(
+                  Icons.check_circle_outline_rounded,
+                  size: 16,
+                  color: castingResponseStatusColor(status!),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  castingResponseStatusLabel(t, status!),
+                  style: AppText.smallStrong.copyWith(
+                    color: castingResponseStatusColor(status!),
+                  ),
+                ),
+              ],
+            ),
           ],
           const SizedBox(height: 16),
           Row(
@@ -1995,45 +2046,6 @@ class _CastingAdminAction extends StatelessWidget {
 }
 
 /// Stage, dates, fee, my response and the number of references as chips.
-class _CastingMetaRow extends StatelessWidget {
-  const _CastingMetaRow({required this.casting, required this.status});
-
-  final CastingModel casting;
-  final CastingResponseStatus? status;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = AppLocalizations.of(context)!;
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: [
-        _CastingMetaPill(
-          icon: castingProjectStageIcon(casting.projectStage),
-          label: castingProjectStageLabel(context, casting.projectStage),
-          color: castingProjectStageColor(casting.projectStage),
-        ),
-        if (casting.datesText.isNotEmpty)
-          _CastingMetaPill(icon: Icons.event_rounded, label: casting.datesText),
-        if (casting.fee.isNotEmpty)
-          _CastingMetaPill(icon: Icons.payments_outlined, label: casting.fee),
-        if (status != null)
-          _CastingMetaPill(
-            icon: Icons.check_circle_outline_rounded,
-            label: castingResponseStatusLabel(t, status!),
-            color: castingResponseStatusColor(status!),
-          ),
-        if (casting.referenceMedia.isNotEmpty)
-          _CastingMetaPill(
-            icon: Icons.attach_file_rounded,
-            label: '${t.castingReferencesLabel}: '
-                '${casting.referenceMedia.length}',
-          ),
-      ],
-    );
-  }
-}
-
 class _CastingDetailTextSections extends StatelessWidget {
   const _CastingDetailTextSections({
     required this.casting,
@@ -2156,8 +2168,8 @@ class _CastingReferencePreviewStrip extends StatelessWidget {
         ],
         if (extra > 0)
           Container(
-            width: 56,
-            height: 56,
+            width: 72,
+            height: 72,
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: Tokens.surfaceAlt,
@@ -2192,14 +2204,22 @@ class _CastingReferencePreviewThumb extends StatelessWidget {
       borderRadius: BorderRadius.circular(Tokens.radiusSm),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: item.kind == CastingReferenceMediaKind.image
-            ? () => _showCastingReferenceLightbox(context, item)
-            : () async {
-                await openExternalUrl(item.url);
-              },
+        onTap: switch (item.kind) {
+          CastingReferenceMediaKind.image =>
+            () => _showCastingReferenceLightbox(context, item),
+          // Videos play inside the app, like profile videos.
+          CastingReferenceMediaKind.video =>
+            () => context.push(
+              Routes.modelVideoLocation('casting'),
+              extra: item.url,
+            ),
+          CastingReferenceMediaKind.file => () async {
+            await openExternalUrl(item.url);
+          },
+        },
         child: SizedBox(
-          width: 56,
-          height: 56,
+          width: 72,
+          height: 72,
           child: hasPreview
               ? Stack(
                   fit: StackFit.expand,

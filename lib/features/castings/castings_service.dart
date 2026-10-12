@@ -28,6 +28,7 @@ class CastingsService {
       if (SupabaseCompat.isMissingAnyColumn(e, [
         'project_stage',
         'reference_media',
+        'extra_info',
       ])) {
         return _fetchCastingsLegacy();
       }
@@ -41,7 +42,7 @@ class CastingsService {
     final rows = await _sb
         .from('castings')
         .select(
-          'id,title,description,rights,fee,dates,project_stage,reference_media,created_at',
+          'id,title,description,rights,fee,dates,project_stage,reference_media,extra_info,created_at',
         )
         .order('created_at', ascending: false)
         .limit(castingsPageLimit);

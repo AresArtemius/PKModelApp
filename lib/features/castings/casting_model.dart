@@ -11,6 +11,7 @@ class CastingModel {
     required this.datesText,
     required this.projectStage,
     required this.referenceMedia,
+    this.extraInfo = '',
   });
 
   final String id;
@@ -21,6 +22,9 @@ class CastingModel {
   final String datesText;
   final CastingProjectStage projectStage;
   final List<CastingReferenceMedia> referenceMedia;
+
+  /// «Дополнительная информация» (free text, optional).
+  final String extraInfo;
 
   factory CastingModel.fromMap(Map<String, dynamic> map) {
     final id = (map['id'] ?? '').toString();
@@ -43,6 +47,7 @@ class CastingModel {
       datesText: datesText,
       projectStage: projectStage,
       referenceMedia: referenceMedia,
+      extraInfo: (map['extra_info'] ?? '').toString().trim(),
     );
   }
 }
