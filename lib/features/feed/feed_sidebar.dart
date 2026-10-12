@@ -76,12 +76,10 @@ class _SuggestionRow extends StatelessWidget {
       'active' => ru ? 'Недавно публиковал(а)' : 'Recently posted',
       _ => _typeLabel(item.accountType, ru),
     };
-    final canOpen = item.accountTag.isNotEmpty;
-
     return InkWell(
-      onTap: canOpen
-          ? () => context.push('${Routes.publicAccountPrefix}${item.accountTag}')
-          : null,
+      onTap: () => context.push(
+        Routes.accountLocation(tag: item.accountTag, userId: item.userId),
+      ),
       borderRadius: BorderRadius.circular(Tokens.radiusSm),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 6),

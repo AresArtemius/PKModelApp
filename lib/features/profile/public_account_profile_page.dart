@@ -23,11 +23,31 @@ import '../feed/follow_button.dart';
 const double _kPublicAccountMaxWidth = 760;
 const double _kPublicAccountAvatarSize = 104;
 
+/// Key prefix for [publicAccountProfileProvider] when opening by user id.
+const publicAccountIdPrefix = 'id:';
+
 final publicAccountProfileProvider =
     FutureProvider.family<PublicAccountProfile?, String>((ref, rawTag) async {
+      final sb = ref.read(supabaseProvider);
+      // «id:<uuid>» — an account without a public @tag (/u/<id>).
+      if (rawTag.startsWith(publicAccountIdPrefix)) {
+        final id = rawTag.substring(publicAccountIdPrefix.length).trim();
+        if (id.isEmpty) return null;
+        try {
+          final rows = await sb.rpc<List<dynamic>>(
+            'get_public_account_profile_by_id',
+            params: {'p_user_id': id},
+          );
+          if (rows.isEmpty) return null;
+          return PublicAccountProfile.fromMap(
+            Map<String, dynamic>.from(rows.first as Map),
+          );
+        } on PostgrestException {
+          return null;
+        }
+      }
       final tag = normalizeAccountTag(rawTag);
       if (tag.isEmpty) return null;
-      final sb = ref.read(supabaseProvider);
 
       try {
         final rows = await sb.rpc<List<dynamic>>(
@@ -91,6 +111,10 @@ class PublicAccountProfile {
   final String website;
   final String socialUrl;
   final String bio;
+
+  /// «@tag» when the tag is public, otherwise the name.
+  String get handleLabel =>
+      accountTag.isNotEmpty ? '@$accountTag' : displayName;
 
   String get displayName {
     if (fullName.isNotEmpty) return fullName;
@@ -264,7 +288,9 @@ class PublicAccountProfilePage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tag = normalizeAccountTag(rawTag);
+    final tag = rawTag.startsWith(publicAccountIdPrefix)
+        ? rawTag
+        : normalizeAccountTag(rawTag);
     final ru = _isRussian(context);
     final profileAsync = ref.watch(publicAccountProfileProvider(tag));
 
@@ -290,7 +316,7 @@ class PublicAccountProfilePage extends ConsumerWidget {
                     onAction: () => context.go(Routes.search),
                   ),
                   data: (profile) {
-                    if (profile == null || profile.accountTag.isEmpty) {
+                    if (profile == null || profile.userId.isEmpty) {
                       return _PublicAccountMessage(
                         title: ru ? 'АККАУНТ НЕ НАЙДЕН' : 'ACCOUNT NOT FOUND',
                         message: ru
@@ -305,7 +331,7 @@ class PublicAccountProfilePage extends ConsumerWidget {
                       padding: kMyProfilePagePad,
                       children: [
                         BrandAdminHeader(
-                          title: '@${profile.accountTag}',
+                          title: profile.handleLabel,
                           onBack: () => context.go(Routes.search),
                         ),
                         const SizedBox(height: kGap14),
@@ -435,7 +461,7 @@ extension _PublicAccountV2 on PublicAccountProfilePage {
           error.toString(),
         ),
         data: (profile) {
-          if (profile == null || profile.accountTag.isEmpty) {
+          if (profile == null || profile.userId.isEmpty) {
             return message(
               ru ? 'Аккаунт не найден' : 'Account not found',
               ru
@@ -446,7 +472,7 @@ extension _PublicAccountV2 on PublicAccountProfilePage {
           final signedIn = ref.watch(isAuthenticatedProvider);
           final typeLabel = _accountTypeLabel(context, profile.accountType);
           final meta = [
-            '@${profile.accountTag}',
+            if (profile.accountTag.isNotEmpty) '@${profile.accountTag}',
             typeLabel,
             if (profile.locationLabel.isNotEmpty) profile.locationLabel,
           ].join(' · ');
@@ -684,7 +710,7 @@ class _PublicAccountHero extends StatelessWidget {
               ),
               const SizedBox(height: kGap6),
               Text(
-                '@${profile.accountTag}',
+                profile.handleLabel,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: commandStyle(

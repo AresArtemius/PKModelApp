@@ -40,6 +40,10 @@ String publicPostLink(String postId) {
   return _joinPublicPath('/post/${Uri.encodeComponent(postId)}');
 }
 
+String publicAccountByIdLink(String userId) {
+  return _joinPublicPath('/u/${Uri.encodeComponent(userId)}');
+}
+
 String publicAccountLink(String tag) {
   return _joinPublicPath('/@${Uri.encodeComponent(tag)}');
 }

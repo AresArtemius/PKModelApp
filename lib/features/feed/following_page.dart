@@ -87,11 +87,12 @@ class _FollowingPageState extends ConsumerState<FollowingPage> {
                               '@${items[i].accountTag}',
                             _typeLabel(items[i].accountType, ru),
                           ].where((s) => s.isNotEmpty).join(' · '),
-                          onTap: items[i].accountTag.isEmpty
-                              ? null
-                              : () => context.push(
-                                  '${Routes.publicAccountPrefix}${items[i].accountTag}',
-                                ),
+                          onTap: () => context.push(
+                            Routes.accountLocation(
+                              tag: items[i].accountTag,
+                              userId: items[i].userId,
+                            ),
+                          ),
                           trailing: FollowButton(
                             userId: items[i].userId,
                             showCount: false,

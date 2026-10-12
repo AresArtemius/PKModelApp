@@ -105,6 +105,14 @@ abstract class Routes {
   static const feed = '/feed';
   static const postPrefix = '/post/';
   static const post = '/post/:id';
+  /// Account page: by public @tag when there is one, else by user id.
+  static String accountLocation({required String tag, required String userId}) {
+    if (tag.trim().isNotEmpty) return '$publicAccountPrefix${tag.trim()}';
+    return '$publicAccountByIdPrefix${userId.trim()}';
+  }
+
+  static const publicAccountByIdPrefix = '/u/';
+  static const publicAccountById = '/u/:id';
   static const publicAccountPrefix = '/@';
   static const publicAccount = '/@:tag';
 
@@ -544,6 +552,12 @@ final List<RouteBase> appRoutes = [
       final tag = state.pathParameters[_routeParamTag] ?? '';
       return PublicAccountProfilePage(rawTag: tag);
     },
+  ),
+  GoRoute(
+    path: Routes.publicAccountById,
+    builder: (context, state) => PublicAccountProfilePage(
+      rawTag: '$publicAccountIdPrefix${state.pathParameters[_routeParamId] ?? ''}',
+    ),
   ),
 
   GoRoute(
