@@ -1324,6 +1324,18 @@ class _AccountStatusEntryCardState
   bool _saving = false;
   final Set<String> _shownRejectedDialogs = <String>{};
 
+  @override
+  void initState() {
+    super.initState();
+    // The role may have been changed by an admin while the app was open
+    // (or on another device): re-read it every time the account opens.
+    Future.microtask(() {
+      if (!mounted) return;
+      ref.invalidate(accountRoleProvider);
+      ref.invalidate(accountStatusProvider);
+    });
+  }
+
   bool get _isRussian {
     return Localizations.localeOf(context).languageCode.toLowerCase() == 'ru';
   }

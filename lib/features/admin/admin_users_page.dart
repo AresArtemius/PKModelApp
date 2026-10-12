@@ -785,6 +785,8 @@ class _UserActionsMenu extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final isAdmin = user.primaryRole == 'admin';
+    final isClient = user.primaryRole == 'casting_agent';
     return AdminPopupMenuButton<String>(
       tooltip: ru ? 'Действия' : 'Actions',
       onSelected: (value) {
@@ -799,6 +801,7 @@ class _UserActionsMenu extends StatelessWidget {
             onSetRole(user, 'casting_agent');
             return;
           case 'user':
+          case 'unclient':
             onSetRole(user, 'user');
             return;
           case 'delete_profile':
@@ -812,21 +815,31 @@ class _UserActionsMenu extends StatelessWidget {
           label: ru ? 'Открыть чаты' : 'Chats',
           icon: Icons.chat_bubble_outline_rounded,
         ),
-        AdminMenuOption(
-          value: 'admin',
-          label: ru ? 'Выдать админку' : 'Make admin',
-          icon: Icons.admin_panel_settings_rounded,
-        ),
-        AdminMenuOption(
-          value: 'user',
-          label: ru ? 'Снять админку' : 'Make user',
-          icon: Icons.person_outline_rounded,
-        ),
-        AdminMenuOption(
-          value: 'client',
-          label: ru ? 'Дать статус заказчика' : 'Make client',
-          icon: Icons.business_center_outlined,
-        ),
+        // Only the actions that change something for this user.
+        if (!isAdmin)
+          AdminMenuOption(
+            value: 'admin',
+            label: ru ? 'Выдать админку' : 'Make admin',
+            icon: Icons.admin_panel_settings_rounded,
+          ),
+        if (isAdmin)
+          AdminMenuOption(
+            value: 'user',
+            label: ru ? 'Снять админку' : 'Remove admin',
+            icon: Icons.person_outline_rounded,
+          ),
+        if (!isAdmin && !isClient)
+          AdminMenuOption(
+            value: 'client',
+            label: ru ? 'Дать статус заказчика' : 'Make client',
+            icon: Icons.business_center_outlined,
+          ),
+        if (isClient)
+          AdminMenuOption(
+            value: 'unclient',
+            label: ru ? 'Снять статус заказчика' : 'Remove client status',
+            icon: Icons.business_center_outlined,
+          ),
         AdminMenuOption(
           value: 'delete_profile',
           label: ru ? 'Удалить профиль аккаунта' : 'Delete account profile',
