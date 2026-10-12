@@ -127,6 +127,7 @@ class FeedPost {
     int? commentCount,
     bool? liked,
     bool? saved,
+    String? body,
   }) {
     return FeedPost(
       id: id,
@@ -136,7 +137,7 @@ class FeedPost {
       authorTag: authorTag,
       authorAccountType: authorAccountType,
       kind: kind,
-      body: body,
+      body: body ?? this.body,
       visibility: visibility,
       profileId: profileId,
       profileName: profileName,

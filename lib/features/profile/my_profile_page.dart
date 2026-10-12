@@ -1,4 +1,5 @@
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -288,13 +289,16 @@ class MyProfilePage extends ConsumerWidget {
         badge: unreadNotifications,
         onTap: () => context.go(Routes.notifications),
       ),
-      if (!_accountV2) const SizedBox(height: kGap14),
-      _AccountEntryCard(
-        icon: Icons.analytics_rounded,
-        title: AppLocalizations.of(context)!.analyticsUpper,
-        subtitle: AppLocalizations.of(context)!.analyticsAccountEntrySubtitle,
-        onTap: () => context.go(Routes.profileAnalytics),
-      ),
+      // Profile analytics stays web-only for now (decision 12.10).
+      if (kIsWeb) ...[
+        if (!_accountV2) const SizedBox(height: kGap14),
+        _AccountEntryCard(
+          icon: Icons.analytics_rounded,
+          title: AppLocalizations.of(context)!.analyticsUpper,
+          subtitle: AppLocalizations.of(context)!.analyticsAccountEntrySubtitle,
+          onTap: () => context.go(Routes.profileAnalytics),
+        ),
+      ],
       if (!_accountV2) const SizedBox(height: kGap14),
       _AccountEntryCard(
         icon: Icons.people_outline_rounded,
@@ -1331,7 +1335,6 @@ class _AccountStatusEntryCardState
     // (or on another device): re-read it every time the account opens.
     Future.microtask(() {
       if (!mounted) return;
-      ref.invalidate(accountRoleProvider);
       ref.invalidate(accountStatusProvider);
     });
   }

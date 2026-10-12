@@ -125,7 +125,10 @@ final accountRoleProvider = FutureProvider<AccountRole>((ref) async {
   final sb = ref.read(supabaseProvider);
   final user = sb.auth.currentUser;
   if (user == null) return AccountRole.user;
+  return _loadAccountRole(sb, user);
+});
 
+Future<AccountRole> _loadAccountRole(SupabaseClient sb, User user) async {
   try {
     Map<String, dynamic>? data = await _fetchUserRoleRow(sb, user.id);
 
@@ -150,7 +153,7 @@ final accountRoleProvider = FutureProvider<AccountRole>((ref) async {
     AppLogger.error('Account role load failed', error: e, stackTrace: st);
     return AccountRole.user;
   }
-});
+}
 
 final isAdminProvider = FutureProvider<bool>((ref) async {
   final role = await ref.watch(accountRoleProvider.future);
@@ -184,7 +187,8 @@ class AccountStatusSnapshot {
   final String? rejectedComment;
 
   bool get hasPending => pending != null;
-  bool get isApprovedClient => role == AccountRole.castingAgent;
+  bool get isApprovedClient =>
+      role == AccountRole.castingAgent || role == AccountRole.admin;
 }
 
 final accountStatusProvider = FutureProvider<AccountStatusSnapshot>((
@@ -199,7 +203,16 @@ final accountStatusProvider = FutureProvider<AccountStatusSnapshot>((
     );
   }
 
-  final role = await ref.watch(accountRoleProvider.future);
+  // Read the role fresh (an admin may have changed it meanwhile) without
+  // resetting accountRoleProvider — that would flash non-admin UI for a
+  // moment. Only when it actually changed do dependants get refreshed.
+  final cached = ref.read(accountRoleProvider).valueOrNull;
+  final role = await _loadAccountRole(sb, user);
+  if (cached != null && cached != role) {
+    ref.invalidate(accountRoleProvider);
+    ref.invalidate(isAdminProvider);
+    ref.invalidate(canCreateSelectionsProvider);
+  }
 
   try {
     final profile = await _fetchAccountProfileRow(sb, user.id);
@@ -207,11 +220,15 @@ final accountStatusProvider = FutureProvider<AccountStatusSnapshot>((
       profile?['account_type'],
     );
     final application = await _fetchLatestStatusApplication(sb, user.id);
-    final visibleCurrent = role == AccountRole.castingAgent
-        ? (current == RegistrationAccountType.user
-              ? RegistrationAccountType.castingAgent
-              : current)
-        : RegistrationAccountType.user;
+    final visibleCurrent = switch (role) {
+      AccountRole.castingAgent =>
+        current == RegistrationAccountType.user
+            ? RegistrationAccountType.castingAgent
+            : current,
+      // Admins keep whatever type they chose for themselves.
+      AccountRole.admin => current,
+      _ => RegistrationAccountType.user,
+    };
     return AccountStatusSnapshot(
       current: visibleCurrent,
       role: role,
@@ -337,8 +354,11 @@ class AccountStatusService {
     if (user == null) return;
 
     final currentRole = await _currentStoredRole(user.id);
+    // Admins and approved clients switch at once; everyone else files an
+    // application that an admin approves.
     final requiresApproval =
         currentRole != AccountRole.castingAgent &&
+        currentRole != AccountRole.admin &&
         registrationAccountTypeIsClient(type);
     if (requiresApproval) {
       await _requestClientStatus(type);

@@ -89,7 +89,15 @@ class _WebAppFrame extends StatelessWidget {
     final app = Stack(
       fit: StackFit.expand,
       children: [
-        child ?? const SizedBox.shrink(),
+        // Phones: a tap anywhere outside a text field drops the keyboard
+        // (there is no other way to dismiss it on iOS without a «Done»).
+        kIsWeb
+            ? (child ?? const SizedBox.shrink())
+            : GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+                child: child ?? const SizedBox.shrink(),
+              ),
         Positioned.fill(
           child: IgnorePointer(
             child: AnimatedSwitcher(

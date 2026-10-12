@@ -1413,6 +1413,7 @@ class _Composer extends StatelessWidget {
                           return KeyEventResult.handled;
                         },
                   child: TextField(
+                    textCapitalization: TextCapitalization.sentences,
                     controller: controller,
                     focusNode: focusNode,
                     minLines: 1,

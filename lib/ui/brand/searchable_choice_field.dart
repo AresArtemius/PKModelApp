@@ -97,6 +97,7 @@ class SearchableChoiceField extends StatelessWidget {
                     : pillInputDecoration(hint: hint);
 
                 return TextField(
+                  textCapitalization: TextCapitalization.sentences,
                   controller: textEditingController,
                   focusNode: focusNode,
                   enabled: enabled,

@@ -779,6 +779,7 @@ class _FaqEditDialogState extends State<_FaqEditDialog> {
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(
+                textCapitalization: TextCapitalization.sentences,
                 controller: _question,
                 decoration: InputDecoration(
                   labelText: ru ? 'Вопрос' : 'Question',
@@ -786,6 +787,7 @@ class _FaqEditDialogState extends State<_FaqEditDialog> {
               ),
               const SizedBox(height: 12),
               TextField(
+                textCapitalization: TextCapitalization.sentences,
                 controller: _answer,
                 minLines: 4,
                 maxLines: 8,
@@ -793,6 +795,7 @@ class _FaqEditDialogState extends State<_FaqEditDialog> {
               ),
               const SizedBox(height: 12),
               TextField(
+                textCapitalization: TextCapitalization.sentences,
                 controller: _keywords,
                 decoration: InputDecoration(
                   labelText: ru
@@ -1014,6 +1017,7 @@ class _TicketDetail extends ConsumerWidget {
           ),
           const SizedBox(height: 12),
           TextField(
+            textCapitalization: TextCapitalization.sentences,
             controller: replyController,
             minLines: 2,
             maxLines: 5,

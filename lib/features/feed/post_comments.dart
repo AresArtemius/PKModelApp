@@ -9,6 +9,7 @@ import '../../core/router.dart';
 import '../../core/roles_provider.dart';
 import '../../core/storage_image_variant.dart';
 import '../../ui/brand/ui_constants.dart';
+import 'edit_text_dialog.dart';
 import 'feed_models.dart';
 import 'feed_page.dart' show feedRelativeTime;
 import 'feed_service.dart';
@@ -77,6 +78,26 @@ class _PostCommentsSectionState extends ConsumerState<PostCommentsSection> {
     }
   }
 
+  Future<void> _edit(FeedComment c) async {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final text = await showEditTextDialog(
+      context,
+      title: ru ? 'Редактировать комментарий' : 'Edit comment',
+      initial: c.body,
+      maxLength: 1000,
+      minLines: 2,
+    );
+    if (text == null || !mounted) return;
+    try {
+      await ref
+          .read(feedActionsProvider)
+          .editComment(widget.post.id, c.id, text);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _error = ru ? 'Не удалось сохранить' : 'Could not save');
+    }
+  }
+
   Future<void> _delete(FeedComment c) async {
     try {
       await ref.read(feedActionsProvider).deleteComment(widget.post.id, c.id);
@@ -134,11 +155,13 @@ class _PostCommentsSectionState extends ConsumerState<PostCommentsSection> {
                         _CommentRow(
                           comment: c,
                           ru: ru,
+                          canEdit: me != null && c.authorId == me,
                           canDelete:
                               me != null &&
                               (c.authorId == me ||
                                   widget.post.authorId == me ||
                                   isAdmin),
+                          onEdit: () => _edit(c),
                           onDelete: () => _delete(c),
                         ),
                     ],
@@ -151,6 +174,7 @@ class _PostCommentsSectionState extends ConsumerState<PostCommentsSection> {
               children: [
                 Expanded(
                   child: TextField(
+                    textCapitalization: TextCapitalization.sentences,
                     controller: _text,
                     focusNode: _focus,
                     enabled: !_busy,
@@ -202,13 +226,17 @@ class _CommentRow extends StatelessWidget {
   const _CommentRow({
     required this.comment,
     required this.ru,
+    required this.canEdit,
     required this.canDelete,
+    required this.onEdit,
     required this.onDelete,
   });
 
   final FeedComment comment;
   final bool ru;
+  final bool canEdit;
   final bool canDelete;
+  final VoidCallback onEdit;
   final VoidCallback onDelete;
 
   @override
@@ -280,6 +308,16 @@ class _CommentRow extends StatelessWidget {
               ],
             ),
           ),
+          if (canEdit)
+            IconButton(
+              tooltip: ru ? 'Редактировать' : 'Edit',
+              onPressed: onEdit,
+              icon: const Icon(Icons.edit_outlined, size: 16),
+              color: Tokens.textTertiary,
+              visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+            ),
           if (canDelete)
             IconButton(
               tooltip: ru ? 'Удалить' : 'Delete',
@@ -411,6 +449,7 @@ class _ReportDialogState extends State<_ReportDialog> {
               ),
             const SizedBox(height: Tokens.s8),
             TextField(
+              textCapitalization: TextCapitalization.sentences,
               controller: _note,
               enabled: !_busy,
               minLines: 1,

@@ -592,6 +592,7 @@ class _AdminSearchField extends StatelessWidget {
   Widget build(BuildContext context) {
     if (adminV2) {
       return TextField(
+        textCapitalization: TextCapitalization.sentences,
         controller: controller,
         onChanged: (_) => onSearchChanged(),
         style: AppText.body,
@@ -617,6 +618,7 @@ class _AdminSearchField extends StatelessWidget {
       );
     }
     return TextField(
+      textCapitalization: TextCapitalization.sentences,
       controller: controller,
       onChanged: (_) => onSearchChanged(),
       style: adminBodyStyle(color: kTextDark),

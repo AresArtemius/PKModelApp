@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/app_error_mapper.dart';
 import '../../core/push_notifications_service.dart';
+import '../../core/pop_or.dart';
 import '../../core/router.dart';
 import '../../gen_l10n/app_localizations.dart';
 import '../../ui/brand/brand_admin_header.dart';
@@ -313,7 +314,7 @@ class _NotificationsPageV2 extends ConsumerWidget {
     final unread = items.where((e) => !e.isRead).length;
 
     final header = Padding(
-      padding: EdgeInsets.fromLTRB(wide ? 32 : 16, wide ? 28 : 20, wide ? 32 : 16, 8),
+      padding: EdgeInsets.fromLTRB(wide ? 32 : 16, wide ? 28 : 12, wide ? 32 : 16, 8),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
@@ -321,6 +322,18 @@ class _NotificationsPageV2 extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (!wide)
+                  // Phone: the page opens from the account, give a way back.
+                  TextButton.icon(
+                    onPressed: () => popOr(context, () => context.go(Routes.me)),
+                    style: TextButton.styleFrom(
+                      padding: EdgeInsets.zero,
+                      foregroundColor: Tokens.textSecondary,
+                      minimumSize: const Size(0, 32),
+                    ),
+                    icon: const Icon(Icons.arrow_back_rounded, size: 18),
+                    label: Text(ru ? 'Аккаунт' : 'Account'),
+                  ),
                 Text(
                   ru ? 'Уведомления' : 'Notifications',
                   style: AppText.h1.copyWith(fontSize: wide ? 32 : 28),

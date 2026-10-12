@@ -751,6 +751,7 @@ class _V2SearchField extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
             child: TextField(
+              textCapitalization: TextCapitalization.sentences,
               controller: controller,
               style: AppText.small,
               decoration: InputDecoration(
@@ -1418,6 +1419,7 @@ class _ChatsSearch extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: TextField(
+              textCapitalization: TextCapitalization.sentences,
               controller: controller,
               decoration: InputDecoration(
                 border: InputBorder.none,

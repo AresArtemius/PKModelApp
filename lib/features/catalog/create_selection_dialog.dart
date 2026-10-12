@@ -127,6 +127,7 @@ class _CreateSelectionDialogState extends State<CreateSelectionDialog> {
               ),
               const SizedBox(height: kGap14),
               TextField(
+                textCapitalization: TextCapitalization.sentences,
                 controller: _titleC,
                 autofocus: true,
                 textInputAction: TextInputAction.next,
@@ -145,6 +146,7 @@ class _CreateSelectionDialogState extends State<CreateSelectionDialog> {
               ),
               const SizedBox(height: kGap12),
               TextField(
+                textCapitalization: TextCapitalization.sentences,
                 controller: _clientC,
                 textInputAction: TextInputAction.next,
                 style: const TextStyle(color: kTextDark),
@@ -152,6 +154,7 @@ class _CreateSelectionDialogState extends State<CreateSelectionDialog> {
               ),
               const SizedBox(height: kGap12),
               TextField(
+                textCapitalization: TextCapitalization.sentences,
                 controller: _brandC,
                 textInputAction: TextInputAction.next,
                 style: const TextStyle(color: kTextDark),
@@ -162,6 +165,7 @@ class _CreateSelectionDialogState extends State<CreateSelectionDialog> {
                 children: [
                   Expanded(
                     child: TextField(
+                      textCapitalization: TextCapitalization.sentences,
                       controller: _budgetC,
                       textInputAction: TextInputAction.next,
                       style: const TextStyle(color: kTextDark),
@@ -173,6 +177,7 @@ class _CreateSelectionDialogState extends State<CreateSelectionDialog> {
                   const SizedBox(width: kGap10),
                   Expanded(
                     child: TextField(
+                      textCapitalization: TextCapitalization.sentences,
                       controller: _locationC,
                       textInputAction: TextInputAction.next,
                       style: const TextStyle(color: kTextDark),
@@ -185,6 +190,7 @@ class _CreateSelectionDialogState extends State<CreateSelectionDialog> {
               ),
               const SizedBox(height: kGap12),
               TextField(
+                textCapitalization: TextCapitalization.sentences,
                 controller: _datesC,
                 textInputAction: TextInputAction.next,
                 style: const TextStyle(color: kTextDark),
@@ -192,6 +198,7 @@ class _CreateSelectionDialogState extends State<CreateSelectionDialog> {
               ),
               const SizedBox(height: kGap12),
               TextField(
+                textCapitalization: TextCapitalization.sentences,
                 controller: _rolesC,
                 minLines: 2,
                 maxLines: 3,
@@ -213,6 +220,7 @@ class _CreateSelectionDialogState extends State<CreateSelectionDialog> {
                     : Padding(
                         padding: const EdgeInsets.only(top: kGap12),
                         child: TextField(
+                          textCapitalization: TextCapitalization.sentences,
                           controller: _videoRequirementsC,
                           minLines: 2,
                           maxLines: 4,

@@ -170,6 +170,7 @@ class _AgentTextInputDialogState extends State<AgentTextInputDialog> {
     return AlertDialog(
       title: Text(widget.title),
       content: TextField(
+        textCapitalization: TextCapitalization.sentences,
         controller: _controller,
         autofocus: true,
         maxLines: widget.maxLines,

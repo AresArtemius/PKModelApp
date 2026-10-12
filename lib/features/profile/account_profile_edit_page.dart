@@ -997,6 +997,13 @@ class _AccountProfileEditPageState
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: TextField(
+        // Tags, links and emails stay lower-case; everything else starts
+        // with a capital letter.
+        textCapitalization: prefixText != null ||
+                keyboardType == TextInputType.url ||
+                keyboardType == TextInputType.emailAddress
+            ? TextCapitalization.none
+            : TextCapitalization.sentences,
         controller: controller,
         maxLines: maxLines,
         minLines: maxLines > 1 ? 3 : null,
@@ -1513,7 +1520,11 @@ class _AccountProfileEditPageState
                         ru ? 'Сайт' : 'Website',
                         keyboardType: TextInputType.url,
                       ),
-                      _fieldV2(_socialC, 'Instagram / Telegram / WhatsApp'),
+                      _fieldV2(
+                        _socialC,
+                        'Instagram / Telegram / WhatsApp',
+                        keyboardType: TextInputType.url,
+                      ),
                       _fieldV2(_bioC, ru ? 'О себе' : 'About', maxLines: 5),
                     ],
                   ),
@@ -1783,6 +1794,9 @@ class _AccountProfileEditPageState
     return Padding(
       padding: const EdgeInsets.only(bottom: kGap12),
       child: TextField(
+        textCapitalization: prefixText != null
+            ? TextCapitalization.none
+            : TextCapitalization.sentences,
         controller: controller,
         maxLines: maxLines,
         inputFormatters: inputFormatters,

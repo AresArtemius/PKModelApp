@@ -382,6 +382,7 @@ class _PostComposerState extends ConsumerState<PostComposer> {
               const SizedBox(width: Tokens.s12),
               Expanded(
                 child: TextField(
+                  textCapitalization: TextCapitalization.sentences,
                   controller: _text,
                   focusNode: _focus,
                   enabled: !_busy,

@@ -2151,6 +2151,7 @@ class _Field extends StatelessWidget {
   Widget build(BuildContext context) {
     if (_editV2) {
       return TextField(
+        textCapitalization: TextCapitalization.sentences,
         controller: controller,
         keyboardType: keyboardType,
         inputFormatters: inputFormatters,
@@ -2169,6 +2170,7 @@ class _Field extends StatelessWidget {
       );
     }
     return TextField(
+      textCapitalization: TextCapitalization.sentences,
       controller: controller,
       keyboardType: keyboardType,
       inputFormatters: inputFormatters,

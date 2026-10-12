@@ -2092,6 +2092,7 @@ Future<String?> _pickFacetValue(
               child: Column(
                 children: [
                   TextField(
+                    textCapitalization: TextCapitalization.sentences,
                     autofocus: true,
                     onChanged: (v) =>
                         setState(() => filter = v.trim().toLowerCase()),
@@ -3117,6 +3118,7 @@ class _SearchBarState extends State<_SearchBar> {
     if (uiV2) {
       // v2: the theme input (48 px, hairline, no pill), sentence-case hint.
       return TextField(
+        textCapitalization: TextCapitalization.sentences,
         controller: widget.controller,
         focusNode: _focusNode,
         onChanged: widget.onChanged,
@@ -3170,6 +3172,7 @@ class _SearchBarState extends State<_SearchBar> {
         clipBehavior: Clip.antiAlias,
         borderRadius: radius,
         child: TextField(
+          textCapitalization: TextCapitalization.sentences,
           controller: widget.controller,
           focusNode: _focusNode,
           onChanged: widget.onChanged,
@@ -4053,6 +4056,7 @@ class _SaveSearchDialogState extends State<_SaveSearchDialog> {
             ),
             const SizedBox(height: kGap14),
             TextField(
+              textCapitalization: TextCapitalization.sentences,
               controller: _controller,
               autofocus: true,
               textInputAction: TextInputAction.done,

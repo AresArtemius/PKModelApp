@@ -533,6 +533,7 @@ class _CommandPaletteState extends ConsumerState<_CommandPalette> {
                       const SizedBox(width: 10),
                       Expanded(
                         child: TextField(
+                          textCapitalization: TextCapitalization.sentences,
                           controller: _controller,
                           focusNode: _focus,
                           autofocus: true,
