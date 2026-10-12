@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:ui' as ui;
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -109,6 +109,75 @@ class _AccountProfileEditPageState
   bool _uploadingAvatar = false;
   bool _linkingEmail = false;
   bool _linkingPhone = false;
+  bool _linkingApple = false;
+  bool _appleLinked = false;
+
+  /// Apple linking goes through the OAuth flow; it is offered on iOS/macOS
+  /// and on the web.
+  bool get _appleLinkAvailable =>
+      kIsWeb ||
+      defaultTargetPlatform == TargetPlatform.iOS ||
+      defaultTargetPlatform == TargetPlatform.macOS;
+
+  Future<void> _loadAppleLinked() async {
+    try {
+      final ids = await ref.read(authControllerProvider).identities();
+      if (!mounted) return;
+      setState(() => _appleLinked = ids.any((i) => i.provider == 'apple'));
+    } catch (_) {
+      // Not critical — the row simply offers «Привязать».
+    }
+  }
+
+  Future<void> _linkApple() async {
+    setState(() => _linkingApple = true);
+    try {
+      await ref.read(authControllerProvider).linkApple();
+      // The OAuth flow comes back through the app link; re-check later.
+      await Future<void>.delayed(const Duration(seconds: 2));
+      await _loadAppleLinked();
+    } catch (e) {
+      if (!mounted) return;
+      final ru = _isRussian;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            ru
+                ? 'Не удалось привязать Apple ID. $e'
+                : 'Could not link Apple ID. $e',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _linkingApple = false);
+    }
+  }
+
+  Future<void> _unlinkApple() async {
+    setState(() => _linkingApple = true);
+    try {
+      final ids = await ref.read(authControllerProvider).identities();
+      final apple = ids.where((i) => i.provider == 'apple').toList();
+      if (apple.isNotEmpty) {
+        await ref.read(authControllerProvider).unlinkIdentity(apple.first);
+      }
+      await _loadAppleLinked();
+    } catch (e) {
+      if (!mounted) return;
+      final ru = _isRussian;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            ru
+                ? 'Не удалось отвязать Apple ID. $e'
+                : 'Could not unlink Apple ID. $e',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _linkingApple = false);
+    }
+  }
   bool _changingPassword = false;
   bool _requestingMerge = false;
   bool _phoneOtpSent = false;
@@ -128,6 +197,14 @@ class _AccountProfileEditPageState
 
   bool get _isRussian {
     return Localizations.localeOf(context).languageCode.toLowerCase() == 'ru';
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    if (_appleLinkAvailable) {
+      Future.microtask(_loadAppleLinked);
+    }
   }
 
   @override
@@ -1463,8 +1540,33 @@ class _AccountProfileEditPageState
                                 : (ru ? 'Сменить пароль' : 'Change password'),
                           ),
                         ),
-                        last: true,
+                        last: !_appleLinkAvailable,
                       ),
+                      if (_appleLinkAvailable)
+                        SettingsListRow(
+                          icon: Icons.apple,
+                          title: 'Apple ID',
+                          subtitle: _appleLinked
+                              ? (ru
+                                    ? 'Вход через Apple подключён'
+                                    : 'Sign in with Apple is on')
+                              : (ru
+                                    ? 'Входить в этот аккаунт через Apple'
+                                    : 'Sign in to this account with Apple'),
+                          trailing: TextButton(
+                            onPressed: busyAll || _linkingApple
+                                ? null
+                                : (_appleLinked ? _unlinkApple : _linkApple),
+                            child: Text(
+                              _linkingApple
+                                  ? '…'
+                                  : _appleLinked
+                                  ? (ru ? 'Отвязать' : 'Unlink')
+                                  : (ru ? 'Привязать' : 'Link'),
+                            ),
+                          ),
+                          last: true,
+                        ),
                     ],
                   ),
                 ),

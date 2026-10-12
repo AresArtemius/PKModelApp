@@ -57,6 +57,26 @@ const List<String> _kProfileMediaCategories = [
   'Showreel',
 ];
 
+/// Display label for a stored media category value (stored values stay
+/// Russian; only the label shown in the editor is translated).
+String _profileMediaCategoryDisplayLabel(String value, bool ru) {
+  if (ru) return value;
+  switch (value.trim()) {
+    case 'Портфолио':
+      return 'Portfolio';
+    case 'Портрет':
+      return 'Portrait';
+    case 'Снэп-шоты':
+      return 'Snapshots';
+    case 'Работы':
+      return 'Work';
+    case 'Видео':
+      return 'Video';
+    default:
+      return value;
+  }
+}
+
 Alignment _coverFocalAlignment(double x, double y) {
   return Alignment(x.clamp(-1.0, 1.0), y.clamp(-1.0, 1.0));
 }

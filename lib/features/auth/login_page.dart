@@ -1,7 +1,9 @@
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:modelapp/core/app_error_mapper.dart';
@@ -187,6 +189,52 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       if (mounted) setState(() => _loading = false);
     }
   }
+
+  /// iOS: native «Sign in with Apple». New users land in onboarding like
+  /// any other first sign-in.
+  Future<void> _signInWithApple() async {
+    if (_loading) return;
+    final t = AppLocalizations.of(context)!;
+    final isRussian = t.localeName.startsWith('ru');
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      await ref.read(authControllerProvider).signInWithAppleNative();
+      await ref
+          .read(userSecurityAuditServiceProvider)
+          .log(
+            eventType: UserSecurityAuditEvent.loginApple,
+            label: isRussian ? 'Вход через Apple' : 'Apple sign-in',
+            metadata: {'method': 'apple'},
+          );
+      if (!mounted) return;
+      context.go(_afterLoginRoute());
+    } on SignInWithAppleAuthorizationException catch (e) {
+      if (!mounted) return;
+      // The user closed the sheet — not an error worth showing.
+      if (e.code != AuthorizationErrorCode.canceled) {
+        setState(() => _error = e.message);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(
+        () => _error = AppErrorMapper.message(
+          e,
+          t,
+          context: AppErrorContext.signIn,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  bool get _appleAvailable =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.iOS ||
+          defaultTargetPlatform == TargetPlatform.macOS);
 
   String _normalizedPhone() => composeInternationalPhone(
     code: phoneCountryCodeForIso(_phoneIso).code,
@@ -635,6 +683,25 @@ class _LoginPageState extends ConsumerState<LoginPage> {
               child: Text(_loading ? t.loadingDots : t.signInTitle),
             ),
           ),
+          if (_appleAvailable) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              height: Tokens.inputHeight,
+              child: OutlinedButton.icon(
+                onPressed: _loading ? null : _signInWithApple,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Tokens.text,
+                  side: const BorderSide(color: Tokens.borderStrong),
+                ),
+                icon: const Icon(Icons.apple, size: 22),
+                label: Text(
+                  t.localeName.startsWith('ru')
+                      ? 'Войти через Apple'
+                      : 'Sign in with Apple',
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 18),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,

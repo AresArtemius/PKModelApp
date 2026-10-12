@@ -1900,6 +1900,7 @@ class _ModelPhotoGalleryPageState extends State<ModelPhotoGalleryPage> {
   @override
   Widget build(BuildContext context) {
     final hasSeveralPhotos = widget.urls.length > 1;
+    final galleryRu = Localizations.localeOf(context).languageCode == 'ru';
     return Focus(
       focusNode: _keyboardFocus,
       autofocus: true,
@@ -1936,7 +1937,7 @@ class _ModelPhotoGalleryPageState extends State<ModelPhotoGalleryPage> {
                 top: _galleryCloseOffset,
                 left: _galleryCloseOffset,
                 child: IconButton(
-                  tooltip: 'Закрыть',
+                  tooltip: galleryRu ? 'Закрыть' : 'Close',
                   icon: const Icon(Icons.close, color: Colors.white),
                   onPressed: () => Navigator.of(context).pop(),
                 ),
@@ -1948,7 +1949,7 @@ class _ModelPhotoGalleryPageState extends State<ModelPhotoGalleryPage> {
                   bottom: 0,
                   child: Center(
                     child: _PhotoGalleryArrow(
-                      tooltip: 'Предыдущее фото',
+                      tooltip: galleryRu ? 'Предыдущее фото' : 'Previous photo',
                       icon: Icons.chevron_left_rounded,
                       onPressed: () => _showPhoto(_currentIndex - 1),
                     ),
@@ -1961,7 +1962,7 @@ class _ModelPhotoGalleryPageState extends State<ModelPhotoGalleryPage> {
                   bottom: 0,
                   child: Center(
                     child: _PhotoGalleryArrow(
-                      tooltip: 'Следующее фото',
+                      tooltip: galleryRu ? 'Следующее фото' : 'Next photo',
                       icon: Icons.chevron_right_rounded,
                       onPressed: () => _showPhoto(_currentIndex + 1),
                     ),
@@ -2581,6 +2582,7 @@ class _MediaTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final label = _localizedMediaCategoryLabel(context, this.label);
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -2672,6 +2674,21 @@ class _MediaTile extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Media category labels are stored in Russian (`Портфолио`, `Портрет`, …).
+/// Show English equivalents when the locale is not Russian; stored values
+/// are left untouched.
+String _localizedMediaCategoryLabel(BuildContext context, String label) {
+  if (Localizations.localeOf(context).languageCode == 'ru') return label;
+  return switch (label.trim().toLowerCase()) {
+    'портфолио' => 'Portfolio',
+    'портрет' => 'Portrait',
+    'снэп-шоты' || 'снепшоты' || 'снэпшоты' => 'Snapshots',
+    'работы' => 'Work',
+    'видео' => 'Video',
+    _ => label,
+  };
 }
 
 /// Hero shuttle that shows the source hero's child for the whole flight.
