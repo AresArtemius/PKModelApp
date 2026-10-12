@@ -9,6 +9,7 @@ import '../../core/supabase_compat.dart';
 import '../../core/supabase_provider.dart';
 import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
+import '../chat/chat_providers.dart';
 import 'admin_shell_v2.dart';
 import 'admin_style.dart';
 
@@ -605,6 +606,10 @@ class _UserMobileCard extends StatelessWidget {
       subtitle: user.handleOrId,
       meta: meta,
       badge: _RoleBadge(role: user.primaryRole),
+      // Tap → the user's account page (by @tag or id).
+      onOpen: () => context.push(
+        Routes.accountLocation(tag: user.accountTag, userId: user.id),
+      ),
       action: _UserActionsMenu(
         user: user,
         onSetRole: onSetRole,
@@ -771,6 +776,26 @@ class _UserTableRow extends StatelessWidget {
   }
 }
 
+/// Opens (or creates) the one-to-one chat with this user.
+Future<void> _openDirectChat(BuildContext context, String userId) async {
+  final container = ProviderScope.containerOf(context, listen: false);
+  try {
+    final chatId = await container
+        .read(chatServiceProvider)
+        .ensureDirectChat(userId);
+    if (!context.mounted) return;
+    if (chatId.isEmpty) {
+      context.go(Routes.chats);
+      return;
+    }
+    container.invalidate(myChatsProvider(false));
+    context.push(Routes.chatLocation(chatId));
+  } catch (_) {
+    if (!context.mounted) return;
+    context.go('${Routes.chats}?user=$userId');
+  }
+}
+
 class _UserActionsMenu extends StatelessWidget {
   const _UserActionsMenu({
     required this.user,
@@ -792,7 +817,12 @@ class _UserActionsMenu extends StatelessWidget {
       onSelected: (value) {
         switch (value) {
           case 'chat':
-            context.go('${Routes.chats}?user=${user.id}');
+            _openDirectChat(context, user.id);
+            return;
+          case 'account':
+            context.push(
+              Routes.accountLocation(tag: user.accountTag, userId: user.id),
+            );
             return;
           case 'admin':
             onSetRole(user, 'admin');
@@ -811,8 +841,13 @@ class _UserActionsMenu extends StatelessWidget {
       },
       options: [
         AdminMenuOption(
+          value: 'account',
+          label: ru ? 'Открыть аккаунт' : 'Open account',
+          icon: Icons.person_outline_rounded,
+        ),
+        AdminMenuOption(
           value: 'chat',
-          label: ru ? 'Открыть чаты' : 'Chats',
+          label: ru ? 'Написать' : 'Message',
           icon: Icons.chat_bubble_outline_rounded,
         ),
         // Only the actions that change something for this user.
