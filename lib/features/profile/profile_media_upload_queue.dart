@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/app_logger.dart';
+import '../../core/locale_provider.dart';
 import '../../core/media_tools.dart';
 import '../../core/supabase_provider.dart';
 import 'my_profile_controller.dart';
@@ -344,6 +346,11 @@ class ProfileMediaUploadQueue
   static const _storageKey = 'profile_media_upload_queue_v1';
 
   final Ref ref;
+
+  bool get _ru =>
+      (ref.read(localeProvider)?.languageCode ??
+          PlatformDispatcher.instance.locale.languageCode) !=
+      'en';
   final Set<String> _activeTasks = <String>{};
   final Map<String, ProfileMediaUploadCancelToken> _cancelTokens =
       <String, ProfileMediaUploadCancelToken>{};
@@ -594,7 +601,9 @@ class ProfileMediaUploadQueue
                     : ProfileMediaUploadItemStatus.failed,
                 error: File(item.path).existsSync()
                     ? ''
-                    : 'Локальный файл недоступен',
+                    : (_ru
+                          ? 'Локальный файл недоступен'
+                          : 'Local file is unavailable'),
               ),
     ];
     final hasFailed = items.any(
@@ -632,9 +641,10 @@ class ProfileMediaUploadQueue
         items.add(
           item.copyWith(
             status: ProfileMediaUploadItemStatus.failed,
-            error:
-                'Файл недоступен после перезапуска браузера. Выберите медиа заново.',
-            webDiagnostic: 'ошибка восстановления',
+            error: _ru
+                ? 'Файл недоступен после перезапуска браузера. Выберите медиа заново.'
+                : 'The file is unavailable after the browser restarted. Select the media again.',
+            webDiagnostic: _ru ? 'ошибка восстановления' : 'restore failed',
           ),
         );
       } else {
@@ -646,7 +656,9 @@ class ProfileMediaUploadQueue
             source: restored.file,
             webStorage: restored.storage,
             webRestored: true,
-            webDiagnostic: 'восстановлено после перезапуска',
+            webDiagnostic: _ru
+                ? 'восстановлено после перезапуска'
+                : 'restored after restart',
           ),
         );
       }
@@ -689,7 +701,7 @@ class ProfileMediaUploadQueue
             task.id,
             latestItem.copyWith(
               webStorage: storage,
-              webDiagnostic: 'сохранено в браузере',
+              webDiagnostic: _ru ? 'сохранено в браузере' : 'saved in browser',
             ),
           );
           await _persistQueue();
@@ -782,7 +794,11 @@ class ProfileMediaUploadQueue
     }
     final fallback = task.profile;
     if (fallback != null) return fallback;
-    throw StateError('Анкета не найдена для завершения загрузки медиа');
+    throw StateError(
+      _ru
+          ? 'Анкета не найдена для завершения загрузки медиа'
+          : 'Profile not found to finish the media upload',
+    );
   }
 
   Future<void> _process(String taskId) async {
@@ -1106,10 +1122,14 @@ class ProfileMediaUploadQueue
     final type = error.runtimeType.toString();
     final message = error.toString().trim();
     if (message.contains('MissingPluginException')) {
-      return 'Недоступен нативный модуль обработки видео в этой web-среде. type: $type. $message';
+      return _ru
+          ? 'Недоступен нативный модуль обработки видео в этой web-среде. type: $type. $message'
+          : 'The native video processing module is unavailable in this web environment. type: $type. $message';
     }
     if (message.isEmpty || message == 'Exception') {
-      return 'Не удалось загрузить медиа. type: $type. Проверьте соединение и повторите.';
+      return _ru
+          ? 'Не удалось загрузить медиа. type: $type. Проверьте соединение и повторите.'
+          : 'Failed to upload media. type: $type. Check your connection and try again.';
     }
     return '$message\ntype: $type';
   }
@@ -1249,7 +1269,9 @@ class ProfileMediaUploadQueue
           .timeout(
             const Duration(seconds: 45),
             onTimeout: () => throw TimeoutException(
-              'Файл загружен, но Supabase слишком долго сохраняет медиа в анкету. Нажмите «Повторить».',
+              _ru
+                  ? 'Файл загружен, но Supabase слишком долго сохраняет медиа в анкету. Нажмите «Повторить».'
+                  : 'The file was uploaded, but saving media to the profile is taking too long. Tap "Retry".',
             ),
           );
       if (task.approveImmediately) {
@@ -1258,7 +1280,9 @@ class ProfileMediaUploadQueue
             .timeout(
               const Duration(seconds: 45),
               onTimeout: () => throw TimeoutException(
-                'Файл загружен, но публикация анкеты заняла слишком много времени. Нажмите «Повторить».',
+                _ru
+                    ? 'Файл загружен, но публикация анкеты заняла слишком много времени. Нажмите «Повторить».'
+                    : 'The file was uploaded, but publishing the profile took too long. Tap "Retry".',
               ),
             );
       }

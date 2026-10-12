@@ -431,7 +431,9 @@ class _AdminSupportPageState extends ConsumerState<AdminSupportPage> {
                             )
                           : Center(
                               child: Text(
-                                'Не удалось загрузить обращения: $error',
+                                ru
+                                    ? 'Не удалось загрузить обращения: $error'
+                                    : 'Could not load requests: $error',
                                 textAlign: TextAlign.center,
                               ),
                             ),
@@ -1461,8 +1463,8 @@ class _MessageBubble extends StatelessWidget {
 }
 
 class _EmptyDetail extends StatelessWidget {
-  const _EmptyDetail({this.text = 'Выберите обращение слева.'});
-  final String text;
+  const _EmptyDetail({this.text});
+  final String? text;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -1470,7 +1472,10 @@ class _EmptyDetail extends StatelessWidget {
     padding: adminV2 ? const EdgeInsets.fromLTRB(8, 24, 8, 8) : null,
     decoration: adminV2 ? null : adminCardDecoration(),
     child: Text(
-      text,
+      text ??
+          (Localizations.localeOf(context).languageCode == 'ru'
+              ? 'Выберите обращение слева.'
+              : 'Select a request on the left.'),
       textAlign: adminV2 ? TextAlign.left : TextAlign.center,
       style: adminV2
           ? AppText.small.copyWith(color: Tokens.textSecondary)

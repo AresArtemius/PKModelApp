@@ -1353,7 +1353,11 @@ class _Composer extends StatelessWidget {
             children: [
               if (editingText == null)
                 IconButton(
-                  tooltip: flat ? 'Прикрепить' : null,
+                  tooltip: flat
+                      ? (Localizations.localeOf(context).languageCode == 'ru'
+                            ? 'Прикрепить'
+                            : 'Attach')
+                      : null,
                   onPressed: sending ? null : onAttach,
                   style: flat ? _composerIconStyle : null,
                   icon: Icon(
@@ -1441,7 +1445,9 @@ class _Composer extends StatelessWidget {
                 _EmojiPickerButton(onPick: onInsertEmoji!),
               if (editingText == null)
                 IconButton(
-                  tooltip: 'Голосовое сообщение',
+                  tooltip: Localizations.localeOf(context).languageCode == 'ru'
+                      ? 'Голосовое сообщение'
+                      : 'Voice message',
                   onPressed: sending ? null : onRecordVoice,
                   style: flat ? _composerIconStyle : null,
                   icon: Icon(

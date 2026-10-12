@@ -4,6 +4,10 @@ import 'package:go_router/go_router.dart';
 import '../../core/router.dart';
 import '../../ui/brand/brand_theme.dart';
 
+/// The landing copy is hand-written per language (no l10n keys yet).
+String _l(BuildContext context, String ru, String en) =>
+    Localizations.localeOf(context).languageCode == 'ru' ? ru : en;
+
 class LandingPreviewPage extends StatelessWidget {
   const LandingPreviewPage({super.key});
 
@@ -76,9 +80,18 @@ class LandingPreviewPage extends StatelessWidget {
                 ),
               ),
               if (MediaQuery.sizeOf(context).width >= 720) ...[
-                _HeaderLink(label: 'ВОЗМОЖНОСТИ', onTap: () {}),
-                _HeaderLink(label: 'КАК РАБОТАЕТ', onTap: () {}),
-                _HeaderLink(label: 'ТАРИФЫ', onTap: () {}),
+                _HeaderLink(
+                  label: _l(context, 'ВОЗМОЖНОСТИ', 'FEATURES'),
+                  onTap: () {},
+                ),
+                _HeaderLink(
+                  label: _l(context, 'КАК РАБОТАЕТ', 'HOW IT WORKS'),
+                  onTap: () {},
+                ),
+                _HeaderLink(
+                  label: _l(context, 'ТАРИФЫ', 'PLANS'),
+                  onTap: () {},
+                ),
                 const SizedBox(width: 8),
               ],
               OutlinedButton(
@@ -91,7 +104,7 @@ class LandingPreviewPage extends StatelessWidget {
                     vertical: 17,
                   ),
                 ),
-                child: const Text('ВОЙТИ'),
+                child: Text(_l(context, 'ВОЙТИ', 'SIGN IN')),
               ),
             ],
           ),
@@ -159,9 +172,13 @@ class LandingPreviewPage extends StatelessWidget {
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            'ЕДИНАЯ ПЛАТФОРМА ДЛЯ МОДЕЛЬНОЙ ИНДУСТРИИ',
-                            style: TextStyle(
+                          Text(
+                            _l(
+                              context,
+                              'ЕДИНАЯ ПЛАТФОРМА ДЛЯ МОДЕЛЬНОЙ ИНДУСТРИИ',
+                              'ONE PLATFORM FOR THE MODELLING INDUSTRY',
+                            ),
+                            style: const TextStyle(
                               color: Color(0xFFFF746B),
                               fontSize: 12,
                               fontWeight: FontWeight.w800,
@@ -170,7 +187,11 @@ class LandingPreviewPage extends StatelessWidget {
                           ),
                           const SizedBox(height: 20),
                           Text(
-                            'ТАЛАНТЫ. КАСТИНГИ. НОВЫЕ ВОЗМОЖНОСТИ.',
+                            _l(
+                              context,
+                              'ТАЛАНТЫ. КАСТИНГИ. НОВЫЕ ВОЗМОЖНОСТИ.',
+                              'TALENT. CASTINGS. NEW OPPORTUNITIES.',
+                            ),
                             style: TextStyle(
                               color: Colors.white,
                               fontSize: compact ? 42 : 64,
@@ -180,9 +201,13 @@ class LandingPreviewPage extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(height: 24),
-                          const Text(
-                            'Создавайте профессиональные анкеты, находите моделей и специалистов, проводите кастинги и управляйте проектами в одном приложении.',
-                            style: TextStyle(
+                          Text(
+                            _l(
+                              context,
+                              'Создавайте профессиональные анкеты, находите моделей и специалистов, проводите кастинги и управляйте проектами в одном приложении.',
+                              'Create professional profiles, find models and specialists, run castings and manage projects in one app.',
+                            ),
+                            style: const TextStyle(
                               color: Color(0xFFE8E8E8),
                               fontSize: 18,
                               height: 1.5,
@@ -195,16 +220,28 @@ class LandingPreviewPage extends StatelessWidget {
                             runSpacing: 12,
                             children: [
                               _HeroButton(
-                                label: 'СОЗДАТЬ АНКЕТУ',
+                                label: _l(
+                                  context,
+                                  'СОЗДАТЬ АНКЕТУ',
+                                  'CREATE A PROFILE',
+                                ),
                                 filled: true,
                                 onTap: () => context.go(Routes.register),
                               ),
                               _HeroButton(
-                                label: 'НАЙТИ МОДЕЛЬ',
+                                label: _l(
+                                  context,
+                                  'НАЙТИ МОДЕЛЬ',
+                                  'FIND A MODEL',
+                                ),
                                 onTap: () => context.go(Routes.search),
                               ),
                               _HeroButton(
-                                label: 'РАЗМЕСТИТЬ КАСТИНГ',
+                                label: _l(
+                                  context,
+                                  'РАЗМЕСТИТЬ КАСТИНГ',
+                                  'POST A CASTING',
+                                ),
                                 onTap: () => context.go(Routes.register),
                               ),
                             ],
@@ -214,12 +251,16 @@ class LandingPreviewPage extends StatelessWidget {
                     ),
                   ),
                 ),
-                const Positioned(
+                Positioned(
                   right: 22,
                   bottom: 18,
                   child: Text(
-                    'ВРЕМЕННЫЙ ВИЗУАЛ ДЛЯ СОГЛАСОВАНИЯ',
-                    style: TextStyle(
+                    _l(
+                      context,
+                      'ВРЕМЕННЫЙ ВИЗУАЛ ДЛЯ СОГЛАСОВАНИЯ',
+                      'TEMPORARY VISUAL FOR REVIEW',
+                    ),
+                    style: const TextStyle(
                       color: Color(0xB3FFFFFF),
                       fontSize: 9,
                       letterSpacing: 1.2,
@@ -254,24 +295,32 @@ class LandingPreviewPage extends StatelessWidget {
             spacing: 40,
             runSpacing: 30,
             children: [
-              const SizedBox(
+              SizedBox(
                 width: 650,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'ВАША СЛЕДУЮЩАЯ РАБОТА МОЖЕТ НАЧАТЬСЯ ЗДЕСЬ',
-                      style: TextStyle(
+                      _l(
+                        context,
+                        'ВАША СЛЕДУЮЩАЯ РАБОТА МОЖЕТ НАЧАТЬСЯ ЗДЕСЬ',
+                        'YOUR NEXT JOB COULD START HERE',
+                      ),
+                      style: const TextStyle(
                         color: Colors.white,
                         fontSize: 38,
                         height: 1.05,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
-                    SizedBox(height: 12),
+                    const SizedBox(height: 12),
                     Text(
-                      'Присоединяйтесь к профессиональному сообществу PK Management.',
-                      style: TextStyle(
+                      _l(
+                        context,
+                        'Присоединяйтесь к профессиональному сообществу PK Management.',
+                        'Join the PK Management professional community.',
+                      ),
+                      style: const TextStyle(
                         color: Color(0xFFF0D6D6),
                         fontSize: 17,
                         height: 1.4,
@@ -290,7 +339,7 @@ class LandingPreviewPage extends StatelessWidget {
                     vertical: 22,
                   ),
                 ),
-                child: const Text('НАЧАТЬ РАБОТУ'),
+                child: Text(_l(context, 'НАЧАТЬ РАБОТУ', 'GET STARTED')),
               ),
             ],
           ),
@@ -305,30 +354,47 @@ class _AudienceSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const _LandingSection(
-      eyebrow: 'ДЛЯ КАЖДОГО УЧАСТНИКА ИНДУСТРИИ',
-      title: 'ОДНО ПРИЛОЖЕНИЕ — ТРИ СЦЕНАРИЯ РАБОТЫ',
+    return _LandingSection(
+      eyebrow: _l(
+        context,
+        'ДЛЯ КАЖДОГО УЧАСТНИКА ИНДУСТРИИ',
+        'FOR EVERYONE IN THE INDUSTRY',
+      ),
+      title: _l(
+        context,
+        'ОДНО ПРИЛОЖЕНИЕ — ТРИ СЦЕНАРИЯ РАБОТЫ',
+        'ONE APP — THREE WAYS TO WORK',
+      ),
       child: _ResponsiveCards(
         children: [
           _AudienceCard(
             number: '01',
-            title: 'МОДЕЛЯМ И ТАЛАНТАМ',
-            text:
-                'Профессиональная анкета, портфолио, кастинги, отклики и прямое общение с заказчиками.',
+            title: _l(context, 'МОДЕЛЯМ И ТАЛАНТАМ', 'MODELS AND TALENT'),
+            text: _l(
+              context,
+              'Профессиональная анкета, портфолио, кастинги, отклики и прямое общение с заказчиками.',
+              'A professional profile, portfolio, castings, responses and direct communication with clients.',
+            ),
             icon: Icons.person_outline_rounded,
           ),
           _AudienceCard(
             number: '02',
-            title: 'АГЕНТСТВАМ',
-            text:
-                'Единая база моделей, подборки, PDF-презентации, кастинги и управление коммуникацией.',
+            title: _l(context, 'АГЕНТСТВАМ', 'AGENCIES'),
+            text: _l(
+              context,
+              'Единая база моделей, подборки, PDF-презентации, кастинги и управление коммуникацией.',
+              'A single model database, selections, PDF presentations, castings and communication management.',
+            ),
             icon: Icons.apartment_rounded,
           ),
           _AudienceCard(
             number: '03',
-            title: 'ЗАКАЗЧИКАМ',
-            text:
-                'Расширенный поиск, быстрый отбор, шорт-листы и доступ к проверенным профессионалам.',
+            title: _l(context, 'ЗАКАЗЧИКАМ', 'CLIENTS'),
+            text: _l(
+              context,
+              'Расширенный поиск, быстрый отбор, шорт-листы и доступ к проверенным профессионалам.',
+              'Advanced search, fast shortlisting and access to verified professionals.',
+            ),
             icon: Icons.business_center_outlined,
           ),
         ],
@@ -350,45 +416,78 @@ class _FeatureSection extends StatelessWidget {
           colors: [Color(0xFF343434), Color(0xFF1E1E1E), Color(0xFF0E0E0E)],
         ),
       ),
-      child: const _LandingSection(
+      child: _LandingSection(
         dark: true,
-        eyebrow: 'ВОЗМОЖНОСТИ PK MANAGEMENT',
-        title: 'ВСЁ НУЖНОЕ ДЛЯ ПРОФЕССИОНАЛЬНОЙ РАБОТЫ',
+        eyebrow: _l(
+          context,
+          'ВОЗМОЖНОСТИ PK MANAGEMENT',
+          'PK MANAGEMENT FEATURES',
+        ),
+        title: _l(
+          context,
+          'ВСЁ НУЖНОЕ ДЛЯ ПРОФЕССИОНАЛЬНОЙ РАБОТЫ',
+          'EVERYTHING YOU NEED FOR PROFESSIONAL WORK',
+        ),
         child: _ResponsiveCards(
           minCardWidth: 230,
           children: [
             _FeatureCard(
               icon: Icons.badge_outlined,
-              title: 'ПРОФЕССИОНАЛЬНЫЕ АНКЕТЫ',
-              text:
-                  'Точные параметры, роли, портфолио, видео и актуальный опыт.',
+              title: _l(
+                context,
+                'ПРОФЕССИОНАЛЬНЫЕ АНКЕТЫ',
+                'PROFESSIONAL PROFILES',
+              ),
+              text: _l(
+                context,
+                'Точные параметры, роли, портфолио, видео и актуальный опыт.',
+                'Accurate measurements, roles, portfolio, video and up-to-date experience.',
+              ),
             ),
             _FeatureCard(
               icon: Icons.manage_search_rounded,
-              title: 'УМНЫЙ ПОИСК',
-              text:
-                  'Фильтры по возрасту, росту, городу, внешности, роли и ставке.',
+              title: _l(context, 'УМНЫЙ ПОИСК', 'SMART SEARCH'),
+              text: _l(
+                context,
+                'Фильтры по возрасту, росту, городу, внешности, роли и ставке.',
+                'Filters by age, height, city, appearance, role and rate.',
+              ),
             ),
             _FeatureCard(
               icon: Icons.movie_filter_outlined,
-              title: 'КАСТИНГИ',
-              text: 'Публикация проектов, отклики, шорт-листы и этапы отбора.',
+              title: _l(context, 'КАСТИНГИ', 'CASTINGS'),
+              text: _l(
+                context,
+                'Публикация проектов, отклики, шорт-листы и этапы отбора.',
+                'Project posting, responses, shortlists and selection stages.',
+              ),
             ),
             _FeatureCard(
               icon: Icons.folder_copy_outlined,
-              title: 'ПОДБОРКИ И PDF',
-              text: 'Презентации кандидатов для клиента в несколько кликов.',
+              title: _l(context, 'ПОДБОРКИ И PDF', 'SELECTIONS AND PDF'),
+              text: _l(
+                context,
+                'Презентации кандидатов для клиента в несколько кликов.',
+                'Candidate presentations for the client in a few clicks.',
+              ),
             ),
             _FeatureCard(
               icon: Icons.forum_outlined,
-              title: 'РАБОЧИЕ ЧАТЫ',
-              text: 'Вся коммуникация по анкете и кастингу в одном месте.',
+              title: _l(context, 'РАБОЧИЕ ЧАТЫ', 'WORK CHATS'),
+              text: _l(
+                context,
+                'Вся коммуникация по анкете и кастингу в одном месте.',
+                'All communication about a profile or casting in one place.',
+              ),
             ),
             _FeatureCard(
               icon: Icons.verified_user_outlined,
-              title: 'МОДЕРАЦИЯ',
-              text:
-                  'В каталоге размещаются профессиональные и актуальные анкеты.',
+              title: _l(context, 'МОДЕРАЦИЯ', 'MODERATION'),
+              text: _l(
+                context,
+                'В каталоге размещаются профессиональные и актуальные анкеты.',
+                'Only professional, up-to-date profiles are listed in the catalogue.',
+              ),
             ),
           ],
         ),
@@ -402,28 +501,41 @@ class _StepsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const _LandingSection(
-      eyebrow: 'КАК ЭТО РАБОТАЕТ',
-      title: 'ОТ РЕГИСТРАЦИИ ДО НОВОГО ПРОЕКТА',
+    return _LandingSection(
+      eyebrow: _l(context, 'КАК ЭТО РАБОТАЕТ', 'HOW IT WORKS'),
+      title: _l(
+        context,
+        'ОТ РЕГИСТРАЦИИ ДО НОВОГО ПРОЕКТА',
+        'FROM SIGN-UP TO YOUR NEXT PROJECT',
+      ),
       child: _ResponsiveCards(
         children: [
           _StepCard(
             step: '01',
-            title: 'СОЗДАЙТЕ ПРОФИЛЬ',
-            text:
-                'Зарегистрируйте аккаунт и выберите свою профессиональную роль.',
+            title: _l(context, 'СОЗДАЙТЕ ПРОФИЛЬ', 'CREATE AN ACCOUNT'),
+            text: _l(
+              context,
+              'Зарегистрируйте аккаунт и выберите свою профессиональную роль.',
+              'Sign up and choose your professional role.',
+            ),
           ),
           _StepCard(
             step: '02',
-            title: 'ЗАПОЛНИТЕ АНКЕТУ',
-            text:
-                'Добавьте точные данные, портфолио, опыт и актуальные контакты.',
+            title: _l(context, 'ЗАПОЛНИТЕ АНКЕТУ', 'FILL IN YOUR PROFILE'),
+            text: _l(
+              context,
+              'Добавьте точные данные, портфолио, опыт и актуальные контакты.',
+              'Add accurate details, portfolio, experience and current contacts.',
+            ),
           ),
           _StepCard(
             step: '03',
-            title: 'НАЧНИТЕ РАБОТАТЬ',
-            text:
-                'Размещайтесь в каталоге, откликайтесь и находите нужных специалистов.',
+            title: _l(context, 'НАЧНИТЕ РАБОТАТЬ', 'START WORKING'),
+            text: _l(
+              context,
+              'Размещайтесь в каталоге, откликайтесь и находите нужных специалистов.',
+              'Get listed in the catalogue, respond to castings and find the specialists you need.',
+            ),
           ),
         ],
       ),
@@ -452,21 +564,43 @@ class _TrustSection extends StatelessWidget {
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1180),
-          child: const Wrap(
+          child: Wrap(
             alignment: WrapAlignment.spaceBetween,
             runAlignment: WrapAlignment.center,
             spacing: 34,
             runSpacing: 30,
             children: [
-              _TrustMetric(value: '01', label: 'единая профессиональная база'),
-              _TrustMetric(value: '24/7', label: 'доступ к анкетам и проектам'),
+              _TrustMetric(
+                value: '01',
+                label: _l(
+                  context,
+                  'единая профессиональная база',
+                  'one professional database',
+                ),
+              ),
+              _TrustMetric(
+                value: '24/7',
+                label: _l(
+                  context,
+                  'доступ к анкетам и проектам',
+                  'access to profiles and projects',
+                ),
+              ),
               _TrustMetric(
                 value: '100%',
-                label: 'контроль владельца над анкетой',
+                label: _l(
+                  context,
+                  'контроль владельца над анкетой',
+                  'owner control over the profile',
+                ),
               ),
               _TrustMetric(
                 value: '10–22',
-                label: 'поддержка по московскому времени',
+                label: _l(
+                  context,
+                  'поддержка по московскому времени',
+                  'support, Moscow time',
+                ),
               ),
             ],
           ),
@@ -832,9 +966,13 @@ class _LandingFooter extends StatelessWidget {
                   ),
                 ],
               ),
-              const Text(
-                'Черновик презентационной страницы · не опубликован',
-                style: TextStyle(color: Color(0xFF898989), fontSize: 12),
+              Text(
+                _l(
+                  context,
+                  'Черновик презентационной страницы · не опубликован',
+                  'Draft presentation page · not published',
+                ),
+                style: const TextStyle(color: Color(0xFF898989), fontSize: 12),
               ),
             ],
           ),

@@ -1368,7 +1368,10 @@ class _MessageFileCard extends StatelessWidget {
                   children: [
                     Text(
                       message.fileDisplayName.isEmpty
-                          ? 'Файл'
+                          ? (Localizations.localeOf(context).languageCode ==
+                                    'ru'
+                                ? 'Файл'
+                                : 'File')
                           : message.fileDisplayName,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,

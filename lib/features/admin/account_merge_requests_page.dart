@@ -86,15 +86,20 @@ class AccountMergeRequest {
     );
   }
 
-  String get title {
+  String? get _contactTitle {
     if (requesterFullName.trim().isNotEmpty) return requesterFullName.trim();
     if (requesterCompanyName.trim().isNotEmpty) {
       return requesterCompanyName.trim();
     }
     if (requesterEmail.trim().isNotEmpty) return requesterEmail.trim();
     if (requesterPhone.trim().isNotEmpty) return requesterPhone.trim();
-    return 'Аккаунт';
+    return null;
   }
+
+  String get title => _contactTitle ?? 'Аккаунт';
+
+  String displayTitle(bool ru) =>
+      _contactTitle ?? (ru ? 'Аккаунт' : 'Account');
 }
 
 class AccountMergeRequestsPage extends ConsumerWidget {
@@ -258,7 +263,7 @@ class _AccountMergeCard extends StatelessWidget {
 
     if (adminV2) {
       return AdminQueueRowV2(
-        title: request.title,
+        title: request.displayTitle(ru),
         subtitle: ru
             ? 'Объединение аккаунта с номером ${request.requestedPhone}'
             : 'Merge account with ${request.requestedPhone}',
@@ -286,7 +291,7 @@ class _AccountMergeCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            request.title,
+            request.displayTitle(ru),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: adminCommandStyle(size: 17, letterSpacing: 0.7),

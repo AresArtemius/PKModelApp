@@ -180,10 +180,13 @@ Future<bool> showAdminConfirmDialog({
   required BuildContext context,
   required String title,
   required String message,
-  String cancelLabel = 'Отмена',
-  String confirmLabel = 'Да',
+  String? cancelLabel,
+  String? confirmLabel,
   bool destructive = false,
 }) async {
+  final ru = Localizations.localeOf(context).languageCode == 'ru';
+  final cancelText = cancelLabel ?? (ru ? 'Отмена' : 'Cancel');
+  final confirmText = confirmLabel ?? (ru ? 'Да' : 'Yes');
   if (adminV2) {
     final flat = await showDialog<bool>(
       context: context,
@@ -196,14 +199,14 @@ Future<bool> showAdminConfirmDialog({
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: Text(adminSentenceCase(cancelLabel)),
+            child: Text(adminSentenceCase(cancelText)),
           ),
           FilledButton(
             style: destructive
                 ? FilledButton.styleFrom(backgroundColor: Tokens.danger)
                 : null,
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: Text(adminSentenceCase(confirmLabel)),
+            child: Text(adminSentenceCase(confirmText)),
           ),
         ],
       ),
@@ -252,12 +255,12 @@ Future<bool> showAdminConfirmDialog({
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
                     _AdminDialogButton(
-                      label: cancelLabel,
+                      label: cancelText,
                       onTap: () => Navigator.of(dialogContext).pop(false),
                     ),
                     const SizedBox(width: 10),
                     _AdminDialogButton(
-                      label: confirmLabel,
+                      label: confirmText,
                       dark: true,
                       destructive: destructive,
                       onTap: () => Navigator.of(dialogContext).pop(true),

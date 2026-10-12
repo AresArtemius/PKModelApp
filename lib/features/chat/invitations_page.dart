@@ -715,7 +715,7 @@ class _InvitationListTile extends StatelessWidget {
                     if (item.contextLabel.isNotEmpty) ...[
                       const SizedBox(height: 4),
                       Text(
-                        item.contextLabel,
+                        _localizedContextLabel(item.contextLabel, ru),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: _invitationBodyStyle(
@@ -842,7 +842,7 @@ class _InvitationDesktopDetails extends StatelessWidget {
                     if (item.contextLabel.isNotEmpty) ...[
                       const SizedBox(height: 8),
                       Text(
-                        item.contextLabel,
+                        _localizedContextLabel(item.contextLabel, ru),
                         style: _invitationBodyStyle(
                           color: kTextMuted,
                           size: 17,
@@ -994,8 +994,9 @@ class _InvitationCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
     final title = item.accountName.isEmpty ? '—' : item.accountName;
-    final subtitle = item.contextLabel;
+    final subtitle = _localizedContextLabel(item.contextLabel, ru);
 
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 16, 14, 16),
@@ -1608,9 +1609,18 @@ String _invitationTitleV2(CastingInvitation item, bool ru) {
   return ru ? 'Кастинг' : 'Casting';
 }
 
+/// Context labels are built by the service with Russian prefixes
+/// (`Анкета:` / `Кастинг:`); show English prefixes for other locales.
+String _localizedContextLabel(String label, bool ru) {
+  if (ru) return label;
+  return label
+      .replaceAll(RegExp(r'Анкета:\s*'), 'Profile: ')
+      .replaceAll(RegExp(r'Кастинг:\s*'), 'Casting: ');
+}
+
 String _invitationSubtitleV2(CastingInvitation item, bool ru) {
   final context = item.contextLabel.trim();
-  if (context.isNotEmpty) return context;
+  if (context.isNotEmpty) return _localizedContextLabel(context, ru);
   final title = item.selectionTitle.trim();
   if (title.isNotEmpty) return title;
   return ru ? 'Вас рассматривают на кастинг' : 'You are being considered';
@@ -1862,7 +1872,7 @@ class _InvitationDetailsV2 extends StatelessWidget {
                     if (item.contextLabel.trim().isNotEmpty) ...[
                       const SizedBox(height: 4),
                       Text(
-                        item.contextLabel.trim(),
+                        _localizedContextLabel(item.contextLabel.trim(), ru),
                         style: AppText.small.copyWith(
                           fontSize: 15,
                           color: Tokens.textSecondary,

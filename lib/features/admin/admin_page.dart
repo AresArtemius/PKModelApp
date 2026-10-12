@@ -852,7 +852,9 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
           targetTable: 'profiles',
           targetId: item.id,
           kind: ru ? 'Анкета' : 'Profile',
-          title: item.fullName.trim().isEmpty ? 'Анкета' : item.fullName.trim(),
+          title: item.fullName.trim().isEmpty
+              ? (ru ? 'Анкета' : 'Profile')
+              : item.fullName.trim(),
           subtitle: [
             item.profileTypeLabel(context),
             item.city,
@@ -1473,6 +1475,7 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
   Future<void> _retryFailedRows(_AdminBulkResult result) async {
     final failedIds = result.failedRows.map((row) => row.id).toSet();
     if (failedIds.isEmpty) return;
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
     switch (result.actionType) {
       case _AdminBulkActionType.approveProfiles:
         final profiles =
@@ -1502,9 +1505,9 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
                     id: 'safety:${(row['id'] ?? '').toString()}',
                     targetTable: 'profile_reports',
                     targetId: (row['id'] ?? '').toString(),
-                    kind: 'Безопасность',
+                    kind: ru ? 'Безопасность' : 'Safety',
                     title: (row['reason'] ?? '').toString().trim().isEmpty
-                        ? 'Жалоба'
+                        ? (ru ? 'Жалоба' : 'Report')
                         : (row['reason'] ?? '').toString().trim(),
                     subtitle: (row['comment'] ?? '').toString(),
                     status: (row['status'] ?? '').toString(),

@@ -976,15 +976,18 @@ class _ChatRowV2 extends StatefulWidget {
 class _ChatRowV2State extends State<_ChatRowV2> {
   bool _hovered = false;
 
-  String _contextLine() {
+  String _contextLine(bool ru) {
     return widget.item.contextLabel
         .split('•')
         .map((e) => e.trim())
         .where((e) => e.isNotEmpty)
         .map(
-          (chunk) => chunk
-              .replaceFirst(RegExp(r'^Анкета:\s*'), '')
-              .replaceFirst(RegExp(r'^Кастинг:\s*'), ''),
+          (chunk) => _localizedContextChunk(
+            chunk
+                .replaceFirst(RegExp(r'^Анкета:\s*'), '')
+                .replaceFirst(RegExp(r'^Кастинг:\s*'), ''),
+            ru,
+          ),
         )
         .join(' · ');
   }
@@ -994,10 +997,10 @@ class _ChatRowV2State extends State<_ChatRowV2> {
     final item = widget.item;
     final ru = Localizations.localeOf(context).languageCode == 'ru';
     final unread = item.unreadCount > 0;
-    final contextLine = _contextLine();
+    final contextLine = _contextLine(ru);
     final hasLast = item.lastMessage.trim().isNotEmpty;
     final preview = hasLast
-        ? item.lastMessage.trim()
+        ? _localizedPreview(item.lastMessage.trim(), ru)
         : (ru ? 'Нет сообщений' : 'No messages');
 
     return MouseRegion(
@@ -1039,7 +1042,7 @@ class _ChatRowV2State extends State<_ChatRowV2> {
                               ],
                               Expanded(
                                 child: Text(
-                                  item.title,
+                                  _localizedChatTitle(item.title, ru),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: AppText.smallStrong.copyWith(
@@ -1647,6 +1650,7 @@ class _ChatListTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -1683,7 +1687,7 @@ class _ChatListTile extends StatelessWidget {
                         ],
                         Expanded(
                           child: Text(
-                            item.title,
+                            _localizedChatTitle(item.title, ru),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: _chatTitleStyle(
@@ -1714,8 +1718,8 @@ class _ChatListTile extends StatelessWidget {
                               ? _ChatVoicePreview(item: item)
                               : Text(
                                   item.lastMessage.isEmpty
-                                      ? 'Диалог создан'
-                                      : item.lastMessage,
+                                      ? (ru ? 'Диалог создан' : 'Chat created')
+                                      : _localizedPreview(item.lastMessage, ru),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
@@ -1790,6 +1794,7 @@ class _ChatVoicePreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
     final unread = item.unreadCount > 0;
     final listened = item.lastMessageAudioListened;
     final duration = _formatVoicePreviewDuration(item.lastMessageAudioDuration);
@@ -1802,7 +1807,7 @@ class _ChatVoicePreview extends StatelessWidget {
         ),
         const SizedBox(width: 5),
         Text(
-          duration == '00:00' ? 'Голосовое' : duration,
+          duration == '00:00' ? (ru ? 'Голосовое' : 'Voice') : duration,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
@@ -1826,7 +1831,9 @@ class _ChatVoicePreview extends StatelessWidget {
         if (unread || listened) ...[
           const SizedBox(width: 7),
           Text(
-            unread ? 'новое' : 'прослушано',
+            unread
+                ? (ru ? 'новое' : 'new')
+                : (ru ? 'прослушано' : 'listened'),
             style: TextStyle(
               color: unread ? BrandTheme.redTop : kTextMuted,
               fontSize: 10,
@@ -1878,12 +1885,39 @@ class _ChatVoicePreviewPainter extends CustomPainter {
   }
 }
 
+/// Chat list items come from the service with Russian placeholder texts
+/// (media previews, direct-chat label). Map them for non-Russian locales.
+String _localizedPreview(String text, bool ru) {
+  if (ru) return text;
+  final t = text.trim();
+  if (t == 'Фото') return 'Photo';
+  if (t == 'Видео') return 'Video';
+  if (t == 'Файл') return 'File';
+  if (t == 'Переслано') return 'Forwarded';
+  if (t == 'Голосовое сообщение') return 'Voice message';
+  if (t.startsWith('Голосовое')) return t.replaceFirst('Голосовое', 'Voice');
+  return text;
+}
+
+String _localizedChatTitle(String title, bool ru) {
+  if (ru) return title;
+  final t = title.trim();
+  if (t == 'Чат') return 'Chat';
+  if (t == 'Аккаунт') return 'Account';
+  return title;
+}
+
+String _localizedContextChunk(String chunk, bool ru) {
+  if (!ru && chunk.trim() == 'Личный диалог') return 'Direct chat';
+  return chunk;
+}
+
 class _ChatContextSummary extends StatelessWidget {
   const _ChatContextSummary({required this.item});
 
   final ChatListItem item;
 
-  List<({String label, IconData icon})> _contextParts() {
+  List<({String label, IconData icon})> _contextParts(bool ru) {
     final chunks = item.contextLabel
         .split('•')
         .map((e) => e.trim())
@@ -1902,7 +1936,10 @@ class _ChatContextSummary extends StatelessWidget {
           icon: Icons.videocam_rounded,
         ));
       } else {
-        parts.add((label: chunk, icon: Icons.link_rounded));
+        parts.add((
+          label: _localizedContextChunk(chunk, ru),
+          icon: Icons.link_rounded,
+        ));
       }
     }
     return parts;
@@ -1917,7 +1954,7 @@ class _ChatContextSummary extends StatelessWidget {
               ? 'Ваш запрос по анкете / кастингу'
               : 'Your profile / casting request')
         : (ru ? 'Пишут по вашей анкете' : 'A message about your profile');
-    final parts = _contextParts();
+    final parts = _contextParts(ru);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

@@ -1326,6 +1326,7 @@ class _MediaCategoryChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final label = value.trim().isEmpty ? 'Портфолио' : value.trim();
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
     final chip = Container(
       width: double.infinity,
       height: 28,
@@ -1345,7 +1346,7 @@ class _MediaCategoryChip extends StatelessWidget {
         children: [
           Flexible(
             child: Text(
-              label,
+              _profileMediaCategoryDisplayLabel(label, ru),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: _editV2
@@ -1377,7 +1378,7 @@ class _MediaCategoryChip extends StatelessWidget {
           PopupMenuItem<String>(
             value: label,
             child: Text(
-              label,
+              _profileMediaCategoryDisplayLabel(label, ru),
               style: const TextStyle(fontWeight: FontWeight.w800),
             ),
           ),
@@ -1385,7 +1386,7 @@ class _MediaCategoryChip extends StatelessWidget {
           PopupMenuItem<String>(
             value: category,
             child: Text(
-              category,
+              _profileMediaCategoryDisplayLabel(category, ru),
               style: const TextStyle(fontWeight: FontWeight.w800),
             ),
           ),
