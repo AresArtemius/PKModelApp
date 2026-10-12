@@ -15,6 +15,7 @@ import '../../ui/brand/brand_pill_button.dart';
 import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
 import 'account_merge_requests_page.dart';
+import 'admin_menu_page.dart';
 import 'admin_shell_v2.dart';
 import 'admin_style.dart';
 import 'selection_providers.dart';
@@ -164,13 +165,25 @@ class AdminPage extends ConsumerWidget {
             );
           }
           final countsAsync = ref.watch(adminDashboardCountsProvider);
+          final narrow =
+              MediaQuery.sizeOf(context).width < kAdminShellWideBreakpoint;
+          final view = GoRouterState.of(context).uri.queryParameters['view'];
+          // Phone: the tab is a menu of sections; the dashboard itself is
+          // one of them (/admin?view=desk).
+          if (narrow && view != 'desk') {
+            return AdminMenuPage(
+              onCreateCasting: () =>
+                  context.push('${Routes.createCastingAdmin}?from=admin'),
+              onExit: signOutAndGoLogin,
+            );
+          }
           return _AdminHomeV2(
             counts: countsAsync.maybeWhen(
               data: (value) => value,
               orElse: () => const AdminDashboardCounts(),
             ),
             onCreateCasting: () =>
-                context.go('${Routes.createCastingAdmin}?from=admin'),
+                context.push('${Routes.createCastingAdmin}?from=admin'),
             onExit: signOutAndGoLogin,
           );
         },
@@ -523,12 +536,19 @@ class _AdminHomeV2 extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final narrow =
+        MediaQuery.sizeOf(context).width < kAdminShellWideBreakpoint;
     return AdminShellV2(
-      title: ru ? 'Админ-панель' : 'Back office',
+      title: narrow
+          ? (ru ? 'Рабочий стол' : 'Dashboard')
+          : (ru ? 'Админ-панель' : 'Back office'),
       subtitle: ru
           ? 'Очереди, безопасность, подборки, кастинги и журнал действий'
           : 'Queues, safety, selections, castings and the action log',
-      actions: [
+      onBack: () => context.go(Routes.admin),
+      actions: narrow
+          ? const []
+          : [
         OutlinedButton.icon(
           onPressed: onExit,
           icon: const Icon(Icons.logout_rounded, size: 18),
