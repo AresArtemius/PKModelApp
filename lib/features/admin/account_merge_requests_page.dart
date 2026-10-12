@@ -171,7 +171,7 @@ class AccountMergeRequestsPage extends ConsumerWidget {
     final itemsAsync = ref.watch(accountMergeRequestsProvider);
 
     return AdminPageScaffold(
-      title: ru ? 'ОБЪЕДИНЕНИЕ АККАУНТОВ' : 'ACCOUNT MERGES',
+      title: ru ? 'Объединение аккаунтов' : 'Account merges',
       subtitle: ru ? 'Заявки на перенос телефона' : 'Phone merge requests',
       onBack: () => context.go(Routes.admin),
       brandBackground: true,
@@ -195,11 +195,12 @@ class AccountMergeRequestsPage extends ConsumerWidget {
                       data: (items) {
                         if (items.isEmpty) {
                           return _MessageCard(
-                            text: ru ? 'ЗАЯВОК НЕТ' : 'NO REQUESTS',
+                            text: ru ? 'Заявок нет' : 'No requests',
                           );
                         }
 
                         return ListView.separated(
+                          padding: const EdgeInsets.only(bottom: 24),
                           itemCount: items.length,
                           separatorBuilder: (_, _) => adminV2
                               ? const SizedBox.shrink()

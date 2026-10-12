@@ -17,6 +17,7 @@ import '../../ui/brand/brand_admin_header.dart';
 import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
 import 'admin_shell_v2.dart';
+import 'admin_style.dart';
 import '../selection/selection_export_item.dart';
 import '../selection/selection_pdf_options.dart';
 import '../selection/selection_pdf_options_dialog.dart';
@@ -242,22 +243,35 @@ class SelectionCastingPage extends ConsumerWidget {
           padding: uiV2 ? EdgeInsets.zero : const EdgeInsets.all(16),
           child: res.when(
             loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) => Center(
-              child: _CardPill(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 18),
-                  child: Text(
-                    '${t.errorUpper}: ${AppErrorMapper.message(e, t)}',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 1.1,
-                      color: _text,
+            error: (e, _) => uiV2
+                ? AdminShellV2(
+                    title: ru ? 'Отклики' : 'Responses',
+                    onBack: () => context.go(switch (from) {
+                      'castings' => Routes.castings,
+                      'admin_castings' => Routes.adminCastings,
+                      _ => Routes.adminSelection,
+                    }),
+                    body: AdminEmptyV2(
+                      text: AppErrorMapper.message(e, t),
+                      error: true,
+                    ),
+                  )
+                : Center(
+                    child: _CardPill(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 18),
+                        child: Text(
+                          '${t.errorUpper}: ${AppErrorMapper.message(e, t)}',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 1.1,
+                            color: _text,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
-                ),
-              ),
-            ),
             data: (data) {
               final items = List<Map<String, dynamic>>.from(
                 data['items'] as List<dynamic>,
@@ -315,8 +329,8 @@ class SelectionCastingPage extends ConsumerWidget {
                     SnackBar(
                       content: Text(
                         Localizations.localeOf(context).languageCode == 'ru'
-                            ? 'В этой подборке пока нет анкет.'
-                            : 'There are no profiles in this set yet.',
+                            ? 'В этом списке пока нет анкет.'
+                            : 'There are no profiles in this list yet.',
                       ),
                     ),
                   );
@@ -589,7 +603,7 @@ class SelectionCastingPage extends ConsumerWidget {
                   history: ref.watch(castingResponseHistoryProvider(castingId)),
                   onBack: () => context.go(backRoute),
                   backLabel: backRoute == Routes.adminSelection
-                      ? (ru ? 'Подборки' : 'Selections')
+                      ? (ru ? 'Отбор' : 'Selection desk')
                       : (ru ? 'Кастинги' : 'Castings'),
                   onRefresh: () {
                     ref.invalidate(castingResponsesProvider(castingId));
@@ -2091,7 +2105,9 @@ class _CastingResponsesV2 extends StatefulWidget {
 
 class _CastingResponsesV2State extends State<_CastingResponsesV2> {
   final Set<String> _selected = <String>{};
-  CastingResponseStatus _narrowStatus = CastingResponseStatus.submitted;
+
+  /// Phone: the optional status filter above the single list; null = all.
+  CastingResponseStatus? _narrowFilter;
 
   /// Step 38: the row under the mouse — keys 1/2/3 act on it when nothing
   /// is selected.
@@ -2285,6 +2301,81 @@ class _CastingResponsesV2State extends State<_CastingResponsesV2> {
     setState(_selected.clear);
   }
 
+  /// Phone: PDF / CSV export with the scope choice in one bottom sheet.
+  Future<void> _openExportSheet() async {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final scopes = <(_PdfExportScope, String)>[
+      (_PdfExportScope.all, ru ? 'все отклики' : 'all responses'),
+      (_PdfExportScope.shortlist, ru ? 'шортлист' : 'shortlist'),
+      (_PdfExportScope.approved, ru ? 'утверждённые' : 'approved'),
+    ];
+    final choice = await showModalBottomSheet<(bool, _PdfExportScope)>(
+      context: context,
+      backgroundColor: Tokens.bg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(Tokens.radiusLg)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
+              child: Text(
+                ru ? 'Экспорт' : 'Export',
+                style: AppText.label.copyWith(color: Tokens.textTertiary),
+              ),
+            ),
+            for (final scope in scopes)
+              ListTile(
+                enabled: widget.hasExportItems,
+                leading: const Icon(Icons.picture_as_pdf_outlined, size: 20),
+                title: Text('PDF — ${scope.$2}', style: AppText.body),
+                onTap: () => Navigator.of(sheetContext).pop((true, scope.$1)),
+              ),
+            const Divider(height: 1, thickness: 1, color: Tokens.border),
+            for (final scope in scopes)
+              ListTile(
+                leading: const Icon(Icons.table_chart_outlined, size: 20),
+                title: Text(
+                  '${ru ? 'Таблица (CSV)' : 'Table (CSV)'} — ${scope.$2}',
+                  style: AppText.body,
+                ),
+                onTap: () => Navigator.of(sheetContext).pop((false, scope.$1)),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (choice == null || !mounted) return;
+    if (choice.$1) {
+      await widget.onPdf(choice.$2);
+    } else {
+      await widget.onCsv(choice.$2);
+    }
+  }
+
+  /// Phone row menu: remove one response after a confirmation.
+  Future<void> _removeOne(String profileId) async {
+    if (profileId.isEmpty) return;
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final confirmed = await showAdminConfirmDialog(
+      context: context,
+      title: ru ? 'Убрать из откликов?' : 'Remove from responses?',
+      message: ru
+          ? 'Анкета исчезнет из откликов этого кастинга.'
+          : 'The profile will be removed from this casting.',
+      cancelLabel: ru ? 'Отмена' : 'Cancel',
+      confirmLabel: ru ? 'Убрать' : 'Remove',
+      destructive: true,
+    );
+    if (!confirmed || !mounted) return;
+    await widget.onBulkRemove(profileIds: [profileId]);
+    if (!mounted) return;
+    setState(() => _selected.remove(profileId));
+  }
+
   Future<void> _editNote(Map<String, dynamic> row) async {
     final t = AppLocalizations.of(context)!;
     final ru = Localizations.localeOf(context).languageCode == 'ru';
@@ -2437,23 +2528,107 @@ class _CastingResponsesV2State extends State<_CastingResponsesV2> {
         style: IconButton.styleFrom(foregroundColor: Tokens.textSecondary),
         icon: const Icon(Icons.refresh_rounded, size: 20),
       ),
-      scopeMenu(
-        label: 'PDF',
-        icon: Icons.picture_as_pdf_outlined,
-        enabled: widget.hasExportItems,
-        onSelected: widget.onPdf,
-      ),
-      scopeMenu(
-        label: ru ? 'Таблица' : 'Table',
-        icon: Icons.table_chart_outlined,
-        enabled: total > 0,
-        onSelected: widget.onCsv,
-      ),
+      if (wide) ...[
+        scopeMenu(
+          label: 'PDF',
+          icon: Icons.picture_as_pdf_outlined,
+          enabled: widget.hasExportItems,
+          onSelected: widget.onPdf,
+        ),
+        scopeMenu(
+          label: ru ? 'Таблица' : 'Table',
+          icon: Icons.table_chart_outlined,
+          enabled: total > 0,
+          onSelected: widget.onCsv,
+        ),
+      ] else
+        // Phone: the export choices live in one sheet so the header stays
+        // a single line (the shell keeps IconButtons on the title row).
+        IconButton(
+          tooltip: ru ? 'Экспорт' : 'Export',
+          onPressed: total == 0 ? null : _openExportSheet,
+          style: IconButton.styleFrom(foregroundColor: Tokens.textSecondary),
+          icon: const Icon(Icons.ios_share_rounded, size: 20),
+        ),
     ];
 
-    final bulkBar = _selected.isEmpty
-        ? const SizedBox.shrink()
-        : Container(
+    // Phone: a compact «Выбрано: N» line with one «⋯» menu instead of the
+    // dark bar with a row of buttons.
+    final Widget bulkBar;
+    if (_selected.isEmpty) {
+      bulkBar = const SizedBox.shrink();
+    } else if (!wide) {
+      bulkBar = Padding(
+        padding: EdgeInsets.fromLTRB(gutter, 0, gutter - 8, 0),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                ru
+                    ? 'Выбрано: ${_selected.length}'
+                    : 'Selected: ${_selected.length}',
+                style: AppText.smallStrong,
+              ),
+            ),
+            AdminPopupMenuButton<_BulkActionV2>(
+              tooltip: ru ? 'Действия' : 'Actions',
+              onSelected: (action) {
+                switch (action) {
+                  case _BulkActionV2.shortlist:
+                    unawaited(_bulkMove(CastingResponseStatus.shortlist));
+                  case _BulkActionV2.approve:
+                    unawaited(_bulkMove(CastingResponseStatus.approved));
+                  case _BulkActionV2.submitted:
+                    unawaited(_bulkMove(CastingResponseStatus.submitted));
+                  case _BulkActionV2.remove:
+                    unawaited(_removeSelected());
+                  case _BulkActionV2.clear:
+                    setState(_selected.clear);
+                }
+              },
+              options: [
+                AdminMenuOption(
+                  value: _BulkActionV2.shortlist,
+                  label: ru ? 'В шортлист' : 'To shortlist',
+                  icon: Icons.playlist_add_check_rounded,
+                ),
+                AdminMenuOption(
+                  value: _BulkActionV2.approve,
+                  label: ru ? 'Утвердить' : 'Approve',
+                  icon: Icons.verified_outlined,
+                ),
+                AdminMenuOption(
+                  value: _BulkActionV2.submitted,
+                  label: ru ? 'Вернуть в отклики' : 'Back to responses',
+                  icon: Icons.inbox_outlined,
+                ),
+                AdminMenuOption(
+                  value: _BulkActionV2.remove,
+                  label: ru ? 'Убрать' : 'Remove',
+                  icon: Icons.delete_outline_rounded,
+                  destructive: true,
+                ),
+                AdminMenuOption(
+                  value: _BulkActionV2.clear,
+                  label: ru ? 'Снять выделение' : 'Clear selection',
+                  icon: Icons.deselect_rounded,
+                ),
+              ],
+              child: const SizedBox(
+                width: 40,
+                height: 40,
+                child: Icon(
+                  Icons.more_horiz_rounded,
+                  size: 22,
+                  color: Tokens.textSecondary,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    } else {
+      bulkBar = Container(
             margin: EdgeInsets.fromLTRB(gutter, 0, gutter, 0),
             padding: const EdgeInsets.fromLTRB(16, 6, 8, 6),
             decoration: BoxDecoration(
@@ -2534,6 +2709,7 @@ class _CastingResponsesV2State extends State<_CastingResponsesV2> {
               ],
             ),
           );
+    }
 
     Widget columnFor(_BoardColumnSpec spec, {required bool showHeader}) {
       final rows = _itemsFor(spec);
@@ -2593,29 +2769,67 @@ class _CastingResponsesV2State extends State<_CastingResponsesV2> {
         ),
       );
     } else {
-      final active = columns.firstWhere(
-        (e) => e.status == _narrowStatus,
-        orElse: () => columns.first,
-      );
+      // Phone: one list of every response with a status chip per row, so a
+      // response moved to the shortlist stays on screen. The chips above
+      // are an optional filter («Все» by default).
+      final filterSpec = _narrowFilter == null
+          ? null
+          : columns.where((e) => e.status == _narrowFilter).firstOrNull;
+      final rows = filterSpec == null ? widget.items : _itemsFor(filterSpec);
+      _BoardColumnSpec specFor(Map<String, dynamic> row) {
+        final status = (row['status'] ?? '').toString();
+        return columns.where((c) => c.matches(status)).firstOrNull ??
+            columns.first;
+      }
+
       board = Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: gutter),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: EdgeInsets.fromLTRB(gutter, 12, gutter, 12),
             child: Row(
               children: [
-                for (final column in columns)
-                  _StatusTabV2(
+                AdminChipV2(
+                  label: ru ? 'Все' : 'All',
+                  count: total,
+                  selected: _narrowFilter == null,
+                  onTap: () => setState(() => _narrowFilter = null),
+                ),
+                for (final column in columns) ...[
+                  const SizedBox(width: 8),
+                  AdminChipV2(
                     label: _sentenceCaseResponses(column.title),
                     count: counts[column.status] ?? 0,
-                    active: column.status == active.status,
-                    onTap: () => setState(() => _narrowStatus = column.status),
+                    selected: _narrowFilter == column.status,
+                    onTap: () => setState(() => _narrowFilter = column.status),
                   ),
+                ],
               ],
             ),
           ),
           const Divider(height: 1, thickness: 1, color: Tokens.border),
-          columnFor(active, showHeader: false),
+          if (rows.isEmpty)
+            AdminEmptyV2(text: ru ? 'Пусто' : 'Empty')
+          else
+            for (final row in rows)
+              _ResponseRowV2(
+                row: row,
+                castingId: widget.castingId,
+                currentStatus: specFor(row).status,
+                allColumns: columns,
+                gutter: gutter,
+                selected: _selected,
+                onToggle: _toggle,
+                onMove: _moveOne,
+                onNote: _editNote,
+                onRemove: _removeOne,
+                statusChip: AdminStatusV2(
+                  text: _sentenceCaseResponses(specFor(row).title),
+                  color: _statusColorV2(specFor(row).status),
+                ),
+                t: t,
+              ),
         ],
       );
     }
@@ -2629,7 +2843,7 @@ class _CastingResponsesV2State extends State<_CastingResponsesV2> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                (ru ? 'История' : 'History').toUpperCase(),
+                ru ? 'История' : 'History',
                 style: AppText.label.copyWith(color: Tokens.textTertiary),
               ),
               const SizedBox(height: 8),
@@ -2650,7 +2864,10 @@ class _CastingResponsesV2State extends State<_CastingResponsesV2> {
       body: ListView(
         padding: const EdgeInsets.only(bottom: 48),
         children: [
-          if (_selected.isNotEmpty) ...[bulkBar, const SizedBox(height: 20)],
+          if (_selected.isNotEmpty) ...[
+            bulkBar,
+            SizedBox(height: wide ? 20 : 4),
+          ],
           const Divider(height: 1, thickness: 1, color: Tokens.border),
           board,
           history,
@@ -2660,53 +2877,15 @@ class _CastingResponsesV2State extends State<_CastingResponsesV2> {
   }
 }
 
-class _StatusTabV2 extends StatelessWidget {
-  const _StatusTabV2({
-    required this.label,
-    required this.count,
-    required this.active,
-    required this.onTap,
-  });
+enum _BulkActionV2 { shortlist, approve, submitted, remove, clear }
 
-  final String label;
-  final int count;
-  final bool active;
-  final VoidCallback onTap;
+enum _RowActionV2 { shortlist, approve, submitted, note, remove }
 
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(4, 14, 16, 12),
-        decoration: BoxDecoration(
-          border: Border(
-            bottom: BorderSide(
-              color: active ? Tokens.ink : Colors.transparent,
-              width: 2,
-            ),
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              label,
-              style: AppText.smallStrong.copyWith(
-                color: active ? Tokens.text : Tokens.textSecondary,
-              ),
-            ),
-            const SizedBox(width: 6),
-            Text(
-              '$count',
-              style: AppText.caption.copyWith(color: Tokens.textTertiary),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
+Color _statusColorV2(CastingResponseStatus status) => switch (status) {
+  CastingResponseStatus.approved => Tokens.success,
+  CastingResponseStatus.shortlist => Tokens.warning,
+  _ => Tokens.textTertiary,
+};
 
 class _BoardColumnV2 extends StatelessWidget {
   const _BoardColumnV2({
@@ -2862,6 +3041,8 @@ class _ResponseRowV2 extends StatefulWidget {
     required this.onNote,
     required this.t,
     this.onHover,
+    this.onRemove,
+    this.statusChip,
   });
 
   final Map<String, dynamic> row;
@@ -2876,6 +3057,11 @@ class _ResponseRowV2 extends StatefulWidget {
   final Future<void> Function(Map<String, dynamic> row) onNote;
   final AppLocalizations t;
   final void Function(String profileId, bool hovered)? onHover;
+
+  /// Phone list: a status chip under the name and one always-visible «⋯»
+  /// menu with every action (the hover-only note icon is a desktop thing).
+  final Future<void> Function(String profileId)? onRemove;
+  final Widget? statusChip;
 
   @override
   State<_ResponseRowV2> createState() => _ResponseRowV2State();
@@ -2918,6 +3104,132 @@ class _ResponseRowV2State extends State<_ResponseRowV2> {
     final focalY = focal(profile['cover_photo_focal_y'], -0.72);
     final note = (widget.row['admin_note'] ?? '').toString().trim();
     final isSelected = widget.selected.contains(profileId);
+    final compact = widget.statusChip != null;
+
+    final Widget trailing;
+    if (compact) {
+      trailing = AdminPopupMenuButton<_RowActionV2>(
+        tooltip: ru ? 'Действия' : 'Actions',
+        onSelected: (action) {
+          switch (action) {
+            case _RowActionV2.shortlist:
+              unawaited(
+                widget.onMove(profileId, CastingResponseStatus.shortlist),
+              );
+            case _RowActionV2.approve:
+              unawaited(
+                widget.onMove(profileId, CastingResponseStatus.approved),
+              );
+            case _RowActionV2.submitted:
+              unawaited(
+                widget.onMove(profileId, CastingResponseStatus.submitted),
+              );
+            case _RowActionV2.note:
+              unawaited(widget.onNote(widget.row));
+            case _RowActionV2.remove:
+              unawaited(widget.onRemove?.call(profileId));
+          }
+        },
+        options: [
+          if (widget.currentStatus != CastingResponseStatus.shortlist)
+            AdminMenuOption(
+              value: _RowActionV2.shortlist,
+              label: ru ? 'В шортлист' : 'To shortlist',
+              icon: Icons.playlist_add_check_rounded,
+            ),
+          if (widget.currentStatus != CastingResponseStatus.approved)
+            AdminMenuOption(
+              value: _RowActionV2.approve,
+              label: ru ? 'Утвердить' : 'Approve',
+              icon: Icons.verified_outlined,
+            ),
+          if (widget.currentStatus != CastingResponseStatus.submitted)
+            AdminMenuOption(
+              value: _RowActionV2.submitted,
+              label: ru ? 'Вернуть в отклики' : 'Back to responses',
+              icon: Icons.inbox_outlined,
+            ),
+          AdminMenuOption(
+            value: _RowActionV2.note,
+            label: note.isEmpty
+                ? (ru ? 'Заметка' : 'Note')
+                : (ru ? 'Изменить заметку' : 'Edit note'),
+            icon: Icons.sticky_note_2_outlined,
+          ),
+          if (widget.onRemove != null)
+            AdminMenuOption(
+              value: _RowActionV2.remove,
+              label: ru ? 'Убрать' : 'Remove',
+              icon: Icons.delete_outline_rounded,
+              destructive: true,
+            ),
+        ],
+        child: const SizedBox(
+          width: 40,
+          height: 40,
+          child: Icon(
+            Icons.more_horiz_rounded,
+            size: 22,
+            color: Tokens.textSecondary,
+          ),
+        ),
+      );
+    } else {
+      trailing = Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AnimatedOpacity(
+            duration: Tokens.fast,
+            opacity: _hovered || isSelected ? 1 : 0,
+            child: IconButton(
+              tooltip: note.isEmpty
+                  ? (ru ? 'Заметка' : 'Note')
+                  : (ru ? 'Изменить заметку' : 'Edit note'),
+              onPressed: profileId.isEmpty
+                  ? null
+                  : () => widget.onNote(widget.row),
+              visualDensity: VisualDensity.compact,
+              style: IconButton.styleFrom(
+                foregroundColor: Tokens.textSecondary,
+              ),
+              icon: Icon(
+                note.isEmpty
+                    ? Icons.sticky_note_2_outlined
+                    : Icons.sticky_note_2_rounded,
+                size: 18,
+              ),
+            ),
+          ),
+          PopupMenuButton<CastingResponseStatus>(
+            tooltip: ru ? 'Переместить' : 'Move',
+            position: PopupMenuPosition.under,
+            color: Tokens.bg,
+            surfaceTintColor: Colors.transparent,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(Tokens.radiusMd),
+              side: const BorderSide(color: Tokens.border),
+            ),
+            enabled: profileId.isNotEmpty,
+            onSelected: (status) => widget.onMove(profileId, status),
+            itemBuilder: (context) => [
+              for (final column in widget.allColumns)
+                if (column.status != widget.currentStatus)
+                  PopupMenuItem(
+                    value: column.status,
+                    child: Text(
+                      '→ ${_sentenceCaseResponses(column.title)}',
+                    ),
+                  ),
+            ],
+            icon: const Icon(
+              Icons.more_horiz_rounded,
+              size: 20,
+              color: Tokens.textSecondary,
+            ),
+          ),
+        ],
+      );
+    }
 
     final rowWidget = MouseRegion(
       onEnter: (_) {
@@ -3036,59 +3348,15 @@ class _ResponseRowV2State extends State<_ResponseRowV2> {
                           ],
                         ),
                       ],
+                      if (widget.statusChip != null) ...[
+                        const SizedBox(height: 4),
+                        widget.statusChip!,
+                      ],
                     ],
                   ),
                 ),
                 const SizedBox(width: 8),
-                AnimatedOpacity(
-                  duration: Tokens.fast,
-                  opacity: _hovered || isSelected ? 1 : 0,
-                  child: IconButton(
-                    tooltip: note.isEmpty
-                        ? (ru ? 'Заметка' : 'Note')
-                        : (ru ? 'Изменить заметку' : 'Edit note'),
-                    onPressed: profileId.isEmpty
-                        ? null
-                        : () => widget.onNote(widget.row),
-                    visualDensity: VisualDensity.compact,
-                    style: IconButton.styleFrom(
-                      foregroundColor: Tokens.textSecondary,
-                    ),
-                    icon: Icon(
-                      note.isEmpty
-                          ? Icons.sticky_note_2_outlined
-                          : Icons.sticky_note_2_rounded,
-                      size: 18,
-                    ),
-                  ),
-                ),
-                PopupMenuButton<CastingResponseStatus>(
-                  tooltip: ru ? 'Переместить' : 'Move',
-                  position: PopupMenuPosition.under,
-                  color: Tokens.bg,
-                  surfaceTintColor: Colors.transparent,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(Tokens.radiusMd),
-                    side: const BorderSide(color: Tokens.border),
-                  ),
-                  enabled: profileId.isNotEmpty,
-                  onSelected: (status) => widget.onMove(profileId, status),
-                  itemBuilder: (context) => [
-                    for (final column in widget.allColumns)
-                      if (column.status != widget.currentStatus)
-                        PopupMenuItem(
-                          value: column.status,
-                          child: Text(
-                            '→ ${_sentenceCaseResponses(column.title)}',
-                          ),
-                        ),
-                  ],
-                  icon: const Icon(
-                    Icons.more_horiz_rounded,
-                    size: 20,
-                    color: Tokens.textSecondary,
-                  ),
-                ),
+                trailing,
               ],
             ),
           ),
@@ -3096,7 +3364,8 @@ class _ResponseRowV2State extends State<_ResponseRowV2> {
       ),
     );
 
-    if (profileId.isEmpty) return rowWidget;
+    // Phone list: no drag and drop, the menu moves rows.
+    if (profileId.isEmpty || compact) return rowWidget;
 
     final data = _BoardDragData(
       profileId: profileId,

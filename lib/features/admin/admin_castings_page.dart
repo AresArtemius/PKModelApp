@@ -496,6 +496,46 @@ class _CastingsToolbar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final narrow = MediaQuery.sizeOf(context).width < 700;
+    if (adminV2 && narrow) {
+      // Phone: search field, then the stages as one scrolling row of chips.
+      final chips = <Widget>[
+        AdminChipV2(
+          label: ru ? 'Все этапы' : 'All stages',
+          selected: stageFilter == null,
+          onTap: () => onStageChanged(null),
+        ),
+        for (final stage in CastingProjectStage.values)
+          AdminChipV2(
+            label: castingProjectStageLabel(context, stage),
+            selected: stageFilter == stage,
+            onTap: () => onStageChanged(stage),
+          ),
+      ];
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _ToolbarFrame(
+            controller: controller,
+            hintText: ru ? 'Поиск по проекту, клиенту, датам' : 'Search castings',
+            onSearchChanged: onSearchChanged,
+            filters: const [],
+          ),
+          const SizedBox(height: 8),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                for (var i = 0; i < chips.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 8),
+                  chips[i],
+                ],
+              ],
+            ),
+          ),
+        ],
+      );
+    }
     return _ToolbarFrame(
       controller: controller,
       hintText: ru ? 'Поиск по проекту, клиенту, датам' : 'Search castings',
@@ -975,6 +1015,12 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (adminV2) {
+      return Align(
+        alignment: Alignment.topCenter,
+        child: AdminEmptyV2(text: text),
+      );
+    }
     return DecoratedBox(
       decoration: adminCardDecoration().copyWith(
         border: Border.all(color: kBorderColor),

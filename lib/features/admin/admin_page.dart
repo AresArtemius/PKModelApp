@@ -299,7 +299,7 @@ class AdminPage extends ConsumerWidget {
                     onTap: () => context.go(Routes.adminSupport),
                   ),
                   _AdminAction(
-                    label: t.adminAgentApplicationsUpper,
+                    label: ru ? 'ЗАЯВКИ НА СТАТУС' : 'STATUS REQUESTS',
                     description: ru
                         ? 'Статусы заказчиков'
                         : 'Client role requests',
@@ -538,6 +538,15 @@ class _AdminHomeV2 extends StatelessWidget {
     final ru = Localizations.localeOf(context).languageCode == 'ru';
     final narrow =
         MediaQuery.sizeOf(context).width < kAdminShellWideBreakpoint;
+    final stats = <({String label, int value, bool alert})>[
+      (label: ru ? 'Модерация' : 'Moderation', value: counts.moderation, alert: true),
+      (label: ru ? 'Заявки' : 'Requests', value: counts.agentApplications, alert: true),
+      (label: ru ? 'Объединения' : 'Merges', value: counts.accountMerges, alert: true),
+      (label: ru ? 'Безопасность' : 'Safety', value: counts.safety, alert: true),
+      (label: ru ? 'Просрочено' : 'Overdue', value: counts.overdueTasks, alert: true),
+      (label: ru ? 'Критично' : 'Critical', value: counts.criticalTasks, alert: true),
+      (label: ru ? 'Мои просроченные' : 'My overdue', value: counts.myOverdueTasks, alert: true),
+    ];
     return AdminShellV2(
       title: narrow
           ? (ru ? 'Рабочий стол' : 'Dashboard')
@@ -560,49 +569,78 @@ class _AdminHomeV2 extends StatelessWidget {
           label: Text(ru ? 'Создать кастинг' : 'Create casting'),
         ),
       ],
-      headerBottom: AdminStatsRow(
-        items: [
-          (
-            label: ru ? 'Модерация' : 'Moderation',
-            value: counts.moderation,
-            alert: true,
-          ),
-          (
-            label: ru ? 'Заявки' : 'Requests',
-            value: counts.agentApplications,
-            alert: true,
-          ),
-          (
-            label: ru ? 'Объединения' : 'Merges',
-            value: counts.accountMerges,
-            alert: true,
-          ),
-          (
-            label: ru ? 'Безопасность' : 'Safety',
-            value: counts.safety,
-            alert: true,
-          ),
-          (
-            label: ru ? 'Просрочено' : 'Overdue',
-            value: counts.overdueTasks,
-            alert: true,
-          ),
-          (
-            label: ru ? 'Критично' : 'Critical',
-            value: counts.criticalTasks,
-            alert: true,
-          ),
-          (
-            label: ru ? 'Мои просроченные' : 'My overdue',
-            value: counts.myOverdueTasks,
-            alert: true,
-          ),
-        ],
-      ),
+      headerBottom: narrow ? null : AdminStatsRow(items: stats),
       body: ListView(
         padding: const EdgeInsets.only(bottom: 32),
-        children: const [_AdminWorkspaceTable()],
+        children: [
+          if (narrow) ...[
+            _AdminStatTilesV2(items: stats),
+            const SizedBox(height: 20),
+          ],
+          const _AdminWorkspaceTable(),
+        ],
       ),
+    );
+  }
+}
+
+/// Phone dashboard: the counters as a two-column grid of flat tiles
+/// (label on top, number below) instead of a sideways-scrolling row.
+class _AdminStatTilesV2 extends StatelessWidget {
+  const _AdminStatTilesV2({required this.items});
+
+  final List<({String label, int value, bool alert})> items;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget tile(({String label, int value, bool alert}) item) {
+      return Container(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+        decoration: BoxDecoration(
+          color: Tokens.surfaceAlt,
+          borderRadius: BorderRadius.circular(Tokens.radiusMd),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              item.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppText.caption.copyWith(color: Tokens.textSecondary),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '${item.value}',
+              style: AppText.h2.copyWith(
+                fontSize: 22,
+                color: item.alert && item.value > 0
+                    ? Tokens.accent
+                    : Tokens.text,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var i = 0; i < items.length; i += 2) ...[
+          if (i > 0) const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(child: tile(items[i])),
+              const SizedBox(width: 8),
+              if (i + 1 < items.length)
+                Expanded(child: tile(items[i + 1]))
+              else
+                const Expanded(child: SizedBox.shrink()),
+            ],
+          ),
+        ],
+      ],
     );
   }
 }
@@ -1083,6 +1121,9 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
                 ),
               );
               if (compact) {
+                // Phone (v2): the shell already shows the page title — only
+                // the search field here.
+                if (adminV2) return search;
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [header, const SizedBox(height: 12), search],
@@ -2115,6 +2156,21 @@ class _AdminWorkspaceFilters extends StatelessWidget {
       builder: (context, constraints) {
         final compact = constraints.maxWidth < 620;
         if (adminV2) {
+          if (compact) {
+            // Phone: one sideways-scrolling row instead of a tall wrap.
+            return SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  for (final item in items) ...[
+                    filterChip(item),
+                    const SizedBox(width: 8),
+                  ],
+                  mineChip(),
+                ],
+              ),
+            );
+          }
           return Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -2741,6 +2797,8 @@ class _AdminRowsTableV2 extends StatelessWidget {
     final ru = Localizations.localeOf(context).languageCode == 'ru';
     final narrow = MediaQuery.sizeOf(context).width < 900;
     if (narrow) {
+      // Phone: queue-style rows — title, kind · subtitle, the SLA line,
+      // the date and a status dot; the checkbox keeps bulk actions.
       return Column(
         children: [
           for (var i = 0; i < rows.length; i++)
@@ -2748,15 +2806,22 @@ class _AdminRowsTableV2 extends StatelessWidget {
               last: i == rows.length - 1,
               selected: selected.contains(rows[i].id),
               onTap: () => onOpen(rows[i]),
+              padding: const EdgeInsets.fromLTRB(0, 10, 4, 12),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   SizedBox(
                     width: _check,
                     child: Checkbox(
                       value: selected.contains(rows[i].id),
                       onChanged: (_) => onToggle(rows[i].id),
+                      activeColor: Tokens.ink,
+                      checkColor: Colors.white,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      visualDensity: VisualDensity.compact,
                     ),
                   ),
+                  const SizedBox(width: 4),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2765,8 +2830,9 @@ class _AdminRowsTableV2 extends StatelessWidget {
                           rows[i].title,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: AppText.smallStrong,
+                          style: AppText.bodyStrong,
                         ),
+                        const SizedBox(height: 2),
                         Text(
                           [
                             rows[i].kind,
@@ -2774,15 +2840,42 @@ class _AdminRowsTableV2 extends StatelessWidget {
                           ].where((e) => e.isNotEmpty).join(' · '),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: AppText.caption,
+                          style: AppText.small.copyWith(color: Tokens.text),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          [
+                            rows[i].slaLabel(ru),
+                            if (rows[i].assignmentLabel.isNotEmpty)
+                              rows[i].assignmentLabel,
+                          ].join(' · '),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppText.small.copyWith(
+                            color: rows[i].isOverdue
+                                ? Tokens.danger
+                                : Tokens.textSecondary,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: AdminStatusV2(
+                                text: rows[i].status,
+                                color: rows[i].isOverdue
+                                    ? Tokens.danger
+                                    : Tokens.warning,
+                              ),
+                            ),
+                            if (rows[i].dateText.isNotEmpty) ...[
+                              const SizedBox(width: 8),
+                              Text(rows[i].dateText, style: AppText.caption),
+                            ],
+                          ],
                         ),
                       ],
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  AdminStatusV2(
-                    text: rows[i].status,
-                    color: rows[i].isOverdue ? Tokens.danger : Tokens.warning,
                   ),
                 ],
               ),

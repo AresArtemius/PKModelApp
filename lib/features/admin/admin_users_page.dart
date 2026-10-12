@@ -522,6 +522,12 @@ class _UsersEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (adminV2) {
+      return Align(
+        alignment: Alignment.topCenter,
+        child: AdminEmptyV2(text: text),
+      );
+    }
     return DecoratedBox(
       decoration: adminCardDecoration().copyWith(
         border: Border.all(color: kBorderColor),
@@ -635,6 +641,39 @@ class _UsersToolbar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final narrow = MediaQuery.sizeOf(context).width < 700;
+    if (adminV2 && narrow) {
+      // Phone: the search field, then the roles as one scrolling row of
+      // chips — no dropdown pill and no second row.
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AdminMobileToolbar(
+            controller: controller,
+            hintText: ru ? 'Поиск по имени, email, телефону, tag' : 'Search',
+            onSearchChanged: onSearchChanged,
+            filters: const [],
+          ),
+          const SizedBox(height: 8),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                for (final filter in _AdminUserRoleFilter.values) ...[
+                  if (filter != _AdminUserRoleFilter.values.first)
+                    const SizedBox(width: 8),
+                  AdminChipV2(
+                    label: filter.label(ru),
+                    selected: filter == roleFilter,
+                    onTap: () => onRoleFilterChanged(filter),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      );
+    }
     return AdminMobileToolbar(
       controller: controller,
       hintText: ru ? 'Поиск по имени, email, телефону, tag' : 'Search',

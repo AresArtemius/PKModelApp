@@ -18,6 +18,8 @@ import 'selection_status.dart';
 const _bg = BrandTheme.greyMid;
 const _text = kTextDark;
 
+enum _KindFilter { all, castings, selections }
+
 class SelectionAdminPage extends ConsumerStatefulWidget {
   const SelectionAdminPage({super.key});
 
@@ -29,6 +31,7 @@ class _SelectionAdminPageState extends ConsumerState<SelectionAdminPage> {
   final Set<String> _selectedIds = <String>{};
   final Map<String, String> _selectedKinds = <String, String>{};
   bool _isDeleting = false;
+  _KindFilter _kindFilter = _KindFilter.all;
 
   void _toggleSelected(String id, String kind) {
     setState(() {
@@ -236,45 +239,107 @@ class _SelectionAdminPageState extends ConsumerState<SelectionAdminPage> {
         : (ru
               ? 'Подборок: $selections · кастингов: $castings'
               : 'Selections: $selections · castings: $castings');
+    final narrow = MediaQuery.sizeOf(context).width < 700;
     final actions = <Widget>[
-          if (_selectedIds.isNotEmpty) ...[
-            TextButton(
-              onPressed: _clearSelected,
-              style: TextButton.styleFrom(foregroundColor: Tokens.textSecondary),
-              child: Text(ru ? 'Сбросить' : 'Clear'),
-            ),
-            const SizedBox(width: 4),
-            FilledButton.icon(
-              onPressed: _isDeleting ? null : _deleteSelectedV2,
-              style: FilledButton.styleFrom(
-                backgroundColor: Tokens.danger,
-                minimumSize: const Size(0, 40),
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-              ),
-              icon: _isDeleting
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                      ),
-                    )
-                  : const Icon(Icons.delete_outline_rounded, size: 18),
-              label: Text(
-                ru
-                    ? 'Удалить (${_selectedIds.length})'
-                    : 'Delete (${_selectedIds.length})',
-              ),
-            ),
-          ] else
-            IconButton(
-              tooltip: ru ? 'Обновить' : 'Refresh',
-              onPressed: () => ref.invalidate(adminSelectionListProvider),
-              style: IconButton.styleFrom(foregroundColor: Tokens.textSecondary),
-              icon: const Icon(Icons.refresh_rounded, size: 20),
-            ),
+      if (_selectedIds.isNotEmpty && narrow) ...[
+        // Phone: icon actions stay on the one-line header.
+        IconButton(
+          tooltip: ru ? 'Снять выделение' : 'Clear selection',
+          onPressed: _clearSelected,
+          style: IconButton.styleFrom(foregroundColor: Tokens.textSecondary),
+          icon: const Icon(Icons.deselect_rounded, size: 20),
+        ),
+        IconButton(
+          tooltip: ru
+              ? 'Удалить (${_selectedIds.length})'
+              : 'Delete (${_selectedIds.length})',
+          onPressed: _isDeleting ? null : _deleteSelectedV2,
+          style: IconButton.styleFrom(foregroundColor: Tokens.danger),
+          icon: _isDeleting
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.delete_outline_rounded, size: 20),
+        ),
+      ] else if (_selectedIds.isNotEmpty) ...[
+        TextButton(
+          onPressed: _clearSelected,
+          style: TextButton.styleFrom(foregroundColor: Tokens.textSecondary),
+          child: Text(ru ? 'Сбросить' : 'Clear'),
+        ),
+        const SizedBox(width: 4),
+        FilledButton.icon(
+          onPressed: _isDeleting ? null : _deleteSelectedV2,
+          style: FilledButton.styleFrom(
+            backgroundColor: Tokens.danger,
+            minimumSize: const Size(0, 40),
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+          ),
+          icon: _isDeleting
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  ),
+                )
+              : const Icon(Icons.delete_outline_rounded, size: 18),
+          label: Text(
+            ru
+                ? 'Удалить (${_selectedIds.length})'
+                : 'Delete (${_selectedIds.length})',
+          ),
+        ),
+      ] else
+        IconButton(
+          tooltip: ru ? 'Обновить' : 'Refresh',
+          onPressed: () => ref.invalidate(adminSelectionListProvider),
+          style: IconButton.styleFrom(foregroundColor: Tokens.textSecondary),
+          icon: const Icon(Icons.refresh_rounded, size: 20),
+        ),
     ];
+
+    List<Map<String, dynamic>> visible(List<Map<String, dynamic>> rows) {
+      return switch (_kindFilter) {
+        _KindFilter.all => rows,
+        _KindFilter.castings =>
+          rows.where((e) => e['_kind'] == 'casting').toList(growable: false),
+        _KindFilter.selections =>
+          rows.where((e) => e['_kind'] != 'casting').toList(growable: false),
+      };
+    }
+
+    final filters = SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Row(
+        children: [
+          AdminChipV2(
+            label: ru ? 'Все' : 'All',
+            count: items.length,
+            selected: _kindFilter == _KindFilter.all,
+            onTap: () => setState(() => _kindFilter = _KindFilter.all),
+          ),
+          const SizedBox(width: 8),
+          AdminChipV2(
+            label: ru ? 'Кастинги' : 'Castings',
+            count: castings,
+            selected: _kindFilter == _KindFilter.castings,
+            onTap: () => setState(() => _kindFilter = _KindFilter.castings),
+          ),
+          const SizedBox(width: 8),
+          AdminChipV2(
+            label: ru ? 'Подборки' : 'Selections',
+            count: selections,
+            selected: _kindFilter == _KindFilter.selections,
+            onTap: () => setState(() => _kindFilter = _KindFilter.selections),
+          ),
+        ],
+      ),
+    );
 
     final body = itemsAsync.when(
       loading: () => const Padding(
@@ -296,7 +361,7 @@ class _SelectionAdminPageState extends ConsumerState<SelectionAdminPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  ru ? 'Подборок пока нет' : 'No selections yet',
+                  ru ? 'Пока пусто' : 'Nothing yet',
                   style: AppText.h2.copyWith(color: Tokens.textSecondary),
                 ),
                 const SizedBox(height: 6),
@@ -310,13 +375,18 @@ class _SelectionAdminPageState extends ConsumerState<SelectionAdminPage> {
             ),
           );
         }
+        final rows = visible(items);
+        if (rows.isEmpty) {
+          return AdminEmptyV2(text: ru ? 'Ничего не найдено' : 'Nothing found');
+        }
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            for (final row in items)
+            for (final row in rows)
               _SelectionRowV2(
                 row: row,
                 gutter: 0,
+                narrow: narrow,
                 selected: _selectedIds.contains((row['id'] ?? '').toString()),
                 date: _dateV2(row['created_at'], ru),
                 onToggle: () => _toggleSelected(
@@ -339,12 +409,22 @@ class _SelectionAdminPageState extends ConsumerState<SelectionAdminPage> {
     );
 
     return AdminShellV2(
-      title: ru ? 'Подборки' : 'Selections',
+      title: ru ? 'Отбор' : 'Selection desk',
       subtitle: subtitle,
+      onBack: () => context.go(Routes.admin),
       actions: actions,
       body: ListView(
         padding: const EdgeInsets.only(bottom: 40),
         children: [
+          if (narrow)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                subtitle,
+                style: AppText.caption.copyWith(color: Tokens.textSecondary),
+              ),
+            ),
+          filters,
           const Divider(height: 1, thickness: 1, color: Tokens.border),
           body,
         ],
@@ -638,10 +718,14 @@ class _SelectionRowV2 extends StatefulWidget {
     required this.date,
     required this.onToggle,
     required this.onOpen,
+    this.narrow = false,
   });
 
   final Map<String, dynamic> row;
   final double gutter;
+
+  /// Phone: the date goes under the title instead of a trailing column.
+  final bool narrow;
   final bool selected;
   final String date;
   final VoidCallback onToggle;
@@ -665,6 +749,9 @@ class _SelectionRowV2State extends State<_SelectionRowV2> {
     final kindLabel = isCasting
         ? (ru ? 'Кастинг · отклики' : 'Casting · responses')
         : '${ru ? 'Подборка' : 'Selection'} · ${selectionStatusLabel(t, status)}';
+    final subtitle = widget.narrow && widget.date.isNotEmpty
+        ? '$kindLabel · ${widget.date}'
+        : kindLabel;
     final selected = widget.selected;
 
     return MouseRegion(
@@ -732,7 +819,7 @@ class _SelectionRowV2State extends State<_SelectionRowV2> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        kindLabel,
+                        subtitle,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: AppText.caption.copyWith(
@@ -742,11 +829,13 @@ class _SelectionRowV2State extends State<_SelectionRowV2> {
                     ],
                   ),
                 ),
-                const SizedBox(width: 12),
-                Text(
-                  widget.date,
-                  style: AppText.caption.copyWith(color: Tokens.textTertiary),
-                ),
+                if (!widget.narrow) ...[
+                  const SizedBox(width: 12),
+                  Text(
+                    widget.date,
+                    style: AppText.caption.copyWith(color: Tokens.textTertiary),
+                  ),
+                ],
                 const SizedBox(width: 8),
                 Icon(
                   Icons.chevron_right_rounded,

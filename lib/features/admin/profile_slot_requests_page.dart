@@ -103,7 +103,7 @@ class ProfileSlotRequestsPage extends ConsumerWidget {
     final ru = Localizations.localeOf(context).languageCode == 'ru';
     final requests = ref.watch(profileSlotRequestsProvider);
     return AdminPageScaffold(
-      title: ru ? 'ДОПОЛНИТЕЛЬНЫЕ АНКЕТЫ' : 'EXTRA PROFILES',
+      title: ru ? 'Дополнительные анкеты' : 'Extra profiles',
       subtitle: ru
           ? 'Запросы на увеличение лимита анкет'
           : 'Profile limit requests',
@@ -115,12 +115,19 @@ class ProfileSlotRequestsPage extends ConsumerWidget {
                 requests.when(
                   loading: () =>
                       const Center(child: CircularProgressIndicator()),
-                  error: (error, stackTrace) => Text(
-                    ru
-                        ? 'Не удалось загрузить запросы.'
-                        : 'Could not load requests.',
-                    textAlign: TextAlign.center,
-                  ),
+                  error: (_, _) => adminV2
+                      ? AdminEmptyV2(
+                          text: ru
+                              ? 'Не удалось загрузить запросы.'
+                              : 'Could not load requests.',
+                          error: true,
+                        )
+                      : Text(
+                          ru
+                              ? 'Не удалось загрузить запросы.'
+                              : 'Could not load requests.',
+                          textAlign: TextAlign.center,
+                        ),
                   data: (items) => items.isEmpty
                       ? (adminV2
                             ? AdminEmptyV2(
@@ -157,6 +164,7 @@ class ProfileSlotRequestsPage extends ConsumerWidget {
                                   ),
                                 ],
                               ),
+                            const SizedBox(height: 24),
                           ],
                         )
                       : Column(

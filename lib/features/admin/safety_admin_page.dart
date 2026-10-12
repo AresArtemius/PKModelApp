@@ -52,8 +52,32 @@ final postReportsProvider =
       }
     });
 
-class SafetyAdminPage extends ConsumerWidget {
+/// Status filter buckets for both report lists.
+const List<String> _safetyFilters = ['all', 'open', 'in_review', 'closed'];
+
+String _safetyBucketOf(Map<String, dynamic> row) =>
+    switch ((row['status'] ?? '').toString().trim()) {
+      'closed' || 'resolved' || 'dismissed' => 'closed',
+      'in_review' => 'in_review',
+      _ => 'open',
+    };
+
+String _safetyFilterLabel(String filter, bool ru) => switch (filter) {
+  'open' => ru ? 'Открытые' : 'Open',
+  'in_review' => ru ? 'В работе' : 'In review',
+  'closed' => ru ? 'Закрытые' : 'Closed',
+  _ => ru ? 'Все' : 'All',
+};
+
+class SafetyAdminPage extends ConsumerStatefulWidget {
   const SafetyAdminPage({super.key});
+
+  @override
+  ConsumerState<SafetyAdminPage> createState() => _SafetyAdminPageState();
+}
+
+class _SafetyAdminPageState extends ConsumerState<SafetyAdminPage> {
+  String _filter = 'all';
 
   Future<void> _setReportStatus({
     required BuildContext context,
@@ -172,89 +196,202 @@ class SafetyAdminPage extends ConsumerWidget {
     }
   }
 
+  bool _matchesFilter(Map<String, dynamic> row) =>
+      _filter == 'all' || _safetyBucketOf(row) == _filter;
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
     final async = ref.watch(safetyReportsProvider);
-    final postReports = ref
+    final allPostReports = ref
         .watch(postReportsProvider)
         .maybeWhen(data: (v) => v, orElse: () => const <Map<String, dynamic>>[]);
     final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final narrow = MediaQuery.sizeOf(context).width < 700;
 
     return AdminPageScaffold(
       title: t.safetyAdminUpper,
-      subtitle: Localizations.localeOf(context).languageCode == 'ru' ? 'Жалобы и проверки' : 'Reports and safety',
+      subtitle: ru ? 'Жалобы и проверки' : 'Reports and safety',
       onBack: () => context.go(Routes.admin),
       brandBackground: true,
       padding: const EdgeInsets.all(kPagePadH),
       headerGap: kGap16,
       children: [
-                  Expanded(
-                    child: async.when(
-                      loading: () =>
-                          const Center(child: CircularProgressIndicator()),
-                      error: (e, _) => _MessageCard(
-                        text: AppErrorMapper.message(e, t),
-                        isError: true,
+        if (adminV2)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: async.maybeWhen(
+              data: (items) => _SafetyFilterRow(
+                value: _filter,
+                narrow: narrow,
+                counts: {
+                  for (final filter in _safetyFilters)
+                    filter: filter == 'all'
+                        ? items.length + allPostReports.length
+                        : [...items, ...allPostReports]
+                              .where((row) => _safetyBucketOf(row) == filter)
+                              .length,
+                },
+                onChanged: (value) => setState(() => _filter = value),
+              ),
+              orElse: () => const SizedBox.shrink(),
+            ),
+          ),
+        Expanded(
+          child: async.when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (e, _) => _MessageCard(
+              text: AppErrorMapper.message(e, t),
+              isError: true,
+            ),
+            data: (allItems) {
+              if (allItems.isEmpty && allPostReports.isEmpty) {
+                return _MessageCard(text: t.safetyReportsEmpty);
+              }
+              final items = allItems.where(_matchesFilter).toList(
+                growable: false,
+              );
+              final postReports = allPostReports.where(_matchesFilter).toList(
+                growable: false,
+              );
+              if (items.isEmpty && postReports.isEmpty) {
+                return _MessageCard(
+                  text: ru
+                      ? 'Нет жалоб с таким статусом'
+                      : 'No reports with this status',
+                );
+              }
+              return ListView(
+                padding: const EdgeInsets.only(bottom: 24),
+                children: [
+                  if (items.isNotEmpty && postReports.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text(
+                        ru ? 'Жалобы на анкеты' : 'Profile reports',
+                        style: adminV2 ? AppText.label : AppText.h2,
                       ),
-                      data: (items) {
-                        if (items.isEmpty && postReports.isEmpty) {
-                          return _MessageCard(text: t.safetyReportsEmpty);
-                        }
-                        return ListView(
-                          children: [
-                            if (items.isNotEmpty && postReports.isNotEmpty)
-                              Padding(
-                                padding: const EdgeInsets.only(bottom: kGap12),
-                                child: Text(
-                                  ru ? 'Жалобы на анкеты' : 'Profile reports',
-                                  style: AppText.h2,
-                                ),
-                              ),
-                            for (var i = 0; i < items.length; i++) ...[
-                              _ReportCard(
-                                row: items[i],
-                                last: i == items.length - 1,
-                                onStatusChanged: (status) => _setReportStatus(
-                                  context: context,
-                                  ref: ref,
-                                  row: items[i],
-                                  status: status,
-                                ),
-                              ),
-                              if (!adminV2) const SizedBox(height: kGap12),
-                            ],
-                            if (postReports.isNotEmpty) ...[
-                              Padding(
-                                padding: EdgeInsets.only(
-                                  top: items.isEmpty ? 0 : kGap16 * 2,
-                                  bottom: kGap12,
-                                ),
-                                child: Text(
-                                  ru ? 'Жалобы на посты' : 'Post reports',
-                                  style: AppText.h2,
-                                ),
-                              ),
-                              for (var i = 0; i < postReports.length; i++)
-                                _PostReportRow(
-                                  row: postReports[i],
-                                  last: i == postReports.length - 1,
-                                  onStatus: (status, {hidePost = false}) =>
-                                      _setPostReportStatus(
-                                        context: context,
-                                        ref: ref,
-                                        row: postReports[i],
-                                        status: status,
-                                        hidePost: hidePost,
-                                      ),
-                                ),
-                            ],
-                          ],
-                        );
-                      },
                     ),
-                  ),
+                  for (var i = 0; i < items.length; i++) ...[
+                    _ReportCard(
+                      row: items[i],
+                      last: i == items.length - 1,
+                      narrow: narrow,
+                      onStatusChanged: (status) => _setReportStatus(
+                        context: context,
+                        ref: ref,
+                        row: items[i],
+                        status: status,
+                      ),
+                    ),
+                    if (!adminV2) const SizedBox(height: kGap12),
+                  ],
+                  if (postReports.isNotEmpty) ...[
+                    Padding(
+                      padding: EdgeInsets.only(
+                        top: items.isEmpty ? 0 : 24,
+                        bottom: 8,
+                      ),
+                      child: Text(
+                        ru ? 'Жалобы на посты' : 'Post reports',
+                        style: adminV2 ? AppText.label : AppText.h2,
+                      ),
+                    ),
+                    for (var i = 0; i < postReports.length; i++)
+                      _PostReportRow(
+                        row: postReports[i],
+                        last: i == postReports.length - 1,
+                        narrow: narrow,
+                        onStatus: (status, {hidePost = false}) =>
+                            _setPostReportStatus(
+                              context: context,
+                              ref: ref,
+                              row: postReports[i],
+                              status: status,
+                              hidePost: hidePost,
+                            ),
+                      ),
+                  ],
+                ],
+              );
+            },
+          ),
+        ),
       ],
+    );
+  }
+}
+
+/// Status chips: one scrolling row on phones, a wrap on wide screens.
+class _SafetyFilterRow extends StatelessWidget {
+  const _SafetyFilterRow({
+    required this.value,
+    required this.narrow,
+    required this.counts,
+    required this.onChanged,
+  });
+
+  final String value;
+  final bool narrow;
+  final Map<String, int> counts;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final chips = [
+      for (final filter in _safetyFilters)
+        AdminChipV2(
+          label: _safetyFilterLabel(filter, ru),
+          selected: filter == value,
+          count: counts[filter],
+          onTap: () => onChanged(filter),
+        ),
+    ];
+    if (!narrow) {
+      return Wrap(spacing: 8, runSpacing: 8, children: chips);
+    }
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          for (var i = 0; i < chips.length; i++) ...[
+            if (i > 0) const SizedBox(width: 8),
+            chips[i],
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// «⋯» button with the row actions for phones.
+class _SafetyMoreButton extends StatelessWidget {
+  const _SafetyMoreButton({required this.options, required this.onSelected});
+
+  final List<AdminMenuOption<String>> options;
+  final ValueChanged<String> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    return AdminPopupMenuButton<String>(
+      tooltip: ru ? 'Действия' : 'Actions',
+      options: options,
+      onSelected: onSelected,
+      child: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(Tokens.radiusSm),
+          border: Border.all(color: Tokens.border),
+        ),
+        child: const Icon(
+          Icons.more_horiz_rounded,
+          size: 20,
+          color: Tokens.textSecondary,
+        ),
+      ),
     );
   }
 }
@@ -264,11 +401,13 @@ class _ReportCard extends StatelessWidget {
     required this.row,
     required this.onStatusChanged,
     this.last = false,
+    this.narrow = false,
   });
 
   final Map<String, dynamic> row;
   final ValueChanged<String> onStatusChanged;
   final bool last;
+  final bool narrow;
 
   @override
   Widget build(BuildContext context) {
@@ -280,6 +419,12 @@ class _ReportCard extends StatelessWidget {
     final isClosed = status == 'closed' || status == 'resolved';
 
     if (adminV2) {
+      final openLabel = ru ? 'Открыть анкету' : 'Open profile';
+      final toggleLabel = isClosed
+          ? (ru ? 'В работу' : 'Reopen')
+          : (ru ? 'Закрыть' : 'Close');
+      void openProfile() => context.go('${Routes.modelPrefix}$profileId');
+      void toggle() => onStatusChanged(isClosed ? 'in_review' : 'closed');
       return AdminQueueRowV2(
         title: text('reason').isEmpty ? (ru ? 'Жалоба' : 'Report') : text('reason'),
         note: comment,
@@ -295,22 +440,34 @@ class _ReportCard extends StatelessWidget {
           },
           color: isClosed ? Tokens.textTertiary : Tokens.danger,
         ),
-        actions: [
-          if (profileId.isNotEmpty)
-            AdminRowButton(
-              label: ru ? 'Открыть анкету' : 'Open profile',
-              onPressed: () =>
-                  context.go('${Routes.modelPrefix}$profileId'),
-            ),
-          AdminRowButton(
-            label: isClosed
-                ? (ru ? 'В работу' : 'Reopen')
-                : (ru ? 'Закрыть' : 'Close'),
-            primary: !isClosed,
-            onPressed: () =>
-                onStatusChanged(isClosed ? 'in_review' : 'closed'),
-          ),
-        ],
+        actions: narrow
+            ? [
+                AdminRowButton(
+                  label: toggleLabel,
+                  primary: !isClosed,
+                  onPressed: toggle,
+                ),
+                if (profileId.isNotEmpty)
+                  _SafetyMoreButton(
+                    options: [
+                      AdminMenuOption(
+                        value: 'open',
+                        label: openLabel,
+                        icon: Icons.person_outline_rounded,
+                      ),
+                    ],
+                    onSelected: (_) => openProfile(),
+                  ),
+              ]
+            : [
+                if (profileId.isNotEmpty)
+                  AdminRowButton(label: openLabel, onPressed: openProfile),
+                AdminRowButton(
+                  label: toggleLabel,
+                  primary: !isClosed,
+                  onPressed: toggle,
+                ),
+              ],
       );
     }
 
@@ -371,11 +528,13 @@ class _PostReportRow extends StatelessWidget {
     required this.row,
     required this.onStatus,
     this.last = false,
+    this.narrow = false,
   });
 
   final Map<String, dynamic> row;
   final void Function(String status, {bool hidePost}) onStatus;
   final bool last;
+  final bool narrow;
 
   @override
   Widget build(BuildContext context) {
@@ -421,21 +580,51 @@ class _PostReportRow extends StatelessWidget {
         },
         color: isClosed ? Tokens.textTertiary : Tokens.danger,
       ),
-      actions: [
-        if (!hidden && !isClosed)
-          AdminRowButton(
-            label: ru ? 'Скрыть пост' : 'Hide post',
-            primary: true,
-            onPressed: () => onStatus('resolved', hidePost: true),
-          ),
-        AdminRowButton(
-          label: isClosed
-              ? (ru ? 'В работу' : 'Reopen')
-              : (ru ? 'Закрыть' : 'Close'),
-          onPressed: () => onStatus(isClosed ? 'in_review' : 'closed'),
-        ),
-      ],
+      actions: _actions(ru, hidden: hidden, isClosed: isClosed),
     );
+  }
+
+  List<Widget> _actions(bool ru, {required bool hidden, required bool isClosed}) {
+    final hideLabel = ru ? 'Скрыть пост' : 'Hide post';
+    final toggleLabel = isClosed
+        ? (ru ? 'В работу' : 'Reopen')
+        : (ru ? 'Закрыть' : 'Close');
+    void hide() => onStatus('resolved', hidePost: true);
+    void toggle() => onStatus(isClosed ? 'in_review' : 'closed');
+    final canHide = !hidden && !isClosed;
+
+    if (narrow) {
+      // Phone: the primary decision as a button, the rest under «⋯».
+      return [
+        AdminRowButton(
+          label: canHide ? hideLabel : toggleLabel,
+          primary: canHide,
+          destructive: canHide,
+          onPressed: canHide ? hide : toggle,
+        ),
+        if (canHide)
+          _SafetyMoreButton(
+            options: [
+              AdminMenuOption(
+                value: 'toggle',
+                label: toggleLabel,
+                icon: Icons.check_circle_outline_rounded,
+              ),
+            ],
+            onSelected: (_) => toggle(),
+          ),
+      ];
+    }
+    return [
+      if (canHide)
+        AdminRowButton(
+          label: hideLabel,
+          primary: true,
+          destructive: true,
+          onPressed: hide,
+        ),
+      AdminRowButton(label: toggleLabel, onPressed: toggle),
+    ];
   }
 }
 

@@ -540,6 +540,65 @@ class _SelectionsToolbar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final narrow = MediaQuery.sizeOf(context).width < 700;
+    if (adminV2 && narrow) {
+      // Phone: search field, then statuses and access as one scrolling row
+      // of chips (a hairline divides the two groups).
+      final chips = <Widget>[
+        AdminChipV2(
+          label: ru ? 'Все статусы' : 'All statuses',
+          selected: statusFilter == null,
+          onTap: () => onStatusChanged(null),
+        ),
+        for (final status in SelectionStatus.values)
+          AdminChipV2(
+            label: _selectionStatusText(status, ru),
+            selected: statusFilter == status,
+            onTap: () => onStatusChanged(status),
+          ),
+        const _ChipGroupDivider(),
+        AdminChipV2(
+          label: ru ? 'Любой доступ' : 'Any visibility',
+          selected: publicFilter == null,
+          onTap: () => onPublicChanged(null),
+        ),
+        AdminChipV2(
+          label: ru ? 'Публичные' : 'Public',
+          selected: publicFilter == true,
+          onTap: () => onPublicChanged(true),
+        ),
+        AdminChipV2(
+          label: ru ? 'Закрытые' : 'Private',
+          selected: publicFilter == false,
+          onTap: () => onPublicChanged(false),
+        ),
+      ];
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _ToolbarFrame(
+            controller: controller,
+            hintText: ru
+                ? 'Поиск по подборке, клиенту, локации'
+                : 'Search selections',
+            onSearchChanged: onSearchChanged,
+            filters: const [],
+          ),
+          const SizedBox(height: 8),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                for (var i = 0; i < chips.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 8),
+                  chips[i],
+                ],
+              ],
+            ),
+          ),
+        ],
+      );
+    }
     return _ToolbarFrame(
       controller: controller,
       hintText: ru
@@ -1055,6 +1114,12 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (adminV2) {
+      return Align(
+        alignment: Alignment.topCenter,
+        child: AdminEmptyV2(text: text),
+      );
+    }
     return DecoratedBox(
       decoration: adminCardDecoration().copyWith(
         border: Border.all(color: kBorderColor),
@@ -1069,6 +1134,21 @@ class _EmptyState extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Thin vertical hairline between two chip groups in a scrolling row.
+class _ChipGroupDivider extends StatelessWidget {
+  const _ChipGroupDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 1,
+      height: 20,
+      margin: const EdgeInsets.symmetric(horizontal: 2),
+      color: Tokens.borderStrong,
     );
   }
 }

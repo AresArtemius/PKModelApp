@@ -1045,7 +1045,7 @@ List<AdminShellGroup> adminShellGroups(
           ),
           AdminShellSection(
             route: Routes.castingAgentApplicationsAdmin,
-            label: ru ? 'Заявки на статус' : 'Role requests',
+            label: ru ? 'Заявки на статус' : 'Status requests',
             icon: Icons.badge_outlined,
             badge: counts.agentApplications,
           ),
