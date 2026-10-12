@@ -129,11 +129,10 @@ class FeedService {
   }
 
   /// Soft delete of my own post (admins can hide any post the same way).
+  /// Soft delete through `delete_post` (a plain UPDATE is rejected by
+  /// RLS once deleted_at is set — see supabase/sql/feed_delete_post.sql).
   Future<void> deletePost(String postId) async {
-    await _sb
-        .from('posts')
-        .update({'deleted_at': DateTime.now().toUtc().toIso8601String()})
-        .eq('id', postId);
+    await _sb.rpc('delete_post', params: {'p_post_id': postId});
   }
 
   /// A repost is a post of kind `repost` that points at a post, a profile or

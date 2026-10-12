@@ -126,10 +126,7 @@ class SafetyAdminPage extends ConsumerWidget {
     if (reportId.isEmpty) return;
     try {
       if (hidePost && postId.isNotEmpty) {
-        await sb
-            .from('posts')
-            .update({'deleted_at': DateTime.now().toUtc().toIso8601String()})
-            .eq('id', postId);
+        await sb.rpc('delete_post', params: {'p_post_id': postId});
       }
       await sb.from('post_reports').update({'status': status}).eq('id', reportId);
       await AdminActionLogService(sb).log(
