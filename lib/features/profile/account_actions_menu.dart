@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth_providers.dart';
 import '../../ui/brand/ui_constants.dart';
+import '../feed/feed_service.dart' show feedControllerProvider, postCommentsProvider;
 import '../feed/post_comments.dart' show showReportReasonsDialog;
 import '../safety/safety_service.dart';
 
@@ -69,6 +70,8 @@ class AccountActionsMenu extends ConsumerWidget {
       if (blocked) {
         await safety.unblockUser(userId);
         ref.invalidate(blockedByMeProvider(userId));
+        ref.invalidate(feedControllerProvider);
+        ref.invalidate(postCommentsProvider);
         if (context.mounted) toast(ru ? 'Разблокировано' : 'Unblocked');
         return;
       }
@@ -105,6 +108,10 @@ class AccountActionsMenu extends ConsumerWidget {
       if (confirmed != true) return;
       final ok = await safety.blockUser(blockedUserId: userId, profileId: '');
       ref.invalidate(blockedByMeProvider(userId));
+      // Their posts and comments leave the feed right away (the server
+      // already filters them; this drops the cached pages).
+      ref.invalidate(feedControllerProvider);
+      ref.invalidate(postCommentsProvider);
       if (!context.mounted) return;
       toast(
         ok
