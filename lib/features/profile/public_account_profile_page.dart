@@ -19,6 +19,7 @@ import '../../ui/brand/ui_constants.dart';
 import '../chat/chat_providers.dart';
 import '../feed/feed_page.dart' show AuthorPostsSection;
 import '../feed/follow_button.dart';
+import 'account_actions_menu.dart';
 import 'account_links.dart';
 import 'account_profiles_section.dart';
 
@@ -618,6 +619,10 @@ extension _PublicAccountV2 on PublicAccountProfilePage {
                               userId: profile.userId,
                               showCount: false,
                             ),
+                          ),
+                          AccountActionsMenu(
+                            userId: profile.userId,
+                            displayName: profile.displayName,
                           ),
                         ],
                       ],
