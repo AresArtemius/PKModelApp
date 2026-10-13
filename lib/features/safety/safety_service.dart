@@ -72,7 +72,59 @@ class SafetyService {
       rethrow;
     }
   }
+
+  Future<bool> isBlocked(String blockedUserId) async {
+    final userId = _sb.auth.currentUser?.id;
+    final target = blockedUserId.trim();
+    if (userId == null || target.isEmpty) return false;
+    try {
+      final row = await _sb
+          .from(blocksTable)
+          .select('blocked_user_id')
+          .eq('blocker_user_id', userId)
+          .eq('blocked_user_id', target)
+          .maybeSingle();
+      return row != null;
+    } on PostgrestException catch (e) {
+      if (SupabaseCompat.isMissingRelation(e, const [blocksTable])) {
+        return false;
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> unblockUser(String blockedUserId) async {
+    final userId = _sb.auth.currentUser?.id;
+    final target = blockedUserId.trim();
+    if (userId == null || target.isEmpty) return;
+    await _sb
+        .from(blocksTable)
+        .delete()
+        .eq('blocker_user_id', userId)
+        .eq('blocked_user_id', target);
+  }
+
+  /// First catalogue profile of this account (reports are filed per profile).
+  Future<String?> firstProfileIdOf(String userId) async {
+    final row = await _sb
+        .from('catalog_profiles')
+        .select('id')
+        .eq('user_id', userId.trim())
+        .order('created_at', ascending: false)
+        .limit(1)
+        .maybeSingle();
+    final id = (row?['id'] ?? '').toString().trim();
+    return id.isEmpty ? null : id;
+  }
 }
+
+/// Whether I have blocked this user (null entry while unknown).
+final blockedByMeProvider = FutureProvider.autoDispose.family<bool, String>((
+  ref,
+  userId,
+) {
+  return ref.read(safetyServiceProvider).isBlocked(userId);
+});
 
 final safetyServiceProvider = Provider<SafetyService>((ref) {
   return SafetyService(ref.read(supabaseProvider));

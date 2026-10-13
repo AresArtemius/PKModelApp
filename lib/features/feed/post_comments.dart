@@ -161,8 +161,10 @@ class _PostCommentsSectionState extends ConsumerState<PostCommentsSection> {
                               (c.authorId == me ||
                                   widget.post.authorId == me ||
                                   isAdmin),
+                          canReport: me != null && c.authorId != me,
                           onEdit: () => _edit(c),
                           onDelete: () => _delete(c),
+                          onReport: () => _report(c),
                         ),
                     ],
                   ),
@@ -228,16 +230,20 @@ class _CommentRow extends StatelessWidget {
     required this.ru,
     required this.canEdit,
     required this.canDelete,
+    required this.canReport,
     required this.onEdit,
     required this.onDelete,
+    required this.onReport,
   });
 
   final FeedComment comment;
   final bool ru;
   final bool canEdit;
   final bool canDelete;
+  final bool canReport;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
+  final VoidCallback onReport;
 
   @override
   Widget build(BuildContext context) {
@@ -318,6 +324,16 @@ class _CommentRow extends StatelessWidget {
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
             ),
+          if (canReport)
+            IconButton(
+              tooltip: ru ? 'Пожаловаться' : 'Report',
+              onPressed: onReport,
+              icon: const Icon(Icons.flag_outlined, size: 16),
+              color: Tokens.textTertiary,
+              visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+            ),
           if (canDelete)
             IconButton(
               tooltip: ru ? 'Удалить' : 'Delete',
@@ -335,7 +351,51 @@ class _CommentRow extends StatelessWidget {
 }
 
 /// Step 47: «Пожаловаться» in one click — a reason, an optional note.
-Future<bool> showReportPostDialog(BuildContext context, FeedPost post) async {
+Future<bool> showReportPostDialog(BuildContext context, FeedPost post) =>
+    _showReportDialog(context, post: post);
+
+/// A report on a single comment goes to the same moderation queue as a
+/// post report; the comment text travels in the note so the moderator sees
+/// what was reported.
+Future<bool> showReportCommentDialog(
+  BuildContext context, {
+  required FeedPost post,
+  required FeedComment comment,
+}) => _showReportDialog(context, post: post, comment: comment);
+
+Future<bool> _showReportDialog(
+  BuildContext context, {
+  required FeedPost post,
+  FeedComment? comment,
+}) {
+  final ru = Localizations.localeOf(context).languageCode == 'ru';
+  return showReportReasonsDialog(
+    context,
+    title: comment == null
+        ? (ru ? 'Пожаловаться на пост' : 'Report post')
+        : (ru ? 'Пожаловаться на комментарий' : 'Report comment'),
+    onSubmit: (ref, reason, note) {
+      final text = comment == null
+          ? note
+          : '${ru ? 'Комментарий' : 'Comment'} '
+                '${comment.authorTag.isNotEmpty ? '@${comment.authorTag}' : comment.authorName} '
+                '(${comment.id}): «${comment.body.trim()}»'
+                '${note.trim().isEmpty ? '' : '\n$note'}';
+      return ref
+          .read(feedServiceProvider)
+          .reportPost(postId: post.id, reason: reason, comment: text);
+    },
+  );
+}
+
+/// The shared «reason + note» report dialog (posts, comments, accounts).
+/// Returns true when the report was sent.
+Future<bool> showReportReasonsDialog(
+  BuildContext context, {
+  required String title,
+  required Future<void> Function(WidgetRef ref, String reason, String note)
+  onSubmit,
+}) async {
   final ru = Localizations.localeOf(context).languageCode == 'ru';
   final reasons = <(String, String)>[
     ('spam', ru ? 'Спам или реклама' : 'Spam or ads'),
@@ -349,12 +409,10 @@ Future<bool> showReportPostDialog(BuildContext context, FeedPost post) async {
     context: context,
     builder: (_) => Consumer(
       builder: (context, ref, _) => _ReportDialog(
-        post: post,
+        title: title,
         reasons: reasons,
         ru: ru,
-        onSubmit: (reason, note) => ref
-            .read(feedServiceProvider)
-            .reportPost(postId: post.id, reason: reason, comment: note),
+        onSubmit: (reason, note) => onSubmit(ref, reason, note),
       ),
     ),
   );
@@ -363,13 +421,13 @@ Future<bool> showReportPostDialog(BuildContext context, FeedPost post) async {
 
 class _ReportDialog extends StatefulWidget {
   const _ReportDialog({
-    required this.post,
+    required this.title,
     required this.reasons,
     required this.ru,
     required this.onSubmit,
   });
 
-  final FeedPost post;
+  final String title;
   final List<(String, String)> reasons;
   final bool ru;
   final Future<void> Function(String reason, String note) onSubmit;
@@ -419,7 +477,7 @@ class _ReportDialogState extends State<_ReportDialog> {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(Tokens.radiusLg),
       ),
-      title: Text(ru ? 'Пожаловаться на пост' : 'Report post', style: AppText.h2),
+      title: Text(widget.title, style: AppText.h2),
       content: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 420),
         child: Column(
