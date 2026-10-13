@@ -1,0 +1,30 @@
+Hello,
+
+Thank you for the review. Please find the requested information below. The same text has been added to the App Review Information → Notes field.
+
+1. SCREEN RECORDING
+Attached (recorded on iPhone, iOS 26). It starts with launching the app and shows: sign-up with a new e-mail account, sign-in, the feed with user-generated posts, reporting a post and a comment from the "…" menu, blocking a user from the account page, the catalogue with filters, a model profile, the castings list and applying to a casting, chats, and finally account deletion from "My account" → "Delete account".
+
+2. PURPOSE AND TARGET AUDIENCE
+PK Management is a B2B working tool for the modelling and advertising industry in Russia. Users are models and actors (profiles of minors are managed by a parent or legal guardian), photographers and other creative professionals, and clients: casting directors, advertising agencies, brands and production companies. The problem it solves: today castings are run through messengers and spreadsheets. The app gives one place for a verified catalogue of talent, castings with applications, selections (shortlists) that a client can review, direct chats and a professional feed. All public profiles are reviewed by our moderators before they become visible.
+
+3. SET-UP AND ACCESS
+No set-up is required. Sign in with the demo account provided in App Review Information (e-mail + password). The demo account has the "client" role: the catalogue, castings, feed, chats and selections are available immediately. To see the model side, you can register a new account with any e-mail (no verification code is needed for review) and create a profile; it will be visible to moderators only until approved. Sign in with Apple is also available on the login screen.
+
+4. EXTERNAL SERVICES
+- Supabase (supabase.com): authentication (e-mail/password, phone, Sign in with Apple), PostgreSQL database and file storage for photos, videos and voice messages.
+- Firebase Cloud Messaging (Google): push notifications only.
+- Sentry: crash reporting.
+- Apple "Sign in with Apple".
+No advertising SDKs, no analytics trackers, no AI services, no payment processors in the iOS app. The app does not sell anything: listing a profile in the catalogue is a service purchased on our website; the app only shows the current listing status.
+
+5. REGIONAL DIFFERENCES
+None. The app functions identically in all regions. The interface language follows the device language (Russian or English).
+
+6. REGULATED INDUSTRY / THIRD-PARTY MATERIAL
+The app does not operate in a regulated industry. All photos and videos are uploaded by the users themselves (or by the parent/guardian for a minor) and, under our Terms of Use, users confirm they hold the rights to the material and consent to its publication. Every public profile is checked by a human moderator before publication. Users can report any profile, post, comment or message from the "…" menu and block other users; reported content is reviewed within 24 hours. Child-safety standards: https://app.pk.management/#/child-safety. Privacy policy: https://app.pk.management/#/privacy.
+
+Contact: Artem Kukhar, artem@president-kids.ru, +7 925 507-86-93.
+
+Best regards,
+Artem Kukhar
