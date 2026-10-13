@@ -1,0 +1,16 @@
+Hello,
+
+Thank you for the detailed feedback. All precautions required by Guideline 1.2 are implemented in build 1.1.0 (11), and the attached screen recording (physical iPhone, latest iOS) demonstrates each of them:
+
+1. EULA / Terms before registration (0:00). The registration form requires accepting the Terms of Use, Privacy Policy, Child Safety Standards and data-processing consent before the account can be created (the "I accept the documents…" switch; the documents open from the links right below it, and the same links are shown on the login screen).
+
+2. Flagging objectionable content. Every post has a "…" menu → "Report" with a reason list; every comment has a flag icon → "Report"; every account page has a "…" menu → "Report". Reports go to the moderation queue in the admin panel and the moderation team is notified.
+
+3. Blocking abusive users. Account page → "…" → "Block". Blocking takes effect immediately: the blocked user's posts and comments disappear from the blocker's feed at once, the blocked user can no longer message or follow the blocker, and the moderation team receives an automatic notification about every block so the account can be reviewed.
+
+4. Moderation commitment. The moderation team reviews every report and block within 24 hours; objectionable content is removed and the offending account is suspended or deleted from the admin panel. All catalogue profiles are additionally reviewed by a human moderator before they become visible.
+
+This recording and this text have also been added to the Notes field of App Review Information.
+
+Best regards,
+Roman Cuhari (account holder) and Artem Kukhar
