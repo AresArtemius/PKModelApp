@@ -98,6 +98,21 @@ class _PostCommentsSectionState extends ConsumerState<PostCommentsSection> {
     }
   }
 
+  Future<void> _report(FeedComment c) async {
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final sent = await showReportCommentDialog(
+      context,
+      post: widget.post,
+      comment: c,
+    );
+    if (!sent || !mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(content: Text(ru ? 'Жалоба отправлена' : 'Report sent')),
+      );
+  }
+
   Future<void> _delete(FeedComment c) async {
     try {
       await ref.read(feedActionsProvider).deleteComment(widget.post.id, c.id);
