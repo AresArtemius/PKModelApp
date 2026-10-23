@@ -164,30 +164,37 @@ class ProfileMediaWebUploadCache {
 
   static Future<void> deleteTask(String taskId) async {
     if (!isSupported) return;
+    // An IndexedDB transaction auto-commits as soon as we await anything
+    // that is not one of its own requests (Safari is strict about it), so
+    // OPFS files are removed only after the transaction has finished.
+    final opfsFiles = <String>[];
     final db = await _openDb();
     try {
       final transaction = db.transaction(_storeName.toJS, 'readwrite');
       final store = transaction.objectStore(_storeName);
       final rawKeys = await _waitRequest(store.getAllKeys());
-      final keys = _readStringList(rawKeys);
+      final keys = _readStringList(
+        rawKeys,
+      ).where((key) => key.startsWith('$taskId/')).toList(growable: false);
       for (final key in keys) {
-        if (key.startsWith('$taskId/')) {
-          final raw = await _waitRequest(store.get(key.toJS));
-          if (raw != null && !raw.isUndefinedOrNull) {
-            final record = raw as JSObject;
-            final storage = _readString(record['storage']);
-            final opfsFileName = _readString(record['opfsFileName']);
-            if ((storage == _storageOpfs || storage == _storageNativeFs) &&
-                opfsFileName.isNotEmpty) {
-              await _deleteOpfsFile(opfsFileName);
-            }
+        final raw = await _waitRequest(store.get(key.toJS));
+        if (raw != null && !raw.isUndefinedOrNull) {
+          final record = raw as JSObject;
+          final storage = _readString(record['storage']);
+          final opfsFileName = _readString(record['opfsFileName']);
+          if ((storage == _storageOpfs || storage == _storageNativeFs) &&
+              opfsFileName.isNotEmpty) {
+            opfsFiles.add(opfsFileName);
           }
-          await _waitRequest(store.delete(key.toJS));
         }
+        await _waitRequest(store.delete(key.toJS));
       }
       await _waitTransaction(transaction);
     } finally {
       db.close();
+    }
+    for (final fileName in opfsFiles) {
+      await _deleteOpfsFile(fileName);
     }
   }
 
