@@ -15,6 +15,7 @@ import '../castings/casting_model.dart';
 import '../castings/casting_project_stage.dart';
 import '../castings/castings_provider.dart';
 import '../catalog/agent_workspace.dart';
+import '../safety/block_user_dialog.dart';
 import 'edit_text_dialog.dart';
 import 'feed_models.dart';
 import 'feed_service.dart';
@@ -493,8 +494,19 @@ class _PostMenu extends ConsumerWidget {
           case 'report':
             final sent = await showReportPostDialog(context, post);
             if (sent && context.mounted) {
-              toast(ru ? 'Жалоба отправлена' : 'Report sent');
+              toast(
+                ru
+                    ? 'Жалоба отправлена. Модераторы рассмотрят её в течение 24 часов.'
+                    : 'Report sent. Our moderators will review it within 24 hours.',
+              );
             }
+          case 'block':
+            await blockUserWithConfirm(
+              context,
+              ref,
+              userId: post.authorId,
+              displayName: post.authorName,
+            );
           case 'edit':
             final text = await showEditTextDialog(
               context,
@@ -544,6 +556,14 @@ class _PostMenu extends ConsumerWidget {
           PopupMenuItem(
             value: 'report',
             child: Text(ru ? 'Пожаловаться' : 'Report', style: AppText.body),
+          ),
+        if (!mine)
+          PopupMenuItem(
+            value: 'block',
+            child: Text(
+              ru ? 'Заблокировать автора' : 'Block author',
+              style: AppText.body.copyWith(color: Tokens.danger),
+            ),
           ),
         if (mine || isAdmin)
           PopupMenuItem(

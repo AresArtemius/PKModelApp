@@ -5,6 +5,7 @@ import '../../core/auth_providers.dart';
 import '../../ui/brand/ui_constants.dart';
 import '../feed/feed_service.dart' show feedControllerProvider, postCommentsProvider;
 import '../feed/post_comments.dart' show showReportReasonsDialog;
+import '../safety/block_user_dialog.dart';
 import '../safety/safety_service.dart';
 
 /// «⋯» on a public account page: report the account, block / unblock.
@@ -75,48 +76,11 @@ class AccountActionsMenu extends ConsumerWidget {
         if (context.mounted) toast(ru ? 'Разблокировано' : 'Unblocked');
         return;
       }
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          backgroundColor: Tokens.bg,
-          surfaceTintColor: Colors.transparent,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(Tokens.radiusLg),
-          ),
-          title: Text(
-            ru ? 'Заблокировать $displayName?' : 'Block $displayName?',
-            style: AppText.h2,
-          ),
-          content: Text(
-            ru
-                ? 'Вы не будете получать сообщения и подписки от этого аккаунта. Разблокировать можно здесь же.'
-                : 'You will not receive messages or follows from this account. You can unblock here any time.',
-            style: AppText.body,
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: Text(ru ? 'Отмена' : 'Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: Text(ru ? 'Заблокировать' : 'Block'),
-            ),
-          ],
-        ),
-      );
-      if (confirmed != true) return;
-      final ok = await safety.blockUser(blockedUserId: userId, profileId: '');
-      ref.invalidate(blockedByMeProvider(userId));
-      // Their posts and comments leave the feed right away (the server
-      // already filters them; this drops the cached pages).
-      ref.invalidate(feedControllerProvider);
-      ref.invalidate(postCommentsProvider);
-      if (!context.mounted) return;
-      toast(
-        ok
-            ? (ru ? 'Аккаунт заблокирован' : 'Account blocked')
-            : (ru ? 'Не удалось заблокировать' : 'Could not block'),
+      await blockUserWithConfirm(
+        context,
+        ref,
+        userId: userId,
+        displayName: displayName,
       );
     }
 
