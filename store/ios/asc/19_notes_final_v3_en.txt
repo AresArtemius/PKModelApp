@@ -1,0 +1,21 @@
+PK Management is a B2B tool for the modelling and advertising industry in Russia: models and actors (profiles of minors are managed by a parent/guardian), photographers, and clients (casting directors, agencies, brands). It replaces messengers and spreadsheets with one verified catalogue, castings with applications, client selections, chats and a professional feed. Every public profile is reviewed by a human moderator before it becomes visible.
+
+TESTING: sign in with the review account above (email + password). It has the "client" role: catalogue, castings, feed, chats and selections are available at once. A new account can be registered with any e-mail (no verification code during review). Sign in with Apple, e-mail and phone sign-in are available.
+
+GUIDELINE 1.2 (UGC) — attached recording shows:
+1) Terms before registration: the sign-up form cannot be submitted without accepting the Terms of Use, Privacy Policy, Child Safety Standards and data-processing consent (switch "I accept the documents…"; documents open from the links under it and on the login screen).
+2) Flagging: every post ("…" → Report), comment (flag icon → Report), account page ("…" → Report) and chat message can be reported with a reason; the user sees a confirmation that moderators review it within 24 hours.
+3) Blocking: post "…" → "Block author", or account page "…" → "Block". All posts and comments of the blocked user disappear from the blocker's feed instantly (no reload), the server excludes them from later loads, the blocked user can no longer message/follow/comment to the blocker, and the moderation team receives an automatic notification (in-app + push) about every block.
+4) Moderation: every report and block is reviewed within 24 hours; objectionable content is removed and the offending account is suspended or deleted from the admin panel. Contact: artem@president-kids.ru. Child-safety standards: https://app.pk.management/#/child-safety. Privacy: https://app.pk.management/#/privacy.
+
+ACCOUNT DELETION: My account → Delete account (shown in the recording).
+
+BUSINESS MODEL (2.1b): the iOS app contains no paid content, subscriptions, paid features or paywalls — every signed-in account has the full feature set. Our website sells a separate web-only service (publishing a model profile in the web catalogue); it is not sold, advertised or linked from the app. The "Listing status" screen only informs whether a profile is currently published; it unlocks nothing and has no prices or links. Any future paid feature in the app would use In-App Purchase.
+
+EXTERNAL SERVICES: Supabase (auth, PostgreSQL, file storage), Firebase Cloud Messaging (push only), Sentry (crash reports), Sign in with Apple. No ads, trackers, AI services or payment processors in the app.
+
+REGIONAL DIFFERENCES: none; the app works identically everywhere. UI language follows the device (Russian/English).
+
+REGULATED INDUSTRY / THIRD-PARTY MATERIAL: not a regulated industry. All photos and videos are uploaded by users (or the parent/guardian of a minor), who confirm under the Terms of Use that they hold the rights and consent to publication.
+
+Contact for App Review: Artem Kukhar (product), artem@president-kids.ru, +7 925 507-86-93. Account holder: Roman Cuhari.

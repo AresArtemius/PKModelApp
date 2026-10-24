@@ -280,6 +280,16 @@ class FeedController extends StateNotifier<FeedState> {
     );
   }
 
+  /// Drops every post of this author (a block takes effect at once).
+  void removeAuthor(String userId) {
+    state = state.copyWith(
+      posts: [
+        for (final p in state.posts)
+          if (p.authorId != userId) p,
+      ],
+    );
+  }
+
   /// Local patch (optimistic like / save, step 46).
   void patch(String postId, FeedPost Function(FeedPost) update) {
     state = state.copyWith(
@@ -308,6 +318,16 @@ class FeedActions {
       if (!_ref.exists(feedControllerProvider(scope))) continue;
       _ref.read(feedControllerProvider(scope).notifier).patch(postId, update);
     }
+  }
+
+  /// After a block: the author's posts leave every loaded feed right away;
+  /// the next load from the server will not return them either.
+  void hideAuthor(String userId) {
+    for (final scope in _scopes) {
+      if (!_ref.exists(feedControllerProvider(scope))) continue;
+      _ref.read(feedControllerProvider(scope).notifier).removeAuthor(userId);
+    }
+    _ref.invalidate(postCommentsProvider);
   }
 
   Future<bool> toggleLike(FeedPost post) async {

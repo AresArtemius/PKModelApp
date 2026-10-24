@@ -154,6 +154,15 @@ final accountEntitlementsProvider = FutureProvider<AccountEntitlements>((
   final sb = ref.read(supabaseProvider);
   final user = sb.auth.currentUser;
   if (user == null) return AccountEntitlements.free(role);
+  // The mobile app sells nothing and shows no paywalls (App Store 3.1.1):
+  // every signed-in account gets the full feature set. Plans are a web thing.
+  if (!kIsWeb) {
+    return AccountEntitlements.fromPlan(
+      plan: BillingPlan.agencyAdmin,
+      role: role,
+      isPaidActive: true,
+    );
+  }
 
   try {
     final row = await sb
