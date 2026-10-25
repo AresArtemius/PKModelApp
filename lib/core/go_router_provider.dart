@@ -114,6 +114,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
             path == Routes.chats ||
             path.startsWith(Routes.chatsChatPrefix) ||
             path == Routes.following ||
+            path == Routes.blockedUsers ||
             path == Routes.feed ||
             path == Routes.invitations) {
           return Routes.authRequired;

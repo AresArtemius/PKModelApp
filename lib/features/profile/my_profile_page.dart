@@ -310,6 +310,15 @@ class MyProfilePage extends ConsumerWidget {
       ),
       if (!_accountV2) const SizedBox(height: kGap14),
       _AccountEntryCard(
+        icon: Icons.block_rounded,
+        title: isRu ? 'ЗАБЛОКИРОВАННЫЕ' : 'BLOCKED USERS',
+        subtitle: isRu
+            ? 'Кого вы заблокировали; разблокировать можно здесь'
+            : 'Who you blocked; unblock them here',
+        onTap: () => context.go(Routes.blockedUsers),
+      ),
+      if (!_accountV2) const SizedBox(height: kGap14),
+      _AccountEntryCard(
         icon: Icons.support_agent_rounded,
         title: isRu ? 'ПОМОЩЬ И ПОДДЕРЖКА' : 'HELP & SUPPORT',
         subtitle: isRu

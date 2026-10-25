@@ -118,6 +118,42 @@ class SafetyService {
   }
 }
 
+class BlockedAccount {
+  const BlockedAccount({
+    required this.userId,
+    required this.name,
+    required this.avatarUrl,
+    required this.accountTag,
+  });
+
+  final String userId;
+  final String name;
+  final String avatarUrl;
+  final String accountTag;
+
+  factory BlockedAccount.fromMap(Map<String, dynamic> map) => BlockedAccount(
+    userId: (map['user_id'] ?? '').toString(),
+    name: (map['full_name'] ?? '').toString().trim(),
+    avatarUrl: (map['avatar_url'] ?? '').toString().trim(),
+    accountTag: (map['account_tag'] ?? '').toString().trim(),
+  );
+}
+
+/// Accounts I have blocked (My account → Blocked users).
+final blockedUsersProvider = FutureProvider.autoDispose<List<BlockedAccount>>((
+  ref,
+) async {
+  final sb = ref.read(supabaseProvider);
+  if (sb.auth.currentUser == null) return const [];
+  final rows = await sb.rpc<List<dynamic>>(
+    'list_my_blocked_users',
+    params: {'p_limit': 200},
+  );
+  return rows
+      .map((e) => BlockedAccount.fromMap(Map<String, dynamic>.from(e as Map)))
+      .toList(growable: false);
+});
+
 /// Whether I have blocked this user (null entry while unknown).
 final blockedByMeProvider = FutureProvider.autoDispose.family<bool, String>((
   ref,
