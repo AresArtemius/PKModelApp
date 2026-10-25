@@ -12,13 +12,13 @@ Terms: the registration form cannot be submitted without accepting the Terms of 
 The attached screen recording (physical iPhone, latest iOS) shows the terms step, flagging a post and a comment, and blocking an author with the posts disappearing immediately.
 
 GUIDELINE 2.1(b) — Business model
-The iOS app contains no paid content, subscriptions or features, and no paywalls. In the previous build a few features (chats, selections) checked a subscription that exists only in our web product; this has been removed — in the iOS app every signed-in account has the full feature set. Answers to your questions:
-1. Who uses paid subscriptions in the app? Nobody: the iOS app has no paid subscriptions or paid features.
-2. Where can users purchase subscriptions accessed in the app? Nowhere; nothing in the iOS app is unlocked by a purchase. Our website sells a separate web-only service (listing a model profile in the web catalogue); it is not sold, advertised or linked from the iOS app.
-3. What previously purchased subscriptions can a user access in the app? None. The "Listing status" screen only informs a model whether their profile is currently published in the catalogue; it does not unlock anything and contains no prices or purchase links.
-4. What paid content or features are unlocked without In-App Purchase? None.
-5. Are enterprise services sold to single users, consumers or families? Not applicable: the iOS app does not sell or unlock any services.
-If we ever add paid features to the iOS app, they will be offered through In-App Purchase.
+The iOS app sells nothing and contains no In-App Purchases, paywalls, prices or links to purchase. PK Management is a modelling agency; the app is used by the agency's own models and by its partners (casting directors, brands, photographers). Some features (chats and invitations) are available to accounts with the "Pro" status. This status is not a paid subscription and cannot be bought anywhere — it is granted manually and free of charge by the agency's administrators to its models and partners, the same way the agency admits people to its database. The wording in the previous build ("plan", "upgrade") was misleading and has been replaced: the app now explains that the status is granted by the agency and offers to contact support.
+1. Who uses paid subscriptions in the app? Nobody: there are no paid subscriptions. The Pro status is an agency membership status granted by administrators, not a purchase.
+2. Where can users purchase subscriptions accessed in the app? Nowhere. The Pro status cannot be purchased on any platform. Our website sells one separate web-only service — publishing a model profile in the web catalogue — which is not sold, advertised or linked from the app and does not unlock any app feature.
+3. What previously purchased subscriptions can a user access in the app? None. The "Listing status" screen only informs a model whether their profile is currently published in the web catalogue; it unlocks nothing and contains no prices or purchase links.
+4. What paid content, subscriptions or features are unlocked without In-App Purchase? None.
+5. Are the enterprise services sold to single users, consumers or families? They are not sold at all: the Pro status is assigned by the agency to its own models and business partners.
+The review account (art@test.ru) already has the Pro status, so every feature is available for testing. If we ever add paid features to the iOS app, they will be offered through In-App Purchase.
 
 Best regards,
 Roman Cuhari (account holder) and Artem Kukhar
