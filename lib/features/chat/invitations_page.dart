@@ -10,6 +10,7 @@ import '../../gen_l10n/app_localizations.dart';
 import '../../ui/brand/brand_pill_button.dart';
 import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
+import '../billing/pro_status_dialog.dart';
 import 'chat_models.dart';
 import 'chat_page.dart';
 import 'chat_providers.dart';
@@ -81,7 +82,7 @@ class _InvitationsPageState extends ConsumerState<InvitationsPage> {
     final entitlements = await ref.read(accountEntitlementsProvider.future);
     if (!context.mounted) return null;
     if (!entitlements.canUseSelectionChat) {
-      await _showModelProRequiredDialog(context);
+      await showProStatusRequiredDialog(context);
       return null;
     }
     final chatId = await ref
@@ -273,71 +274,6 @@ class _InvitationsPageState extends ConsumerState<InvitationsPage> {
         ],
       ),
     );
-  }
-}
-
-Future<void> _showModelProRequiredDialog(BuildContext context) async {
-  final t = AppLocalizations.of(context)!;
-  final goToBilling = await showDialog<bool>(
-    context: context,
-    builder: (context) => Dialog(
-      backgroundColor: Colors.transparent,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(24, 26, 24, 20),
-        decoration: catalogDialogDecoration(),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              t.billingUpgradeRequiredTitle,
-              textAlign: TextAlign.center,
-              style: _invitationCommandStyle(
-                size: 21,
-                spacing: 1.8,
-                weight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 14),
-            Text(
-              t.billingUpgradeRequiredMessage,
-              textAlign: TextAlign.center,
-              style: _invitationBodyStyle(
-                color: kTextMuted,
-                size: 15,
-                spacing: 0.1,
-                weight: FontWeight.w600,
-                height: 1.35,
-              ),
-            ),
-            const SizedBox(height: 22),
-            Row(
-              children: [
-                Expanded(
-                  child: BrandPillButton(
-                    label: MaterialLocalizations.of(context).cancelButtonLabel,
-                    style: BrandPillStyle.light,
-                    onTap: () => Navigator.of(context).pop(false),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: BrandPillButton(
-                    label: t.billingUpgradeActionUpper,
-                    style: BrandPillStyle.dark,
-                    onTap: () => Navigator.of(context).pop(true),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
-  if (goToBilling == true && context.mounted) {
-    context.go(Routes.billing);
   }
 }
 
