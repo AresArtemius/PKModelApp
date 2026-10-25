@@ -1878,11 +1878,18 @@ class _BillingEntryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
 
+    // The mobile app sells nothing: the entry is about the listing status
+    // only (App Store 3.1.1), so it must not read as "plans".
     return _AccountEntryCard(
       icon: Icons.workspace_premium_rounded,
-      title: t.billingTitleUpper,
-      subtitle: t.billingAccountEntrySubtitle,
+      title: kIsWeb
+          ? t.billingTitleUpper
+          : (ru ? 'РАЗМЕЩЕНИЕ АНКЕТЫ' : 'PROFILE LISTING'),
+      subtitle: kIsWeb
+          ? t.billingAccountEntrySubtitle
+          : (ru ? 'Статус и срок показа в каталоге' : 'Status and listing period'),
       onTap: onTap,
     );
   }
