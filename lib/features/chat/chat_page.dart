@@ -27,6 +27,7 @@ import '../../core/supabase_provider.dart';
 import '../../gen_l10n/app_localizations.dart';
 import '../../ui/brand/brand_theme.dart';
 import '../../ui/brand/ui_constants.dart';
+import '../billing/pro_status_dialog.dart';
 import 'chat_context_panel.dart';
 import 'chat_models.dart';
 import 'chat_providers.dart';
@@ -1499,32 +1500,7 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     final entitlements = await ref.read(accountEntitlementsProvider.future);
     if (entitlements.canUseSelectionChat) return true;
     if (!mounted) return false;
-
-    final goToBilling = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(AppLocalizations.of(context)!.billingUpgradeRequiredTitle),
-        content: Text(
-          AppLocalizations.of(context)!.billingUpgradeRequiredMessage,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: Text(MaterialLocalizations.of(context).cancelButtonLabel),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: Text(
-              AppLocalizations.of(context)!.billingUpgradeActionUpper,
-              style: const TextStyle(color: BrandTheme.redTop),
-            ),
-          ),
-        ],
-      ),
-    );
-    if (goToBilling == true && mounted) {
-      context.go(Routes.billing);
-    }
+    await showProStatusRequiredDialog(context);
     return false;
   }
 

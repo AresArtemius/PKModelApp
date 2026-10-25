@@ -10,7 +10,7 @@ GUIDELINE 1.2 (UGC) — attached recording shows:
 
 ACCOUNT DELETION: My account → Delete account (shown in the recording).
 
-BUSINESS MODEL (2.1b): the iOS app contains no paid content, subscriptions, paid features or paywalls — every signed-in account has the full feature set. Our website sells a separate web-only service (publishing a model profile in the web catalogue); it is not sold, advertised or linked from the app. The "Listing status" screen only informs whether a profile is currently published; it unlocks nothing and has no prices or links. Any future paid feature in the app would use In-App Purchase.
+BUSINESS MODEL (2.1b): the iOS app sells nothing — no In-App Purchases, paywalls, prices or purchase links. PK Management is a modelling agency; chats and invitations are available to accounts with the "Pro" status, which is NOT a subscription and cannot be bought anywhere: the agency's administrators grant it free of charge to the agency's own models and partners. The review account already has it. Our website sells one separate web-only service (publishing a model profile in the web catalogue); it is not sold, advertised or linked from the app and unlocks no app feature; the "Listing status" screen only shows whether a profile is published. Any future paid feature in the app would use In-App Purchase.
 
 EXTERNAL SERVICES: Supabase (auth, PostgreSQL, file storage), Firebase Cloud Messaging (push only), Sentry (crash reports), Sign in with Apple. No ads, trackers, AI services or payment processors in the app.
 
