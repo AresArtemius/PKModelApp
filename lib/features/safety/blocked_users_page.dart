@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/router.dart';
-import '../../ui/brand/settings_page_v2.dart';
 import '../../ui/brand/ui_constants.dart';
 import '../feed/feed_service.dart' show feedControllerProvider, postCommentsProvider;
 import 'safety_service.dart';
