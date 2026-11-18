@@ -1,0 +1,6 @@
+Fixed:
+• Choosing a city when creating a profile: the city list now opens right after a country is selected.
+
+Improved:
+• Comment reports are sent separately from post reports.
+• You get a notification with the outcome once moderators have reviewed your report.
