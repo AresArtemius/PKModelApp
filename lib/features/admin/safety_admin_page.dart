@@ -69,6 +69,19 @@ String _safetyFilterLabel(String filter, bool ru) => switch (filter) {
   _ => ru ? 'Все' : 'All',
 };
 
+/// Report reason codes (spam, abuse…) as readable text.
+String _reasonLabel(String code, bool ru, {required String fallback}) =>
+    switch (code) {
+      'spam' => ru ? 'Спам или реклама' : 'Spam or ads',
+      'abuse' => ru ? 'Оскорбление, травля' : 'Harassment',
+      'nudity' => ru ? 'Откровенный контент' : 'Explicit content',
+      'minor' => ru ? 'Ребёнок в опасности' : 'Child at risk',
+      'fake' => ru ? 'Обман, чужие фото' : 'Scam or stolen photos',
+      'other' => ru ? 'Другое' : 'Other',
+      '' => fallback,
+      final r => r,
+    };
+
 class SafetyAdminPage extends ConsumerStatefulWidget {
   const SafetyAdminPage({super.key});
 
@@ -196,6 +209,73 @@ class _SafetyAdminPageState extends ConsumerState<SafetyAdminPage> {
     }
   }
 
+  /// Removes a report for good (test reports, duplicates). The reported
+  /// content itself is not touched.
+  Future<void> _deleteReport({
+    required BuildContext context,
+    required WidgetRef ref,
+    required Map<String, dynamic> row,
+    required bool isPost,
+  }) async {
+    final t = AppLocalizations.of(context)!;
+    final ru = Localizations.localeOf(context).languageCode == 'ru';
+    final reportId = (row['id'] ?? '').toString().trim();
+    if (reportId.isEmpty) return;
+    final ok = await showAdminConfirmDialog(
+      context: context,
+      title: ru ? 'Удалить жалобу?' : 'Delete report?',
+      message: ru
+          ? 'Жалоба исчезнет из списка навсегда. Сам пост или анкета не изменятся.'
+          : 'The report will be removed for good. The post or profile itself stays as it is.',
+      confirmLabel: ru ? 'Удалить' : 'Delete',
+      destructive: true,
+    );
+    if (!ok || !context.mounted) return;
+    final sb = ref.read(supabaseProvider);
+    final table = isPost ? 'post_reports' : 'profile_reports';
+    try {
+      final deleted = await sb
+          .from(table)
+          .delete()
+          .eq('id', reportId)
+          .select('id');
+      if ((deleted as List).isEmpty) {
+        throw StateError(
+          ru
+              ? 'Нет прав на удаление — выполните reports_admin_delete.sql'
+              : 'No permission to delete — run reports_admin_delete.sql',
+        );
+      }
+      await AdminActionLogService(sb).log(
+        actionType: 'report_deleted',
+        title: 'Жалоба удалена',
+        description: (row['reason'] ?? '').toString(),
+        targetTable: table,
+        targetId: reportId,
+        targetText: (row[isPost ? 'post_id' : 'profile_id'] ?? '').toString(),
+        status: 'deleted',
+        metadata: {
+          'reason': (row['reason'] ?? '').toString(),
+          'comment': (row['comment'] ?? '').toString(),
+        },
+      );
+      ref.invalidate(isPost ? postReportsProvider : safetyReportsProvider);
+      ref.invalidate(adminDashboardCountsProvider);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(content: Text(ru ? 'Жалоба удалена' : 'Report deleted')),
+        );
+    } catch (e) {
+      if (!context.mounted) return;
+      final message = e is StateError ? e.message : AppErrorMapper.message(e, t);
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text('${t.errorUpper}: $message')));
+    }
+  }
+
   bool _matchesFilter(Map<String, dynamic> row) =>
       _filter == 'all' || _safetyBucketOf(row) == _filter;
 
@@ -283,6 +363,12 @@ class _SafetyAdminPageState extends ConsumerState<SafetyAdminPage> {
                         row: items[i],
                         status: status,
                       ),
+                      onDelete: () => _deleteReport(
+                        context: context,
+                        ref: ref,
+                        row: items[i],
+                        isPost: false,
+                      ),
                     ),
                     if (!adminV2) const SizedBox(height: kGap12),
                   ],
@@ -310,6 +396,12 @@ class _SafetyAdminPageState extends ConsumerState<SafetyAdminPage> {
                               status: status,
                               hidePost: hidePost,
                             ),
+                        onDelete: () => _deleteReport(
+                          context: context,
+                          ref: ref,
+                          row: postReports[i],
+                          isPost: true,
+                        ),
                       ),
                   ],
                 ],
@@ -400,12 +492,14 @@ class _ReportCard extends StatelessWidget {
   const _ReportCard({
     required this.row,
     required this.onStatusChanged,
+    required this.onDelete,
     this.last = false,
     this.narrow = false,
   });
 
   final Map<String, dynamic> row;
   final ValueChanged<String> onStatusChanged;
+  final VoidCallback onDelete;
   final bool last;
   final bool narrow;
 
@@ -426,7 +520,11 @@ class _ReportCard extends StatelessWidget {
       void openProfile() => context.go('${Routes.modelPrefix}$profileId');
       void toggle() => onStatusChanged(isClosed ? 'in_review' : 'closed');
       return AdminQueueRowV2(
-        title: text('reason').isEmpty ? (ru ? 'Жалоба' : 'Report') : text('reason'),
+        title: _reasonLabel(
+          text('reason'),
+          ru,
+          fallback: ru ? 'Жалоба на анкету' : 'Profile report',
+        ),
         note: comment,
         details: profileId.isEmpty ? null : 'ID: $profileId',
         date: adminDateV2(DateTime.tryParse(text('created_at'))),
@@ -447,17 +545,24 @@ class _ReportCard extends StatelessWidget {
                   primary: !isClosed,
                   onPressed: toggle,
                 ),
-                if (profileId.isNotEmpty)
-                  _SafetyMoreButton(
-                    options: [
+                _SafetyMoreButton(
+                  options: [
+                    if (profileId.isNotEmpty)
                       AdminMenuOption(
                         value: 'open',
                         label: openLabel,
                         icon: Icons.person_outline_rounded,
                       ),
-                    ],
-                    onSelected: (_) => openProfile(),
-                  ),
+                    AdminMenuOption(
+                      value: 'delete',
+                      label: ru ? 'Удалить жалобу' : 'Delete report',
+                      icon: Icons.delete_outline_rounded,
+                      destructive: true,
+                    ),
+                  ],
+                  onSelected: (value) =>
+                      value == 'delete' ? onDelete() : openProfile(),
+                ),
               ]
             : [
                 if (profileId.isNotEmpty)
@@ -466,6 +571,11 @@ class _ReportCard extends StatelessWidget {
                   label: toggleLabel,
                   primary: !isClosed,
                   onPressed: toggle,
+                ),
+                AdminRowButton(
+                  label: ru ? 'Удалить' : 'Delete',
+                  destructive: true,
+                  onPressed: onDelete,
                 ),
               ],
       );
@@ -527,12 +637,14 @@ class _PostReportRow extends StatelessWidget {
   const _PostReportRow({
     required this.row,
     required this.onStatus,
+    required this.onDelete,
     this.last = false,
     this.narrow = false,
   });
 
   final Map<String, dynamic> row;
   final void Function(String status, {bool hidePost}) onStatus;
+  final VoidCallback onDelete;
   final bool last;
   final bool narrow;
 
@@ -544,15 +656,11 @@ class _PostReportRow extends StatelessWidget {
     final isClosed =
         status == 'closed' || status == 'resolved' || status == 'dismissed';
     final hidden = row['post_deleted'] == true;
-    final reason = switch (text('reason')) {
-      'spam' => ru ? 'Спам или реклама' : 'Spam or ads',
-      'abuse' => ru ? 'Оскорбление, травля' : 'Harassment',
-      'nudity' => ru ? 'Откровенный контент' : 'Explicit content',
-      'minor' => ru ? 'Ребёнок в опасности' : 'Child at risk',
-      'fake' => ru ? 'Обман, чужие фото' : 'Scam or stolen photos',
-      'other' => ru ? 'Другое' : 'Other',
-      final r => r.isEmpty ? (ru ? 'Жалоба на пост' : 'Post report') : r,
-    };
+    final reason = _reasonLabel(
+      text('reason'),
+      ru,
+      fallback: ru ? 'Жалоба на пост' : 'Post report',
+    );
     final body = text('post_body');
     final author = text('post_author_name');
     final details = [
@@ -593,6 +701,7 @@ class _PostReportRow extends StatelessWidget {
     void toggle() => onStatus(isClosed ? 'in_review' : 'closed');
     final canHide = !hidden && !isClosed;
 
+    final deleteLabel = ru ? 'Удалить жалобу' : 'Delete report';
     if (narrow) {
       // Phone: the primary decision as a button, the rest under «⋯».
       return [
@@ -602,17 +711,23 @@ class _PostReportRow extends StatelessWidget {
           destructive: canHide,
           onPressed: canHide ? hide : toggle,
         ),
-        if (canHide)
-          _SafetyMoreButton(
-            options: [
+        _SafetyMoreButton(
+          options: [
+            if (canHide)
               AdminMenuOption(
                 value: 'toggle',
                 label: toggleLabel,
                 icon: Icons.check_circle_outline_rounded,
               ),
-            ],
-            onSelected: (_) => toggle(),
-          ),
+            AdminMenuOption(
+              value: 'delete',
+              label: deleteLabel,
+              icon: Icons.delete_outline_rounded,
+              destructive: true,
+            ),
+          ],
+          onSelected: (value) => value == 'delete' ? onDelete() : toggle(),
+        ),
       ];
     }
     return [
@@ -624,6 +739,11 @@ class _PostReportRow extends StatelessWidget {
           onPressed: hide,
         ),
       AdminRowButton(label: toggleLabel, onPressed: toggle),
+      AdminRowButton(
+        label: ru ? 'Удалить' : 'Delete',
+        destructive: true,
+        onPressed: onDelete,
+      ),
     ];
   }
 }
