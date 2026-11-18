@@ -1,6 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../gen_l10n/app_localizations.dart';
+import 'account_suspension.dart';
 import 'app_logger.dart';
 
 enum AppErrorContext { generic, signIn, signUp, phoneSignIn }
@@ -79,6 +80,12 @@ class AppErrorMapper {
     }
 
     if (providerDisabled) return t.oauthProviderDisabled;
+
+    if (lower.contains('user is banned') ||
+        lower.contains('user_banned') ||
+        error.code == 'user_banned') {
+      return suspendedNoticeText(t.localeName == 'ru');
+    }
 
     if (lower.contains('invalid login credentials') ||
         lower.contains('invalid credentials')) {

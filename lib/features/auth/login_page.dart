@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'package:modelapp/core/account_suspension.dart';
 import 'package:modelapp/core/app_error_mapper.dart';
 import 'package:modelapp/core/supabase_provider.dart';
 import 'package:modelapp/core/router.dart';
@@ -363,6 +364,19 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
+    final suspended = ref.watch(suspendedNoticeProvider);
+    if (suspended) {
+      // Shown once: the account was signed out by checkAccountSuspension.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ref.read(suspendedNoticeProvider.notifier).state = false;
+        setState(
+          () => _error = suspendedNoticeText(
+            Localizations.localeOf(context).languageCode == 'ru',
+          ),
+        );
+      });
+    }
     final appLocale = ref.watch(localeProvider);
     final lang = _langCodeFor(context, appLocale);
 

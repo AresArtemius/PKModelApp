@@ -149,6 +149,30 @@ class FeedService {
     );
   }
 
+  /// A report on one comment (moderation_v2.sql). Older databases without
+  /// the RPC get it as a post report with the comment quoted in the note.
+  Future<void> reportComment({
+    required String postId,
+    required String commentId,
+    required String reason,
+    String note = '',
+    String legacyNote = '',
+  }) async {
+    try {
+      await _sb.rpc(
+        'report_comment',
+        params: {
+          'p_comment_id': commentId,
+          'p_reason': reason,
+          'p_note': note.trim(),
+        },
+      );
+    } on PostgrestException catch (e) {
+      if (!SupabaseCompat.isMissingRpc(e, 'report_comment')) rethrow;
+      await reportPost(postId: postId, reason: reason, comment: legacyNote);
+    }
+  }
+
   /// Soft delete of my own post (admins can hide any post the same way).
   /// Soft delete through `delete_post` (a plain UPDATE is rejected by
   /// RLS once deleted_at is set — see supabase/sql/feed_delete_post.sql).

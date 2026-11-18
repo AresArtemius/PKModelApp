@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter/foundation.dart';
 
+import 'account_suspension.dart';
 import 'locale_provider.dart';
 import 'page_titles.dart';
 import 'roles_provider.dart';
@@ -77,6 +78,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       supabase.auth.onAuthStateChange,
       onEvent: () {
         isAdminCached = null;
+        unawaited(checkAccountSuspension(ref));
         ref.invalidate(accountRoleProvider);
         ref.invalidate(isAdminProvider);
         ref.invalidate(canCreateSelectionsProvider);

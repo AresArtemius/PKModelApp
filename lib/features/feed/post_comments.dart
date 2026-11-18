@@ -390,15 +390,22 @@ Future<bool> _showReportDialog(
         ? (ru ? 'Пожаловаться на пост' : 'Report post')
         : (ru ? 'Пожаловаться на комментарий' : 'Report comment'),
     onSubmit: (ref, reason, note) {
-      final text = comment == null
-          ? note
-          : '${ru ? 'Комментарий' : 'Comment'} '
-                '${comment.authorTag.isNotEmpty ? '@${comment.authorTag}' : comment.authorName} '
-                '(${comment.id}): «${comment.body.trim()}»'
-                '${note.trim().isEmpty ? '' : '\n$note'}';
-      return ref
-          .read(feedServiceProvider)
-          .reportPost(postId: post.id, reason: reason, comment: text);
+      final service = ref.read(feedServiceProvider);
+      if (comment == null) {
+        return service.reportPost(postId: post.id, reason: reason, comment: note);
+      }
+      final legacyNote =
+          '${ru ? 'Комментарий' : 'Comment'} '
+          '${comment.authorTag.isNotEmpty ? '@${comment.authorTag}' : comment.authorName} '
+          '(${comment.id}): «${comment.body.trim()}»'
+          '${note.trim().isEmpty ? '' : '\n$note'}';
+      return service.reportComment(
+        postId: post.id,
+        commentId: comment.id,
+        reason: reason,
+        note: note,
+        legacyNote: legacyNote,
+      );
     },
   );
 }
