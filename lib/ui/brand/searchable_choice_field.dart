@@ -74,11 +74,35 @@ class _SearchableChoiceBody extends StatefulWidget {
 
 class _SearchableChoiceBodyState extends State<_SearchableChoiceBody> {
   final FocusNode _focusNode = FocusNode();
+  bool _listPrimed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode.addListener(_primeListOnFirstFocus);
+  }
 
   @override
   void dispose() {
+    _focusNode.removeListener(_primeListOnFirstFocus);
     _focusNode.dispose();
     super.dispose();
+  }
+
+  /// RawAutocomplete builds its list only after the controller reports a
+  /// change, so on the first focus nudge the selection and put it back: the
+  /// full list then opens without typing.
+  void _primeListOnFirstFocus() {
+    if (_listPrimed || !_focusNode.hasFocus || !widget.enabled) return;
+    _listPrimed = true;
+    final controller = widget.controller;
+    final value = controller.value;
+    controller.value = value.copyWith(
+      selection: value.selection.isValid
+          ? const TextSelection.collapsed(offset: -1)
+          : TextSelection.collapsed(offset: value.text.length),
+    );
+    controller.value = value;
   }
 
   Iterable<String> _optionsFor(TextEditingValue value) {
