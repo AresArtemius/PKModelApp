@@ -125,7 +125,8 @@ Future<int> _countPendingRows(SupabaseClient sb, String table) async {
 Future<int> _countOpenSafetyReports(SupabaseClient sb) async {
   // Profile reports + (step 47) post reports share the «Безопасность» badge.
   return await _countOpenReports(sb, 'profile_reports') +
-      await _countOpenReports(sb, 'post_reports');
+      await _countOpenReports(sb, 'post_reports') +
+      await _countOpenReports(sb, 'comment_reports');
 }
 
 Future<int> _countOpenReports(SupabaseClient sb, String table) async {
