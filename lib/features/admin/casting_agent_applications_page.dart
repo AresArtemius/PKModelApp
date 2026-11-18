@@ -451,25 +451,7 @@ class _ApplicationCard extends StatelessWidget {
 
   String _statusLabel(BuildContext context, RegistrationAccountType type) {
     final ru = Localizations.localeOf(context).languageCode == 'ru';
-    return switch (type) {
-      RegistrationAccountType.user =>
-        ru ? 'Личный аккаунт' : 'Personal account',
-      RegistrationAccountType.castingDirector =>
-        ru ? 'Кастинг-директор' : 'Casting director',
-      RegistrationAccountType.castingAgent =>
-        ru ? 'Кастинг-агент' : 'Casting agent',
-      RegistrationAccountType.directorProducer =>
-        ru ? 'Режиссер / продюсер' : 'Director / producer',
-      RegistrationAccountType.brandClient =>
-        ru ? 'Бренд / заказчик' : 'Brand / client',
-      RegistrationAccountType.agency => ru ? 'Агентство' : 'Agency',
-      RegistrationAccountType.productionAgency =>
-        ru ? 'Продакшн / рекламное агентство' : 'Production / ad agency',
-      RegistrationAccountType.photoVideo =>
-        ru ? 'Фотограф / видеограф' : 'Photographer / videographer',
-      RegistrationAccountType.scoutBooker =>
-        ru ? 'Скаут / буккер' : 'Scout / booker',
-    };
+    return registrationAccountTypeAdminLabel(type, ru: ru);
   }
 }
 
@@ -520,4 +502,29 @@ class _MessageCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return AdminMessageCard(text: text, isError: isError);
   }
+}
+
+/// Admin-facing name of the account type someone applied for.
+String registrationAccountTypeAdminLabel(
+  RegistrationAccountType type, {
+  required bool ru,
+}) {
+  return switch (type) {
+    RegistrationAccountType.user => ru ? 'Личный аккаунт' : 'Personal account',
+    RegistrationAccountType.castingDirector =>
+      ru ? 'Кастинг-директор' : 'Casting director',
+    RegistrationAccountType.castingAgent =>
+      ru ? 'Кастинг-агент' : 'Casting agent',
+    RegistrationAccountType.directorProducer =>
+      ru ? 'Режиссер / продюсер' : 'Director / producer',
+    RegistrationAccountType.brandClient =>
+      ru ? 'Бренд / заказчик' : 'Brand / client',
+    RegistrationAccountType.agency => ru ? 'Агентство' : 'Agency',
+    RegistrationAccountType.productionAgency =>
+      ru ? 'Продакшн / рекламное агентство' : 'Production / ad agency',
+    RegistrationAccountType.photoVideo =>
+      ru ? 'Фотограф / видеограф' : 'Photographer / videographer',
+    RegistrationAccountType.scoutBooker =>
+      ru ? 'Скаут / буккер' : 'Scout / booker',
+  };
 }

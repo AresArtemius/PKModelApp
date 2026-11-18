@@ -325,11 +325,11 @@ class _MyProfileEditPageState extends ConsumerState<MyProfileEditPage> {
   }
 
   void _onCountryChanged(String value) {
+    // The country field edits _countryC itself; rewriting its text here would
+    // move the cursor and drop spaces while the user is still typing.
     final normalized = value.trim();
 
     setState(() {
-      _countryC.text = normalized;
-
       final allowedCities = cityOptionsForCountry(_t, normalized);
       final currentCity = _cityC.text.trim();
       if (currentCity.isNotEmpty && !allowedCities.contains(currentCity)) {

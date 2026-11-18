@@ -746,6 +746,24 @@ class _AdminWorkspaceRow {
           .toLowerCase();
 }
 
+/// Roles of a pending profile for the admin desk, e.g. "Модель • Актёр".
+String _adminProfileRolesLabel(BuildContext context, MyProfileState profile) {
+  final t = AppLocalizations.of(context)!;
+  return profile.effectiveProfileRoles
+      .map(
+        (role) => switch (role) {
+          ProfessionalProfileType.model => t.profileTypeModel,
+          ProfessionalProfileType.actor => t.profileTypeActor,
+          ProfessionalProfileType.photographer => t.profileTypePhotographer,
+          ProfessionalProfileType.videographer => t.profileTypeVideographer,
+          ProfessionalProfileType.stylist => t.profileTypeStylist,
+          ProfessionalProfileType.makeupArtist => t.profileTypeMakeupArtist,
+          ProfessionalProfileType.hairStylist => t.profileTypeHairStylist,
+        },
+      )
+      .join(' • ');
+}
+
 class _AdminWorkspaceTable extends ConsumerStatefulWidget {
   const _AdminWorkspaceTable();
 
@@ -846,7 +864,7 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
         safety.isLoading ||
         assignmentsAsync.isLoading;
     final rows = <_AdminWorkspaceRow>[
-      for (final item in profiles.valueOrNull ?? const [])
+      for (final item in profiles.valueOrNull ?? const <MyProfileState>[])
         _AdminWorkspaceRow(
           id: 'profile:${item.id}',
           targetTable: 'profiles',
@@ -856,7 +874,7 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
               ? (ru ? 'Анкета' : 'Profile')
               : item.fullName.trim(),
           subtitle: [
-            item.profileTypeLabel(context),
+            _adminProfileRolesLabel(context, item),
             item.city,
             item.country,
           ].where((part) => part.trim().isNotEmpty).join(' • '),
@@ -871,7 +889,8 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
           priority: assignmentFor('profiles', item.id)?.priority ?? 'normal',
           dueAt: assignmentFor('profiles', item.id)?.dueAt,
         ),
-      for (final item in applications.valueOrNull ?? const [])
+      for (final item
+          in applications.valueOrNull ?? const <CastingAgentApplication>[])
         _AdminWorkspaceRow(
           id: 'application:${item.id}',
           targetTable: 'casting_agent_applications',
@@ -881,7 +900,7 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
               ? item.userId
               : item.owner.displayName,
           subtitle: [
-            item.requestedType.label(context),
+            registrationAccountTypeAdminLabel(item.requestedType, ru: ru),
             item.owner.companyName,
             item.owner.city,
           ].where((part) => part.trim().isNotEmpty).join(' • '),
@@ -906,7 +925,8 @@ class _AdminWorkspaceTableState extends ConsumerState<_AdminWorkspaceTable> {
               'normal',
           dueAt: assignmentFor('casting_agent_applications', item.id)?.dueAt,
         ),
-      for (final item in merges.valueOrNull ?? const [])
+      for (final item
+          in merges.valueOrNull ?? const <AccountMergeRequest>[])
         _AdminWorkspaceRow(
           id: 'merge:${item.id}',
           targetTable: 'account_merge_requests',

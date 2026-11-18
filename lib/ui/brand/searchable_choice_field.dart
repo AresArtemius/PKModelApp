@@ -3,6 +3,11 @@ import 'package:flutter/material.dart';
 import 'brand_theme.dart';
 import 'ui_constants.dart';
 
+/// A text field with a filtered list of suggestions (country, city, colours).
+///
+/// The field edits [controller] directly, so the parent's listeners only fire
+/// on real user input. Nothing here writes to the parent's controller while a
+/// frame is being built; doing that froze the profile form on the web.
 class SearchableChoiceField extends StatelessWidget {
   const SearchableChoiceField({
     super.key,
@@ -27,39 +32,85 @@ class SearchableChoiceField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // A new field whenever the choice list or the enabled state changes (for
+    // example, the city list after a country is picked): the suggestion list
+    // is otherwise only recomputed when the text changes.
+    return _SearchableChoiceBody(
+      key: ValueKey<int>(Object.hash(enabled, Object.hashAll(options))),
+      controller: controller,
+      options: options,
+      onChanged: onChanged,
+      enabled: enabled,
+      hint: hint,
+      label: label,
+      flat: flat,
+    );
+  }
+}
+
+class _SearchableChoiceBody extends StatefulWidget {
+  const _SearchableChoiceBody({
+    super.key,
+    required this.controller,
+    required this.options,
+    required this.onChanged,
+    required this.enabled,
+    required this.hint,
+    required this.label,
+    required this.flat,
+  });
+
+  final TextEditingController controller;
+  final List<String> options;
+  final ValueChanged<String>? onChanged;
+  final bool enabled;
+  final String hint;
+  final String? label;
+  final bool flat;
+
+  @override
+  State<_SearchableChoiceBody> createState() => _SearchableChoiceBodyState();
+}
+
+class _SearchableChoiceBodyState extends State<_SearchableChoiceBody> {
+  final FocusNode _focusNode = FocusNode();
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  Iterable<String> _optionsFor(TextEditingValue value) {
+    if (!widget.enabled) return const Iterable<String>.empty();
+
+    final query = value.text.trim().toLowerCase();
+    if (query.isEmpty) return widget.options;
+
+    return widget.options.where(
+      (option) => option.toLowerCase().contains(query),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final flat = widget.flat;
+    final label = widget.label;
+    final hint = widget.hint;
+    final enabled = widget.enabled;
     final radius = BorderRadius.circular(kSearchRadius);
 
-    return Autocomplete<String>(
-      initialValue: TextEditingValue(text: controller.text),
-      optionsBuilder: (textEditingValue) {
-        if (!enabled) return const Iterable<String>.empty();
-
-        final query = textEditingValue.text.trim().toLowerCase();
-        if (query.isEmpty) return options;
-
-        return options.where((option) => option.toLowerCase().contains(query));
-      },
+    return RawAutocomplete<String>(
+      textEditingController: widget.controller,
+      focusNode: _focusNode,
+      optionsBuilder: _optionsFor,
       displayStringForOption: (option) => option,
-      onSelected: (selection) {
-        controller.text = selection;
-        onChanged?.call(selection);
-      },
+      onSelected: (selection) => widget.onChanged?.call(selection),
       fieldViewBuilder:
           (context, textEditingController, focusNode, onFieldSubmitted) {
-            if (textEditingController.text != controller.text) {
-              textEditingController.value = TextEditingValue(
-                text: controller.text,
-                selection: TextSelection.collapsed(
-                  offset: controller.text.length,
-                ),
-              );
-            }
-
             return ValueListenableBuilder<TextEditingValue>(
               valueListenable: textEditingController,
               builder: (context, value, _) {
-                controller.value = value;
-
                 final baseDecoration = flat
                     ? InputDecoration(
                         labelText: label,
@@ -101,10 +152,8 @@ class SearchableChoiceField extends StatelessWidget {
                   controller: textEditingController,
                   focusNode: focusNode,
                   enabled: enabled,
-                  onChanged: (value) {
-                    controller.text = value;
-                    onChanged?.call(value);
-                  },
+                  onChanged: widget.onChanged,
+                  onSubmitted: (_) => onFieldSubmitted(),
                   style: flat
                       ? AppText.body
                       : const TextStyle(
@@ -130,9 +179,8 @@ class SearchableChoiceField extends StatelessWidget {
                               color: kTextMuted,
                             ),
                             onPressed: () {
-                              controller.clear();
                               textEditingController.clear();
-                              onChanged?.call('');
+                              widget.onChanged?.call('');
                               focusNode.unfocus();
                             },
                           ),
